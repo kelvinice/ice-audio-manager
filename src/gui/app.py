@@ -1,81 +1,81 @@
-import customtkinter as ctk
+import sys
+import json
+from PyQt5.QtWidgets import QMainWindow, QApplication, QTabWidget, QWidget, QVBoxLayout, QPushButton
 from core.audio_controller import AudioController
 from core.hotkey_controller import HotkeyController
 from gui.components.device_frame import DeviceFrame
 from gui.components.hotkey_list import HotkeyListFrame
-import json
 
-class AudioManagerApp(ctk.CTk):
+class AudioManagerApp(QMainWindow):
     def __init__(self):
         super().__init__()
-        
-        self.title("Ice Audio Manager")
-        self.geometry("800x600")
-        
+        self.setWindowTitle("Ice Audio Manager")
+        self.resize(800, 600)
         self.audio_controller = AudioController()
         self.hotkey_controller = HotkeyController()
+        self.initUI()
+    
+    def initUI(self):
+        self.tab_widget = QTabWidget()
+        self.setCentralWidget(self.tab_widget)
         
-        self.setup_ui()
-        self.protocol("WM_DELETE_WINDOW", self.on_closing)
-
-    def on_closing(self):
-        """Save hotkeys before closing the application."""
-        with open(self.hotkey_controller.config_file, 'w') as f:
-            json.dump(self.hotkey_controller.hotkeys, f, indent=4)
-        self.destroy()
-
-    def setup_ui(self):
-        # Create tabview
-        self.tabview = ctk.CTkTabview(self)
-        self.tabview.pack(fill="both", expand=True, padx=10, pady=10)
+        # Create tabs
+        self.input_tab = QWidget()
+        self.output_tab = QWidget()
+        self.hotkeys_tab = QWidget()
+        self.settings_tab = QWidget()
         
-        # Add tabs
-        self.tabview.add("Input Devices")
-        self.tabview.add("Output Devices")
-        self.tabview.add("Hotkeys")
-        self.tabview.add("Settings")
+        self.tab_widget.addTab(self.input_tab, "Input Devices")
+        self.tab_widget.addTab(self.output_tab, "Output Devices")
+        self.tab_widget.addTab(self.hotkeys_tab, "Hotkeys")
+        self.tab_widget.addTab(self.settings_tab, "Settings")
         
-        # Input devices tab
-        input_frame = DeviceFrame(
-            self.tabview.tab("Input Devices"),
+        # Setup tabs
+        self.setupInputTab()
+        self.setupOutputTab()
+        self.setupHotkeysTab()
+        self.setupSettingsTab()
+    
+    def setupInputTab(self):
+        layout = QVBoxLayout()
+        self.input_frame = DeviceFrame(
             self.audio_controller.input_devices,
             self.hotkey_controller,
-            self.audio_controller,
-            width=750,
-            height=500
+            self.audio_controller
         )
-        input_frame.pack(fill="both", expand=True)
-        
-        # Output devices tab
-        output_frame = DeviceFrame(
-            self.tabview.tab("Output Devices"),
+        layout.addWidget(self.input_frame)
+        self.input_tab.setLayout(layout)
+    
+    def setupOutputTab(self):
+        layout = QVBoxLayout()
+        self.output_frame = DeviceFrame(
             self.audio_controller.output_devices,
             self.hotkey_controller,
-            self.audio_controller,
-            width=750,
-            height=500
+            self.audio_controller
         )
-        output_frame.pack(fill="both", expand=True)
-
-        # Hotkeys tab
-        hotkey_frame = HotkeyListFrame(
-            self.tabview.tab("Hotkeys"),
-            width=750,
-            height=500
-        )
-        hotkey_frame.pack(fill="both", expand=True)
-        
-        # Settings tab
-        settings_frame = ctk.CTkFrame(self.tabview.tab("Settings"))
-        settings_frame.pack(fill="both", expand=True)
-        
-        refresh_btn = ctk.CTkButton(
-            settings_frame,
-            text="Refresh Devices",
-            command=self.refresh_devices
-        )
-        refresh_btn.pack(pady=20)
-
+        layout.addWidget(self.output_frame)
+        self.output_tab.setLayout(layout)
+    
+    def setupHotkeysTab(self):
+        layout = QVBoxLayout()
+        self.hotkey_list_frame = HotkeyListFrame(self.hotkey_controller)
+        layout.addWidget(self.hotkey_list_frame)
+        self.hotkeys_tab.setLayout(layout)
+    
+    def setupSettingsTab(self):
+        layout = QVBoxLayout()
+        refresh_btn = QPushButton("Refresh Devices")
+        refresh_btn.clicked.connect(self.refresh_devices)
+        layout.addWidget(refresh_btn)
+        self.settings_tab.setLayout(layout)
+    
     def refresh_devices(self):
         self.audio_controller.refresh_devices()
-        self.setup_ui()
+        # Update device frames with new data
+        self.input_frame.update_devices(self.audio_controller.input_devices)
+        self.output_frame.update_devices(self.audio_controller.output_devices)
+    
+    def closeEvent(self, event):
+        with open(self.hotkey_controller.config_file, 'w') as f:
+            json.dump(self.hotkey_controller.hotkeys, f, indent=4)
+        event.accept()

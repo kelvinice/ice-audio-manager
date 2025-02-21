@@ -1,92 +1,126 @@
-import customtkinter as ctk
 import json
 import os
+from PyQt5.QtWidgets import (
+    QScrollArea,
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QMessageBox,
+    QInputDialog,
+    QFrame
+)
+from PyQt5.QtCore import Qt
 
-class HotkeyListFrame(ctk.CTkScrollableFrame):
-    def __init__(self, master, **kwargs):
-        super().__init__(master, **kwargs)
+class HotkeyListFrame(QScrollArea):
+    def __init__(self, hotkey_controller, parent=None):
+        super().__init__(parent)
+        self.hotkey_controller = hotkey_controller
         self.config_file = "hotkeys.json"
         self.refresh_hotkeys()
-
+    
     def refresh_hotkeys(self):
-        # Clear existing widgets
-        for widget in self.winfo_children():
-            widget.destroy()
-
+        # Load hotkeys from file
+        self.hotkeys = {}
         if os.path.exists(self.config_file):
             with open(self.config_file, 'r') as f:
                 self.hotkeys = json.load(f)
 
-            # Create header
-            header_frame = ctk.CTkFrame(self)
-            header_frame.pack(fill="x", padx=5, pady=(0, 10))
-            
-            ctk.CTkLabel(header_frame, text="Device Name").pack(side="left")
-            ctk.CTkLabel(header_frame, text="Actions").pack(side="right", padx=100)
-            ctk.CTkLabel(header_frame, text="Hotkey").pack(side="right")
+        # Create main container widget
+        container = QWidget()
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(5, 5, 5, 5)
+        layout.setSpacing(10)
 
-            # List all hotkeys
-            for hotkey, data in self.hotkeys.items():
-                item_frame = ctk.CTkFrame(self)
-                item_frame.pack(fill="x", padx=5, pady=2)
-                
-                ctk.CTkLabel(item_frame, text=data['name']).pack(side="left")
-                
-                # Action buttons frame
-                action_frame = ctk.CTkFrame(item_frame, fg_color="transparent")
-                action_frame.pack(side="right")
-                
-                # Delete button
-                delete_btn = ctk.CTkButton(
-                    action_frame,
-                    text="Delete",
-                    width=60,
-                    fg_color="red",
-                    command=lambda h=hotkey: self.delete_hotkey(h)
-                )
-                delete_btn.pack(side="right", padx=5)
-                
-                # Edit button
-                edit_btn = ctk.CTkButton(
-                    action_frame,
-                    text="Edit",
-                    width=60,
-                    command=lambda h=hotkey, d=data: self.edit_hotkey(h, d)
-                )
-                edit_btn.pack(side="right", padx=5)
-                
-                # Hotkey label
-                ctk.CTkLabel(action_frame, text=hotkey.upper()).pack(side="right", padx=10)
+        # Header row
+        header = QFrame()
+        header_layout = QHBoxLayout(header)
+        header_layout.setContentsMargins(5, 5, 5, 5)
+        header_layout.setSpacing(10)
+        name_header = QLabel("Device Name")
+        hotkey_header = QLabel("Hotkey")
+        actions_header = QLabel("Actions")
+        header_layout.addWidget(name_header, 2)
+        header_layout.addWidget(hotkey_header, 1)
+        header_layout.addWidget(actions_header, 1, alignment=Qt.AlignRight)
+        layout.addWidget(header)
 
+        # Separator
+        sep = QFrame()
+        sep.setFrameShape(QFrame.HLine)
+        layout.addWidget(sep)
+
+        # Add a row for each hotkey
+        for hotkey, data in self.hotkeys.items():
+            row = QFrame()
+            row_layout = QHBoxLayout(row)
+            row_layout.setContentsMargins(5, 5, 5, 5)
+            row_layout.setSpacing(10)
+
+            name_label = QLabel(data['name'])
+            hotkey_label = QLabel(hotkey.upper())
+
+            # Actions widget with Edit and Delete buttons
+            actions_widget = QWidget()
+            actions_layout = QHBoxLayout(actions_widget)
+            actions_layout.setContentsMargins(0, 0, 0, 0)
+            actions_layout.setSpacing(5)
+            edit_btn = QPushButton("Edit")
+            edit_btn.setFixedWidth(60)
+            delete_btn = QPushButton("Delete")
+            delete_btn.setFixedWidth(60)
+            edit_btn.clicked.connect(lambda _, h=hotkey, d=data: self.edit_hotkey(h, d))
+            delete_btn.clicked.connect(lambda _, h=hotkey: self.delete_hotkey(h))
+            actions_layout.addWidget(edit_btn)
+            actions_layout.addWidget(delete_btn)
+
+            row_layout.addWidget(name_label, 2)
+            row_layout.addWidget(hotkey_label, 1)
+            row_layout.addWidget(actions_widget, 1, alignment=Qt.AlignRight)
+
+            # Add row to main layout
+            layout.addWidget(row)
+
+            # Add a separator between rows
+            row_sep = QFrame()
+            row_sep.setFrameShape(QFrame.HLine)
+            layout.addWidget(row_sep)
+
+        layout.addStretch()  # Push content to top
+
+        self.setWidget(container)
+        self.setWidgetResizable(True)
+    
     def delete_hotkey(self, hotkey):
         if hotkey in self.hotkeys:
-            self.hotkeys.pop(hotkey)
-            with open(self.config_file, 'w') as f:
-                json.dump(self.hotkeys, f, indent=4)
-            self.refresh_hotkeys()
-                
-
+            reply = QMessageBox.question(
+                self,
+                "Confirm Delete",
+                f"Are you sure you want to delete the hotkey: {hotkey}?",
+                QMessageBox.Yes | QMessageBox.No
+            )
+            if reply == QMessageBox.Yes:
+                self.hotkeys.pop(hotkey)
+                with open(self.config_file, 'w') as f:
+                    json.dump(self.hotkeys, f, indent=4)
+                self.hotkey_controller.hotkeys.clear()
+                self.hotkey_controller.load_hotkeys()
+                self.refresh_hotkeys()
+    
     def edit_hotkey(self, hotkey, data):
-        # Create edit dialog
-        dialog = ctk.CTkInputDialog(
-            text=f"Enter new hotkey for {data['name']}:",
-            title="Edit Hotkey"
+        new_hotkey, ok = QInputDialog.getText(
+            self,
+            "Edit Hotkey",
+            f"Enter new hotkey for {data['name']}:"
         )
-        new_hotkey = dialog.get_input()
-        
-        if new_hotkey and new_hotkey.upper() != hotkey:
-            # Remove old hotkey
+        if ok and new_hotkey and new_hotkey.upper() != hotkey:
             old_data = self.hotkeys.pop(hotkey)
-            
-            # Add new hotkey with updated data
             self.hotkeys[new_hotkey.upper()] = {
                 'hotkey': new_hotkey.upper(),
                 'name': old_data['name'],
                 'index': old_data['index']
             }
-            
-            # Save changes
             with open(self.config_file, 'w') as f:
                 json.dump(self.hotkeys, f, indent=4)
-            
             self.refresh_hotkeys()

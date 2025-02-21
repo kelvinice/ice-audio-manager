@@ -7,10 +7,10 @@ name = "pypi"
 pyaudio = "*"
 sounddevice = "*"
 keyboard = "*"
-customtkinter = "*"
 pycaw = "*"
 pywin32 = "*"
 comtypes = "*"
+pyqt5 = "*"
 
 [dev-packages]
 

@@ -1,37 +1,27 @@
-import tkinter as tk
-from tkinter import ttk
 import pyaudio
-import sounddevice as sd
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTreeWidget, QTreeWidgetItem, QLabel
 
-class DeviceList:
-    def __init__(self, master):
-        self.master = master
-        self.frame = ttk.Frame(master)
-        self.frame.pack(padx=10, pady=10)
-
-        self.label = ttk.Label(self.frame, text="Audio Devices")
-        self.label.pack()
-
-        self.tree = ttk.Treeview(self.frame)
-        self.tree.pack()
-
+class DeviceList(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.initUI()
+    
+    def initUI(self):
+        layout = QVBoxLayout(self)
+        label = QLabel("Audio Devices")
+        layout.addWidget(label)
+        self.tree = QTreeWidget()
+        self.tree.setColumnCount(2)
+        self.tree.setHeaderLabels(["Type", "Name"])
+        layout.addWidget(self.tree)
         self.populate_device_list()
-
+    
     def populate_device_list(self):
-        self.tree.delete(*self.tree.get_children())
-        self.tree["columns"] = ("Type", "Name")
-        self.tree.column("#0", width=0, stretch=tk.NO)
-        self.tree.column("Type", anchor=tk.W, width=100)
-        self.tree.column("Name", anchor=tk.W, width=300)
-
-        self.tree.heading("#0", text="", anchor=tk.W)
-        self.tree.heading("Type", text="Type", anchor=tk.W)
-        self.tree.heading("Name", text="Name", anchor=tk.W)
-
+        self.tree.clear()
         p = pyaudio.PyAudio()
         for i in range(p.get_device_count()):
             device_info = p.get_device_info_by_index(i)
             device_type = "Input" if device_info['maxInputChannels'] > 0 else "Output"
-            self.tree.insert("", "end", values=(device_type, device_info['name']))
-
+            item = QTreeWidgetItem([device_type, device_info['name']])
+            self.tree.addTopLevelItem(item)
         p.terminate()
