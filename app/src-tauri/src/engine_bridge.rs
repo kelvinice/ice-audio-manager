@@ -1,14 +1,14 @@
 use std::sync::{Arc, mpsc::Receiver};
 
 use ice_core::device::Flow;
-use ice_core::engine::{EngineEvent, EngineSnapshot, Envelope, RoleSet, SpatialMode};
+use ice_core::engine::{DeviceSummary, EngineEvent, EngineSnapshot, Envelope, RoleSet, SpatialMode};
 use tauri::{AppHandle, Emitter};
 
 use super::{ActivityKind, NotchSnapshot, SharedRuntime, tray};
 
 pub(super) fn project(snapshot: &EngineSnapshot, view: &mut NotchSnapshot) {
     let active = snapshot.playback.iter().find(|device| device.is_default);
-    let target = snapshot.playback.iter().find(|device| !device.is_default);
+    let target = preview_target(snapshot);
     view.active_device = active.map_or_else(|| "No playback device".into(), |device| device.name.clone());
     view.target_device = target.map_or_else(String::new, |device| device.name.clone());
     view.spatial_badge = active.and_then(|device| match device.spatial? {
@@ -22,6 +22,10 @@ pub(super) fn project(snapshot: &EngineSnapshot, view: &mut NotchSnapshot) {
     view.volume_percent = snapshot.volume.map_or(0, |volume| volume.percent);
     view.muted = snapshot.volume.is_some_and(|volume| volume.muted);
     view.mic_muted = snapshot.mic_muted.unwrap_or(false);
+}
+
+pub(super) fn preview_target(snapshot: &EngineSnapshot) -> Option<&DeviceSummary> {
+    snapshot.playback.iter().find(|device| !device.is_default)
 }
 
 pub(super) fn watch(
@@ -65,7 +69,9 @@ fn apply_event(app: &AppHandle, state: &SharedRuntime, delta: Envelope) {
 
     state.update_and_emit(app, |view| {
         project(&snapshot, view);
-        if let Some(activity) = activity {
+        if let Some(activity) = activity
+            && snapshot.revision == delta.revision
+        {
             view.activity = activity;
             view.event_seq = view.event_seq.saturating_add(1);
         }

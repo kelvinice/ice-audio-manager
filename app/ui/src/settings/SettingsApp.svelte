@@ -1,19 +1,30 @@
 <script lang="ts">
   import { invoke } from '@tauri-apps/api/core';
+  import { listen } from '@tauri-apps/api/event';
   import { onMount } from 'svelte';
-  import type { NotchSnapshot } from '../lib/ipc/types';
+  import type { NotchDelta, NotchSnapshot } from '../lib/ipc/types';
 
   let snapshot = $state<NotchSnapshot | null>(null);
 
   onMount(() => {
-    void invoke<NotchSnapshot>('get_notch_snapshot').then((s) => {
-      snapshot = s;
+    let closed = false;
+    const applySnapshot = (next: NotchSnapshot) => {
+      if (!closed && (!snapshot || next.revision > snapshot.revision)) snapshot = next;
+    };
+    const listener = listen<NotchDelta>('notch://delta/v1', ({ payload }) => applySnapshot(payload.snapshot));
+    void listener.then(async () => {
+      if (closed) return;
+      applySnapshot(await invoke<NotchSnapshot>('get_notch_snapshot'));
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
-          void invoke('report_settings_ready');
+          if (!closed) void invoke('report_settings_ready');
         });
       });
     });
+    return () => {
+      closed = true;
+      void listener.then((unlisten) => unlisten());
+    };
   });
 </script>
 

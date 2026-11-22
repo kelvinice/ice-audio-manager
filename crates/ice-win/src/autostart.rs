@@ -1,45 +1,21 @@
-//! Per-user startup registration and the desktop shell's session lifetime guard.
+//! Per-user startup registration for the desktop shell.
 
 use std::os::windows::ffi::OsStrExt;
 use std::path::Path;
 
 use windows::Win32::Foundation::{
-    APPMODEL_ERROR_NO_PACKAGE, CloseHandle, E_INVALIDARG, ERROR_ALREADY_EXISTS, ERROR_FILE_NOT_FOUND,
-    ERROR_INSUFFICIENT_BUFFER, GetLastError, HANDLE,
+    APPMODEL_ERROR_NO_PACKAGE, E_INVALIDARG, ERROR_FILE_NOT_FOUND, ERROR_INSUFFICIENT_BUFFER,
 };
 use windows::Win32::Storage::Packaging::Appx::GetCurrentPackageFullName;
 use windows::Win32::System::Registry::{
     HKEY_CURRENT_USER, REG_SZ, RRF_RT_REG_SZ, RegDeleteKeyValueW, RegGetValueW, RegSetKeyValueW,
 };
-use windows::Win32::System::Threading::CreateMutexW;
 use windows::core::{Error, PCWSTR, Result, w};
 
 const RUN_KEY: PCWSTR = w!("Software\\Microsoft\\Windows\\CurrentVersion\\Run");
 const RUN_VALUE: PCWSTR = w!("IceAudioManager");
 
-/// Hold this until the process exits. A duplicate launch never starts a second shell.
-pub struct InstanceGuard(HANDLE);
-
-impl InstanceGuard {
-    pub fn acquire() -> Result<Option<Self>> {
-        // SAFETY: use the default security descriptor and a static name in the session namespace.
-        // The handle just keeps the mutex alive and does not take ownership of it.
-        let handle = unsafe { CreateMutexW(None, false, w!("Local\\IceAudioManager.Desktop")) }?;
-        // SAFETY: read the status set by CreateMutexW before calling another Windows API.
-        let already_running = unsafe { GetLastError() } == ERROR_ALREADY_EXISTS;
-        let guard = Self(handle);
-        Ok((!already_running).then_some(guard))
-    }
-}
-
-impl Drop for InstanceGuard {
-    fn drop(&mut self) {
-        // SAFETY: this object is the sole owner of the handle returned by CreateMutexW.
-        let _ = unsafe { CloseHandle(self.0) };
-    }
-}
-
-/// The current package determines which signup API may be used.
+/// The current package determines which startup API may be used.
 #[derive(Clone, Copy)]
 pub enum Autostart {
     Unpackaged,

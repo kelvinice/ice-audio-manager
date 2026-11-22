@@ -9,7 +9,7 @@ use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::window::WindowBuilder;
 
-use super::{SharedRuntime, create_notch_window, create_settings_window, cycle_monitor_internal, spawn_cursor_poll};
+use super::{Preview, SharedRuntime, cycle_monitor_internal, request_preview};
 
 const TRAY_ID: &str = "ice-audio-tray";
 const DEVICE_PREFIX: &str = "switch/";
@@ -29,6 +29,7 @@ pub(super) fn refresh_tooltip(app: &AppHandle, snapshot: &EngineSnapshot) {
 pub(super) fn build(app: &AppHandle, state: Arc<SharedRuntime>) -> tauri::Result<()> {
     let popup_owner =
         WindowBuilder::new(app, "tray-menu-owner").visible(false).skip_taskbar(true).decorations(false).build()?;
+    let owner_hwnd = popup_owner.hwnd()?.0 as isize;
     let startup = Autostart::current().and_then(|mode| Ok(mode.enabled()?.map(|enabled| (mode, enabled))));
     let startup = match startup {
         Ok(startup) => startup,
@@ -69,10 +70,14 @@ pub(super) fn build(app: &AppHandle, state: Arc<SharedRuntime>) -> tauri::Result
                 return;
             }
             let operation = match event.id.as_ref() {
-                "settings" => create_settings_window(app, &menu_state),
-                "notch" => create_notch_window(app, &menu_state).map(|_| {
-                    spawn_cursor_poll(Arc::clone(&menu_state), false);
-                }),
+                "settings" => {
+                    request_preview(app, &menu_state, Preview::Settings);
+                    Ok(())
+                }
+                "notch" => {
+                    request_preview(app, &menu_state, Preview::Notch);
+                    Ok(())
+                }
                 "monitor" => cycle_monitor_internal(app, &menu_state),
                 "launch" => {
                     if let Some((startup, _)) = startup {
@@ -110,6 +115,9 @@ pub(super) fn build(app: &AppHandle, state: Arc<SharedRuntime>) -> tauri::Result
             if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } = event {
                 let app = tray.app_handle();
                 let result = quick_menu(app, &state.engine.snapshot()).and_then(|menu| popup_owner.popup_menu(&menu));
+                if let Err(error) = ice_win::desktop::finish_tray_menu(owner_hwnd) {
+                    tracing::debug!(%error, "Could not signal the tray popup closed");
+                }
                 if let Err(error) = result {
                     tracing::warn!(%error, "Could not open the audio device menu");
                 }

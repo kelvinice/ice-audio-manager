@@ -9,6 +9,7 @@
 pub mod audio_engine;
 pub mod autostart;
 pub mod com;
+pub mod desktop;
 pub mod endpoints;
 pub mod file_watch;
 pub mod fullscreen;

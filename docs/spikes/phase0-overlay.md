@@ -1,25 +1,25 @@
 # Phase 0.2 findings: overlay, springs, and memory policy (Gemini)
 
 > Measured 2026-11-22 on the owner's PC (Windows 11, Ryzen 5 3600X, RTX 3050, 16 GB RAM, `\\.\DISPLAY1` 1920×1080 @ 144 Hz primary + `\\.\DISPLAY2` 1920×1080 @ 75 Hz secondary at 100% scale, LTO release build).
-> Code: [`crates/ice-win`](../../crates/ice-win) (`monitors`, `overlay_win`, `native_dot`, `proc_metrics`, `webview2`) + [`spikes/overlay`](../../spikes/overlay).
+> Code: [`crates/ice-win`](../../crates/ice-win) (`monitors`, `overlay_win`, `native_dot`, `proc_metrics`, `webview2`) + [`app/`](../../app) (moved from `spikes/overlay` in Phase 1).
 
 ## Run from PowerShell
 
 ```powershell
 # UI checks, 75/144/240 Hz spring unit tests, and production dist build
-Set-Location spikes\overlay\ui
+Set-Location app\ui
 npm run check
 npm test
 npm run build
 
 # Release benchmark (60 s settle-and-sample across all 7 memory/CPU states)
 $env:PATH = "$env:USERPROFILE\.cargo\bin;$env:PATH"
-Set-Location ..\..\..
-cargo build --release -p overlay-spike
-.\target\release\overlay-spike.exe --bench --sample-secs 60 --out spikes\overlay\out\bench-60s.json
+Set-Location ..\..
+cargo build --release -p ice-audio-manager
+.\target\release\ice-audio-manager.exe --bench --sample-secs 60 --out app\out\bench-60s.json
 
-# Interactive tray mode (right-click tray icon to test events, presets, monitor switch, Settings)
-.\target\release\overlay-spike.exe
+# Interactive tray and notch preview with the fake engine
+.\target\release\ice-audio-manager.exe --show-notch
 ```
 
 Release binary size (`target/release/overlay-spike.exe`, LTO): **8,841,728 bytes (8.43 MiB)** (target `< 10 MB`).
@@ -73,7 +73,7 @@ Window flags & input routing checks (all passed in release benchmark):
 
 ## Spring physics verification (`spring.test.ts`, 5/5 passing)
 
-- Exact closed-form analytical `(stiffness k, damping c, mass m)` oscillator in [`spikes/overlay/ui/src/lib/motion/spring.ts`](../../spikes/overlay/ui/src/lib/motion/spring.ts) animates SVG `<rect rx ry>` + `clip-path: inset(...)` with zero layout-property animation.
+- Exact closed-form analytical `(stiffness k, damping c, mass m)` oscillator in [`app/ui/src/lib/motion/spring.ts`](../../app/ui/src/lib/motion/spring.ts) animates SVG `<rect rx ry>` + `clip-path: inset(...)` with zero layout-property animation.
 - `Bouncy` retuned per Codex's D-13 check (`k=300, c=21.7, m=1.0`): verified **7.5%–8.5%** (~8%) step overshoot (`bouncy` test).
 - `Snappy` (`k=420, c=34, m=1.0`) and `Smooth` (`k=280, c=31, m=1.0`) verified `< 2.0%` and `< 0.25%` overshoot respectively.
 - Identical position & velocity (`< 1e-8` delta) across **75 Hz, 144 Hz, and 240 Hz**, including mid-flight velocity-preserving retargeting.

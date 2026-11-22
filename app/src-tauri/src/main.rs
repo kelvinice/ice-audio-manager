@@ -12,8 +12,8 @@ use std::sync::atomic::{AtomicBool, AtomicIsize, Ordering};
 use std::sync::{Arc, Mutex, mpsc};
 use std::time::{Duration, Instant};
 
-use ice_core::engine::{Command, Engine, EngineSnapshot, fake::FakeEngine};
-use ice_win::autostart::InstanceGuard;
+use ice_core::engine::{Command, Engine, EngineSnapshot, RoleSet, fake::FakeEngine};
+use ice_win::desktop::InstanceGuard;
 use ice_win::monitors::{MonitorInfo, list_monitors};
 use ice_win::native_dot::NativeDotHandle;
 use ice_win::overlay_win;
@@ -31,6 +31,8 @@ const NOTCH_TOP_OFFSET: i32 = 0;
 struct SharedRuntime {
     engine: Arc<dyn Engine>,
     cursor_poll_running: AtomicBool,
+    notch_opening: AtomicBool,
+    settings_opening: AtomicBool,
     snapshot: Mutex<NotchSnapshot>,
     monitors: Mutex<Vec<MonitorInfo>>,
     hit_rect: Mutex<HitRect>,
@@ -88,6 +90,8 @@ impl SharedRuntime {
         Self {
             engine,
             cursor_poll_running: AtomicBool::new(false),
+            notch_opening: AtomicBool::new(false),
+            settings_opening: AtomicBool::new(false),
             snapshot: Mutex::new(snapshot),
             monitors: Mutex::new(monitors),
             hit_rect: Mutex::new(HitRect { x: 154.0, y: 6.0, width: 112.0, height: 28.0 }),
@@ -114,7 +118,9 @@ impl SharedRuntime {
             mutator(&mut guard);
             guard.clone()
         };
-        let _ = app.emit_to("notch", "notch://delta/v1", NotchDelta::State { snapshot: snap.clone() });
+        let delta = NotchDelta::State { snapshot: snap.clone() };
+        let _ = app.emit_to("notch", "notch://delta/v1", &delta);
+        let _ = app.emit_to("settings", "notch://delta/v1", &delta);
         snap
     }
 
@@ -186,7 +192,10 @@ fn toggle_mic_mute(state: State<'_, Arc<SharedRuntime>>) {
 
 #[tauri::command]
 fn trigger_switch(state: State<'_, Arc<SharedRuntime>>) {
-    state.engine.send(Command::CycleFavourites { flow: ice_core::device::Flow::Render, step: 1 });
+    let snapshot = state.engine.snapshot();
+    if let Some(target) = engine_bridge::preview_target(&snapshot) {
+        state.engine.send(Command::SwitchTo { device_id: target.id.clone(), roles: RoleSet::Default });
+    }
 }
 
 #[tauri::command]
@@ -217,8 +226,44 @@ fn cycle_monitor(app: AppHandle, state: State<'_, Arc<SharedRuntime>>) -> Result
 }
 
 #[tauri::command]
-fn open_settings(app: AppHandle, state: State<'_, Arc<SharedRuntime>>) -> Result<(), String> {
-    create_settings_window(&app, &state)
+fn open_settings(app: AppHandle, state: State<'_, Arc<SharedRuntime>>) {
+    request_preview(&app, &state, Preview::Settings);
+}
+
+#[derive(Clone, Copy, Debug)]
+enum Preview {
+    Notch,
+    Settings,
+}
+
+impl Preview {
+    fn opening(self, state: &SharedRuntime) -> &AtomicBool {
+        match self {
+            Self::Notch => &state.notch_opening,
+            Self::Settings => &state.settings_opening,
+        }
+    }
+}
+
+fn request_preview(app: &AppHandle, state: &Arc<SharedRuntime>, preview: Preview) {
+    if preview.opening(state).swap(true, Ordering::AcqRel) {
+        return;
+    }
+    let app = app.clone();
+    let state = Arc::clone(state);
+    // WebView2 creation in a synchronous menu callback can deadlock the Windows event loop.
+    tauri::async_runtime::spawn_blocking(move || {
+        let result = match preview {
+            Preview::Notch => create_notch_window(&app, &state).map(|_| {
+                spawn_cursor_poll(Arc::clone(&state), false);
+            }),
+            Preview::Settings => create_settings_window(&app, &state),
+        };
+        preview.opening(&state).store(false, Ordering::Release);
+        if let Err(error) = result {
+            tracing::warn!(?preview, %error, "Could not open the preview window");
+        }
+    });
 }
 
 fn create_notch_window(app: &AppHandle, state: &Arc<SharedRuntime>) -> Result<isize, String> {
@@ -248,16 +293,25 @@ fn create_notch_window(app: &AppHandle, state: &Arc<SharedRuntime>) -> Result<is
         .build()
         .map_err(|e| e.to_string())?;
 
-    let hwnd = win.hwnd().map_err(|e| e.to_string())?.0 as isize;
-    overlay_win::apply_overlay_styles(hwnd).map_err(|e| e.to_string())?;
-    overlay_win::move_top_center(hwnd, &monitor, NOTCH_CANVAS_W, NOTCH_CANVAS_H, NOTCH_TOP_OFFSET)
-        .map_err(|e| e.to_string())?;
-    win.show().map_err(|e| e.to_string())?;
-    overlay_win::ensure_topmost(hwnd).map_err(|e| e.to_string())?;
-
-    state.notch_hwnd.store(hwnd, Ordering::Release);
-    state.notch_visible.store(true, Ordering::Release);
-    Ok(hwnd)
+    let state = Arc::clone(state);
+    on_main_sync(app, move |_| {
+        let monitor = state.active_monitor_info().unwrap_or(monitor);
+        let configured = (|| {
+            let hwnd = win.hwnd().map_err(|e| e.to_string())?.0 as isize;
+            overlay_win::apply_overlay_styles(hwnd).map_err(|e| e.to_string())?;
+            overlay_win::move_top_center(hwnd, &monitor, NOTCH_CANVAS_W, NOTCH_CANVAS_H, NOTCH_TOP_OFFSET)
+                .map_err(|e| e.to_string())?;
+            win.show().map_err(|e| e.to_string())?;
+            overlay_win::ensure_topmost(hwnd).map_err(|e| e.to_string())?;
+            state.notch_hwnd.store(hwnd, Ordering::Release);
+            state.notch_visible.store(true, Ordering::Release);
+            Ok(hwnd)
+        })();
+        if configured.is_err() {
+            let _ = win.destroy();
+        }
+        configured
+    })
 }
 
 fn create_settings_window(app: &AppHandle, state: &Arc<SharedRuntime>) -> Result<(), String> {
@@ -1080,8 +1134,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                     engine_bridge::watch(handle.clone(), Arc::clone(&setup_state), events, initial.revision)?;
                 }
                 if show_notch {
-                    create_notch_window(&handle, &setup_state).map_err(std::io::Error::other)?;
-                    spawn_cursor_poll(Arc::clone(&setup_state), false);
+                    request_preview(&handle, &setup_state, Preview::Notch);
                 }
                 tracing::info!(engine = "fake", "Ice Audio Manager tray ready");
             }
