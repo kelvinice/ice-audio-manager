@@ -79,7 +79,11 @@ impl DeviceRef {
     /// confirmed (D-16 amendment).
     #[must_use]
     pub fn relinked_to(&self, e: &EndpointInfo) -> Self {
-        Self { match_mode: self.match_mode, display_name: self.display_name.clone(), ..Self::from_endpoint(e, self.match_mode) }
+        Self {
+            match_mode: self.match_mode,
+            display_name: self.display_name.clone(),
+            ..Self::from_endpoint(e, self.match_mode)
+        }
     }
 }
 
@@ -195,7 +199,11 @@ pub enum ToggleAction<'a> {
 /// took over (e.g. a monitor after display wake), go to the primary side, or the secondary if the
 /// primary isn't connected (Gemini's D-16 amendment).
 #[must_use]
-pub fn toggle<'a>(pair: [&DeviceRef; 2], current_default_id: Option<&str>, endpoints: &'a [EndpointInfo]) -> ToggleAction<'a> {
+pub fn toggle<'a>(
+    pair: [&DeviceRef; 2],
+    current_default_id: Option<&str>,
+    endpoints: &'a [EndpointInfo],
+) -> ToggleAction<'a> {
     let res = [resolve(pair[0], endpoints), resolve(pair[1], endpoints)];
     let is_current =
         |r: &Resolution<'_>| r.target().zip(current_default_id).is_some_and(|(e, cur)| e.id.eq_ignore_ascii_case(cur));
@@ -218,7 +226,17 @@ mod tests {
     use crate::device::hardware_key_from_devnode;
 
     /// Builds an endpoint like the ones on the owner's PC (2026-11-22 scan).
-    fn ep(id: &str, state: DeviceState, flow: Flow, endpoint: &str, iface: &str, devnode: &str, container: &str, ff: u32) -> EndpointInfo {
+    #[allow(clippy::too_many_arguments)]
+    fn ep(
+        id: &str,
+        state: DeviceState,
+        flow: Flow,
+        endpoint: &str,
+        iface: &str,
+        devnode: &str,
+        container: &str,
+        ff: u32,
+    ) -> EndpointInfo {
         EndpointInfo {
             id: id.into(),
             flow,
@@ -289,7 +307,16 @@ mod tests {
     fn other_port_relinks_same_model() {
         // Different USB port: new endpoint ID, new stable ID, new instance; same hardware key + container.
         let saved = DeviceRef::from_endpoint(&arctis("old", DeviceState::Active), MatchMode::SameModel);
-        let mut moved = ep("new", DeviceState::Active, Flow::Render, "Headphones", "2- Arctis Nova 7", ARCTIS_DEV_OTHER_PORT, ARCTIS_CT, 3);
+        let mut moved = ep(
+            "new",
+            DeviceState::Active,
+            Flow::Render,
+            "Headphones",
+            "2- Arctis Nova 7",
+            ARCTIS_DEV_OTHER_PORT,
+            ARCTIS_CT,
+            3,
+        );
         moved.stable_id = Some("stable-new".into());
         let list = vec![arctis("old", DeviceState::NotPresent), moved, realtek("r", DeviceState::Active), arctis_mic()];
         assert_eq!(resolve(&saved, &list), Resolution::Relinked(&list[1]));
@@ -302,7 +329,16 @@ mod tests {
     #[test]
     fn exact_mode_does_not_follow_other_port() {
         let saved = DeviceRef::from_endpoint(&arctis("old", DeviceState::Active), MatchMode::Exact);
-        let list = vec![ep("new", DeviceState::Active, Flow::Render, "Headphones", "2- Arctis Nova 7", ARCTIS_DEV_OTHER_PORT, ARCTIS_CT, 3)];
+        let list = vec![ep(
+            "new",
+            DeviceState::Active,
+            Flow::Render,
+            "Headphones",
+            "2- Arctis Nova 7",
+            ARCTIS_DEV_OTHER_PORT,
+            ARCTIS_CT,
+            3,
+        )];
         assert_eq!(resolve(&saved, &list), Resolution::NotConnected);
     }
 
@@ -310,7 +346,8 @@ mod tests {
     fn never_crosses_flow_or_logical_endpoint() {
         // Headphones must not re-link onto the same headset's hands-free output or its microphone.
         let saved = DeviceRef::from_endpoint(&arctis("old", DeviceState::Active), MatchMode::SameModel);
-        let hands_free = ep("hf", DeviceState::Active, Flow::Render, "Headset", "Arctis Nova 7", ARCTIS_DEV, ARCTIS_CT, 5);
+        let hands_free =
+            ep("hf", DeviceState::Active, Flow::Render, "Headset", "Arctis Nova 7", ARCTIS_DEV, ARCTIS_CT, 5);
         let list = vec![hands_free, arctis_mic()];
         assert_eq!(resolve(&saved, &list), Resolution::NotConnected);
     }
@@ -330,7 +367,16 @@ mod tests {
         let mut saved = DeviceRef::from_endpoint(&arctis("old", DeviceState::Active), MatchMode::SameModel);
         saved.container_id = None;
         let mut a = arctis("a", DeviceState::Active);
-        let mut b = ep("b", DeviceState::Active, Flow::Render, "Headphones", "Arctis Nova 7", ARCTIS_DEV_OTHER_PORT, "{OTHER}", 3);
+        let mut b = ep(
+            "b",
+            DeviceState::Active,
+            Flow::Render,
+            "Headphones",
+            "Arctis Nova 7",
+            ARCTIS_DEV_OTHER_PORT,
+            "{OTHER}",
+            3,
+        );
         a.stable_id = None;
         b.stable_id = None;
         let list = vec![a, b];
@@ -341,7 +387,16 @@ mod tests {
     fn different_unit_of_same_model_is_not_relinked() {
         // Same hardware key, but a known, different container = another physical headset.
         let saved = DeviceRef::from_endpoint(&arctis("old", DeviceState::Active), MatchMode::SameModel);
-        let list = vec![ep("b", DeviceState::Active, Flow::Render, "Headphones", "Arctis Nova 7", ARCTIS_DEV_OTHER_PORT, "{OTHER}", 3)];
+        let list = vec![ep(
+            "b",
+            DeviceState::Active,
+            Flow::Render,
+            "Headphones",
+            "Arctis Nova 7",
+            ARCTIS_DEV_OTHER_PORT,
+            "{OTHER}",
+            3,
+        )];
         assert_eq!(resolve(&saved, &list), Resolution::NotConnected);
     }
 
@@ -360,7 +415,20 @@ mod tests {
     fn toggle_pair_flips_and_handles_third_device() {
         let a = arctis("a", DeviceState::Active);
         let s = realtek("r", DeviceState::Active);
-        let list = vec![a.clone(), s.clone(), ep("lg", DeviceState::Active, Flow::Render, "LG FULL HD", "NVIDIA High Definition Audio", r"{1}.HDAUDIO\FUNC_01&VEN_10DE&DEV_009F\x", "{LG}", 9)];
+        let list = vec![
+            a.clone(),
+            s.clone(),
+            ep(
+                "lg",
+                DeviceState::Active,
+                Flow::Render,
+                "LG FULL HD",
+                "NVIDIA High Definition Audio",
+                r"{1}.HDAUDIO\FUNC_01&VEN_10DE&DEV_009F\x",
+                "{LG}",
+                9,
+            ),
+        ];
         let pa = DeviceRef::from_endpoint(&a, MatchMode::SameModel); // primary: headset
         let ps = DeviceRef::from_endpoint(&s, MatchMode::SameModel);
         let side = |act: ToggleAction<'_>| match act {

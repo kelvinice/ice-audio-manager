@@ -49,7 +49,9 @@
 - ✅ 0.7 (Claude): `legacy-python-v0` tag, Python removed, `.env` untracked, MIT `LICENSE`, Rust workspace (`ice-core`, `ice-win`, spikes),
   CI (fmt, clippy `-D warnings`, test, release build). **Not yet:** Tauri `app/` scaffold + typed IPC codegen. These belong with the 0.2
   overlay spike (Gemini + Codex), which creates `app/`.
-- ⏳ 0.2 overlay + memory (Gemini + Codex).
+- ✅ 0.2 overlay spike code (Gemini) merged: `spikes/overlay` (Tauri + Svelte, typed IPC export, spring module, native dot,
+  process metrics). **Missing:** the measurement write-up (`docs/spikes/phase0-overlay.md`) that picks the D-15 default profile.
+- ✅ D-16 resolver (Claude): `ice_core::resolve` (`DeviceRef`, `resolve`, `toggle`), 12 tests built from the owner's real endpoints.
 - ✅ 0.5 fullscreen spike (Codex): see [dual-monitor results](spikes/phase0-fullscreen.md). Phase 2 still needs to cover
   exclusive-mode transitions that can be missed by window notifications.
 
@@ -65,6 +67,28 @@
 
 **Exit criteria:** D-01 to D-14 signed off, and the D-15 default profile chosen from measured numbers. Switching works for all
 3 roles. Volume events arrive from hardware keys **without any keyboard hook**.
+
+---
+
+## Parallel work: tracks, branches and file ownership (from 2026-11-22)
+
+Three agents work at once, each in **its own worktree** branched from the latest `main` (code-practices §8).
+
+| Track | Agent | Branches, in order | Depends on |
+|---|---|---|---|
+| **A: Engine** | Claude | `phase-1/engine-api` (small, merge first: commands, events, snapshot types in `ice-core`) → `phase-1/engine` (TOML config, `RegisterHotKey` hotkeys, audio thread: events → resolver → switch → confirm → re-link) | — |
+| **B: App shell** | Codex | `phase-1/app-shell` (**`git mv spikes/overlay app`**, tray quick-switch menu, single instance, autostart abstraction, logging; codes against `engine-api`, using a fake engine until `engine` merges) → `phase-1/assets` (snowflake app + tray icons) | `engine-api` |
+| **C: Notch UI** | Gemini | `phase-0/overlay-report` (D-15 numbers, docs only, start now) → `phase-2/notch-activities` (volume/switch/mic activities against a **mock event source**, native-dot theming) | `app-shell` merged (for the `app/` move) |
+
+**Rules that keep the tracks from colliding:**
+- **One owner per path.** Claude: `crates/ice-core/**`, the audio/hotkey/config/engine modules in `crates/ice-win`, `spikes/audio`, `spikes/media`.
+  Codex: `app/src-tauri/**`, `crates/ice-win/src/{fullscreen,autostart}.rs`, `assets/**`, release/packaging CI.
+  Gemini: `app/ui/**`, `crates/ice-win/src/{native_dot,overlay_win,monitors,webview2,proc_metrics}.rs`, `docs/theming.md`.
+- **Shared hotspots:** root `Cargo.toml`, `Cargo.lock`, `crates/ice-win/Cargo.toml`, `crates/ice-win/src/lib.rs`, `ci.yml`, docs tables. Keep edits to
+  one line each (one `pub mod`, one feature), rebase on `main` right before merging, and resolve conflicts as the union of both sides.
+- **The `spikes/overlay` → `app/` move happens once, in Codex's `app-shell`,** merged early. Gemini starts `notch-activities` after that merge.
+- **Contracts first:** cross-track interfaces (engine API, IPC types) merge as their own small branch before code that uses them.
+- **Generated files** (e.g. `ui/src/lib/ipc/types.ts`) are only rewritten when their content changes, so test runs never dirty a worktree.
 
 ---
 

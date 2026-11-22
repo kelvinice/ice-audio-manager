@@ -110,6 +110,11 @@ mod tests {
         if let Some(parent) = out.parent() {
             std::fs::create_dir_all(parent).expect("create ipc output dir");
         }
-        std::fs::write(&out, body).expect("write generated types.ts");
+        // Only rewrite when the content really changed. Git on Windows checks the file out with CRLF,
+        // so an unconditional LF write leaves a phantom "modified" file after every `cargo test`.
+        let unchanged = std::fs::read_to_string(&out).is_ok_and(|old| old.replace("\r\n", "\n") == body);
+        if !unchanged {
+            std::fs::write(&out, body).expect("write generated types.ts");
+        }
     }
 }
