@@ -19,6 +19,8 @@ ice-core = { path = "crates/ice-core" }
 ice-win = { path = "crates/ice-win" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+# Structured logs (code-practices §4); the app installs a subscriber.
+tracing = "0.1"
 webview2-com = "0.39"
 # Must match the `windows` crate's core version; the #[implement]/#[interface] macros expand to `windows_core::…`.
 windows-core = "0.62"

@@ -106,6 +106,12 @@ pub struct EngineSnapshot {
     pub volume: Option<VolumeState>,
     /// Mute state of the default communications microphone.
     pub mic_muted: Option<bool>,
+    /// Volume (0–100) of the default communications microphone.
+    pub mic_volume: Option<u8>,
+    /// Problems that stay true until fixed (hotkey conflicts, config problems). A UI shows these after
+    /// (re)subscribing, instead of relying on replayed events (review ENG-08).
+    #[serde(default)]
+    pub notices: Vec<Notice>,
 }
 
 /// What the tray, hotkeys and UI ask the engine to do.
@@ -179,6 +185,8 @@ pub enum Notice {
     ConfigReplaced { backup: String, error: String },
     /// An edited `config.toml` is invalid; the last valid config stays in effect until the file is fixed.
     ConfigInvalid { error: String },
+    /// An automatic save (e.g. a re-link) couldn't be written; the change only lasts until restart.
+    ConfigSaveFailed { error: String },
 }
 
 /// Deltas. The notch maps these onto activities (switch, plug/unplug, volume, mic).
@@ -197,6 +205,10 @@ pub enum EngineEvent {
     },
     MicMuteChanged {
         muted: bool,
+    },
+    /// Microphone volume changed (e.g. Alt+knob, F31).
+    MicVolumeChanged {
+        percent: u8,
     },
     /// A switch the user asked for completed and was confirmed by re-reading the defaults.
     Switched {
@@ -217,6 +229,10 @@ pub enum EngineEvent {
     },
     Notice {
         notice: Notice,
+    },
+    /// The set of persistent problems changed (raised or resolved). Mirrors `EngineSnapshot::notices`.
+    NoticesChanged {
+        notices: Vec<Notice>,
     },
 }
 
@@ -312,6 +328,8 @@ pub mod fake {
                 recording: vec![mic, device("fake-ugreen", "Microphone (UGREEN Camera Audio)", Flow::Capture, 4, None)],
                 volume: Some(VolumeState { percent: 40, muted: false }),
                 mic_muted: Some(false),
+                mic_volume: Some(80),
+                notices: Vec::new(),
             };
             Self { state: Mutex::new(State { snap, subscribers: Vec::new() }) }
         }
@@ -322,6 +340,10 @@ pub mod fake {
             let Some(pos) = st.snap.playback.iter().position(|d| d.id == device_id) else { return };
             let mut dev = st.snap.playback.remove(pos);
             dev.state = DeviceState::NotPresent;
+            // Same shape as the real engine's DeviceLeft (review ENG-14).
+            dev.is_default = false;
+            dev.is_default_communications = false;
+            dev.spatial = None;
             emit(&mut st, EngineEvent::DeviceLeft { device: dev });
         }
 

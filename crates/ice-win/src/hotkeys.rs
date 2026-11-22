@@ -2,11 +2,15 @@
 //!
 //! Never a keyboard hook (code-practices §1): Windows only tells us about the exact chords we
 //! registered, and nothing else the user types.
+//!
+//! Thread-level hotkeys (no window) are fine here: this thread never runs a modal loop, so posted
+//! thread messages can't be swallowed (review ENG-01 item 4).
 
 use std::collections::VecDeque;
 use std::sync::mpsc::{Sender, channel};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, PoisonError};
 use std::thread::JoinHandle;
+use std::time::Duration;
 
 use ice_core::hotkey::Chord;
 use windows::Win32::Foundation::{LPARAM, WPARAM};
@@ -18,6 +22,8 @@ use windows::Win32::UI::WindowsAndMessaging::{
 
 /// Posted to the hotkey thread when the request queue has work.
 const WM_HOTKEY_REQUEST: u32 = WM_APP + 1;
+/// Upper bound for a registration round-trip, so a dead hotkey thread can never hang the audio thread.
+const REGISTER_TIMEOUT: Duration = Duration::from_secs(2);
 
 enum Request {
     Register { id: i32, chord: Chord, repeat: bool, reply: Sender<Result<(), String>> },
@@ -32,15 +38,15 @@ pub struct HotkeyService {
 }
 
 impl HotkeyService {
-    /// Starts the thread. Each press of a registered chord sends its `id` on `pressed`.
+    /// Starts the thread. `on_press(id)` runs on the hotkey thread for each press; it must not block.
     ///
     /// # Errors
-    /// Fails if the thread can't be spawned.
-    pub fn start(pressed: Sender<i32>) -> std::io::Result<Self> {
+    /// Fails if the thread can't be spawned or doesn't come up.
+    pub fn start(on_press: impl Fn(i32) + Send + 'static) -> std::io::Result<Self> {
         let queue: Arc<Mutex<VecDeque<Request>>> = Arc::default();
         let (tid_tx, tid_rx) = channel();
         let q = Arc::clone(&queue);
-        let join = std::thread::Builder::new().name("ice-hotkeys".into()).spawn(move || run(&q, &pressed, &tid_tx))?;
+        let join = std::thread::Builder::new().name("ice-hotkeys".into()).spawn(move || run(&q, &on_press, &tid_tx))?;
         let thread_id = tid_rx.recv().map_err(|_| std::io::Error::other("hotkey thread failed to start"))?;
         Ok(Self { thread_id, queue, join: Some(join) })
     }
@@ -48,35 +54,42 @@ impl HotkeyService {
     /// Registers `chord` under `id`. `repeat = false` ignores auto-repeat while held.
     ///
     /// # Errors
-    /// A readable message, e.g. when another app already owns the chord (`HotkeyConflict` notice).
+    /// A readable message, e.g. when another app already owns the chord (`HotkeyConflict` notice),
+    /// or when the hotkey thread didn't answer in time.
     pub fn register(&self, id: i32, chord: Chord, repeat: bool) -> Result<(), String> {
         let (reply, rx) = channel();
-        self.push(Request::Register { id, chord, repeat, reply });
-        rx.recv().unwrap_or_else(|_| Err("hotkey thread stopped".into()))
+        if !self.push(Request::Register { id, chord, repeat, reply }) {
+            return Err(format!("{chord}: hotkey thread is not running"));
+        }
+        rx.recv_timeout(REGISTER_TIMEOUT).unwrap_or_else(|_| Err(format!("{chord}: hotkey thread did not respond")))
     }
 
     pub fn unregister(&self, id: i32) {
-        self.push(Request::Unregister { id });
+        let _ = self.push(Request::Unregister { id });
     }
 
-    fn push(&self, r: Request) {
-        self.queue.lock().unwrap_or_else(std::sync::PoisonError::into_inner).push_back(r);
+    /// Queues a request and wakes the thread. `false` if the thread can't be reached.
+    fn push(&self, r: Request) -> bool {
+        self.queue.lock().unwrap_or_else(PoisonError::into_inner).push_back(r);
         // SAFETY: posting a plain message to a thread we created; its queue exists before `start` returns.
-        let _ = unsafe { PostThreadMessageW(self.thread_id, WM_HOTKEY_REQUEST, WPARAM(0), LPARAM(0)) };
+        unsafe { PostThreadMessageW(self.thread_id, WM_HOTKEY_REQUEST, WPARAM(0), LPARAM(0)) }.is_ok()
     }
 }
 
 impl Drop for HotkeyService {
     fn drop(&mut self) {
-        // SAFETY: as in `push`. WM_QUIT ends GetMessageW's loop; registrations die with the thread's cleanup below.
-        let _ = unsafe { PostThreadMessageW(self.thread_id, WM_QUIT, WPARAM(0), LPARAM(0)) };
+        // SAFETY: as in `push`. WM_QUIT ends the message loop, which then unregisters everything.
+        let posted = unsafe { PostThreadMessageW(self.thread_id, WM_QUIT, WPARAM(0), LPARAM(0)) }.is_ok();
         if let Some(j) = self.join.take() {
-            let _ = j.join();
+            // If the post failed the thread has already exited (or can't be told to), so joining could block forever.
+            if posted || j.is_finished() {
+                let _ = j.join();
+            }
         }
     }
 }
 
-fn run(queue: &Mutex<VecDeque<Request>>, pressed: &Sender<i32>, tid_tx: &Sender<u32>) {
+fn run(queue: &Mutex<VecDeque<Request>>, on_press: &dyn Fn(i32), tid_tx: &Sender<u32>) {
     let mut msg = MSG::default();
     // SAFETY: PeekMessageW forces creation of this thread's message queue before we publish its ID,
     // so PostThreadMessageW from other threads can't race ahead of it.
@@ -87,15 +100,17 @@ fn run(queue: &Mutex<VecDeque<Request>>, pressed: &Sender<i32>, tid_tx: &Sender<
     let _ = tid_tx.send(unsafe { GetCurrentThreadId() });
     let mut registered = Vec::new();
 
-    // SAFETY: standard message loop on this thread; `msg` is a valid out-pointer.
-    while unsafe { GetMessageW(&mut msg, None, 0, 0) }.as_bool() {
+    loop {
+        // SAFETY: standard message loop on this thread; `msg` is a valid out-pointer.
+        // GetMessageW returns 0 for WM_QUIT and -1 on error; both end the loop (review ENG-01).
+        let ret = unsafe { GetMessageW(&mut msg, None, 0, 0) };
+        if ret.0 <= 0 {
+            break;
+        }
         match msg.message {
-            WM_HOTKEY => {
-                let _ = pressed.send(i32::try_from(msg.wParam.0).unwrap_or(-1));
-            }
+            WM_HOTKEY => on_press(i32::try_from(msg.wParam.0).unwrap_or(-1)),
             WM_HOTKEY_REQUEST => {
-                let drained: Vec<Request> =
-                    queue.lock().unwrap_or_else(std::sync::PoisonError::into_inner).drain(..).collect();
+                let drained: Vec<Request> = queue.lock().unwrap_or_else(PoisonError::into_inner).drain(..).collect();
                 for req in drained {
                     match req {
                         Request::Register { id, chord, repeat, reply } => {

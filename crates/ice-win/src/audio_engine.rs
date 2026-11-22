@@ -1,40 +1,60 @@
 //! The real engine (plan.md track A): implements [`ice_core::engine::Engine`] on Core Audio.
 //!
-//! One `ice-audio` thread owns every COM object (MTA). COM callbacks and hotkeys only forward
-//! messages to it. Device-change bursts (one unplug = state + 3 default changes + dozens of property
-//! changes) are coalesced into one refresh after a short quiet period.
+//! One `ice-audio` thread owns every COM object (MTA). COM callbacks, hotkeys and the config watcher only
+//! post messages to it; nothing they do can block it. Device-change bursts (one unplug = state + 3 default
+//! changes + dozens of property changes) are coalesced into one refresh after a sliding quiet period.
+//!
+//! "The current playback device" means the **Multimedia** default throughout (what media plays on and what
+//! the volume events follow); switches set Console + Multimedia together (review ENG-13).
 
-use std::collections::HashMap;
-use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
+use std::collections::BTreeMap;
+use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender, SyncSender, TrySendError};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
 use ice_core::config::{Config, ConfigStore, KnobGestures, Loaded};
-use ice_core::device::{EndpointInfo, Flow, Role};
+use ice_core::device::{DeviceState, EndpointInfo, Flow, Role};
 use ice_core::engine::{
     Command, DeviceSummary, Engine, EngineEvent, EngineSnapshot, Envelope, Notice, RoleSet, SpatialMode, VolumeState,
 };
 use ice_core::event::AudioEvent;
 use ice_core::hotkey::Chord;
 use ice_core::resolve::{self, DeviceRef, Resolution, ToggleAction, normalize_name};
+use windows::Win32::Media::Audio::IMMDevice;
 
 use crate::com::ComGuard;
 use crate::endpoints::Endpoints;
+use crate::file_watch::DirWatch;
 use crate::hotkeys::HotkeyService;
 use crate::spatial::{self, SpatialFormat};
 use crate::{notify, policy, volume};
 
-/// Quiet period before a device-change burst is turned into one refresh.
+/// Quiet period before a device-change burst is turned into one refresh (sliding)…
 const REFRESH_DEBOUNCE: Duration = Duration::from_millis(120);
-/// Volume step for Alt+knob (mic volume), in percent.
-const MIC_STEP: f32 = 0.02;
+/// …but never later than this after the first event of the burst.
+const REFRESH_MAX_WAIT: Duration = Duration::from_millis(600);
 /// Editors save in several writes; wait this long after the last change before re-reading.
 const RELOAD_DEBOUNCE: Duration = Duration::from_millis(300);
+/// Volume step for Alt+knob (mic volume).
+const MIC_STEP: f32 = 0.02;
+/// A hung spatial provider must not stall the audio thread (review ENG-02).
+const SPATIAL_WRITE_LIMIT: Duration = Duration::from_secs(3);
+/// Per-subscriber buffer. A subscriber that falls this far behind is dropped and must re-subscribe and
+/// re-read the snapshot (code-practices §6, review ENG-12).
+const SUBSCRIBER_BUFFER: usize = 1024;
+/// Unanswered device pickers kept at most.
+const MAX_PENDING_CHOICES: usize = 8;
 
 enum Msg {
     Command(Command),
+    /// Endpoint notifications and the playback device's volume.
     Audio(AudioEvent),
+    /// The communications microphone's volume/mute.
+    Mic {
+        scalar: f32,
+        muted: bool,
+    },
     Hotkey(i32),
     /// Something in the config folder changed (debounced, then re-read).
     ConfigChanged,
@@ -43,9 +63,7 @@ enum Msg {
 
 struct Shared {
     snapshot: EngineSnapshot,
-    subscribers: Vec<Sender<Envelope>>,
-    /// Notices raised before anyone subscribed (hotkey conflicts, broken config); replayed to new subscribers.
-    startup: Vec<Envelope>,
+    subscribers: Vec<SyncSender<Envelope>>,
 }
 
 fn lock(m: &Mutex<Shared>) -> MutexGuard<'_, Shared> {
@@ -66,16 +84,12 @@ impl AudioEngine {
     /// A readable reason if COM or the audio service is unavailable.
     pub fn start(store: ConfigStore) -> Result<Self, String> {
         let (tx, rx) = mpsc::channel();
-        let shared = Arc::new(Mutex::new(Shared {
-            snapshot: EngineSnapshot::default(),
-            subscribers: Vec::new(),
-            startup: Vec::new(),
-        }));
+        let shared = Arc::new(Mutex::new(Shared { snapshot: EngineSnapshot::default(), subscribers: Vec::new() }));
         let (ready_tx, ready_rx) = mpsc::channel::<Result<(), String>>();
         let (worker_shared, worker_tx) = (Arc::clone(&shared), tx.clone());
         let join = std::thread::Builder::new()
             .name("ice-audio".into())
-            .spawn(move || match Worker::new(store, worker_shared, &worker_tx) {
+            .spawn(move || match Worker::new(store, worker_shared, worker_tx) {
                 Ok(mut w) => {
                     let _ = ready_tx.send(Ok(()));
                     w.run(&rx);
@@ -99,13 +113,10 @@ impl Engine for AudioEngine {
         let _ = self.tx.send(Msg::Command(command));
     }
 
+    /// Persistent problems are in [`EngineSnapshot::notices`]; nothing is replayed (review ENG-08).
     fn subscribe(&self) -> Receiver<Envelope> {
-        let (tx, rx) = mpsc::channel();
-        let mut sh = lock(&self.shared);
-        for env in &sh.startup {
-            let _ = tx.send(env.clone());
-        }
-        sh.subscribers.push(tx);
+        let (tx, rx) = mpsc::sync_channel(SUBSCRIBER_BUFFER);
+        lock(&self.shared).subscribers.push(tx);
         rx
     }
 }
@@ -138,13 +149,6 @@ impl From<Resolution<'_>> for Owned {
     }
 }
 
-/// Where a saved [`DeviceRef`] lives, so a confirmed re-link can be persisted.
-#[derive(Debug, Clone, Copy)]
-enum Loc {
-    Binding(usize),
-    Pair(usize, usize),
-}
-
 #[derive(Debug, Clone)]
 enum HotkeyAction {
     Binding(String),
@@ -155,8 +159,10 @@ enum HotkeyAction {
     KnobMic(f32),
 }
 
+/// An open device picker. Holds the saved reference itself, not an index into the config, so a hot
+/// reload can't make it point at a different binding (review ENG-03).
 struct PendingChoice {
-    loc: Option<Loc>,
+    dref: DeviceRef,
     roles: RoleSet,
 }
 
@@ -165,21 +171,27 @@ struct Worker {
     endpoints: Vec<EndpointInfo>,
     store: ConfigStore,
     config: Config,
+    /// The config file's text as we last read or wrote it, to detect external edits before saving (ENG-04).
+    disk_text: Option<String>,
     shared: Arc<Mutex<Shared>>,
     revision: u64,
-    audio_tx: Sender<AudioEvent>,
-    volume_watch: Option<volume::VolumeWatch>,
+    engine_tx: Sender<Msg>,
+    render_watch: Option<volume::VolumeWatch>,
+    mic_watch: Option<volume::VolumeWatch>,
     _notify: notify::Registration,
     hotkeys: Option<HotkeyService>,
-    actions: HashMap<i32, HotkeyAction>,
-    pending: HashMap<u64, PendingChoice>,
+    actions: BTreeMap<i32, HotkeyAction>,
+    pending: BTreeMap<u64, PendingChoice>,
     next_request: u64,
     refresh_at: Option<Instant>,
-    engine_tx: Sender<Msg>,
-    _config_watch: Option<crate::file_watch::DirWatch>,
+    refresh_first: Option<Instant>,
+    _config_watch: Option<DirWatch>,
     reload_at: Option<Instant>,
-    /// Last hot-reload error shown, so a broken file isn't reported on every save.
-    last_config_error: Option<String>,
+    // Persistent problems, published as `EngineSnapshot::notices`.
+    config_replaced: Option<Notice>,
+    config_invalid: Option<Notice>,
+    save_failed: Option<Notice>,
+    hotkey_conflicts: Vec<Notice>,
     knob_steps: i32,
     /// Direction of the first detent of the current Ctrl+knob gesture.
     knob_first: i32,
@@ -188,35 +200,53 @@ struct Worker {
     _com: ComGuard,
 }
 
-/// Forwards one channel into the engine's message channel on a tiny thread (ends when the sender drops).
-fn forward<T: Send + 'static>(engine: &Sender<Msg>, wrap: fn(T) -> Msg) -> Sender<T> {
-    let (tx, rx) = mpsc::channel::<T>();
-    let engine = engine.clone();
-    let _ = std::thread::Builder::new().name("ice-forward".into()).spawn(move || {
-        for item in rx {
-            if engine.send(wrap(item)).is_err() {
-                break;
-            }
+fn audio_sink(tx: &Sender<Msg>) -> impl Fn(AudioEvent) + Send + Sync + 'static {
+    let tx = tx.clone();
+    move |e| {
+        let _ = tx.send(Msg::Audio(e));
+    }
+}
+
+fn mic_sink(tx: &Sender<Msg>) -> impl Fn(AudioEvent) + Send + Sync + 'static {
+    let tx = tx.clone();
+    move |e| {
+        if let AudioEvent::Volume { scalar, muted } = e {
+            let _ = tx.send(Msg::Mic { scalar, muted });
         }
-    });
-    tx
+    }
 }
 
 impl Worker {
-    fn new(store: ConfigStore, shared: Arc<Mutex<Shared>>, engine_tx: &Sender<Msg>) -> Result<Self, String> {
+    fn new(store: ConfigStore, shared: Arc<Mutex<Shared>>, engine_tx: Sender<Msg>) -> Result<Self, String> {
         let com = ComGuard::init_mta().map_err(|e| format!("COM: {e}"))?;
         let eps = Endpoints::new().map_err(|e| format!("audio service: {e}"))?;
-        let audio_tx = forward(engine_tx, Msg::Audio);
-        let registration = notify::register(eps.raw(), audio_tx.clone()).map_err(|e| format!("notifications: {e}"))?;
+        let registration =
+            notify::register(eps.raw(), audio_sink(&engine_tx)).map_err(|e| format!("notifications: {e}"))?;
         let loaded = store.load();
         let config = loaded.config().clone();
+        let disk_text = match &loaded {
+            Loaded::Ok(_) => store.read_text().ok().flatten(),
+            _ => None,
+        };
+        let config_replaced = match loaded {
+            Loaded::Replaced { backup, error, .. } => Some(Notice::ConfigReplaced {
+                backup: backup
+                    .map_or_else(|| "(could not be moved; left in place)".into(), |b| b.display().to_string()),
+                error,
+            }),
+            _ => None,
+        };
         // Hot reload (code-practices §7): watch the config folder, never poll.
         let config_watch = store.path().parent().and_then(|dir| {
-            std::fs::create_dir_all(dir).ok()?;
+            if let Err(e) = std::fs::create_dir_all(dir) {
+                tracing::warn!(error = %e, "config folder unavailable; hot reload disabled");
+                return None;
+            }
             let tx = engine_tx.clone();
-            crate::file_watch::DirWatch::start(dir, move || {
+            DirWatch::start(dir, move || {
                 let _ = tx.send(Msg::ConfigChanged);
             })
+            .inspect_err(|e| tracing::warn!(error = %e, "config watcher failed; hot reload disabled"))
             .ok()
         });
         let mut w = Self {
@@ -224,30 +254,36 @@ impl Worker {
             endpoints: Vec::new(),
             store,
             config,
+            disk_text,
             shared,
             revision: 0,
-            audio_tx,
-            volume_watch: None,
+            engine_tx,
+            render_watch: None,
+            mic_watch: None,
             _notify: registration,
             hotkeys: None,
-            actions: HashMap::new(),
-            pending: HashMap::new(),
+            actions: BTreeMap::new(),
+            pending: BTreeMap::new(),
             next_request: 1,
             refresh_at: None,
-            engine_tx: engine_tx.clone(),
+            refresh_first: None,
             _config_watch: config_watch,
             reload_at: None,
-            last_config_error: None,
+            config_replaced,
+            config_invalid: None,
+            save_failed: None,
+            hotkey_conflicts: Vec::new(),
             knob_steps: 0,
             knob_first: 0,
             knob_at: None,
             _com: com,
         };
-        if let Loaded::Replaced { backup, error, .. } = loaded {
-            w.startup_notice(Notice::ConfigReplaced { backup: backup.display().to_string(), error });
-        }
         w.refresh(false);
-        w.register_hotkeys(true);
+        w.register_hotkeys();
+        w.publish_notices();
+        // The first snapshot is revision 1, like the fake engine (review ENG-12).
+        w.revision = 1;
+        lock(&w.shared).snapshot.revision = 1;
         Ok(w)
     }
 
@@ -272,10 +308,9 @@ impl Worker {
                 Msg::Quit => break,
                 Msg::Command(c) => self.command(c),
                 Msg::Audio(e) => self.audio(e),
+                Msg::Mic { scalar, muted } => self.on_mic(scalar, muted),
                 Msg::Hotkey(id) => self.hotkey(id),
-                Msg::ConfigChanged => {
-                    self.reload_at = Some(Instant::now() + RELOAD_DEBOUNCE);
-                }
+                Msg::ConfigChanged => self.reload_at = Some(Instant::now() + RELOAD_DEBOUNCE),
             }
         }
     }
@@ -288,6 +323,7 @@ impl Worker {
         }
         if self.refresh_at.is_some_and(|t| t <= now) {
             self.refresh_at = None;
+            self.refresh_first = None;
             self.refresh(true);
         }
         if self.knob_at.is_some_and(|t| t <= now) {
@@ -310,96 +346,146 @@ impl Worker {
         let env = Envelope { revision: self.revision, event };
         let mut sh = lock(&self.shared);
         sh.snapshot.revision = self.revision;
-        sh.subscribers.retain(|tx| tx.send(env.clone()).is_ok());
+        // A full buffer means the subscriber stopped reading: drop it rather than grow without bound.
+        sh.subscribers.retain(|tx| match tx.try_send(env.clone()) {
+            Ok(()) => true,
+            Err(TrySendError::Full(_)) => {
+                tracing::warn!("dropping a subscriber that fell {SUBSCRIBER_BUFFER} events behind");
+                false
+            }
+            Err(TrySendError::Disconnected(_)) => false,
+        });
     }
 
     fn notice(&mut self, notice: Notice) {
         self.emit(EngineEvent::Notice { notice });
     }
 
-    fn startup_notice(&mut self, notice: Notice) {
-        self.revision += 1;
-        let env = Envelope { revision: self.revision, event: EngineEvent::Notice { notice } };
-        let mut sh = lock(&self.shared);
-        sh.snapshot.revision = self.revision;
-        sh.startup.push(env);
+    /// Copies the current persistent problems into the snapshot, and tells subscribers when they changed.
+    fn publish_notices(&mut self) {
+        let notices: Vec<Notice> = [&self.config_replaced, &self.config_invalid, &self.save_failed]
+            .into_iter()
+            .flatten()
+            .cloned()
+            .chain(self.hotkey_conflicts.iter().cloned())
+            .collect();
+        let changed = {
+            let mut sh = lock(&self.shared);
+            let changed = sh.snapshot.notices != notices;
+            sh.snapshot.notices.clone_from(&notices);
+            changed
+        };
+        if changed {
+            self.emit(EngineEvent::NoticesChanged { notices });
+        }
     }
 
     // ---- device state -----------------------------------------------------------------------------
 
-    fn summary(&self, e: &EndpointInfo) -> DeviceSummary {
-        let prefs = self.config.prefs_for(e);
-        let spatial =
-            (e.flow == Flow::Render).then(|| spatial::status(&e.id).ok()).flatten().and_then(|s| match s.active {
-                None => Some(SpatialMode::Off),
-                Some((Some(f), _)) => Some(mode_of(f)),
-                Some((None, _)) => None,
-            });
+    /// A summary without any WinRT calls (spatial unknown).
+    fn summary_basic(&self, e: &EndpointInfo) -> DeviceSummary {
         DeviceSummary {
             id: e.id.clone(),
-            name: prefs
+            name: self
+                .config
+                .prefs_for(e)
                 .and_then(|p| p.alias.clone())
                 .unwrap_or_else(|| normalize_name(e.friendly_name.as_deref().unwrap_or(&e.id))),
             flow: e.flow,
             state: e.state,
-            is_default: e.default_for.contains(&Role::Console),
+            is_default: e.default_for.contains(&Role::Multimedia),
             is_default_communications: e.default_for.contains(&Role::Communications),
             form_factor: e.form_factor,
             is_virtual: e.hardware_key.as_deref().is_some_and(|k| k.starts_with("ROOT\\") || k.starts_with("SWD\\")),
-            spatial,
+            spatial: None,
         }
+    }
+
+    /// Full summary: one fast spatial read for playback devices (review ENG-02).
+    fn summary(&self, e: &EndpointInfo) -> DeviceSummary {
+        let spatial = if e.flow == Flow::Render { spatial::active(&e.id).ok().and_then(mode_from) } else { None };
+        DeviceSummary { spatial, ..self.summary_basic(e) }
     }
 
     /// Re-enumerates, updates the snapshot and (when `notify`) emits arrivals, departures and `DevicesChanged`.
     fn refresh(&mut self, notify: bool) {
-        let Ok(fresh) = self.eps.list(false) else { return };
+        let fresh = match self.eps.list(false) {
+            Ok(f) => f,
+            Err(e) => {
+                tracing::warn!(error = %e, "endpoint enumeration failed; keeping the previous device list");
+                return;
+            }
+        };
         let old = std::mem::replace(&mut self.endpoints, fresh);
-        let old_default = old
-            .iter()
-            .find(|e| e.flow == Flow::Render && e.default_for.contains(&Role::Multimedia))
-            .map(|e| e.id.clone());
-        let new_default = self.default_id(Flow::Render, Role::Multimedia);
+        let current = |list: &[EndpointInfo]| {
+            list.iter()
+                .find(|e| e.flow == Flow::Render && e.default_for.contains(&Role::Multimedia))
+                .map(|e| e.id.clone())
+        };
+        let (old_default, new_default) = (current(&old), current(&self.endpoints));
 
-        let visible = |w: &Self, flow: Flow| -> Vec<DeviceSummary> {
-            w.endpoints
+        // One summary per endpoint per refresh (review ENG-02).
+        let summaries: Vec<DeviceSummary> = self.endpoints.iter().map(|e| self.summary(e)).collect();
+        let visible = |flow: Flow| -> Vec<DeviceSummary> {
+            self.endpoints
                 .iter()
-                .filter(|e| e.flow == flow && !w.config.prefs_for(e).is_some_and(|p| p.hidden))
-                .map(|e| w.summary(e))
+                .zip(&summaries)
+                .filter(|(e, _)| e.flow == flow && !self.config.prefs_for(e).is_some_and(|p| p.hidden))
+                .map(|(_, s)| s.clone())
                 .collect()
         };
-        let (playback, recording) = (visible(self, Flow::Render), visible(self, Flow::Capture));
-        let volume = self.default_volume();
-        let mic_muted = self.mic_device().and_then(|d| volume::get(&d).ok()).map(|(_, m)| m);
+        let (playback, recording) = (visible(Flow::Render), visible(Flow::Capture));
+
+        // Re-create both watches on every refresh: a same-ID reconnect can leave the old interfaces stale (ENG-07).
+        self.render_watch = None;
+        self.mic_watch = None;
+        let render_dev = self.eps.default_device(Flow::Render, Role::Multimedia).ok();
+        let mic_dev = self.mic_device();
+        self.render_watch = render_dev.as_ref().and_then(|d| {
+            volume::VolumeWatch::new(d, audio_sink(&self.engine_tx))
+                .inspect_err(|e| tracing::warn!(error = %e, "playback volume watch failed"))
+                .ok()
+        });
+        self.mic_watch = mic_dev.as_ref().and_then(|d| {
+            volume::VolumeWatch::new(d, mic_sink(&self.engine_tx))
+                .inspect_err(|e| tracing::warn!(error = %e, "microphone volume watch failed"))
+                .ok()
+        });
+        let volume = render_dev
+            .as_ref()
+            .and_then(|d| volume::get(d).ok())
+            .map(|(scalar, muted)| VolumeState { percent: percent(scalar), muted });
+        let mic = mic_dev.as_ref().and_then(|d| volume::get(d).ok());
+
         let lists_changed = {
             let mut sh = lock(&self.shared);
             let changed = sh.snapshot.playback != playback || sh.snapshot.recording != recording;
             sh.snapshot.playback.clone_from(&playback);
             sh.snapshot.recording.clone_from(&recording);
             sh.snapshot.volume = volume;
-            sh.snapshot.mic_muted = mic_muted;
+            sh.snapshot.mic_muted = mic.map(|(_, m)| m);
+            sh.snapshot.mic_volume = mic.map(|(s, _)| percent(s));
             changed
         };
-        if old_default != new_default || self.volume_watch.is_none() {
-            self.volume_watch = self
-                .eps
-                .default_device(Flow::Render, Role::Multimedia)
-                .ok()
-                .and_then(|d| volume::VolumeWatch::new(&d, self.audio_tx.clone()).ok());
-        }
         if !notify {
             return;
         }
-        let arrived: Vec<DeviceSummary> =
-            self.endpoints.iter().filter(|e| !old.iter().any(|o| o.id == e.id)).map(|e| self.summary(e)).collect();
+        let arrived: Vec<DeviceSummary> = self
+            .endpoints
+            .iter()
+            .zip(&summaries)
+            .filter(|(e, _)| !old.iter().any(|o| o.id == e.id))
+            .map(|(_, s)| s.clone())
+            .collect();
+        // Departed devices: no WinRT calls on endpoints that are gone.
         let left: Vec<DeviceSummary> = old
             .iter()
             .filter(|o| !self.endpoints.iter().any(|e| e.id == o.id))
             .map(|o| DeviceSummary {
-                state: ice_core::device::DeviceState::NotPresent,
+                state: DeviceState::NotPresent,
                 is_default: false,
                 is_default_communications: false,
-                spatial: None,
-                ..self.summary(o)
+                ..self.summary_basic(o)
             })
             .collect();
         for device in arrived {
@@ -422,13 +508,7 @@ impl Worker {
         self.endpoints.iter().find(|e| e.flow == flow && e.default_for.contains(&role)).map(|e| e.id.clone())
     }
 
-    fn default_volume(&self) -> Option<VolumeState> {
-        let dev = self.eps.default_device(Flow::Render, Role::Multimedia).ok()?;
-        let (scalar, muted) = volume::get(&dev).ok()?;
-        Some(VolumeState { percent: percent(scalar), muted })
-    }
-
-    fn mic_device(&self) -> Option<windows::Win32::Media::Audio::IMMDevice> {
+    fn mic_device(&self) -> Option<IMMDevice> {
         self.eps.default_device(Flow::Capture, Role::Communications).ok()
     }
 
@@ -442,40 +522,129 @@ impl Worker {
             // Very chatty and rarely user-visible; a real change also arrives as state/default events.
             AudioEvent::PropertyChanged { .. } => {}
             _ => {
-                self.refresh_at.get_or_insert_with(|| Instant::now() + REFRESH_DEBOUNCE);
+                // Sliding quiet window, capped so a long burst still refreshes (review ENG-09).
+                let now = Instant::now();
+                let first = *self.refresh_first.get_or_insert(now);
+                self.refresh_at = Some((now + REFRESH_DEBOUNCE).min(first + REFRESH_MAX_WAIT));
             }
         }
+    }
+
+    /// Microphone volume/mute from the mic watch or our own changes; emits only real changes.
+    fn on_mic(&mut self, scalar: f32, muted: bool) {
+        let p = percent(scalar);
+        let (muted_changed, volume_changed) = {
+            let mut sh = lock(&self.shared);
+            let changes = (sh.snapshot.mic_muted != Some(muted), sh.snapshot.mic_volume != Some(p));
+            sh.snapshot.mic_muted = Some(muted);
+            sh.snapshot.mic_volume = Some(p);
+            changes
+        };
+        if muted_changed {
+            self.emit(EngineEvent::MicMuteChanged { muted });
+        }
+        if volume_changed {
+            self.emit(EngineEvent::MicVolumeChanged { percent: p });
+        }
+    }
+
+    // ---- config -----------------------------------------------------------------------------------
+
+    /// Applies an edited config.toml. Invalid files are reported once and the last valid config stays in effect.
+    fn reload_config(&mut self) {
+        let text = match self.store.read_text() {
+            Ok(Some(t)) => t,
+            Ok(None) => return, // deleted: keep running; the next save recreates it
+            Err(e) => return self.config_problem(format!("config I/O error: {e}")),
+        };
+        if Some(&text) == self.disk_text.as_ref() {
+            // Our own save, or the user put back the last good file: nothing to apply, but a reported problem is over.
+            if self.config_invalid.take().is_some() {
+                self.publish_notices();
+            }
+            return;
+        }
+        match Config::from_toml(&text) {
+            Ok(cfg) => {
+                self.disk_text = Some(text);
+                self.config_invalid = None;
+                self.config_replaced = None;
+                self.set_config(cfg);
+            }
+            Err(e) => self.config_problem(e.to_string()),
+        }
+    }
+
+    fn config_problem(&mut self, error: String) {
+        let notice = Notice::ConfigInvalid { error };
+        if self.config_invalid.as_ref() != Some(&notice) {
+            self.config_invalid = Some(notice.clone());
+            self.publish_notices();
+            self.notice(notice);
+        }
+    }
+
+    fn set_config(&mut self, cfg: Config) {
+        if cfg != self.config {
+            self.config = cfg;
+            self.pending.clear(); // pickers refer to the old bindings (review ENG-03)
+            self.hotkeys = None; // dropping the service unregisters every chord
+            self.actions.clear();
+            self.register_hotkeys();
+            self.refresh(true);
+        }
+        self.publish_notices();
+    }
+
+    /// After a confirmed switch to a re-created endpoint, points every reference to the old endpoint at the new
+    /// one and saves. If the file changed on disk since we last read it, the user's version is adopted first;
+    /// a half-edited (invalid) file is never overwritten (code-practices §7, review ENG-04/ENG-10).
+    fn persist_relink(&mut self, old: &DeviceRef, target: &EndpointInfo) {
+        match self.store.read_text() {
+            Ok(text) if text != self.disk_text => {
+                if let Some(t) = text {
+                    match Config::from_toml(&t) {
+                        Ok(cfg) => {
+                            self.disk_text = Some(t);
+                            self.set_config(cfg);
+                        }
+                        Err(_) => {
+                            self.reload_at = Some(Instant::now() + RELOAD_DEBOUNCE);
+                            return self
+                                .save_problem("config.toml is being edited and is invalid; re-link not saved".into());
+                        }
+                    }
+                }
+            }
+            Ok(_) => {}
+            Err(e) => return self.save_problem(e.to_string()),
+        }
+        if self.config.relink_all(&old.endpoint_id, target) == 0 {
+            return;
+        }
+        match self.store.save(&self.config) {
+            Ok(text) => {
+                self.disk_text = Some(text);
+                if self.save_failed.take().is_some() {
+                    self.publish_notices();
+                }
+            }
+            Err(e) => self.save_problem(e.to_string()),
+        }
+    }
+
+    fn save_problem(&mut self, error: String) {
+        tracing::warn!(%error, "config save failed");
+        let notice = Notice::ConfigSaveFailed { error };
+        self.save_failed = Some(notice.clone());
+        self.publish_notices();
+        self.notice(notice);
     }
 
     // ---- hotkeys ----------------------------------------------------------------------------------
 
-    /// Applies an edited config.toml. Invalid files are reported once and the last valid config stays in effect;
-    /// the engine's own saves (re-links) parse equal and are ignored.
-    fn reload_config(&mut self) {
-        match self.store.read() {
-            Ok(Some(cfg)) => {
-                self.last_config_error = None;
-                if cfg == self.config {
-                    return;
-                }
-                self.config = cfg;
-                self.hotkeys = None; // dropping the service unregisters every chord
-                self.actions.clear();
-                self.register_hotkeys(false);
-                self.refresh(true);
-            }
-            Ok(None) => {} // deleted: keep running with what we have; the next save recreates it
-            Err(e) => {
-                let error = e.to_string();
-                if self.last_config_error.as_deref() != Some(error.as_str()) {
-                    self.last_config_error = Some(error.clone());
-                    self.notice(Notice::ConfigInvalid { error });
-                }
-            }
-        }
-    }
-
-    fn register_hotkeys(&mut self, startup: bool) {
+    fn register_hotkeys(&mut self) {
+        self.hotkey_conflicts.clear();
         let mut wanted: Vec<(Chord, HotkeyAction, String, bool)> = Vec::new();
         for b in &self.config.bindings {
             if let Some(c) = b.hotkey {
@@ -494,15 +663,26 @@ impl Worker {
         if wanted.is_empty() {
             return;
         }
-        let Ok(svc) = HotkeyService::start(forward(&self.engine_tx, Msg::Hotkey)) else { return };
+        let tx = self.engine_tx.clone();
+        let svc = match HotkeyService::start(move |id| {
+            let _ = tx.send(Msg::Hotkey(id));
+        }) {
+            Ok(s) => s,
+            Err(e) => {
+                tracing::warn!(error = %e, "hotkey service failed to start");
+                return;
+            }
+        };
         for (id, (chord, action, name, repeat)) in (1..).zip(wanted) {
             match svc.register(id, chord, repeat) {
                 Ok(()) => {
                     self.actions.insert(id, action);
                 }
-                Err(_) => {
+                Err(e) => {
+                    tracing::warn!(%chord, error = %e, "hotkey unavailable");
                     let notice = Notice::HotkeyConflict { binding_id: name, keys: chord.to_string() };
-                    if startup { self.startup_notice(notice) } else { self.notice(notice) }
+                    self.hotkey_conflicts.push(notice.clone());
+                    self.notice(notice);
                 }
             }
         }
@@ -527,9 +707,12 @@ impl Worker {
             HotkeyAction::KnobFine(delta) => self.command(Command::StepVolume { delta }),
             HotkeyAction::KnobMic(delta) => {
                 if let Some(dev) = self.mic_device()
-                    && let Ok((scalar, _)) = volume::get(&dev)
+                    && let Ok((scalar, muted)) = volume::get(&dev)
                 {
-                    let _ = volume::set_scalar(&dev, scalar + delta);
+                    let target = (scalar + delta).clamp(0.0, 1.0);
+                    if volume::set_scalar(&dev, target).is_ok() {
+                        self.on_mic(target, muted); // immediate feedback; the watch callback dedupes
+                    }
                 }
             }
         }
@@ -540,30 +723,28 @@ impl Worker {
     fn command(&mut self, command: Command) {
         match command {
             Command::SwitchTo { device_id, roles } => {
-                match self.endpoints.iter().find(|e| e.id == device_id).cloned() {
+                match self.endpoints.iter().find(|e| e.id.eq_ignore_ascii_case(&device_id)).cloned() {
                     Some(target) => self.switch(&target, roles, None),
                     None => self.notice(Notice::NotConnected { name: device_id }),
                 }
             }
             Command::SwitchBinding { binding_id } => {
-                let Some(i) = self.config.bindings.iter().position(|b| b.id == binding_id) else { return };
-                let b = &self.config.bindings[i];
+                let Some(b) = self.config.bindings.iter().find(|b| b.id == binding_id) else { return };
                 let (dref, roles) = (b.device.clone(), b.roles.unwrap_or(self.config.default_roles));
                 let res = Owned::from(resolve::resolve(&dref, &self.endpoints));
-                self.follow(&dref, res, roles, Loc::Binding(i));
+                self.follow(&dref, res, roles);
             }
             Command::TogglePair { pair_id } => {
-                let Some(i) = self.config.toggle_pairs.iter().position(|p| p.id == pair_id) else { return };
-                let p = &self.config.toggle_pairs[i];
+                let Some(p) = self.config.toggle_pairs.iter().find(|p| p.id == pair_id) else { return };
                 let roles = p.roles.unwrap_or(self.config.default_roles);
                 let pair = [p.primary.clone(), p.secondary.clone()];
-                let current = self.default_id(pair[0].flow, Role::Console);
+                let current = self.default_id(pair[0].flow, Role::Multimedia);
                 let (side, res) = match resolve::toggle([&pair[0], &pair[1]], current.as_deref(), &self.endpoints) {
                     ToggleAction::SwitchTo { side, resolution } | ToggleAction::Unavailable { side, resolution } => {
                         (side, Owned::from(resolution))
                     }
                 };
-                self.follow(&pair[side], res, roles, Loc::Pair(i, side));
+                self.follow(&pair[side], res, roles);
             }
             Command::CycleFavourites { flow, step } => self.cycle(flow, i32::from(step)),
             Command::SetVolume { percent } => self.with_default_volume(|dev, _, _| {
@@ -577,31 +758,32 @@ impl Worker {
             }),
             Command::ToggleMicMute => {
                 if let Some(dev) = self.mic_device()
-                    && let Ok((_, muted)) = volume::get(&dev)
+                    && let Ok((scalar, muted)) = volume::get(&dev)
                     && volume::set_mute(&dev, !muted).is_ok()
                 {
-                    lock(&self.shared).snapshot.mic_muted = Some(!muted);
-                    self.emit(EngineEvent::MicMuteChanged { muted: !muted });
+                    self.on_mic(scalar, !muted);
                 }
             }
             Command::SetSpatial { device_id, mode } => {
-                if let Some(target) = self.endpoints.iter().find(|e| e.id == device_id).cloned() {
+                if let Some(target) = self.endpoints.iter().find(|e| e.id.eq_ignore_ascii_case(&device_id)).cloned() {
                     self.apply_spatial(&target, mode);
                     self.refresh(true);
                 }
             }
             Command::ResolveChoice { request_id, device_id } => {
                 let Some(p) = self.pending.remove(&request_id) else { return };
-                if let Some(target) = device_id.and_then(|id| self.endpoints.iter().find(|e| e.id == id).cloned()) {
-                    // The user confirmed this device, so a re-link is persisted after the switch.
-                    self.switch_relinked(&target, p.roles, p.loc);
+                let target =
+                    device_id.and_then(|id| self.endpoints.iter().find(|e| e.id.eq_ignore_ascii_case(&id)).cloned());
+                if let Some(target) = target {
+                    // The user confirmed this device, so the re-link is persisted after the switch.
+                    self.switch(&target, p.roles, Some(p.dref));
                 }
             }
             Command::Refresh => self.refresh(true),
         }
     }
 
-    fn with_default_volume(&self, f: impl FnOnce(&windows::Win32::Media::Audio::IMMDevice, f32, bool)) {
+    fn with_default_volume(&self, f: impl FnOnce(&IMMDevice, f32, bool)) {
         if let Ok(dev) = self.eps.default_device(Flow::Render, Role::Multimedia)
             && let Ok((scalar, muted)) = volume::get(&dev)
         {
@@ -610,24 +792,20 @@ impl Worker {
     }
 
     /// Acts on a resolution of a saved reference.
-    fn follow(&mut self, dref: &DeviceRef, res: Owned, roles: RoleSet, loc: Loc) {
+    fn follow(&mut self, dref: &DeviceRef, res: Owned, roles: RoleSet) {
         match res {
             Owned::Exact(t) => self.switch(&t, roles, None),
-            Owned::Relinked(t) => self.switch_relinked(&t, roles, Some(loc)),
+            Owned::Relinked(t) => self.switch(&t, roles, Some(dref.clone())),
             Owned::Choose => {
-                let candidates: Vec<DeviceSummary> = self
-                    .endpoints
-                    .iter()
-                    .filter(|e| e.flow == dref.flow)
-                    .filter(|e| {
-                        (dref.hardware_key.is_some() && e.hardware_key == dref.hardware_key)
-                            || (dref.container_id.is_some() && e.container_id == dref.container_id)
-                    })
-                    .map(|e| self.summary(e))
-                    .collect();
+                // Same rules as the resolver (review ENG-06).
+                let candidates: Vec<DeviceSummary> =
+                    resolve::candidates(dref, &self.endpoints).into_iter().map(|e| self.summary_basic(e)).collect();
                 let request_id = self.next_request;
                 self.next_request += 1;
-                self.pending.insert(request_id, PendingChoice { loc: Some(loc), roles });
+                self.pending.insert(request_id, PendingChoice { dref: dref.clone(), roles });
+                while self.pending.len() > MAX_PENDING_CHOICES {
+                    self.pending.pop_first();
+                }
                 self.notice(Notice::ChooseDevice { request_id, name: dref.display_name.clone(), candidates });
             }
             Owned::NotConnected => self.notice(Notice::NotConnected { name: dref.display_name.clone() }),
@@ -649,7 +827,7 @@ impl Worker {
             return;
         }
         let n = i32::try_from(targets.len()).unwrap_or(1);
-        let current = self.default_id(flow, Role::Console);
+        let current = self.default_id(flow, Role::Multimedia);
         let cur =
             targets.iter().position(|t| Some(&t.id) == current.as_ref()).map_or(-1, |i| i32::try_from(i).unwrap_or(0));
         let next = usize::try_from((cur + steps).rem_euclid(n)).unwrap_or(0);
@@ -660,17 +838,14 @@ impl Worker {
         self.switch(&target, self.config.default_roles, None);
     }
 
-    fn switch_relinked(&mut self, target: &EndpointInfo, roles: RoleSet, loc: Option<Loc>) {
-        self.switch(target, roles, Some(loc));
-    }
-
     /// Switches, confirms by re-reading the defaults, persists a re-link only after confirmation (D-16),
     /// then applies the device's spatial preference (D-17).
-    /// `relink`: `None` = not a re-link; `Some(loc)` = the binding at `loc` followed the device to `target`.
-    fn switch(&mut self, target: &EndpointInfo, roles: RoleSet, relink: Option<Option<Loc>>) {
-        let name = self.summary(target).name;
+    /// `relink_from`: the saved reference that followed the device to `target`, if this is a re-link.
+    fn switch(&mut self, target: &EndpointInfo, roles: RoleSet, relink_from: Option<DeviceRef>) {
+        let name = self.summary_basic(target).name;
         let wanted = roles.roles();
-        if policy::set_default(&target.id, wanted).is_err() {
+        if let Err(e) = policy::set_default(&target.id, wanted) {
+            tracing::warn!(error = %e, device = %name, "IPolicyConfig unavailable");
             self.notice(Notice::SwitchFailed { name, failed_roles: wanted.to_vec() });
             return;
         }
@@ -689,8 +864,8 @@ impl Worker {
                 return;
             }
         }
-        if let Some(Some(loc)) = relink {
-            self.persist_relink(loc, target);
+        if let Some(old) = &relink_from {
+            self.persist_relink(old, target);
         }
         let spatial_applied = self
             .config
@@ -699,53 +874,36 @@ impl Worker {
             .filter(|m| *m != SpatialMode::Keep)
             .and_then(|mode| self.apply_spatial(target, mode));
         self.refresh(true);
-        let device =
-            self.endpoints.iter().find(|e| e.id == target.id).map_or_else(|| self.summary(target), |e| self.summary(e));
-        self.emit(EngineEvent::Switched { device, roles, relinked: relink.is_some(), spatial_applied });
+        let device = {
+            let sh = lock(&self.shared);
+            sh.snapshot.playback.iter().chain(&sh.snapshot.recording).find(|d| d.id == target.id).cloned()
+        }
+        .unwrap_or_else(|| self.summary_basic(target));
+        self.emit(EngineEvent::Switched { device, roles, relinked: relink_from.is_some(), spatial_applied });
     }
 
-    fn persist_relink(&mut self, loc: Loc, target: &EndpointInfo) {
-        let old = match loc {
-            Loc::Binding(i) => self.config.bindings.get(i).map(|b| b.device.clone()),
-            Loc::Pair(i, 0) => self.config.toggle_pairs.get(i).map(|p| p.primary.clone()),
-            Loc::Pair(i, _) => self.config.toggle_pairs.get(i).map(|p| p.secondary.clone()),
-        };
-        let Some(old) = old else { return };
-        let new = old.relinked_to(target);
-        match loc {
-            Loc::Binding(i) => self.config.bindings[i].device = new.clone(),
-            Loc::Pair(i, 0) => self.config.toggle_pairs[i].primary = new.clone(),
-            Loc::Pair(i, _) => self.config.toggle_pairs[i].secondary = new.clone(),
-        }
-        // Keep this device's preferences (spatial, alias) attached to the same device.
-        for p in &mut self.config.devices {
-            if p.device.endpoint_id == old.endpoint_id {
-                p.device = p.device.relinked_to(target);
-            }
-        }
-        let _ = self.store.save(&self.config);
-    }
-
-    /// Read-before-write, then read back. Returns the mode only when Windows confirms it (D-17).
+    /// Read-before-write, bounded write, read back. Returns the mode only when Windows confirms it (D-17).
     fn apply_spatial(&mut self, target: &EndpointInfo, mode: SpatialMode) -> Option<SpatialMode> {
         let wanted = format_of(mode)?;
         if target.flow != Flow::Render {
             return None;
         }
-        let name = self.summary(target).name;
-        let current = spatial::status(&target.id).ok()?.default.map(|(f, _)| f);
-        if current == Some(wanted) || (current.is_none() && wanted.is_none()) {
+        let selected = |id: &str| spatial::selected(id).ok().map(|s| s.and_then(|(f, _)| f));
+        let is_wanted = |sel: Option<Option<SpatialFormat>>| sel == Some(wanted);
+        if is_wanted(selected(&target.id)) {
             return Some(mode);
         }
-        let status = spatial::set_default(&target.id, wanted);
-        let confirmed = spatial::status(&target.id).ok().map(|s| s.default.and_then(|(f, _)| f)) == Some(wanted);
-        if confirmed {
-            Some(mode)
-        } else {
-            let reason = status.map_or_else(|e| e.message(), str::to_string);
-            self.notice(Notice::SpatialUnavailable { name, mode, reason });
-            None
+        let status = spatial::set_default_within(&target.id, wanted, SPATIAL_WRITE_LIMIT);
+        if is_wanted(selected(&target.id)) {
+            return Some(mode);
         }
+        let reason = match status {
+            Ok(s) => s.to_string(),
+            Err(e) => e,
+        };
+        let name = self.summary_basic(target).name;
+        self.notice(Notice::SpatialUnavailable { name, mode, reason });
+        None
     }
 }
 
@@ -771,15 +929,20 @@ fn format_of(mode: SpatialMode) -> Option<Option<SpatialFormat>> {
     })
 }
 
-fn mode_of(f: SpatialFormat) -> SpatialMode {
-    match f {
-        SpatialFormat::WindowsSonic => SpatialMode::WindowsSonic,
-        SpatialFormat::DolbyAtmosHeadphones => SpatialMode::DolbyAtmosHeadphones,
-        SpatialFormat::DolbyAtmosHomeTheater => SpatialMode::DolbyAtmosHomeTheater,
-        SpatialFormat::DolbyAtmosSpeakers => SpatialMode::DolbyAtmosSpeakers,
-        SpatialFormat::DtsHeadphoneX => SpatialMode::DtsHeadphoneX,
-        SpatialFormat::DtsXUltra => SpatialMode::DtsXUltra,
-        SpatialFormat::DtsXHomeTheater => SpatialMode::DtsXHomeTheater,
+/// Active spatial state → UI mode. `None` = an unknown provider.
+fn mode_from(active: Option<(Option<SpatialFormat>, String)>) -> Option<SpatialMode> {
+    match active {
+        None => Some(SpatialMode::Off),
+        Some((Some(f), _)) => Some(match f {
+            SpatialFormat::WindowsSonic => SpatialMode::WindowsSonic,
+            SpatialFormat::DolbyAtmosHeadphones => SpatialMode::DolbyAtmosHeadphones,
+            SpatialFormat::DolbyAtmosHomeTheater => SpatialMode::DolbyAtmosHomeTheater,
+            SpatialFormat::DolbyAtmosSpeakers => SpatialMode::DolbyAtmosSpeakers,
+            SpatialFormat::DtsHeadphoneX => SpatialMode::DtsHeadphoneX,
+            SpatialFormat::DtsXUltra => SpatialMode::DtsXUltra,
+            SpatialFormat::DtsXHomeTheater => SpatialMode::DtsXHomeTheater,
+        }),
+        Some((None, _)) => None,
     }
 }
 

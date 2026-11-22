@@ -126,6 +126,46 @@ pub fn status(endpoint_id: &str) -> Result<SpatialStatus> {
     })
 }
 
+/// Fast read of what is active right now: one config lookup + one property, no format probing (review ENG-02).
+/// `Ok(None)` = off; `Ok(Some((None, raw)))` = an unknown provider.
+///
+/// # Errors
+/// Fails if the endpoint isn't a render endpoint or the WinRT API is unavailable.
+pub fn active(endpoint_id: &str) -> Result<Option<(Option<SpatialFormat>, String)>> {
+    Ok(classify(config(endpoint_id)?.ActiveSpatialAudioFormat()?))
+}
+
+/// Fast read of what the user selected (the value [`set_default`] changes).
+///
+/// # Errors
+/// As [`active`].
+pub fn selected(endpoint_id: &str) -> Result<Option<(Option<SpatialFormat>, String)>> {
+    Ok(classify(config(endpoint_id)?.DefaultSpatialAudioFormat()?))
+}
+
+/// [`set_default`] on a helper thread with a time limit, so a hung spatial provider can't stall the caller
+/// (review ENG-02). On timeout the write may still complete later; callers re-read to find out.
+///
+/// # Errors
+/// The Windows error, or `"timed out"`.
+pub fn set_default_within(
+    endpoint_id: &str,
+    format: Option<SpatialFormat>,
+    limit: std::time::Duration,
+) -> std::result::Result<&'static str, String> {
+    let (tx, rx) = std::sync::mpsc::channel();
+    let id = endpoint_id.to_string();
+    std::thread::Builder::new()
+        .name("ice-spatial-set".into())
+        .spawn(move || {
+            let result =
+                crate::com::ComGuard::init_mta().and_then(|_com| set_default(&id, format)).map_err(|e| e.message());
+            let _ = tx.send(result);
+        })
+        .map_err(|e| e.to_string())?;
+    rx.recv_timeout(limit).unwrap_or_else(|_| Err("timed out".into()))
+}
+
 /// Sets the default spatial format (`None` = off) and returns Windows' status, e.g. `Succeeded`,
 /// `AccessDenied`, `LicenseNotValidForAudioEndpoint`.
 ///

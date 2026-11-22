@@ -173,6 +173,30 @@ impl Config {
         let one = std::slice::from_ref(endpoint);
         self.devices.iter().find(|p| crate::resolve::resolve(&p.device, one).target().is_some())
     }
+
+    /// Every saved device reference: bindings, both sides of toggle pairs, device preferences, favourites.
+    pub fn device_refs_mut(&mut self) -> impl Iterator<Item = &mut DeviceRef> {
+        self.bindings
+            .iter_mut()
+            .map(|b| &mut b.device)
+            .chain(self.toggle_pairs.iter_mut().flat_map(|p| [&mut p.primary, &mut p.secondary]))
+            .chain(self.devices.iter_mut().map(|d| &mut d.device))
+            .chain(self.favourites.playback.iter_mut())
+            .chain(self.favourites.recording.iter_mut())
+    }
+
+    /// After a confirmed switch to a re-created endpoint, points *every* reference to the old endpoint at the
+    /// new one (review ENG-10), keeping each reference's display name and match mode. Returns how many changed.
+    pub fn relink_all(&mut self, old_endpoint_id: &str, target: &crate::device::EndpointInfo) -> usize {
+        let mut n = 0;
+        for r in self.device_refs_mut() {
+            if r.endpoint_id.eq_ignore_ascii_case(old_endpoint_id) && r.flow == target.flow {
+                *r = r.relinked_to(target);
+                n += 1;
+            }
+        }
+        n
+    }
 }
 
 /// Loads and saves the config file.
@@ -186,10 +210,11 @@ pub enum Loaded {
     Ok(Config),
     /// No file yet: defaults.
     Missing(Config),
-    /// The file was unusable; it was renamed to `backup` and defaults are used. Tell the user.
+    /// The file was unusable; defaults are used. Tell the user. `backup` is where the broken file went,
+    /// or `None` if it couldn't be moved (it's then left in place untouched).
     Replaced {
         config: Config,
-        backup: PathBuf,
+        backup: Option<PathBuf>,
         error: String,
     },
 }
@@ -229,9 +254,10 @@ impl ConfigStore {
     }
 
     fn replace_broken(&self, error: &str) -> Loaded {
-        let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
-        let backup = self.path.with_extension(format!("invalid-{stamp}.toml"));
-        let _ = std::fs::rename(&self.path, &backup);
+        // Millisecond stamp: quick restarts mustn't collide (review ENG-04).
+        let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis());
+        let target = self.path.with_extension(format!("invalid-{stamp}.toml"));
+        let backup = std::fs::rename(&self.path, &target).ok().map(|()| target);
         Loaded::Replaced { config: Config::default(), backup, error: error.to_string() }
     }
 
@@ -248,17 +274,49 @@ impl ConfigStore {
         }
     }
 
-    /// Atomic save: write a temp file next to the target, then rename over it.
+    /// The file's current text, for detecting external edits before an automatic save. `None` if missing.
     ///
     /// # Errors
-    /// I/O failures (folder not writable, disk full).
-    pub fn save(&self, cfg: &Config) -> Result<(), ConfigError> {
+    /// I/O errors other than "not found".
+    pub fn read_text(&self) -> std::io::Result<Option<String>> {
+        match std::fs::read_to_string(&self.path) {
+            Ok(t) => Ok(Some(t)),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+
+    /// Atomic save: write and flush a temp file next to the target, then rename over it. Windows briefly
+    /// locks files that editors or antivirus have open, so the rename is retried; the temp file is
+    /// removed if it never lands (review ENG-04). Returns the text written.
+    ///
+    /// # Errors
+    /// I/O failures (folder not writable, disk full, file locked for longer than the retries).
+    pub fn save(&self, cfg: &Config) -> Result<String, ConfigError> {
+        use std::io::Write as _;
         if let Some(dir) = self.path.parent() {
             std::fs::create_dir_all(dir).map_err(ConfigError::Io)?;
         }
+        let text = cfg.to_toml();
         let tmp = self.path.with_extension("toml.tmp");
-        std::fs::write(&tmp, cfg.to_toml()).map_err(ConfigError::Io)?;
-        std::fs::rename(&tmp, &self.path).map_err(ConfigError::Io)
+        let written = std::fs::File::create(&tmp).and_then(|mut f| {
+            f.write_all(text.as_bytes())?;
+            f.sync_all()
+        });
+        if let Err(e) = written {
+            let _ = std::fs::remove_file(&tmp);
+            return Err(ConfigError::Io(e));
+        }
+        let mut last = None;
+        for attempt in 0..5 {
+            match std::fs::rename(&tmp, &self.path) {
+                Ok(()) => return Ok(text),
+                Err(e) => last = Some(e),
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20 * (attempt + 1)));
+        }
+        let _ = std::fs::remove_file(&tmp);
+        Err(ConfigError::Io(last.unwrap_or_else(|| std::io::Error::other("rename failed"))))
     }
 }
 
@@ -336,7 +394,7 @@ mod tests {
         match store.load() {
             Loaded::Replaced { config, backup, .. } => {
                 assert_eq!(config, Config::default());
-                assert!(backup.exists() && !store.path().exists());
+                assert!(backup.is_some_and(|b| b.exists()) && !store.path().exists());
             }
             other => panic!("expected Replaced, got {other:?}"),
         }
@@ -354,5 +412,33 @@ mod tests {
         assert!(matches!(store.read(), Err(ConfigError::Parse(_))));
         assert!(store.path().exists(), "the user's file must stay where it is");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn relink_all_updates_every_reference_to_the_old_endpoint() {
+        let mut cfg = owner_config();
+        cfg.favourites.playback.push(dref("arctis", "Headphones (Arctis Nova 7)"));
+        let new = crate::device::EndpointInfo {
+            id: "arctis-new".into(),
+            flow: Flow::Render,
+            state: crate::device::DeviceState::Active,
+            friendly_name: Some("Headphones (2- Arctis Nova 7)".into()),
+            endpoint_name: Some("Headphones".into()),
+            interface_name: Some("2- Arctis Nova 7".into()),
+            devnode: None,
+            hardware_key: Some(r"USB\VID_1038&PID_22A1&MI_00".into()),
+            container_id: Some("{8EC256AB}".into()),
+            form_factor: Some(3),
+            stable_id: None,
+            default_for: vec![],
+        };
+        // Pair primary + device prefs + favourite point at "arctis" (matched case-insensitively); the speakers don't.
+        assert_eq!(cfg.relink_all("ARCTIS", &new), 3);
+        assert_eq!(cfg.toggle_pairs[0].primary.endpoint_id, "arctis-new");
+        assert_eq!(cfg.toggle_pairs[0].primary.display_name, "Headphones (Arctis Nova 7)");
+        assert_eq!(cfg.toggle_pairs[0].primary.interface_name.as_deref(), Some("Arctis Nova 7"));
+        assert_eq!(cfg.devices[0].device.endpoint_id, "arctis-new");
+        assert_eq!(cfg.favourites.playback[0].endpoint_id, "arctis-new");
+        assert_eq!(cfg.toggle_pairs[0].secondary.endpoint_id, "realtek");
     }
 }

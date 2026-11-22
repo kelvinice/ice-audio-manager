@@ -125,5 +125,6 @@ Keep the `engine` window visible. "Expect" lines refer to what it prints. In lat
 | B1 | ✅ | Both endpoints left and returned with the same IDs; Atmos kept |
 | B3 / B5 | not yet run | Different port and sleep/wake still pending |
 | D1 / D2 / D5 | ✅ | Plain 2%, Shift 1%, knob press = mute |
-| D4 | ❌ → fixed | Re-switched to the current device with 2 favourites; fixed in `f24b9b5` (one device per gesture). Re-run pending |
+| D4 | ✅ (after fix) | Re-switched to the current device with 2 favourites; fixed in `f24b9b5`; owner confirmed the fix works |
+| A3 (repeat) | ✅ | 2nd run: ~10 rapid toggles 260 ms apart, all confirmed, Atmos each time |
 | E1 / E3 / E4 | ✅ | Live test: alias applied, broken file → one notice, file not renamed |

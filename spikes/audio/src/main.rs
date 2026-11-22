@@ -122,7 +122,10 @@ fn run_engine(path: &str, secs: u64) -> AnyResult<()> {
             if d.is_virtual { "  (virtual)" } else { "" }
         );
     }
-    println!("volume {:?}, mic muted {:?}", snap.volume, snap.mic_muted);
+    println!("volume {:?}, mic muted {:?}, mic volume {:?}", snap.volume, snap.mic_muted, snap.mic_volume);
+    for n in &snap.notices {
+        println!("  ! {n:?}");
+    }
     println!(
         "\nfor {secs} s: press Ctrl+Alt+F12 (toggle), Ctrl+knob (browse, commits when it rests), Shift+knob (1% steps),"
     );
@@ -167,7 +170,9 @@ fn hotkeys(secs: u64) -> AnyResult<()> {
         "Ctrl+Alt+F12",
     ];
     let (tx, rx) = mpsc::channel();
-    let svc = ice_win::hotkeys::HotkeyService::start(tx)?;
+    let svc = ice_win::hotkeys::HotkeyService::start(move |id| {
+        let _ = tx.send(id);
+    })?;
     let mut parsed = Vec::new();
     for (i, s) in chords.iter().enumerate() {
         let chord: Chord = s.parse()?;
@@ -343,8 +348,14 @@ fn watch(eps: &Endpoints, secs: Option<u64>, log_path: &str) -> AnyResult<()> {
     snapshot(&mut log, "start")?;
 
     let (tx, rx) = mpsc::channel();
-    let _reg = notify::register(eps.raw(), tx.clone())?;
-    let mut vol_watch = volume::VolumeWatch::new(&eps.default_device(Flow::Render, Role::Multimedia)?, tx.clone())?;
+    let sink = |tx: mpsc::Sender<AudioEvent>| {
+        move |e| {
+            let _ = tx.send(e);
+        }
+    };
+    let _reg = notify::register(eps.raw(), sink(tx.clone()))?;
+    let mut vol_watch =
+        volume::VolumeWatch::new(&eps.default_device(Flow::Render, Role::Multimedia)?, sink(tx.clone()))?;
     let start = Instant::now();
     println!("watching (endpoint + default-device volume events); log: {log_path}");
     println!("try: volume keys, unplug/replug the headset dongle, power-cycle the headset, switch default device…");
@@ -375,7 +386,7 @@ fn watch(eps: &Endpoints, secs: Option<u64>, log_path: &str) -> AnyResult<()> {
                 if *flow == Flow::Render
                     && *role == Role::Multimedia
                     && let Ok(dev) = eps.default_device(Flow::Render, Role::Multimedia)
-                    && let Ok(w) = volume::VolumeWatch::new(&dev, tx.clone())
+                    && let Ok(w) = volume::VolumeWatch::new(&dev, sink(tx.clone()))
                 {
                     vol_watch = w;
                 }

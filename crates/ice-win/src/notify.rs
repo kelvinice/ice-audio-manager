@@ -1,6 +1,4 @@
-//! Endpoint notifications (`IMMNotificationClient`) → [`AudioEvent`]s on a channel.
-
-use std::sync::mpsc::Sender;
+//! Endpoint notifications (`IMMNotificationClient`) → [`AudioEvent`]s delivered to a caller-supplied sink.
 
 use ice_core::device::DeviceState;
 use ice_core::event::AudioEvent;
@@ -15,7 +13,7 @@ use crate::props::key_to_string;
 
 #[implement(IMMNotificationClient)]
 struct Client {
-    tx: Sender<AudioEvent>,
+    sink: Box<dyn Fn(AudioEvent) + Send + Sync>,
 }
 
 fn id_of(id: &PCWSTR) -> Option<String> {
@@ -31,35 +29,35 @@ fn id_of(id: &PCWSTR) -> Option<String> {
 impl IMMNotificationClient_Impl for Client_Impl {
     fn OnDeviceStateChanged(&self, id: &PCWSTR, state: DEVICE_STATE) -> Result<()> {
         if let Some(id) = id_of(id) {
-            let _ = self.tx.send(AudioEvent::StateChanged { id, state: DeviceState::from_bits(state.0) });
+            (self.sink)(AudioEvent::StateChanged { id, state: DeviceState::from_bits(state.0) });
         }
         Ok(())
     }
 
     fn OnDeviceAdded(&self, id: &PCWSTR) -> Result<()> {
         if let Some(id) = id_of(id) {
-            let _ = self.tx.send(AudioEvent::DeviceAdded { id });
+            (self.sink)(AudioEvent::DeviceAdded { id });
         }
         Ok(())
     }
 
     fn OnDeviceRemoved(&self, id: &PCWSTR) -> Result<()> {
         if let Some(id) = id_of(id) {
-            let _ = self.tx.send(AudioEvent::DeviceRemoved { id });
+            (self.sink)(AudioEvent::DeviceRemoved { id });
         }
         Ok(())
     }
 
     fn OnDefaultDeviceChanged(&self, flow: EDataFlow, role: ERole, id: &PCWSTR) -> Result<()> {
         if let (Some(flow), Some(role)) = (from_edataflow(flow), from_erole(role)) {
-            let _ = self.tx.send(AudioEvent::DefaultChanged { flow, role, id: id_of(id) });
+            (self.sink)(AudioEvent::DefaultChanged { flow, role, id: id_of(id) });
         }
         Ok(())
     }
 
     fn OnPropertyValueChanged(&self, id: &PCWSTR, key: &PROPERTYKEY) -> Result<()> {
         if let Some(id) = id_of(id) {
-            let _ = self.tx.send(AudioEvent::PropertyChanged { id, key: key_to_string(key) });
+            (self.sink)(AudioEvent::PropertyChanged { id, key: key_to_string(key) });
         }
         Ok(())
     }
@@ -71,12 +69,12 @@ pub struct Registration {
     client: IMMNotificationClient,
 }
 
-/// Registers for endpoint notifications.
+/// Registers for endpoint notifications. `sink` runs on MMDevAPI threads and must not block.
 ///
 /// # Errors
 /// Fails if registration is rejected by MMDevAPI.
-pub fn register(en: &IMMDeviceEnumerator, tx: Sender<AudioEvent>) -> Result<Registration> {
-    let client: IMMNotificationClient = Client { tx }.into();
+pub fn register(en: &IMMDeviceEnumerator, sink: impl Fn(AudioEvent) + Send + Sync + 'static) -> Result<Registration> {
+    let client: IMMNotificationClient = Client { sink: Box::new(sink) }.into();
     // SAFETY: `client` is a valid COM object kept alive by `Registration` until unregistered.
     unsafe { en.RegisterEndpointNotificationCallback(&client)? };
     Ok(Registration { en: en.clone(), client })

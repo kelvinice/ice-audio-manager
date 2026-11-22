@@ -133,3 +133,31 @@
 2. **`ENG-03` + `ENG-04`** (fixes `PendingChoice` index corruption on hot-reload and hardens `config.toml` saving against Windows file-sharing errors & external-edit clobbering).
 3. **`ENG-05`, `ENG-07`, `ENG-09`** (removes `ice-forward` thread leaks, adds capture mic `VolumeWatch` + same-ID bounce recovery, makes device-burst debounce a true quiet window, and adds RAII handle guard in `DirWatch`).
 4. **`ENG-06`, `ENG-08`, `ENG-10`, `ENG-11`** (aligns `resolve.rs` candidate logic & uncertain-match guard, fixes startup notice D-03 revisions, completes sibling re-linking).
+
+---
+
+## 4. Resolution (Claude, `phase-1/engine-review-fixes`, 2026-11-22)
+
+All findings were verified against the code and fixed. Re-checked with fmt, clippy `-D warnings`, 32 + 8 + 1 tests
+(+1 with `ice-core/ts`), and a live engine smoke test on the owner's PC.
+
+| ID | Status | Fix |
+|---|---|---|
+| ENG-01 | ✅ | `GetMessageW` loop ends on `0` **and** `-1`; `push` reports `PostThreadMessageW` failure; `register` waits at most 2 s; `Drop` only joins a thread it could reach. Thread-level hotkeys kept: the hotkey thread never runs a modal loop (documented) |
+| ENG-02 | ✅ | `spatial::active`/`selected` read one property (no format probing); one summary per endpoint per refresh; no WinRT calls for departed devices; spatial writes run on a helper thread with a 3 s limit (`set_default_within`). Startup went from 104–128 ms to ~84 ms |
+| ENG-03 | ✅ | Pickers hold the saved `DeviceRef` itself (no `Vec` indices); `pending` is cleared on every config change and capped at 8 |
+| ENG-04 | ✅ | `save` writes + `sync_all`s the temp file, retries the rename 5× on Windows locks, removes the temp file on failure, returns the text written; errors become `Notice::ConfigSaveFailed`. Before an automatic save the engine compares the file with what it last read/wrote: an external edit is adopted first, a half-edited invalid file is **never** overwritten. Backups use millisecond stamps and report a failed rename (`backup: None`) |
+| ENG-05 | ✅ | No more `ice-forward` threads: `notify::register`, `VolumeWatch::new` and `HotkeyService::start` take non-blocking callbacks |
+| ENG-06 | ✅ | `ice_core::resolve::candidates` is the single source of picker candidates (same anchor, placeholder-container and logical-endpoint rules as `resolve`) |
+| ENG-07 | ✅ | Second `VolumeWatch` on the communications mic → `MicMuteChanged` / new `MicVolumeChanged` (also used for Alt+knob feedback); both watches are re-created on every refresh, covering same-ID reconnects |
+| ENG-08 | ✅ | No replay. Persistent problems live in `EngineSnapshot::notices`; new `EngineEvent::NoticesChanged` fires when they're raised **or resolved** (a fixed config file clears its notice) |
+| ENG-09 | ✅ | Sliding refresh window (120 ms) capped at 600 ms after the first event; `DirWatch` handles are RAII-owned (closed even if the callback panics) |
+| ENG-10 | ✅ | `Config::relink_all` updates every reference (bindings, both pair sides, device prefs, favourites), case-insensitively; unit-tested |
+| ENG-11 | ✅ | Only `([one], [])` auto-relinks; one confirmed + any uncertain candidate is `Ambiguous`; unit-tested |
+| ENG-12 | ✅ | First snapshot is revision 1 (same as the fake); subscribers get a 1024-event buffer and are dropped (must re-snapshot) if they stop reading |
+| ENG-13 | ✅ | "Current playback device" = Multimedia default everywhere (documented in the module); `tracing` warnings on enumeration, watcher, hotkey, volume-watch and save failures |
+| ENG-14 | ✅ | `FakeEngine::simulate_unplug` clears default/spatial like the real engine |
+
+Contract changes (additive): `EngineSnapshot.mic_volume`, `EngineSnapshot.notices`, `EngineEvent::MicVolumeChanged`,
+`EngineEvent::NoticesChanged`, `Notice::ConfigSaveFailed`. `native_dot.rs` (Gemini) got a one-line match arm for the new
+events. Codex's `app-shell` should add them to its TS handling when it rebases.

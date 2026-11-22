@@ -2,8 +2,6 @@
 //!
 //! This is how the notch learns about volume changes from hardware keys *without* any keyboard hook.
 
-use std::sync::mpsc::Sender;
-
 use ice_core::event::AudioEvent;
 use windows::Win32::Media::Audio::AUDIO_VOLUME_NOTIFICATION_DATA;
 use windows::Win32::Media::Audio::Endpoints::{
@@ -15,14 +13,14 @@ use windows::core::{Result, implement};
 
 #[implement(IAudioEndpointVolumeCallback)]
 struct Callback {
-    tx: Sender<AudioEvent>,
+    sink: Box<dyn Fn(AudioEvent) + Send + Sync>,
 }
 
 impl IAudioEndpointVolumeCallback_Impl for Callback_Impl {
     fn OnNotify(&self, data: *mut AUDIO_VOLUME_NOTIFICATION_DATA) -> Result<()> {
         // SAFETY: Windows passes a valid pointer (or null) for the duration of the callback.
         if let Some(d) = unsafe { data.as_ref() } {
-            let _ = self.tx.send(AudioEvent::Volume { scalar: d.fMasterVolume, muted: d.bMuted.as_bool() });
+            (self.sink)(AudioEvent::Volume { scalar: d.fMasterVolume, muted: d.bMuted.as_bool() });
         }
         Ok(())
     }
@@ -63,18 +61,21 @@ pub fn set_mute(dev: &IMMDevice, muted: bool) -> Result<()> {
     unsafe { vol.SetMute(muted, std::ptr::null()) }
 }
 
-/// Watches one endpoint's volume; unregisters on drop. Re-create it when the default device changes.
+/// Watches one endpoint's volume; unregisters on drop. Re-create it after device changes, including a
+/// same-ID reconnect, which can leave the old interface stale (review ENG-07).
 pub struct VolumeWatch {
     vol: IAudioEndpointVolume,
     cb: IAudioEndpointVolumeCallback,
 }
 
 impl VolumeWatch {
+    /// `sink` runs on an MMDevAPI thread: it must not block (e.g. a channel send).
+    ///
     /// # Errors
     /// Fails if the endpoint can't be activated or registration is rejected.
-    pub fn new(dev: &IMMDevice, tx: Sender<AudioEvent>) -> Result<Self> {
+    pub fn new(dev: &IMMDevice, sink: impl Fn(AudioEvent) + Send + Sync + 'static) -> Result<Self> {
         let vol = endpoint_volume(dev)?;
-        let cb: IAudioEndpointVolumeCallback = Callback { tx }.into();
+        let cb: IAudioEndpointVolumeCallback = Callback { sink: Box::new(sink) }.into();
         // SAFETY: `cb` stays alive in `Self` until unregistered in Drop.
         unsafe { vol.RegisterControlChangeNotify(&cb)? };
         Ok(Self { vol, cb })
