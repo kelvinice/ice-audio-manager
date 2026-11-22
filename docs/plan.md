@@ -142,23 +142,22 @@ replugging the dongle in a different USB port, power-cycling the headset, restar
 
 **Goal:** add the notch to the private daily-use build (D-06). **Features:** F08–F14.
 
-**Status (2026-11-22):** activities, scheduler, springs, interactions and the wake hand-off are in `main` (Gemini). Placement,
-gaming mode and the user-selectable profiles still need wiring into the app shell.
+**Status (2026-11-23):** activities, scheduler, springs, interactions and the wake hand-off (Gemini), plus placement, gaming mode
+and the profile setting (Codex, finished by Claude) are in `main`. Open: idle-state default and visual QA.
 
-- [ ] Notch window: **exactly one** transparent window, moved between monitors with `SetWindowPos`, DPI-aware (per-monitor v2).
-      Building blocks in `ice_win::overlay_win`/`monitors`; app wiring with placement below
-- [ ] **Performance profiles (D-15.1):** `Instant` (WebView warm, `TrySuspend` when idle) · `Balanced` (suspend, not destroy) · `Lite`
-      (no notch WebView; native dot + tray only), user-selectable. `TrySuspend` wake hand-off ✅; the profile setting isn't built yet
+- [x] Notch window: **exactly one** transparent window, moved between monitors (`overlay_win::move_top_center`), DPI-aware
+- [x] **Performance profiles (D-15.1):** `Instant` (WebView warm, `TrySuspend` when idle) · `Balanced` (created on demand, suspends) ·
+      `Lite` (no notch WebView; native dot + tray only). Saved in config (schema v2), chosen from the tray
 - [x] **Native idle dot/pill** drawn when the WebView is suspended/released: live volume %, mute, mic volume and theme colours (Gemini)
-- [ ] **Gaming mode:** auto while a fullscreen app runs on the notch's monitor (or manual); WebView released and not recreated by events.
-      `ice_win::fullscreen::FullscreenWatcher` (event-driven) ✅; app wiring open
+- [x] **Gaming mode:** automatic while a fullscreen app covers the notch's monitor (`FullscreenWatcher`, event-driven); the WebView
+      is released and a generation guard stops events from recreating it. A manual toggle isn't built
 - [x] Activity scheduler: priorities, durations, merge rules, snapshot + delta with monotonic revisions. Lives in `app/ui`
       (`scheduler.ts`, tested) rather than `ice-core`
 - [x] Activities: **Volume**, **Mic volume**, **Device switch** (with "re-linked" caption and the Atmos badge only after Windows
       confirms), **Plug/unplug**, **Mic mute**
 - [x] Interactions: hover-intent expand, scroll = volume, Shift+scroll = switch device, middle-click = mute (`NotchApp.svelte`)
-- [ ] Placement: **pinned monitor is the default**, remembered by display path; fall back to primary while it's disconnected.
-      Display-path resolver in `ice_win::monitors` ✅; app wiring open
+- [x] Placement: **pinned monitor is the default** (first run pins the primary), saved by display path, chosen from the tray;
+      falls back while it's disconnected
 - [ ] Idle state: **default = small visible notch** (dot or mini pill, picked from mockups) (Q-10); `hidden` remains an option
 - [x] Springs: custom `(k, c, m)` module; Snappy / Smooth / Bouncy (~8% overshoot) / Off (instant); identical at 75/144/240 Hz (tested)
 - [x] **Spatial sound on switch (D-17):** per-device preference applied after a confirmed switch (read-before-write, read-back),
@@ -188,10 +187,12 @@ games on the pinned monitor. Budgets met in every profile.
 - [x] `ice-win::media`: GSMTC manager, current-session tracking, timeline, playback status, transport commands (event-driven)
 - [x] Media contract in the engine API, with a fake implementation
 - [ ] Real engine wiring: dedicated media worker thread, coalesced signals, bounded WinRT waits (MED fixes)
-- [ ] Album art: downscale (≤ 128 px) + content hash + readable accent ✅; review fixes (bounds, EXIF, straight alpha, composited-surface
-      contrast) and the scoped `iceart://<id>` handler in the app shell are open
-- [ ] Activities: **Track change** (art + labels crossfade in fixed slots; controls never move; accent glow transition), compact **Now playing** idle state
-- [ ] Expanded notch: media card (art, title, artist, scrubber, prev/play/next) + device switcher row. Hold expansion while the pointer moves into controls
+- [x] Scoped `iceart://<id>` handler in the app shell: engine PNGs only, no paths/queries/other methods, in the production CSP (Codex)
+- [ ] Album art: downscale (≤ 128 px) + content hash + readable accent ✅; review fixes (bounds, EXIF, straight alpha,
+      composited-surface contrast) open in `phase-3/media-engine`
+- [x] Activities: **Track change** and compact **Now playing** idle state (Gemini, against the fake engine)
+- [x] Expanded notch: media card (art, title, artist, scrubber, prev/play/next) (Gemini, against the fake engine). Real-engine data
+      arrives with `phase-3/media-engine`
 - [ ] Visualizer: `IAudioMeterInformation` peaks at ≤ 30 Hz, subscribed **only while visible**, rendered as 4–6 bars with fast-attack/slow-decay springs
 - [ ] Secondary QA: Chromium/Edge/Firefox media sessions
 
