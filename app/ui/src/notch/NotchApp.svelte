@@ -232,6 +232,7 @@
   }
 
   function applyEngineSnapshot(snapshot: EngineSnapshot) {
+    if (snapshot.revision < scheduler.state.revision) return;
     scheduler.applySnapshot(snapshot, Date.now());
     engineState = { ...scheduler.state };
     syncGeometry(true);
@@ -275,6 +276,7 @@
     const bufferedEngine: Envelope[] = [];
     let notchInitialized = false;
     let engineInitialized = false;
+    let bufferedEngineSnapshot: EngineSnapshot | null = null;
 
     const unlistenNotchPromise = listen<NotchDelta>('notch://delta/v1', (ev) => {
       if (disposed) return;
@@ -297,7 +299,18 @@
       applyEngineEnvelope(ev.payload);
     });
 
+    const unlistenEngineSnapshotPromise = listen<EngineSnapshot>('engine://snapshot/v1', ({ payload }) => {
+      if (disposed) return;
+      if (!engineInitialized) {
+        bufferedEngineSnapshot = payload;
+        return;
+      }
+      applyEngineSnapshot(payload);
+    });
+
     void (async () => {
+      await Promise.all([unlistenNotchPromise, unlistenEnginePromise, unlistenEngineSnapshotPromise]);
+      if (disposed) return;
       const [initialNotch, initialEngine] = await Promise.all([
         invoke<NotchSnapshot>('get_notch_snapshot'),
         invoke<EngineSnapshot>('get_engine_snapshot'),
@@ -305,7 +318,9 @@
       if (disposed) return;
 
       engineInitialized = true;
-      applyEngineSnapshot(initialEngine);
+      applyEngineSnapshot(bufferedEngineSnapshot && bufferedEngineSnapshot.revision > initialEngine.revision
+        ? bufferedEngineSnapshot
+        : initialEngine);
       for (const delta of bufferedEngine) {
         if (delta.revision > scheduler.state.revision) {
           applyEngineEnvelope(delta);
@@ -335,6 +350,7 @@
       clearActivityTimer();
       void unlistenNotchPromise.then((fn) => fn());
       void unlistenEnginePromise.then((fn) => fn());
+      void unlistenEngineSnapshotPromise.then((fn) => fn());
     };
   });
 

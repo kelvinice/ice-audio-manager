@@ -61,9 +61,12 @@ Right-click for Settings, the notch preview, launch at sign-in, and Quit. A norm
 and a second launch exits without creating another instance.
 
 The app uses Windows audio and reads `%APPDATA%\IceAudioManager\config.toml`. It uses the default
-configuration when the file is absent. Use `--fake-engine` to simulate devices and volume changes.
+configuration when the file is absent. If Windows audio is unavailable, the tray shows the error
+and retries in the background. Use `--fake-engine` to simulate devices and volume changes.
 Use `--verbose` to log engine events in `%LOCALAPPDATA%\IceAudioManager\logs`.
 The existing `--bench` mode writes its report to `app/out/bench.json` by default.
+
+The Windows CI run provides an unsigned portable ZIP with the release executable and license.
 
 ## License
 

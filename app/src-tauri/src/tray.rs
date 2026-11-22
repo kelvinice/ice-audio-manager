@@ -114,7 +114,9 @@ fn notify(state: &SharedRuntime, title: &str, message: &str) {
 pub(super) fn refresh_tooltip(state: &SharedRuntime, snapshot: &EngineSnapshot) {
     let status = {
         let prompts = prompts(state);
-        if prompts.choice.is_some() {
+        if state.engine.unavailable().is_some() {
+            Some("Audio unavailable")
+        } else if prompts.choice.is_some() {
             Some("Left-click to choose a device")
         } else if prompts.feedback.is_some() || !snapshot.notices.is_empty() {
             Some("Left-click to see audio notices")
@@ -143,8 +145,9 @@ fn handle_prompt_action(state: &SharedRuntime, id: &str) -> bool {
             command
         };
         if let Some(command) = command {
-            state.engine.send(command);
+            // Clearing the picker changes the tooltip even when Cancel produces no engine event.
             refresh_tooltip(state, &state.engine.snapshot());
+            state.engine.send(command);
         }
     } else if id == DISMISS_ID {
         prompts(state).feedback = None;
@@ -256,7 +259,9 @@ pub(super) fn build(app: &AppHandle, state: Arc<SharedRuntime>) -> tauri::Result
                 let visible_prompts = prompts(&state).clone();
                 let snapshot = state.engine.snapshot();
                 tracing::debug!(revision = snapshot.revision, "Opening audio tray menu");
-                quick_menu(app, &snapshot, &visible_prompts).and_then(|menu| popup_owner.popup_menu(&menu))
+                let unavailable = state.engine.unavailable();
+                quick_menu(app, &snapshot, &visible_prompts, unavailable.as_deref())
+                    .and_then(|menu| popup_owner.popup_menu(&menu))
             }
             MouseButton::Right => popup_owner.popup_menu(&menu),
             _ => return,
@@ -285,8 +290,18 @@ fn item(app: &AppHandle, id: &str, text: &str) -> tauri::Result<MenuItem<tauri::
     MenuItem::with_id(app, id, text, true, None::<&str>)
 }
 
-fn quick_menu(app: &AppHandle, snapshot: &EngineSnapshot, prompts: &Prompts) -> tauri::Result<Menu<tauri::Wry>> {
+fn quick_menu(
+    app: &AppHandle,
+    snapshot: &EngineSnapshot,
+    prompts: &Prompts,
+    unavailable: Option<&str>,
+) -> tauri::Result<Menu<tauri::Wry>> {
     let menu = Menu::new(app)?;
+    if let Some(reason) = unavailable {
+        append_status(app, &menu, "audio-unavailable", "Audio unavailable")?;
+        append_status(app, &menu, "audio-unavailable-reason", reason)?;
+        return Ok(menu);
+    }
     if let Some(choice) = &prompts.choice {
         let picker = Submenu::new(app, menu_text(&format!("Choose device for {}", choice.name)), true)?;
         for (index, device) in choice.candidates.iter().enumerate() {
@@ -462,7 +477,7 @@ mod tests {
         let snapshot = engine.snapshot();
         let default = snapshot.playback.iter().find(|device| device.is_default).unwrap();
         let other = snapshot.playback.iter().find(|device| !device.is_default).unwrap();
-        let menu = quick_menu(app.handle(), &snapshot, &Prompts::default()).unwrap();
+        let menu = quick_menu(app.handle(), &snapshot, &Prompts::default(), None).unwrap();
         let items = menu.items().unwrap();
         let device_menu = items
             .iter()

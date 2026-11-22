@@ -1,8 +1,14 @@
-use std::sync::atomic::Ordering;
-use std::sync::{Arc, mpsc::Receiver};
+use std::path::PathBuf;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex, PoisonError};
+use std::time::Duration;
 
+use ice_core::config::ConfigStore;
 use ice_core::device::Flow;
-use ice_core::engine::{DeviceSummary, EngineEvent, EngineSnapshot, Envelope, Notice, RoleSet, SpatialMode};
+use ice_core::engine::{
+    Command, DeviceSummary, Engine, EngineEvent, EngineSnapshot, Envelope, Notice, RoleSet, SpatialMode,
+};
+use ice_win::audio_engine::AudioEngine;
 use tauri::{AppHandle, Emitter, Manager};
 
 use super::{ActivityKind, NotchSnapshot, SharedRuntime, tray};
@@ -29,20 +35,83 @@ pub(super) fn preview_target(snapshot: &EngineSnapshot) -> Option<&DeviceSummary
     snapshot.playback.iter().find(|device| !device.is_default)
 }
 
-pub(super) fn watch(
-    app: AppHandle,
-    state: Arc<SharedRuntime>,
-    events: Receiver<Envelope>,
-    initial_revision: u64,
-) -> std::io::Result<()> {
-    std::thread::Builder::new().name("ice-engine-events".into()).spawn(move || {
+type EngineRef = Arc<dyn Engine>;
+
+pub(super) struct EngineSlot(Mutex<Result<EngineRef, String>>);
+
+impl EngineSlot {
+    pub(super) fn new(engine: Option<EngineRef>) -> Self {
+        Self(Mutex::new(engine.ok_or_else(|| "Starting Windows audio…".into())))
+    }
+
+    fn current(&self) -> Option<EngineRef> {
+        self.0.lock().unwrap_or_else(PoisonError::into_inner).as_ref().ok().cloned()
+    }
+
+    pub(super) fn unavailable(&self) -> Option<String> {
+        self.0.lock().unwrap_or_else(PoisonError::into_inner).as_ref().err().cloned()
+    }
+
+    pub(super) fn snapshot(&self) -> EngineSnapshot {
+        self.current().map_or_else(EngineSnapshot::default, |engine| engine.snapshot())
+    }
+
+    pub(super) fn send(&self, command: Command) {
+        if let Some(engine) = self.current() {
+            engine.send(command);
+        }
+    }
+
+    fn set(&self, engine: Result<EngineRef, String>) {
+        *self.0.lock().unwrap_or_else(PoisonError::into_inner) = engine;
+    }
+}
+
+fn start_audio() -> Result<EngineRef, String> {
+    let path = PathBuf::from(std::env::var_os("APPDATA").ok_or("APPDATA is unavailable")?)
+        .join("IceAudioManager")
+        .join("config.toml");
+    Ok(Arc::new(AudioEngine::start(ConfigStore::new(path))?))
+}
+
+fn retry_start<T>(
+    mut start: impl FnMut() -> Result<T, String>,
+    mut on_failure: impl FnMut(String, Duration) -> bool,
+) -> Option<T> {
+    let mut delay = Duration::from_secs(1);
+    loop {
+        match start() {
+            Ok(engine) => return Some(engine),
+            Err(error) => {
+                if !on_failure(error, delay) {
+                    return None;
+                }
+                delay = (delay * 2).min(Duration::from_secs(30));
+            }
+        }
+    }
+}
+
+enum Update {
+    Snapshot(EngineSnapshot),
+    Delta(Envelope),
+}
+
+fn follow(engine: &dyn Engine, mut publish: impl FnMut(Update) -> bool) {
+    loop {
+        let events = engine.subscribe();
+        let snapshot = engine.snapshot();
+        let initial_revision = snapshot.revision;
+        if !publish(Update::Snapshot(snapshot)) {
+            return;
+        }
         let mut revision = 0;
         for delta in events {
             if delta.revision <= revision {
                 continue;
             }
             revision = delta.revision;
-            // A snapshot supersedes older deltas, except for transient prompts.
+            // The snapshot supersedes older deltas, except for transient prompts.
             if revision <= initial_revision
                 && !matches!(
                     delta.event,
@@ -55,14 +124,83 @@ pub(super) fn watch(
             {
                 continue;
             }
-            let app_for_event = app.clone();
-            let state = Arc::clone(&state);
-            if app.run_on_main_thread(move || apply_event(&app_for_event, &state, delta)).is_err() {
-                break;
+            if !publish(Update::Delta(delta)) {
+                return;
             }
         }
+        tracing::warn!("Audio event stream ended; resubscribing");
+    }
+}
+
+pub(super) fn watch(app: AppHandle, state: Arc<SharedRuntime>) -> std::io::Result<()> {
+    std::thread::Builder::new().name("ice-engine-events".into()).spawn(move || {
+        if state.allow_exit.load(Ordering::Acquire) {
+            return;
+        }
+        let existing = state.engine.current();
+        let Some(engine) = existing.clone().or_else(|| {
+            retry_start(start_audio, |error, delay| {
+                tracing::warn!(%error, retry_after_secs = delay.as_secs(), "Windows audio unavailable");
+                let ui_state = Arc::clone(&state);
+                if state.allow_exit.load(Ordering::Acquire)
+                    || app
+                        .run_on_main_thread(move || {
+                            ui_state.engine.set(Err(error));
+                            tray::refresh_tooltip(&ui_state, &EngineSnapshot::default());
+                        })
+                        .is_err()
+                {
+                    return false;
+                }
+                std::thread::park_timeout(delay);
+                !state.allow_exit.load(Ordering::Acquire)
+            })
+        }) else {
+            return;
+        };
+        let mut install = existing.is_none().then(|| Arc::clone(&engine));
+        let generation = Arc::new(AtomicU64::new(0));
+        follow(engine.as_ref(), |update| {
+            if state.allow_exit.load(Ordering::Acquire) {
+                return false;
+            }
+            let app_for_event = app.clone();
+            let state = Arc::clone(&state);
+            let ready = install.take();
+            let stamp = if matches!(update, Update::Snapshot(_)) {
+                generation.fetch_add(1, Ordering::AcqRel) + 1
+            } else {
+                generation.load(Ordering::Acquire)
+            };
+            let active_generation = Arc::clone(&generation);
+            app.run_on_main_thread(move || {
+                if let Some(engine) = ready {
+                    state.engine.set(Ok(engine));
+                    tracing::info!("Windows audio engine ready");
+                }
+                // A fresh snapshot replaces any work still queued from the old subscription.
+                if active_generation.load(Ordering::Acquire) != stamp {
+                    return;
+                }
+                match update {
+                    Update::Snapshot(snapshot) => apply_snapshot(&app_for_event, &state, &snapshot),
+                    Update::Delta(delta) => apply_event(&app_for_event, &state, delta),
+                }
+            })
+            .is_ok()
+        });
     })?;
     Ok(())
+}
+
+fn apply_snapshot(app: &AppHandle, state: &SharedRuntime, snapshot: &EngineSnapshot) {
+    if let Some(dot) = state.native_dot.lock().unwrap_or_else(PoisonError::into_inner).as_ref() {
+        dot.apply_snapshot(snapshot);
+    }
+    state.update_and_emit(app, |view| project(snapshot, view));
+    tray::refresh_tooltip(state, snapshot);
+    let _ = app.emit_to("notch", "engine://snapshot/v1", snapshot);
+    let _ = app.emit_to("settings", "engine://snapshot/v1", snapshot);
 }
 
 fn apply_event(app: &AppHandle, state: &Arc<SharedRuntime>, delta: Envelope) {
@@ -130,5 +268,65 @@ fn apply_event(app: &AppHandle, state: &Arc<SharedRuntime>, delta: Envelope) {
 
     if waking {
         super::wake_notch_on_main(app, state, view.event_seq);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::mpsc::{Receiver, channel};
+
+    use super::*;
+
+    struct DroppedSubscriber(AtomicU64);
+
+    impl Engine for DroppedSubscriber {
+        fn snapshot(&self) -> EngineSnapshot {
+            EngineSnapshot { revision: self.0.load(Ordering::Relaxed), ..Default::default() }
+        }
+
+        fn send(&self, _: Command) {}
+
+        fn subscribe(&self) -> Receiver<Envelope> {
+            let revision = self.0.fetch_add(10, Ordering::Relaxed) + 10;
+            let (tx, rx) = channel();
+            tx.send(Envelope { revision, event: EngineEvent::NoticesChanged { notices: vec![] } }).unwrap();
+            tx.send(Envelope { revision: revision + 1, event: EngineEvent::NoticesChanged { notices: vec![] } })
+                .unwrap();
+            rx
+        }
+    }
+
+    #[test]
+    fn reconnect_subscribes_before_snapshot_and_skips_subsumed_deltas() {
+        let engine = DroppedSubscriber(AtomicU64::new(0));
+        let mut seen = Vec::new();
+        follow(&engine, |update| {
+            seen.push(match update {
+                Update::Snapshot(snapshot) => ("snapshot", snapshot.revision),
+                Update::Delta(delta) => ("delta", delta.revision),
+            });
+            seen.len() < 4
+        });
+        assert_eq!(seen, [("snapshot", 10), ("delta", 11), ("snapshot", 20), ("delta", 21)]);
+    }
+
+    #[test]
+    fn startup_retries_with_capped_delays_and_can_stop() {
+        let mut attempts = 0;
+        let mut delays = Vec::new();
+        let ready = retry_start(
+            || {
+                attempts += 1;
+                if attempts == 8 { Ok("ready") } else { Err("audio service is unavailable".into()) }
+            },
+            |error, delay| {
+                assert_eq!(error, "audio service is unavailable");
+                delays.push(delay.as_secs());
+                true
+            },
+        );
+        assert_eq!(delays, [1, 2, 4, 8, 16, 30, 30]);
+        assert_eq!(ready, Some("ready"));
+        assert_eq!(retry_start::<()>(|| Err("stopping".into()), |_, _| false), None);
     }
 }

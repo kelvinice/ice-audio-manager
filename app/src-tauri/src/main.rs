@@ -12,9 +12,7 @@ use std::sync::atomic::{AtomicBool, AtomicIsize, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, mpsc};
 use std::time::{Duration, Instant};
 
-use ice_core::config::ConfigStore;
-use ice_core::engine::{Command, Engine, EngineSnapshot, RoleSet, fake::FakeEngine};
-use ice_win::audio_engine::AudioEngine;
+use ice_core::engine::{Command, EngineSnapshot, RoleSet, fake::FakeEngine};
 use ice_win::desktop::InstanceGuard;
 use ice_win::monitors::{MonitorInfo, list_monitors};
 use ice_win::native_dot::{NativeDotHandle, NativePillTheme};
@@ -31,7 +29,7 @@ const NOTCH_CANVAS_H: i32 = 190;
 const NOTCH_TOP_OFFSET: i32 = 0;
 
 struct SharedRuntime {
-    engine: Arc<dyn Engine>,
+    engine: engine_bridge::EngineSlot,
     bench_mode: bool,
     tray_prompts: Mutex<tray::Prompts>,
     cursor_poll_running: AtomicBool,
@@ -62,7 +60,7 @@ impl SharedRuntime {
         wv2_data_dir: PathBuf,
         settings_wv2_data_dir: PathBuf,
         bench_mode: bool,
-        engine: Arc<dyn Engine>,
+        engine: engine_bridge::EngineSlot,
         initial: &EngineSnapshot,
     ) -> Self {
         let summaries = monitors
@@ -1267,18 +1265,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     let monitors = list_monitors().unwrap_or_default();
     let fake_engine = bench_mode || args.iter().any(|arg| arg == "--fake-engine");
-    let engine: Arc<dyn Engine> = if fake_engine {
-        Arc::new(FakeEngine::new())
-    } else {
-        let config_path = PathBuf::from(std::env::var_os("APPDATA").ok_or("APPDATA is unavailable")?)
-            .join("IceAudioManager")
-            .join("config.toml");
-        Arc::new(
-            AudioEngine::start(ConfigStore::new(&config_path))
-                .map_err(|error| format!("Audio engine startup failed ({}): {error}", config_path.display()))?,
-        )
-    };
-    let events = (!bench_mode).then(|| engine.subscribe());
+    let engine = engine_bridge::EngineSlot::new(fake_engine.then(|| Arc::new(FakeEngine::new()) as _));
     let initial = engine.snapshot();
     tracing::debug!(revision = initial.revision, notices = ?initial.notices, "Initial audio engine snapshot");
     let wv2_data_dir = app_data.join(if bench_mode { "spike-overlay-wv2" } else { "webview" });
@@ -1334,9 +1321,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                     dot.set_standby_only(true);
                     *setup_state.native_dot.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = Some(dot);
                 }
-                if let Some(events) = events {
-                    engine_bridge::watch(handle.clone(), Arc::clone(&setup_state), events, initial.revision)?;
-                }
+                engine_bridge::watch(handle.clone(), Arc::clone(&setup_state))?;
                 if show_notch {
                     request_preview(&handle, &setup_state, Preview::Notch);
                 }
