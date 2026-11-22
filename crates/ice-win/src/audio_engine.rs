@@ -845,6 +845,8 @@ impl Worker {
             | Command::RemoveBinding { .. }
             | Command::SetFavourites { .. }
             | Command::SetDevicePrefs { .. }
+            | Command::SetPerformanceProfile { .. }
+            | Command::SetPinnedMonitor { .. }
             | Command::SetKnobGestures { .. }
             | Command::SetDefaultRoles { .. } => self.edit_settings(&command),
         }

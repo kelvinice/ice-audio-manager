@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use ice_core::device::{DeviceState, Flow};
 use ice_core::engine::{
-    Command, DeviceSummary, EngineSnapshot, Notice, RoleSet, SavedDevice, SettingsView, SpatialMode,
+    Command, DeviceSummary, EngineSnapshot, Notice, PerformanceProfile, RoleSet, SavedDevice, SettingsView, SpatialMode,
 };
 use ice_win::autostart::Autostart;
 use tauri::AppHandle;
@@ -13,7 +13,7 @@ use tauri::tray::{MouseButton, MouseButtonState, TrayIconEvent};
 use tauri::window::WindowBuilder;
 use tray_icon::{Icon, TrayIcon, TrayIconBuilder};
 
-use super::{Preview, SharedRuntime, cycle_monitor_internal, request_preview};
+use super::{Preview, SharedRuntime, request_preview};
 
 const TRAY_ID: &str = "ice-audio-tray";
 const COMMAND_PREFIX: &str = "audio/";
@@ -179,17 +179,54 @@ pub(super) fn build(app: &AppHandle, state: Arc<SharedRuntime>) -> tauri::Result
         startup.is_some_and(|(_, enabled)| enabled),
         None::<&str>,
     )?;
-    let menu = Menu::with_items(
-        app,
-        &[
-            &item(app, "settings", "Settings")?,
-            &item(app, "notch", "Show notch preview")?,
-            &item(app, "monitor", "Move notch to next monitor")?,
-            &launch,
-            &PredefinedMenuItem::separator(app)?,
-            &item(app, "quit", "Quit Ice Audio Manager")?,
-        ],
-    )?;
+    let menu_launch = launch.clone();
+    let context_menu = move |app: &AppHandle, state: &SharedRuntime| {
+        let snapshot = state.engine.snapshot();
+        let available = state.engine.unavailable().is_none();
+        let profiles = Submenu::new(app, "Performance profile", available)?;
+        for (profile, label) in [
+            (PerformanceProfile::Instant, "Instant"),
+            (PerformanceProfile::Balanced, "Balanced"),
+            (PerformanceProfile::Lite, "Lite"),
+        ] {
+            let id = command_id(&Command::SetPerformanceProfile { profile })?;
+            profiles.append(&CheckMenuItem::with_id(
+                app,
+                id,
+                label,
+                true,
+                snapshot.settings.performance_profile == profile,
+                None::<&str>,
+            )?)?;
+        }
+        let pinned = Submenu::new(app, "Pinned monitor", available)?;
+        let monitors = state.monitors.lock().unwrap_or_else(PoisonError::into_inner);
+        for m in monitors.iter() {
+            let id = command_id(&Command::SetPinnedMonitor { display_path: m.display_path.clone() })?;
+            let selected =
+                snapshot.settings.pinned_monitor.as_ref().is_some_and(|pin| pin.eq_ignore_ascii_case(&m.display_path));
+            pinned.append(&CheckMenuItem::with_id(
+                app,
+                id,
+                menu_text(&m.friendly_name),
+                true,
+                selected,
+                None::<&str>,
+            )?)?;
+        }
+        Menu::with_items(
+            app,
+            &[
+                &item(app, "settings", "Settings")?,
+                &item(app, "notch", "Show notch preview")?,
+                &pinned,
+                &profiles,
+                &menu_launch,
+                &PredefinedMenuItem::separator(app)?,
+                &item(app, "quit", "Quit Ice Audio Manager")?,
+            ],
+        )
+    };
 
     let menu_state = Arc::clone(&state);
     app.on_menu_event(move |app, event| {
@@ -216,7 +253,6 @@ pub(super) fn build(app: &AppHandle, state: Arc<SharedRuntime>) -> tauri::Result
                 request_preview(app, &menu_state, Preview::Notch);
                 Ok(())
             }
-            "monitor" => cycle_monitor_internal(app, &menu_state),
             "launch" => {
                 if let Some((startup, _)) = startup {
                     let mut enabled = startup_enabled.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
@@ -263,7 +299,7 @@ pub(super) fn build(app: &AppHandle, state: Arc<SharedRuntime>) -> tauri::Result
                 quick_menu(app, &snapshot, &visible_prompts, unavailable.as_deref())
                     .and_then(|menu| popup_owner.popup_menu(&menu))
             }
-            MouseButton::Right => popup_owner.popup_menu(&menu),
+            MouseButton::Right => context_menu(app, &state).and_then(|menu| popup_owner.popup_menu(&menu)),
             _ => return,
         };
         if let Err(error) = ice_win::desktop::finish_tray_menu(owner_hwnd) {

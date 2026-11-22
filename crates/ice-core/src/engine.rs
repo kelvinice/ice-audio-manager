@@ -43,6 +43,17 @@ impl RoleSet {
     }
 }
 
+/// D-15.1 notch WebView lifetime. Both WebView profiles suspend on idle.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(TS))]
+#[serde(rename_all = "camelCase")]
+pub enum PerformanceProfile {
+    #[default]
+    Instant,
+    Balanced,
+    Lite,
+}
+
 /// Spatial sound choice for a device (D-17). `Keep` never touches Windows' setting.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[cfg_attr(feature = "ts", derive(TS))]
@@ -217,6 +228,12 @@ pub enum Command {
         alias: Option<String>,
         hidden: Option<bool>,
     },
+    SetPerformanceProfile {
+        profile: PerformanceProfile,
+    },
+    SetPinnedMonitor {
+        display_path: String,
+    },
     /// Turns the F31 knob gestures (Ctrl/Shift/Alt + knob) on or off.
     SetKnobGestures {
         enabled: bool,
@@ -275,6 +292,10 @@ pub struct DevicePrefsView {
 #[cfg_attr(feature = "ts", derive(TS))]
 #[serde(rename_all = "camelCase")]
 pub struct SettingsView {
+    #[serde(default)]
+    pub performance_profile: PerformanceProfile,
+    #[serde(default)]
+    pub pinned_monitor: Option<String>,
     pub default_roles: RoleSet,
     pub toggle_pairs: Vec<TogglePairView>,
     pub bindings: Vec<BindingView>,
@@ -671,6 +692,8 @@ pub mod fake {
                 | Command::RemoveBinding { .. }
                 | Command::SetFavourites { .. }
                 | Command::SetDevicePrefs { .. }
+                | Command::SetPerformanceProfile { .. }
+                | Command::SetPinnedMonitor { .. }
                 | Command::SetKnobGestures { .. }
                 | Command::SetDefaultRoles { .. } => {
                     let eps = endpoints(&st.snap);
@@ -715,7 +738,7 @@ pub mod fake {
         }
 
         fn art(&self, id: &str) -> Option<Vec<u8>> {
-            id.starts_with("fake-art-").then(|| FAKE_ART_PNG.to_vec())
+            (0..FAKE_TRACKS.len()).any(|i| id == format!("fake-art-{i}")).then(|| FAKE_ART_PNG.to_vec())
         }
     }
 }

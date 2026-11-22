@@ -48,6 +48,10 @@ impl EngineSlot {
         self.0.lock().unwrap_or_else(PoisonError::into_inner).as_ref().ok().cloned()
     }
 
+    pub(super) fn art(&self, id: &str) -> Option<Vec<u8>> {
+        self.current()?.art(id)
+    }
+
     pub(super) fn unavailable(&self) -> Option<String> {
         self.0.lock().unwrap_or_else(PoisonError::into_inner).as_ref().err().cloned()
     }
@@ -194,7 +198,8 @@ pub(super) fn watch(app: AppHandle, state: Arc<SharedRuntime>) -> std::io::Resul
     Ok(())
 }
 
-fn apply_snapshot(app: &AppHandle, state: &SharedRuntime, snapshot: &EngineSnapshot) {
+fn apply_snapshot(app: &AppHandle, state: &Arc<SharedRuntime>, snapshot: &EngineSnapshot) {
+    super::placement::settings(app, state, &snapshot.settings);
     if let Some(dot) = state.native_dot.lock().unwrap_or_else(PoisonError::into_inner).as_ref() {
         dot.apply_snapshot(snapshot);
     }
@@ -213,6 +218,9 @@ fn apply_event(app: &AppHandle, state: &Arc<SharedRuntime>, delta: Envelope) {
     }
 
     let snapshot = state.engine.snapshot();
+    if matches!(delta.event, EngineEvent::SettingsChanged { .. }) {
+        super::placement::settings(app, state, &snapshot.settings);
+    }
     let activity = match &delta.event {
         EngineEvent::VolumeChanged { .. } | EngineEvent::MicVolumeChanged { .. } => Some(ActivityKind::Volume),
         EngineEvent::MicMuteChanged { .. } => Some(ActivityKind::MicMute),
@@ -233,8 +241,8 @@ fn apply_event(app: &AppHandle, state: &Arc<SharedRuntime>, delta: Envelope) {
         | EngineEvent::MediaChanged { .. } => None,
     };
 
-    let waking = activity.is_some()
-        && !state.bench_mode
+    let needs_webview = activity.is_some() && !state.bench_mode && state.placement().allows_webview();
+    let waking = needs_webview
         && app.get_webview_window("notch").is_some()
         && (state.want_suspended.load(Ordering::Acquire)
             || state.notch_suspended.load(Ordering::Acquire)
@@ -245,7 +253,7 @@ fn apply_event(app: &AppHandle, state: &Arc<SharedRuntime>, delta: Envelope) {
 
     let view = state.update_and_emit(app, |view| {
         project(&snapshot, view);
-        if let Some(activity) = activity {
+        if let Some(activity) = activity.filter(|_| needs_webview) {
             view.activity = activity;
             view.event_seq = view.event_seq.saturating_add(1);
             if waking {
@@ -271,6 +279,8 @@ fn apply_event(app: &AppHandle, state: &Arc<SharedRuntime>, delta: Envelope) {
 
     if waking {
         super::wake_notch_on_main(app, state, view.event_seq);
+    } else if needs_webview && app.get_webview_window("notch").is_none() {
+        super::request_preview(app, state, super::Preview::Notch);
     }
 }
 

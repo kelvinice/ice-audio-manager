@@ -86,7 +86,7 @@ mod tests {
     use ice_core::device::{DeviceState, Flow, Role};
     use ice_core::engine::{
         BindingView, Command, DevicePrefsView, DeviceSummary, EngineEvent, EngineSnapshot, Envelope, MediaAction,
-        Notice, RoleSet, SavedDevice, SettingsView, SpatialMode, TogglePairView, VolumeState,
+        Notice, PerformanceProfile, RoleSet, SavedDevice, SettingsView, SpatialMode, TogglePairView, VolumeState,
     };
     use ice_core::media::{ArtInfo, NowPlaying, PlaybackStatus, Rgb};
 
@@ -152,6 +152,8 @@ mod tests {
             &format!("export {}", BindingView::decl(&cfg)),
             "",
             &format!("export {}", DevicePrefsView::decl(&cfg)),
+            "",
+            &format!("export {}", PerformanceProfile::decl(&cfg)),
             "",
             &format!("export {}", SettingsView::decl(&cfg)),
             "",

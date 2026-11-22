@@ -73,6 +73,8 @@ function sampleSnapshot(): EngineSnapshot {
       favouritesPlayback: [],
       favouritesRecording: [],
       devices: [],
+      performanceProfile: 'instant',
+      pinnedMonitor: null,
       knobGestures: false,
     },
     media: null,

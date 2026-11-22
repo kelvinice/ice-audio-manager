@@ -1,4 +1,4 @@
-//! User configuration, `config.toml` schema v1 (D-04).
+//! User configuration, `config.toml` schema v2 (D-04).
 //!
 //! Location: `%APPDATA%\IceAudioManager\config.toml` (chosen by the app). Every field has a default, so a
 //! missing or partial file is valid. Unknown future `schema_version`s are rejected rather than
@@ -10,17 +10,21 @@ use serde::{Deserialize, Serialize};
 
 use crate::device::{DeviceState, EndpointInfo, Flow};
 use crate::engine::{
-    BindingView, Command, DevicePrefsView, RoleSet, SavedDevice, SettingsView, SpatialMode, TogglePairView,
+    BindingView, Command, DevicePrefsView, PerformanceProfile, RoleSet, SavedDevice, SettingsView, SpatialMode,
+    TogglePairView,
 };
 use crate::hotkey::Chord;
 use crate::resolve::{DeviceRef, MatchMode, resolve};
 
-pub const SCHEMA_VERSION: u32 = 1;
+pub const SCHEMA_VERSION: u32 = 2;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Config {
     pub schema_version: u32,
+    pub performance_profile: PerformanceProfile,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pinned_monitor: Option<String>,
     /// Roles set by switches that don't specify their own.
     pub default_roles: RoleSet,
     /// Device hotkeys: press → switch to that device.
@@ -40,6 +44,8 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             schema_version: SCHEMA_VERSION,
+            performance_profile: PerformanceProfile::default(),
+            pinned_monitor: None,
             default_roles: RoleSet::Default,
             bindings: Vec::new(),
             toggle_pairs: Vec::new(),
@@ -156,7 +162,7 @@ impl Config {
         let cfg: Self = toml::from_str(text).map_err(|e| ConfigError::Parse(e.to_string()))?;
         match cfg.schema_version {
             v if v > SCHEMA_VERSION => Err(ConfigError::TooNew(v)),
-            // 0 = file written before versioning; nothing to migrate yet.
+            // v0/v1 gain the default profile and an initially unassigned monitor pin via serde defaults.
             _ => Ok(Self { schema_version: SCHEMA_VERSION, ..cfg }),
         }
     }
@@ -211,6 +217,8 @@ impl Config {
         };
         SettingsView {
             default_roles: self.default_roles,
+            performance_profile: self.performance_profile,
+            pinned_monitor: self.pinned_monitor.clone(),
             toggle_pairs: self
                 .toggle_pairs
                 .iter()
@@ -330,6 +338,13 @@ impl Config {
                 if prefs.spatial == SpatialMode::Keep && prefs.alias.is_none() && !prefs.hidden {
                     next.devices.remove(i);
                 }
+            }
+            Command::SetPerformanceProfile { profile } => next.performance_profile = *profile,
+            Command::SetPinnedMonitor { display_path } => {
+                if display_path.trim().is_empty() || display_path.chars().any(char::is_control) {
+                    return Err("Choose a connected monitor.".into());
+                }
+                next.pinned_monitor = Some(display_path.clone());
             }
             Command::SetKnobGestures { enabled } => next.knob.enabled = *enabled,
             Command::SetDefaultRoles { roles } => next.default_roles = *roles,
@@ -538,6 +553,21 @@ mod tests {
             }],
             ..Config::default()
         }
+    }
+
+    #[test]
+    fn v1_migrates_with_default_placement_and_preserves_user_settings() {
+        let mut config = Config::from_toml("schema_version = 1\ndefault_roles = 'both'").unwrap();
+        assert_eq!(config.default_roles, RoleSet::Both);
+        assert_eq!(config.view(&[]).performance_profile, PerformanceProfile::Instant);
+        assert_eq!(config.pinned_monitor, None);
+        let pin = Command::SetPinnedMonitor { display_path: "DISPLAY#test".into() };
+        let profile = Command::SetPerformanceProfile { profile: PerformanceProfile::Lite };
+        assert_eq!(config.apply_setting(&pin, &[]), Ok(true));
+        assert_eq!(config.apply_setting(&profile, &[]), Ok(true));
+        assert_eq!(config.view(&[]).pinned_monitor.as_deref(), Some("DISPLAY#test"));
+        assert_eq!(config.view(&[]).performance_profile, PerformanceProfile::Lite);
+        assert_eq!(Config::from_toml(&config.to_toml()).unwrap(), config);
     }
 
     #[test]
