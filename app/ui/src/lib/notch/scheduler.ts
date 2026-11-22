@@ -1,9 +1,14 @@
 import type {
+  ArtInfo,
+  Command,
   DeviceSummary,
   EngineEvent,
   EngineSnapshot,
   Envelope,
+  MediaAction,
   Notice,
+  NowPlaying,
+  Rgb,
   RoleSet,
   SettingsView,
   SpatialMode,
@@ -14,6 +19,7 @@ export const VOLUME_DURATION_MS = 1600;
 export const SWITCH_DURATION_MS = 2200;
 export const PLUG_DURATION_MS = 2000;
 export const MIC_DURATION_MS = 1600;
+export const TRACK_CHANGE_DURATION_MS = 2400;
 export const PLUG_SWITCH_MERGE_WINDOW_MS = 1500;
 export const IDLE_SUSPEND_LINGER_MS = 15_000;
 
@@ -54,6 +60,15 @@ export type ActivityView =
       deviceName: string;
       entranceSeq: number;
       expiresAtMs: number;
+    }
+  | {
+      kind: 'track';
+      media: NowPlaying;
+      previousTitle: string | null;
+      previousArtist: string | null;
+      previousArt: ArtInfo | null;
+      trackSeq: number;
+      expiresAtMs: number;
     };
 
 export interface NotchSchedulerState {
@@ -65,6 +80,7 @@ export interface NotchSchedulerState {
   micVolume: number | null;
   notices: Notice[];
   settings: SettingsView | null;
+  media: NowPlaying | null;
   activeDevice: DeviceSummary | null;
   targetDevice: DeviceSummary | null;
   activeMic: DeviceSummary | null;
@@ -110,6 +126,66 @@ export function shortDeviceName(name: string): string {
     return trimmed.slice(0, paren).trim();
   }
   return trimmed;
+}
+
+export function createMediaCommand(action: MediaAction): Command {
+  return { type: 'media', action };
+}
+
+export function isMediaActive(media: NowPlaying | null | undefined): media is NowPlaying {
+  if (!media) return false;
+  if (media.status === 'closed' || media.status === 'stopped') return false;
+  return media.title.trim().length > 0 || media.artist.trim().length > 0;
+}
+
+export function isSameTrack(a: NowPlaying | null | undefined, b: NowPlaying | null | undefined): boolean {
+  if (!a || !b) return false;
+  return (
+    a.title === b.title &&
+    a.artist === b.artist &&
+    a.album === b.album &&
+    (a.art?.id ?? null) === (b.art?.id ?? null)
+  );
+}
+
+export function toMsNumber(value: number | bigint | null | undefined): number | null {
+  if (value === null || value === undefined) return null;
+  const num = typeof value === 'bigint' ? Number(value) : value;
+  return Number.isFinite(num) && num >= 0 ? num : null;
+}
+
+export function formatTimecode(ms: number | bigint | null | undefined): string {
+  const safeMs = toMsNumber(ms);
+  if (safeMs === null) return '0:00';
+  const totalSeconds = Math.max(0, Math.floor(safeMs / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+}
+
+export function mediaProgressPercent(media: NowPlaying | null | undefined): number {
+  if (!media) return 0;
+  const pos = toMsNumber(media.positionMs);
+  const dur = toMsNumber(media.durationMs);
+  if (pos === null || dur === null || dur <= 0) return 0;
+  return Math.max(0, Math.min(100, (pos / dur) * 100));
+}
+
+export function formatRgbCss(rgb: Rgb | null | undefined): string | null {
+  if (!rgb) return null;
+  const r = Math.max(0, Math.min(255, Math.round(rgb.r)));
+  const g = Math.max(0, Math.min(255, Math.round(rgb.g)));
+  const b = Math.max(0, Math.min(255, Math.round(rgb.b)));
+  return `rgb(${r}, ${g}, ${b})`;
+}
+
+export function formatRgbGlowCss(rgb: Rgb | null | undefined, alpha = 0.28): string | null {
+  if (!rgb) return null;
+  const r = Math.max(0, Math.min(255, Math.round(rgb.r)));
+  const g = Math.max(0, Math.min(255, Math.round(rgb.g)));
+  const b = Math.max(0, Math.min(255, Math.round(rgb.b)));
+  const clampedAlpha = Math.max(0, Math.min(1, alpha));
+  return `rgba(${r}, ${g}, ${b}, ${clampedAlpha})`;
 }
 
 function findActivePlayback(list: DeviceSummary[]): DeviceSummary | null {
@@ -177,6 +253,7 @@ export class NotchActivityScheduler {
       micVolume: null,
       notices: [],
       settings: null,
+      media: null,
       activeDevice: null,
       targetDevice: null,
       activeMic: null,
@@ -202,6 +279,7 @@ export class NotchActivityScheduler {
       micVolume: snapshot.micVolume,
       notices: snapshot.notices,
       settings: snapshot.settings,
+      media: snapshot.media,
       activeDevice,
       targetDevice,
       activeMic,
@@ -420,8 +498,49 @@ export class NotchActivityScheduler {
         return { status: 'applied', wokeActivity: false };
       }
 
-      // Phase 3: the track-change activity will hook in here; for now the delta only advances the revision.
       case 'mediaChanged': {
+        const prev = this.state.media;
+        const next = ev.media;
+        this.state.media = next;
+
+        if (!isMediaActive(next)) {
+          if (this.state.activity.kind === 'track') {
+            this.state.activity = { kind: 'idle' };
+            this.state.idleSinceMs = nowMs;
+            this.state.suspendDispatched = false;
+          }
+          return { status: 'applied', wokeActivity: false };
+        }
+
+        if (!isSameTrack(prev, next)) {
+          const prevTrack =
+            this.state.activity.kind === 'track'
+              ? this.state.activity.media
+              : isMediaActive(prev)
+                ? prev
+                : null;
+          this.state.activity = {
+            kind: 'track',
+            media: next,
+            previousTitle: prevTrack?.title ?? null,
+            previousArtist: prevTrack?.artist ?? null,
+            previousArt: prevTrack?.art ?? null,
+            trackSeq: ++this.seqCounter,
+            expiresAtMs: nowMs + TRACK_CHANGE_DURATION_MS,
+          };
+          this.state.idleSinceMs = null;
+          this.state.suspendDispatched = false;
+          return { status: 'applied', wokeActivity: true };
+        }
+
+        if (this.state.activity.kind === 'track') {
+          const statusChanged = prev !== null && prev.status !== next.status;
+          this.state.activity = {
+            ...this.state.activity,
+            media: next,
+            expiresAtMs: statusChanged ? nowMs + TRACK_CHANGE_DURATION_MS : this.state.activity.expiresAtMs,
+          };
+        }
         return { status: 'applied', wokeActivity: false };
       }
     }

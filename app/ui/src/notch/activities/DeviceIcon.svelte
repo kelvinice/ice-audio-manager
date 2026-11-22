@@ -9,7 +9,12 @@
     | 'mic'
     | 'mic-muted'
     | 'plug-in'
-    | 'plug-out';
+    | 'plug-out'
+    | 'music'
+    | 'play'
+    | 'pause'
+    | 'prev'
+    | 'next';
 
   interface Props {
     kind?: IconKind;
@@ -77,6 +82,21 @@
   {:else if resolved === 'plug-in'}
     <path d="M6 2.5v3M10 2.5v3M4.2 5.5h7.6v2.2a3.8 3.8 0 0 1-7.6 0V5.5Z" />
     <path d="M8 11.5v2.5" />
+  {:else if resolved === 'music'}
+    <path d="M6.2 11.8V4.2l6.3-1.4v7.6" />
+    <circle cx="4.6" cy="11.8" r="1.6" />
+    <circle cx="10.9" cy="10.4" r="1.6" />
+  {:else if resolved === 'play'}
+    <path d="M4.5 3.2L12.5 8l-8 4.8V3.2Z" fill="currentColor" />
+  {:else if resolved === 'pause'}
+    <rect x="4" y="3.2" width="2.5" height="9.6" rx="0.8" fill="currentColor" />
+    <rect x="9.5" y="3.2" width="2.5" height="9.6" rx="0.8" fill="currentColor" />
+  {:else if resolved === 'prev'}
+    <path d="M3.5 3.6v8.8" />
+    <path d="M12.5 3.6L6.2 8l6.3 4.4V3.6Z" fill="currentColor" />
+  {:else if resolved === 'next'}
+    <path d="M12.5 3.6v8.8" />
+    <path d="M3.5 3.6L9.8 8l-6.3 4.4V3.6Z" fill="currentColor" />
   {:else}
     <path d="M6 2.5v2.5M10 2.5v2.5M4.2 5h7.6v2a3.8 3.8 0 0 1-7.6 0V5Z" />
     <path d="M3 13L13 3" />

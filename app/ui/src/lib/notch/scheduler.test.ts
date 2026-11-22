@@ -1,10 +1,17 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import type { DeviceSummary, EngineSnapshot } from '../ipc/engine.ts';
+import type { DeviceSummary, EngineSnapshot, NowPlaying } from '../ipc/engine.ts';
 import {
+  createMediaCommand,
+  formatRgbCss,
+  formatRgbGlowCss,
+  formatTimecode,
   IDLE_SUSPEND_LINGER_MS,
+  isMediaActive,
+  mediaProgressPercent,
   NotchActivityScheduler,
   SWITCH_DURATION_MS,
+  TRACK_CHANGE_DURATION_MS,
   VOLUME_DURATION_MS,
   type ActivityView,
 } from './scheduler.ts';
@@ -274,4 +281,115 @@ test('noticesChanged and settingsChanged sync snapshot state silently without wa
   assert.equal(sched.state.idleSinceMs, initialIdleMs);
   assert.equal(sched.state.playback, playbackBefore);
   assert.equal(sched.state.settings?.togglePairs[0]?.primary.deviceId, null);
+});
+
+function sampleMedia(overrides: Partial<NowPlaying> = {}): NowPlaying {
+  return {
+    appId: 'Spotify.exe',
+    status: 'paused',
+    title: 'Viva La Vida',
+    artist: 'Coldplay',
+    album: 'Viva La Vida or Death and All His Friends',
+    positionMs: 52_000n,
+    durationMs: 211_000n,
+    art: { id: 'fake-art-0', width: 256, height: 256, accent: { r: 226, g: 88, b: 62 } },
+    ...overrides,
+  };
+}
+
+test('snapshot.media populates compact idle state and mediaChanged wakes track activity only on track change', () => {
+  const sched = new NotchActivityScheduler(1000);
+  const snap = sampleSnapshot();
+  snap.media = sampleMedia();
+  sched.applySnapshot(snap, 1000);
+
+  // Initial snapshot sets state.media without waking a track-change activity banner.
+  assert.equal(sched.state.activity.kind, 'idle');
+  assert.equal(isMediaActive(sched.state.media), true);
+  assert.equal(sched.state.media?.title, 'Viva La Vida');
+
+  // Same-track play/pause delta updates status in place without waking a track-change banner from idle.
+  const playRes = sched.applyEnvelope(
+    {
+      revision: 2,
+      event: {
+        type: 'mediaChanged',
+        media: sampleMedia({ status: 'playing', positionMs: 55_000n }),
+      },
+    },
+    1200,
+  );
+  assert.equal(playRes.status, 'applied');
+  assert.equal(playRes.wokeActivity, false);
+  assert.equal(sched.state.activity.kind, 'idle');
+  assert.equal(sched.state.media?.status, 'playing');
+
+  // Next track wakes the track-change activity with previous track metadata for fixed-slot crossfade.
+  const nextTrack = sampleMedia({
+    status: 'playing',
+    title: 'Midnight City',
+    artist: 'M83',
+    album: "Hurry Up, We're Dreaming",
+    positionMs: 0n,
+    durationMs: 243_000n,
+    art: { id: 'fake-art-1', width: 256, height: 256, accent: { r: 196, g: 82, b: 212 } },
+  });
+  const trackRes = sched.applyEnvelope(
+    { revision: 3, event: { type: 'mediaChanged', media: nextTrack } },
+    1500,
+  );
+  assert.equal(trackRes.status, 'applied');
+  assert.equal(trackRes.wokeActivity, true);
+  const tr1 = expectActivity(sched, 'track');
+  assert.equal(tr1.media.title, 'Midnight City');
+  assert.equal(tr1.previousTitle, 'Viva La Vida');
+  assert.equal(tr1.previousArtist, 'Coldplay');
+  assert.equal(tr1.previousArt?.id, 'fake-art-0');
+  assert.equal(tr1.expiresAtMs, 1500 + TRACK_CHANGE_DURATION_MS);
+  const firstTrackSeq = tr1.trackSeq;
+
+  // Same-track timeline or pause update while track activity is open keeps trackSeq stable so controls/labels do not replay.
+  const pauseRes = sched.applyEnvelope(
+    {
+      revision: 4,
+      event: {
+        type: 'mediaChanged',
+        media: { ...nextTrack, status: 'paused', positionMs: 12_000n },
+      },
+    },
+    1800,
+  );
+  assert.equal(pauseRes.status, 'applied');
+  assert.equal(pauseRes.wokeActivity, false);
+  const tr2 = expectActivity(sched, 'track');
+  assert.equal(tr2.trackSeq, firstTrackSeq);
+  assert.equal(tr2.media.status, 'paused');
+
+  // Media closing or stopping dismisses an active track banner back to idle.
+  const closeRes = sched.applyEnvelope(
+    { revision: 5, event: { type: 'mediaChanged', media: null } },
+    2000,
+  );
+  assert.equal(closeRes.status, 'applied');
+  assert.equal(closeRes.wokeActivity, false);
+  assert.equal(sched.state.activity.kind, 'idle');
+  assert.equal(sched.state.media, null);
+});
+
+test('media helpers format timecodes, scrubber percentage, accent colours, and Command::Media payloads', () => {
+  assert.deepEqual(createMediaCommand('playPause'), { type: 'media', action: 'playPause' });
+  assert.deepEqual(createMediaCommand('next'), { type: 'media', action: 'next' });
+  assert.deepEqual(createMediaCommand('previous'), { type: 'media', action: 'previous' });
+
+  assert.equal(formatTimecode(52_000n), '0:52');
+  assert.equal(formatTimecode(211_000), '3:31');
+  assert.equal(formatTimecode(null), '0:00');
+
+  const media = sampleMedia({ positionMs: 52_750n, durationMs: 211_000n });
+  assert.equal(Math.round(mediaProgressPercent(media)), 25);
+  assert.equal(mediaProgressPercent(sampleMedia({ durationMs: 0n })), 0);
+
+  assert.equal(formatRgbCss({ r: 226, g: 88, b: 62 }), 'rgb(226, 88, 62)');
+  assert.equal(formatRgbGlowCss({ r: 226, g: 88, b: 62 }, 0.34), 'rgba(226, 88, 62, 0.34)');
+  assert.equal(formatRgbCss(null), null);
 });

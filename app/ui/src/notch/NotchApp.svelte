@@ -2,15 +2,25 @@
   import { invoke } from '@tauri-apps/api/core';
   import { listen } from '@tauri-apps/api/event';
   import { onMount } from 'svelte';
-  import type { EngineSnapshot, Envelope } from '../lib/ipc/engine';
+  import type { Command, EngineSnapshot, Envelope, MediaAction } from '../lib/ipc/engine';
   import type { HitRect, NotchDelta, NotchSnapshot, SpringPreset, ThemeKind } from '../lib/ipc/types';
   import { SpringGroup } from '../lib/motion/spring.svelte';
-  import { formatSpatialBadge, NotchActivityScheduler, shortDeviceName, type ActivityView } from '../lib/notch/scheduler';
+  import {
+    createMediaCommand,
+    formatRgbCss,
+    formatRgbGlowCss,
+    formatSpatialBadge,
+    isMediaActive,
+    NotchActivityScheduler,
+    shortDeviceName,
+    type ActivityView,
+  } from '../lib/notch/scheduler';
   import ExpandedNotch from './activities/ExpandedNotch.svelte';
   import IdlePill from './activities/IdlePill.svelte';
   import MicActivity from './activities/MicActivity.svelte';
   import PlugActivity from './activities/PlugActivity.svelte';
   import SwitchActivity from './activities/SwitchActivity.svelte';
+  import TrackActivity from './activities/TrackActivity.svelte';
   import VolumeActivity from './activities/VolumeActivity.svelte';
 
   const CANVAS_W = 420;
@@ -60,14 +70,28 @@
       ? formatSpatialBadge(engineState.activeDevice.spatial)
       : (notchSnapshot?.spatialBadge ?? null),
   );
+  const displayedMedia = $derived(
+    activeView.kind === 'track' ? activeView.media : engineState.media,
+  );
+  const activeAccentCss = $derived(
+    isMediaActive(displayedMedia)
+      ? (formatRgbCss(displayedMedia.art?.accent) ?? 'var(--ice-accent)')
+      : 'var(--ice-accent)',
+  );
+  const activeGlowCss = $derived(
+    isMediaActive(displayedMedia)
+      ? (formatRgbGlowCss(displayedMedia.art?.accent, 0.34) ?? 'var(--ice-accent-glow)')
+      : 'var(--ice-accent-glow)',
+  );
 
   function targetGeometry(view: ActivityView, expandedNow: boolean, micMutedNow: boolean) {
     const vol =
       view.kind === 'volume'
         ? view.percent
         : (engineState.volume?.percent ?? notchSnapshot?.volumePercent ?? 40);
+    const hasMedia = isMediaActive(engineState.media);
     if (expandedNow) {
-      return { w: 372, h: 170, r: 22, vol };
+      return { w: 384, h: hasMedia ? 178 : 170, r: 22, vol };
     }
     switch (view.kind) {
       case 'volume':
@@ -78,8 +102,13 @@
         return { w: 268, h: 44, r: 22, vol };
       case 'mic':
         return { w: 204, h: 38, r: 19, vol };
+      case 'track':
+        return { w: 296, h: 48, r: 24, vol };
       case 'idle':
       default:
+        if (hasMedia) {
+          return { w: micMutedNow ? 216 : 196, h: 28, r: 14, vol };
+        }
         return { w: micMutedNow ? 132 : 116, h: 28, r: 14, vol };
     }
   }
@@ -260,7 +289,11 @@
       return;
     }
     engineState = { ...scheduler.state };
-    if (res.wokeActivity || delta.event.type === 'devicesChanged') {
+    if (
+      res.wokeActivity ||
+      delta.event.type === 'devicesChanged' ||
+      delta.event.type === 'mediaChanged'
+    ) {
       benchOverride = null;
       syncGeometry(false);
       scheduleNextTick();
@@ -412,6 +445,23 @@
     }
   }
 
+  async function sendMediaAction(action: MediaAction) {
+    scheduler.markInteraction(Date.now());
+    scheduleNextTick();
+    const command: Command = createMediaCommand(action);
+    try {
+      await invoke('send_command', { command });
+      return;
+    } catch {
+      // Fall back to direct media_command if registered under that name.
+    }
+    try {
+      await invoke('media_command', { action });
+    } catch {
+      // No-op when running in standalone preview before backend media IPC lands.
+    }
+  }
+
   const insetLeft = $derived(Math.max(0, (CANVAS_W - pillSize.w) / 2));
   const insetBottom = $derived(Math.max(0, CANVAS_H - TOP_PAD - pillSize.h));
   const clipPath = $derived(
@@ -454,7 +504,12 @@
     role="region"
     aria-label="Ice Audio Notch"
   >
-    <div class="pill-surface">
+    <div
+      class="pill-surface"
+      style:--ice-active-accent={activeAccentCss}
+      style:--ice-active-glow={activeGlowCss}
+    >
+      <div class="accent-glow" class:instant={isInstant} aria-hidden="true"></div>
       <div
         class="pill-slot"
         style:top={`${TOP_PAD}px`}
@@ -470,12 +525,19 @@
             <PlugActivity activity={activeView} instant={isInstant} />
           {:else if activeView.kind === 'mic'}
             <MicActivity activity={activeView} instant={isInstant} />
+          {:else if activeView.kind === 'track'}
+            <TrackActivity
+              activity={activeView}
+              instant={isInstant}
+              onMediaAction={(action) => void sendMediaAction(action)}
+            />
           {:else}
             <IdlePill
               deviceLabel={shortDeviceName(effectiveDeviceName)}
               volumePercent={effectiveVolumePercent}
               muted={effectiveVolumeMuted}
               micMuted={effectiveMicMuted}
+              media={engineState.media}
             />
           {/if}
         {:else if notchSnapshot && isExpanded}
@@ -487,6 +549,8 @@
             muted={effectiveVolumeMuted}
             barPercent={pillSize.vol}
             micMuted={effectiveMicMuted}
+            media={engineState.media}
+            instant={isInstant}
             activeMonitor={notchSnapshot.activeMonitor}
             monitors={notchSnapshot.monitors}
             preset={notchSnapshot.preset}
@@ -498,6 +562,7 @@
             onAdjustVolume={(delta) => void invoke('adjust_volume', { delta })}
             onSwitchDevice={(deviceId) => void invoke('switch_to_device', { deviceId })}
             onToggleMicMute={() => void invoke('toggle_mic_mute')}
+            onMediaAction={(action) => void sendMediaAction(action)}
             onCycleMonitor={() => void invoke('cycle_monitor')}
             onOpenSettings={() => void invoke('open_settings')}
             onSetPreset={(preset) => void invoke('set_preset', { preset })}
@@ -547,9 +612,23 @@
   .pill-surface {
     position: absolute;
     inset: 0;
-    background:
-      radial-gradient(65% 45% at 50% 0%, var(--ice-accent-glow), transparent 72%),
-      var(--ice-bg);
+    background: var(--ice-bg);
+  }
+
+  .accent-glow {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: radial-gradient(
+      65% 48% at 50% 0%,
+      var(--ice-active-glow, var(--ice-accent-glow)),
+      transparent 74%
+    );
+    transition: opacity 400ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .accent-glow.instant {
+    transition: none;
   }
 
   .pill-slot {
