@@ -170,7 +170,7 @@ which installs a global LL hook. This alone justifies the rewrite.
 **Claude's recommendation for Q-02:** keep the repo **private while it's for personal use**.
 Binaries you build yourself never carry the "downloaded from the internet" mark (Mark-of-the-Web),
 so **SmartScreen never triggers on your own builds and nothing needs signing**. Go public under
-**MIT** (already named in README) at the first public alpha (D-06). At that point the cost to
+**MIT** (already named in README) at the first public release, now Phase 6 (owner, 2026-11-22). At that point the cost to
 you is only that the code is visible. It also gets you SignPath's free signing and a portfolio
 piece. Until then, D-09/D-10 votes describe the *eventual* release path and block nothing.
 
