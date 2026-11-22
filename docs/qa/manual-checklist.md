@@ -130,7 +130,8 @@ Keep the `engine` window visible. "Expect" lines refer to what it prints. In lat
 | A1 / A2 / A3 | ✅ | Toggle both ways; Atmos confirmed on every switch to the Arctis |
 | A4 | ✅ (observed) | Windows moved Communications to the ASUS monitor on unplug; resolver logic covered by tests |
 | B1 | ✅ | Both endpoints left and returned with the same IDs; Atmos kept |
-| B3 | ❌ → fixed | Different USB port: Windows gave the Arctis new endpoint IDs **and a new container** (`8EC256AB…` → `F94FF25C…`, USB without serial), and reset spatial sound to Off. The resolver treated a container mismatch as "another headset" → `NotConnected`. Fixed: hardware key anchors, container only breaks ties. `audio-spike resolve` on the owner's config now gives `Relinked` for the pair, the Atmos preference and the favourite. **Re-run B3/B4 pending** |
+| B3 | ❌ → fixed | Different USB port: Windows gave the Arctis new endpoint IDs **and a new container** (`8EC256AB…` → `F94FF25C…`, USB without serial), and reset spatial sound to Off. The resolver treated a container mismatch as "another headset" → `NotConnected`. Fixed: hardware key anchors, container only breaks ties. `audio-spike resolve` on the owner's config now gives `Relinked` for the pair, the Atmos preference and the favourite. **Re-run after `697fdc7`: ✅ owner confirmed it works** |
+| B4 | ✅ | After the first re-linked switch the saved IDs are current (plain `SWITCHED` from then on) |
 | B5 | not yet run | Sleep/wake |
 | D1 / D2 / D5 | ✅ | Plain 2%, Shift 1%, knob press = mute |
 | D4 | ✅ (after fix) | Re-switched to the current device with 2 favourites; fixed in `f24b9b5`; owner confirmed the fix works |
