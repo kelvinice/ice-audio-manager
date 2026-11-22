@@ -1611,6 +1611,8 @@ mod tests {
     fn test_monitor(scale_factor: f64) -> MonitorInfo {
         MonitorInfo {
             id: "\\\\.\\DISPLAY1".into(),
+            display_path: "\\\\?\\DISPLAY#TEST0001#1".into(),
+            friendly_name: "Primary Test Display".into(),
             is_primary: true,
             left: 0,
             top: 0,

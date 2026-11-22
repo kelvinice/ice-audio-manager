@@ -36,6 +36,7 @@ features = [
     "Media_Control",
     "Media_Devices",
     "Storage_Streams",
+    "Win32_Devices_Display",
     "Win32_Devices_FunctionDiscovery",
     "Win32_Foundation",
     "Win32_Graphics_Dwm",

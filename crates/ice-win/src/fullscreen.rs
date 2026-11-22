@@ -1,34 +1,44 @@
-//! Phase 0.5 probe for fullscreen coverage on the notch's display.
+//! Phase 0.5 / Phase 2 fullscreen coverage probe and production watcher for the notch's display.
 
+use core::ffi::c_void;
 use std::cell::Cell;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicIsize, Ordering};
+use std::sync::mpsc;
+use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
-use windows::Win32::Foundation::{HWND, LPARAM, RECT, WAIT_FAILED};
+use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, RECT, WAIT_FAILED, WPARAM};
 use windows::Win32::Graphics::Dwm::{DWMWA_EXTENDED_FRAME_BOUNDS, DwmGetWindowAttribute};
 use windows::Win32::Graphics::Gdi::{EnumDisplayMonitors, GetMonitorInfoW, HDC, HMONITOR, MONITORINFOEXW};
+use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::UI::Accessibility::{HWINEVENTHOOK, SetWinEventHook, UnhookWinEvent};
 use windows::Win32::UI::HiDpi::{
     DPI_AWARENESS_CONTEXT, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, SetThreadDpiAwarenessContext,
 };
 use windows::Win32::UI::Shell::{QUNS_RUNNING_D3D_FULL_SCREEN, SHQueryUserNotificationState};
 use windows::Win32::UI::WindowsAndMessaging::{
-    CHILDID_SELF, DispatchMessageW, EVENT_OBJECT_LOCATIONCHANGE, EVENT_OBJECT_STATECHANGE, EVENT_SYSTEM_FOREGROUND,
-    GWL_STYLE, GetDesktopWindow, GetForegroundWindow, GetShellWindow, GetWindowLongPtrW, GetWindowRect, IsIconic,
-    IsWindowVisible, IsZoomed, MONITORINFOF_PRIMARY, MSG, MWMO_INPUTAVAILABLE, MsgWaitForMultipleObjectsEx,
-    OBJID_WINDOW, PM_REMOVE, PeekMessageW, QS_ALLINPUT, WINEVENT_OUTOFCONTEXT, WM_QUIT, WS_CAPTION,
+    CHILDID_SELF, CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, EVENT_OBJECT_LOCATIONCHANGE,
+    EVENT_OBJECT_STATECHANGE, EVENT_SYSTEM_FOREGROUND, GWL_STYLE, GetDesktopWindow, GetForegroundWindow, GetMessageW,
+    GetShellWindow, GetWindowLongPtrW, GetWindowRect, IsIconic, IsWindowVisible, IsZoomed, MONITORINFOF_PRIMARY, MSG,
+    MWMO_INPUTAVAILABLE, MsgWaitForMultipleObjectsEx, OBJID_WINDOW, PM_REMOVE, PeekMessageW, PostMessageW,
+    PostQuitMessage, QS_ALLINPUT, RegisterClassExW, TranslateMessage, WINEVENT_OUTOFCONTEXT, WM_CLOSE, WM_DESTROY,
+    WM_DISPLAYCHANGE, WM_QUIT, WNDCLASSEXW, WS_CAPTION, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_POPUP,
 };
-use windows::core::{BOOL, Error, Result};
+use windows::core::{BOOL, Error, Result, w};
 
-#[derive(Debug, PartialEq)]
+use crate::monitors::MonitorInfo;
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct Display {
-    /// Diagnostic label for this session. The app should persist a display path instead.
+    /// Diagnostic label for this session. Persistent monitor identity uses `display_path`.
     pub name: String,
     pub bounds: RECT,
     pub primary: bool,
     pub covered: bool,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Snapshot {
     pub foreground_frame: Option<RECT>,
     pub displays: Vec<Display>,
@@ -36,8 +46,30 @@ pub struct Snapshot {
     pub shell_reports_d3d_fullscreen: Option<bool>,
 }
 
+/// Returns `true` when `monitor` matches an entry in `snapshot` that is currently covered fullscreen.
+#[must_use]
+pub fn is_monitor_covered(snapshot: &Snapshot, monitor: &MonitorInfo) -> bool {
+    let target_bounds = (
+        monitor.left,
+        monitor.top,
+        monitor.left.saturating_add(monitor.width),
+        monitor.top.saturating_add(monitor.height),
+    );
+    snapshot
+        .displays
+        .iter()
+        .find(|d| {
+            d.name.eq_ignore_ascii_case(&monitor.id)
+                || (d.bounds.left, d.bounds.top, d.bounds.right, d.bounds.bottom) == target_bounds
+        })
+        .is_some_and(|d| d.covered)
+}
+
 /// Samples visible foreground bounds and each display in physical pixels.
 /// Returns `None` when the foreground is still changing, so callers can retain the last state.
+///
+/// # Errors
+/// Fails if setting per-monitor DPI awareness context or enumerating displays returns an OS error.
 pub fn snapshot() -> Result<Option<Snapshot>> {
     // SAFETY: this changes only the calling thread's DPI context. The guard restores it.
     let previous = unsafe { SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2) };
@@ -147,6 +179,8 @@ fn covers_display(frame: RECT, display: RECT, maximized_with_caption: bool) -> b
 
 thread_local! {
     static FOREGROUND_CHANGED: Cell<bool> = const { Cell::new(false) };
+    static DISPLAY_CHANGED: Cell<bool> = const { Cell::new(false) };
+    static WINDOW_DESTROYED: Cell<bool> = const { Cell::new(false) };
 }
 
 struct WinEventSubscription(HWINEVENTHOOK);
@@ -184,6 +218,233 @@ unsafe extern "system" fn on_window_event(
     {
         // A single flag coalesces bursts. Sampling and logging happen outside the WinEvent callback.
         FOREGROUND_CHANGED.set(true);
+    }
+}
+
+/// Event pushed by [`FullscreenWatcher`].
+#[derive(Debug, Clone, PartialEq)]
+pub enum FullscreenEvent {
+    /// Foreground/window bounds settled and may have entered or left fullscreen on a display.
+    Changed(Snapshot),
+    /// Windows broadcast `WM_DISPLAYCHANGE` (monitor attach/detach, resolution, or DPI scale change).
+    DisplaysChanged(Option<Snapshot>),
+}
+
+/// Event-driven fullscreen + `WM_DISPLAYCHANGE` monitor running on a dedicated hidden-window thread.
+pub struct FullscreenWatcher {
+    closing: Arc<AtomicBool>,
+    hwnd_raw: Arc<AtomicIsize>,
+    join: Option<JoinHandle<()>>,
+}
+
+impl FullscreenWatcher {
+    /// Spawns the watcher thread and begins pushing [`FullscreenEvent`] updates to `sink`.
+    ///
+    /// `sink` runs on the watcher thread and must return quickly (e.g. dispatch to Tauri main thread).
+    ///
+    /// # Errors
+    /// Fails if the thread cannot be spawned or the WinEvent hooks / watcher window fail to initialize.
+    pub fn start(sink: impl Fn(FullscreenEvent) + Send + 'static) -> Result<Self> {
+        let closing = Arc::new(AtomicBool::new(false));
+        let hwnd_raw = Arc::new(AtomicIsize::new(0));
+        let (ready_tx, ready_rx) = mpsc::sync_channel::<Result<isize>>(1);
+
+        let closing_thread = Arc::clone(&closing);
+        let hwnd_thread = Arc::clone(&hwnd_raw);
+        let join = std::thread::Builder::new()
+            .name("ice-fullscreen-watch".into())
+            .spawn(move || watcher_thread_main(closing_thread, hwnd_thread, ready_tx, &sink))
+            .map_err(|_| Error::from_thread())?;
+
+        match ready_rx.recv() {
+            Ok(Ok(_)) => Ok(Self { closing, hwnd_raw, join: Some(join) }),
+            Ok(Err(err)) => {
+                let _ = join.join();
+                Err(err)
+            }
+            Err(_) => {
+                let _ = join.join();
+                Err(Error::from_thread())
+            }
+        }
+    }
+}
+
+impl Drop for FullscreenWatcher {
+    fn drop(&mut self) {
+        self.closing.store(true, Ordering::Release);
+        let raw = self.hwnd_raw.swap(0, Ordering::AcqRel);
+        if raw != 0 {
+            let hwnd = HWND(raw as *mut c_void);
+            // SAFETY: `hwnd` belongs to `ice-fullscreen-watch` and stays valid until destroyed there.
+            let _ = unsafe { PostMessageW(Some(hwnd), WM_CLOSE, WPARAM(0), LPARAM(0)) };
+        }
+        if let Some(join) = self.join.take() {
+            let _ = join.join();
+        }
+    }
+}
+
+unsafe extern "system" fn watcher_wnd_proc(hwnd: HWND, umsg: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
+    match umsg {
+        WM_DISPLAYCHANGE => {
+            DISPLAY_CHANGED.set(true);
+            LRESULT(0)
+        }
+        WM_CLOSE => {
+            // SAFETY: destroys only our own hidden watcher window on its owning thread.
+            let _ = unsafe { DestroyWindow(hwnd) };
+            LRESULT(0)
+        }
+        WM_DESTROY => {
+            WINDOW_DESTROYED.set(true);
+            // SAFETY: signals `GetMessageW` to return 0 and exit cleanly.
+            unsafe { PostQuitMessage(0) };
+            LRESULT(0)
+        }
+        _ => {
+            // SAFETY: standard default message processing.
+            unsafe { DefWindowProcW(hwnd, umsg, wparam, lparam) }
+        }
+    }
+}
+
+fn create_watcher_window() -> Result<HWND> {
+    let class_name = w!("IceFullscreenWatcherClass");
+    // SAFETY: `GetModuleHandleW(None)` returns the current executable's HINSTANCE.
+    let hinstance = unsafe { GetModuleHandleW(None) }?;
+    let wc = WNDCLASSEXW {
+        cbSize: u32::try_from(size_of::<WNDCLASSEXW>()).unwrap_or(0),
+        lpfnWndProc: Some(watcher_wnd_proc),
+        hInstance: hinstance.into(),
+        lpszClassName: class_name,
+        ..Default::default()
+    };
+    // SAFETY: registering an immutable static class name; repeated registration is benign.
+    unsafe { RegisterClassExW(&raw const wc) };
+
+    // Top-level invisible WS_POPUP window (never shown, not HWND_MESSAGE) so broadcast WM_DISPLAYCHANGE arrives.
+    // SAFETY: creates a private 0x0 tool window owned by this thread.
+    unsafe {
+        CreateWindowExW(
+            WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE,
+            class_name,
+            w!("IceFullscreenWatcher"),
+            WS_POPUP,
+            0,
+            0,
+            0,
+            0,
+            None,
+            None,
+            Some(hinstance.into()),
+            None,
+        )
+    }
+}
+
+fn watcher_thread_main(
+    closing: Arc<AtomicBool>,
+    hwnd_raw: Arc<AtomicIsize>,
+    ready_tx: mpsc::SyncSender<Result<isize>>,
+    sink: &dyn Fn(FullscreenEvent),
+) {
+    let hwnd = match create_watcher_window() {
+        Ok(h) => h,
+        Err(err) => {
+            let _ = ready_tx.send(Err(err));
+            return;
+        }
+    };
+    let _foreground = match WinEventSubscription::new(EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_FOREGROUND) {
+        Ok(sub) => sub,
+        Err(err) => {
+            // SAFETY: destroys window created above before aborting startup.
+            let _ = unsafe { DestroyWindow(hwnd) };
+            let _ = ready_tx.send(Err(err));
+            return;
+        }
+    };
+    let _bounds = match WinEventSubscription::new(EVENT_OBJECT_STATECHANGE, EVENT_OBJECT_LOCATIONCHANGE) {
+        Ok(sub) => sub,
+        Err(err) => {
+            // SAFETY: destroys window created above before aborting startup.
+            let _ = unsafe { DestroyWindow(hwnd) };
+            let _ = ready_tx.send(Err(err));
+            return;
+        }
+    };
+
+    FOREGROUND_CHANGED.set(false);
+    DISPLAY_CHANGED.set(false);
+    WINDOW_DESTROYED.set(false);
+    hwnd_raw.store(hwnd.0 as isize, Ordering::Release);
+    let _ = ready_tx.send(Ok(hwnd.0 as isize));
+
+    if !closing.load(Ordering::Acquire) {
+        match snapshot() {
+            Ok(Some(initial)) => sink(FullscreenEvent::Changed(initial)),
+            Ok(None) => {}
+            Err(err) => tracing::warn!(error = %err, "initial fullscreen snapshot failed"),
+        }
+    }
+
+    let mut msg = MSG::default();
+    loop {
+        if closing.load(Ordering::Acquire) {
+            break;
+        }
+        // SAFETY: `GetMessageW` blocks until a message arrives; returns 0 on WM_QUIT and -1 on error.
+        let ret = unsafe { GetMessageW(&raw mut msg, None, 0, 0) };
+        if ret.0 <= 0 {
+            break;
+        }
+        // SAFETY: dispatches the retrieved message on this thread.
+        unsafe {
+            let _ = TranslateMessage(&raw const msg);
+            DispatchMessageW(&raw const msg);
+        }
+
+        // Drain any remaining queued WinEvents/messages so bursts coalesce before sampling.
+        let mut quit = false;
+        // SAFETY: drains queued thread messages without blocking.
+        while unsafe { PeekMessageW(&raw mut msg, None, 0, 0, PM_REMOVE) }.as_bool() {
+            if msg.message == WM_QUIT {
+                quit = true;
+                break;
+            }
+            // SAFETY: dispatches queued message on this thread.
+            unsafe {
+                let _ = TranslateMessage(&raw const msg);
+                DispatchMessageW(&raw const msg);
+            }
+        }
+        if quit || closing.load(Ordering::Acquire) {
+            break;
+        }
+
+        if DISPLAY_CHANGED.replace(false) {
+            FOREGROUND_CHANGED.set(false);
+            match snapshot() {
+                Ok(snap) => sink(FullscreenEvent::DisplaysChanged(snap)),
+                Err(err) => {
+                    tracing::warn!(error = %err, "fullscreen snapshot failed on display change");
+                    sink(FullscreenEvent::DisplaysChanged(None));
+                }
+            }
+        } else if FOREGROUND_CHANGED.replace(false) {
+            match snapshot() {
+                Ok(Some(current)) => sink(FullscreenEvent::Changed(current)),
+                Ok(None) => {}
+                Err(err) => tracing::warn!(error = %err, "fullscreen snapshot failed"),
+            }
+        }
+    }
+
+    hwnd_raw.store(0, Ordering::Release);
+    if !WINDOW_DESTROYED.get() {
+        // SAFETY: window belongs to this thread and has not been destroyed yet.
+        let _ = unsafe { DestroyWindow(hwnd) };
     }
 }
 
@@ -250,5 +511,67 @@ mod tests {
         let overscan = RECT { left: LEFT.left - 8, right: LEFT.right + 8, ..LEFT };
         assert!(covers_display(overscan, LEFT, false));
         assert!(!covers_display(RECT::default(), LEFT, false));
+    }
+
+    #[test]
+    fn is_monitor_covered_matches_by_name_or_bounds() {
+        let snap = Snapshot {
+            foreground_frame: Some(LEFT),
+            displays: vec![
+                Display { name: "\\\\.\\DISPLAY1".into(), bounds: PRIMARY, primary: true, covered: false },
+                Display { name: "\\\\.\\DISPLAY2".into(), bounds: LEFT, primary: false, covered: true },
+            ],
+            shell_reports_d3d_fullscreen: Some(false),
+        };
+
+        let mon_by_name = MonitorInfo {
+            id: "\\\\.\\display2".into(),
+            display_path: "\\\\?\\DISPLAY#TEST#2".into(),
+            friendly_name: "Left".into(),
+            is_primary: false,
+            left: 0,
+            top: 0,
+            width: 1920,
+            height: 1080,
+            work_left: 0,
+            work_top: 0,
+            work_width: 1920,
+            work_height: 1032,
+            dpi_x: 96,
+            scale_factor: 1.0,
+            refresh_hz: 75,
+        };
+        assert!(is_monitor_covered(&snap, &mon_by_name));
+
+        let mon_by_bounds = MonitorInfo { id: "\\\\.\\DISPLAY9".into(), left: -1920, ..mon_by_name.clone() };
+        assert!(is_monitor_covered(&snap, &mon_by_bounds));
+
+        let mon_primary = MonitorInfo {
+            id: "\\\\.\\DISPLAY1".into(),
+            is_primary: true,
+            left: 0,
+            top: -120,
+            width: 2560,
+            height: 1440,
+            ..mon_by_name
+        };
+        assert!(!is_monitor_covered(&snap, &mon_primary));
+    }
+
+    #[test]
+    fn fullscreen_watcher_starts_and_drops_cleanly() {
+        let initial_probe = snapshot().expect("fullscreen snapshot API should succeed");
+        let (tx, rx) = mpsc::channel();
+        let watcher = FullscreenWatcher::start(move |ev| {
+            let _ = tx.send(ev);
+        })
+        .expect("start fullscreen watcher");
+        if initial_probe.is_some() {
+            let first = rx.recv_timeout(Duration::from_secs(2));
+            assert!(first.is_ok(), "expected initial fullscreen snapshot");
+        }
+        let t0 = Instant::now();
+        drop(watcher);
+        assert!(t0.elapsed() < Duration::from_secs(1), "watcher drop hung");
     }
 }
