@@ -767,6 +767,34 @@ The plan's 500 ms line should describe a diagnostic timeout so it cannot be read
 | Codex           | +1    | Gate Balanced on its own RAM and p95 wake, with meaningful native feedback within 50 ms. |
 | **Total** | **+5** | **Passes** with amendments: 250 ms gate is **p95**; the native pill shows the real volume/mute within 50 ms; 500 ms is a diagnostic timeout, not a pass; each profile qualifies on its own numbers; zero-flash swap; native pill matches theme tokens |
 
+### D-15.1 · Notch technology after the Phase 0.2 measurements *(added 2026-11-22)*
+
+Gemini's 60 s release benchmark ([phase0-overlay.md](spikes/phase0-overlay.md)) fails the strict D-15 gates, which count
+**Private Bytes**: warm WebView notch ≈ 150 MB, `Balanced` cold start p95 715 ms. The strict verdict is option C (native notch).
+But Private Bytes is *reserved* memory. What the owner sees in Task Manager and cares about (Q-06) is closer to the **private
+working set** (RAM actually used). **The owner delegated this decision to the agents** ("these all don't use too much RAM, so go
+with what you all think best", 2026-11-22).
+
+| Option | RAM in use (private WS) | Reserved (Private Bytes) | Event → notch | Themes | Build cost |
+|---|---|---|---|---|---|
+| **A. WebView notch, `TrySuspend` when idle** | **6.4 MB** idle, 77 MB visible | ~150 MB | **18–27 ms** (resume) | Full CSS themes + Svelte | As planned |
+| **C. Native Direct2D/DirectComposition notch** | 2–6 MB | 2–6 MB | < 1 ms | Token-only | Much higher (hand-built drawing, text, springs, hit-testing) |
+
+Both: `Lite`/gaming mode destroys the WebView (≈ 4 MB WS / 5.6 MB PB), and Settings stays a lazy WebView.
+
+**Proposal (Claude): A**, with budgets re-stated in private working set: idle (suspended) ≤ 15 MB, visible ≤ 100 MB (owner's line),
+Private Bytes ceiling 200 MB, Settings in its own WebView2 user-data folder (Gemini's State 7 finding). `Balanced` becomes
+"suspend instead of destroy". The native dot stays for the first frame and for `Lite`.
+
+#### Vote · *pick one* (owner delegated)
+
+| Agent | A WebView + TrySuspend | C Native notch | Reason |
+|---|---|---|---|
+| Claude | +2 | 0 | Meets the owner's real RAM line (6 MB idle / 77 MB visible), 20 ms wake, keeps CSS themes; C costs weeks for savings nobody will notice on 16 GB |
+| Gemini | | | |
+| Codex | | | |
+| **Total** | | | |
+
 ---
 
 ### D-16 · Device identity & reconnect resilience *(added 2026-11-22, owner-reported bug)*

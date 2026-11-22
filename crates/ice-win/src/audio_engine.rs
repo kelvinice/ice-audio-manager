@@ -172,6 +172,8 @@ struct Worker {
     next_request: u64,
     refresh_at: Option<Instant>,
     knob_steps: i32,
+    /// Direction of the first detent of the current Ctrl+knob gesture.
+    knob_first: i32,
     knob_at: Option<Instant>,
     // Must drop last: every COM object above is released before COM is uninitialised.
     _com: ComGuard,
@@ -215,6 +217,7 @@ impl Worker {
             next_request: 1,
             refresh_at: None,
             knob_steps: 0,
+            knob_first: 0,
             knob_at: None,
             _com: com,
         };
@@ -260,9 +263,13 @@ impl Worker {
         }
         if self.knob_at.is_some_and(|t| t <= now) {
             self.knob_at = None;
-            let steps = std::mem::take(&mut self.knob_steps);
-            if steps != 0 {
-                self.cycle(Flow::Render, steps);
+            // One device per gesture, in the spin direction. Counting detents is unsteerable without a visible
+            // picker (fast spins are 13-40 ms/detent); the Phase 2 notch picker can browse by detent instead.
+            let net = std::mem::take(&mut self.knob_steps);
+            let first = std::mem::take(&mut self.knob_first);
+            let step = if net == 0 { first } else { net.signum() };
+            if step != 0 {
+                self.cycle(Flow::Render, step);
             }
         }
     }
@@ -334,13 +341,15 @@ impl Worker {
         let (playback, recording) = (visible(self, Flow::Render), visible(self, Flow::Capture));
         let volume = self.default_volume();
         let mic_muted = self.mic_device().and_then(|d| volume::get(&d).ok()).map(|(_, m)| m);
-        {
+        let lists_changed = {
             let mut sh = lock(&self.shared);
+            let changed = sh.snapshot.playback != playback || sh.snapshot.recording != recording;
             sh.snapshot.playback.clone_from(&playback);
             sh.snapshot.recording.clone_from(&recording);
             sh.snapshot.volume = volume;
             sh.snapshot.mic_muted = mic_muted;
-        }
+            changed
+        };
         if old_default != new_default || self.volume_watch.is_none() {
             self.volume_watch = self
                 .eps
@@ -356,7 +365,13 @@ impl Worker {
         let left: Vec<DeviceSummary> = old
             .iter()
             .filter(|o| !self.endpoints.iter().any(|e| e.id == o.id))
-            .map(|o| DeviceSummary { state: ice_core::device::DeviceState::NotPresent, ..self.summary(o) })
+            .map(|o| DeviceSummary {
+                state: ice_core::device::DeviceState::NotPresent,
+                is_default: false,
+                is_default_communications: false,
+                spatial: None,
+                ..self.summary(o)
+            })
             .collect();
         for device in arrived {
             self.emit(EngineEvent::DeviceArrived { device });
@@ -364,7 +379,9 @@ impl Worker {
         for device in left {
             self.emit(EngineEvent::DeviceLeft { device });
         }
-        self.emit(EngineEvent::DevicesChanged { playback, recording });
+        if lists_changed {
+            self.emit(EngineEvent::DevicesChanged { playback, recording });
+        }
         if old_default != new_default
             && let Some(volume) = volume
         {
@@ -442,6 +459,9 @@ impl Worker {
             HotkeyAction::CycleFavourites => self.cycle(Flow::Render, 1),
             HotkeyAction::KnobCycle(step) => {
                 // Alt+Tab style: one switch per gesture, after the knob rests (F31; fast spins = 13–40 ms/detent).
+                if self.knob_at.is_none() {
+                    self.knob_first = step.signum();
+                }
                 self.knob_steps += step;
                 self.knob_at =
                     Some(Instant::now() + Duration::from_millis(u64::from(self.config.knob.commit_after_ms)));
@@ -576,6 +596,9 @@ impl Worker {
             targets.iter().position(|t| Some(&t.id) == current.as_ref()).map_or(-1, |i| i32::try_from(i).unwrap_or(0));
         let next = usize::try_from((cur + steps).rem_euclid(n)).unwrap_or(0);
         let target = targets[next].clone();
+        if Some(&target.id) == current.as_ref() {
+            return; // already there (e.g. only one favourite connected)
+        }
         self.switch(&target, self.config.default_roles, None);
     }
 
