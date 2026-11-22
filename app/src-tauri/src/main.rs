@@ -247,6 +247,20 @@ fn switch_to_device(device_id: String, state: State<'_, Arc<SharedRuntime>>) {
 }
 
 #[tauri::command]
+fn media_command(action: ice_core::engine::MediaAction, state: State<'_, Arc<SharedRuntime>>) {
+    state.engine.send(Command::Media { action });
+}
+
+#[tauri::command]
+fn set_idle_style(style: String, state: State<'_, Arc<SharedRuntime>>) {
+    if let Some(parsed) = ice_win::native_dot::IdleStyle::from_name(&style)
+        && let Some(dot) = state.native_dot.lock().unwrap_or_else(std::sync::PoisonError::into_inner).as_ref()
+    {
+        dot.set_idle_style(parsed);
+    }
+}
+
+#[tauri::command]
 fn toggle_expand(app: AppHandle, state: State<'_, Arc<SharedRuntime>>) {
     state.update_and_emit(&app, |s| {
         s.expanded = !s.expanded;
@@ -1324,6 +1338,8 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             toggle_mic_mute,
             trigger_switch,
             switch_to_device,
+            media_command,
+            set_idle_style,
             toggle_expand,
             set_preset,
             set_theme,

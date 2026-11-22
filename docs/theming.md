@@ -89,7 +89,7 @@ Four built-in themes ship out of the box (selected via config / Settings `Appear
 | --- | --- | --- |
 | **`ice`** *(default)* | Translucent obsidian-ice pill with cyan rim and ambient glow | Base defaults in §2 |
 | **`midnight`** | Near-pure-black high-contrast OLED/DynamicWin look | `--ice-bg: rgba(0, 0, 0, 0.96)` · `--ice-surface: rgba(12, 12, 14, 0.96)` · `--ice-border: rgba(255, 255, 255, 0.14)` · `--ice-rim: rgba(255, 255, 255, 0.24)` · `--ice-accent-glow: rgba(255, 255, 255, 0.12)` |
-| **`fluent`** | Neutral Windows 11 Dark-grey chrome matching stock Flyouts | `--ice-bg: rgba(32, 32, 32, 0.88)` · `--ice-surface: rgba(44, 44, 44, 0.92)` · `--ice-border: rgba(255, 255, 255, 0.12)` · `--ice-rim: rgba(107, 197, 255, 0.35)` |
+| **`fluent`** | Neutral Windows 11 Dark-grey chrome matching stock Flyouts | `--ice-bg: rgba(24, 24, 27, 0.93)` · `--ice-surface: rgba(36, 36, 40, 0.94)` · `--ice-border: rgba(255, 255, 255, 0.12)` · `--ice-rim: rgba(107, 197, 255, 0.35)` · `--ice-accent-glow: rgba(107, 197, 255, 0.2)` |
 | **`minimal`** | Solid opaque slate with zero glow or specular rim (lowest GPU overdraw) | `--ice-bg: rgb(18, 22, 29)` · `--ice-surface: rgb(26, 32, 42)` · `--ice-border: rgba(255, 255, 255, 0.14)` · `--ice-rim: transparent` · `--ice-shadow: 0 4px 12px rgba(0, 0, 0, 0.35)` · `--ice-drop-shadow: 0 4px 10px rgba(0, 0, 0, 0.3)` · `--ice-accent-glow: transparent` |
 
 ---

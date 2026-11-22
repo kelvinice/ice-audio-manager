@@ -99,6 +99,7 @@
 
   .prev-name {
     position: absolute;
+    top: 0;
     left: 0;
     right: 0;
     color: var(--ice-fg-muted);

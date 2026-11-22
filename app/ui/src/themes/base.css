@@ -37,10 +37,11 @@
 }
 
 :root[data-theme='fluent'] {
-  --ice-bg: rgba(32, 32, 32, 0.88);
-  --ice-surface: rgba(44, 44, 44, 0.92);
+  --ice-bg: rgba(24, 24, 27, 0.93);
+  --ice-surface: rgba(36, 36, 40, 0.94);
   --ice-border: rgba(255, 255, 255, 0.12);
   --ice-rim: rgba(107, 197, 255, 0.35);
+  --ice-accent-glow: rgba(107, 197, 255, 0.2);
 }
 
 :root[data-theme='minimal'] {

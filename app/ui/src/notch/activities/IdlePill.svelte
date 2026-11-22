@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { NowPlaying } from '../../lib/ipc/engine';
-  import { isMediaActive } from '../../lib/notch/scheduler';
+  import { DEFAULT_IDLE_MODE, isMediaActive, type IdleMode } from '../../lib/notch/scheduler';
   import AlbumArtTile from './AlbumArtTile.svelte';
   import DeviceIcon from './DeviceIcon.svelte';
 
@@ -10,15 +10,45 @@
     muted: boolean;
     micMuted: boolean;
     media?: NowPlaying | null;
+    idleMode?: IdleMode;
   }
 
-  let { deviceLabel, volumePercent, muted, micMuted, media = null }: Props = $props();
+  let {
+    deviceLabel,
+    volumePercent,
+    muted,
+    micMuted,
+    media = null,
+    idleMode = DEFAULT_IDLE_MODE,
+  }: Props = $props();
 
   const activeMedia = $derived(isMediaActive(media) ? media : null);
   const isPlaying = $derived(activeMedia?.status === 'playing');
 </script>
 
-{#if activeMedia}
+{#if idleMode === 'hidden'}
+  <div class="idle-hidden-sensor" aria-hidden="true"></div>
+{:else if idleMode === 'dot'}
+  <div class="idle-row dot-idle">
+    {#if micMuted}
+      <span class="mic-badge" title="Microphone muted" aria-label="Microphone muted">
+        <DeviceIcon kind="mic-muted" size={11} />
+      </span>
+    {:else}
+      <span class="dot" aria-hidden="true"></span>
+    {/if}
+    {#if activeMedia}
+      <span
+        class="status-glyph"
+        class:playing={isPlaying}
+        title={isPlaying ? 'Playing' : 'Paused'}
+        aria-label={isPlaying ? 'Playing' : 'Paused'}
+      >
+        <DeviceIcon kind={isPlaying ? 'play' : 'pause'} size={9} />
+      </span>
+    {/if}
+  </div>
+{:else if activeMedia}
   <div class="idle-row media-idle">
     {#if micMuted}
       <span class="mic-badge" title="Microphone muted" aria-label="Microphone muted">
@@ -66,6 +96,16 @@
     font-size: 11px;
     font-weight: 500;
     white-space: nowrap;
+  }
+
+  .idle-row.dot-idle {
+    justify-content: center;
+    gap: 5px;
+  }
+
+  .idle-hidden-sensor {
+    width: 100%;
+    height: 100%;
   }
 
   .dot {

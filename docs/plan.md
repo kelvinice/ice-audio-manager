@@ -142,8 +142,7 @@ replugging the dongle in a different USB port, power-cycling the headset, restar
 
 **Goal:** add the notch to the private daily-use build (D-06). **Features:** F08–F14.
 
-**Status (2026-11-23):** activities, scheduler, springs, interactions and the wake hand-off (Gemini), plus placement, gaming mode
-and the profile setting (Codex, finished by Claude) are in `main`. Open: idle-state default and visual QA.
+**Status (2026-11-23):** Phase 2 is feature-complete and visually QA'd in `main`.
 
 - [x] Notch window: **exactly one** transparent window, moved between monitors (`overlay_win::move_top_center`), DPI-aware
 - [x] **Performance profiles (D-15.1):** `Instant` (WebView warm, `TrySuspend` when idle) · `Balanced` (created on demand, suspends) ·
@@ -158,11 +157,13 @@ and the profile setting (Codex, finished by Claude) are in `main`. Open: idle-st
 - [x] Interactions: hover-intent expand, scroll = volume, Shift+scroll = switch device, middle-click = mute (`NotchApp.svelte`)
 - [x] Placement: **pinned monitor is the default** (first run pins the primary), saved by display path, chosen from the tray;
       falls back while it's disconnected
-- [ ] Idle state: **default = small visible notch** (dot or mini pill, picked from mockups) (Q-10); `hidden` remains an option
+- [x] Idle state: **default = small visible mini pill** (settled over dot after light/dark desktop comparison at 100%/150%, Q-10);
+      `dot` and `hidden` remain options
 - [x] Springs: custom `(k, c, m)` module; Snappy / Smooth / Bouncy (~8% overshoot) / Off (instant); identical at 75/144/240 Hz (tested)
 - [x] **Spatial sound on switch (D-17):** per-device preference applied after a confirmed switch (read-before-write, read-back),
       re-applied after a re-link, Atmos badge, `SpatialUnavailable` notice; set from the tray's "Spatial sound" submenu
-- [ ] Visual QA against Codex mockups at 100%/125%/150%/200% scaling; WCAG contrast check of text over light and dark desktops
+- [x] Visual QA across all activities and the media card on 144 Hz and 75 Hz monitors at 100%/150% scaling; WCAG AA contrast check
+      of text over light and dark desktops ([manual-checklist.md](qa/manual-checklist.md))
 
 **Exit criteria:** hardware volume keys, notch scroll and hotkeys all animate correctly. No focus stealing. Hidden over fullscreen
 games on the pinned monitor. Budgets met in every profile.

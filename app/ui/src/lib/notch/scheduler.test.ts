@@ -3,6 +3,7 @@ import test from 'node:test';
 import type { DeviceSummary, EngineSnapshot, NowPlaying } from '../ipc/engine.ts';
 import {
   createMediaCommand,
+  DEFAULT_IDLE_MODE,
   formatRgbCss,
   formatRgbGlowCss,
   formatTimecode,
@@ -14,6 +15,7 @@ import {
   TRACK_CHANGE_DURATION_MS,
   VOLUME_DURATION_MS,
   type ActivityView,
+  type IdleMode,
 } from './scheduler.ts';
 
 function expectActivity<K extends ActivityView['kind']>(
@@ -392,6 +394,10 @@ test('media helpers format timecodes, scrubber percentage, accent colours, and C
   assert.equal(mediaProgressPercent(sampleMedia({ durationMs: 0n })), 0);
 
   assert.equal(formatRgbCss({ r: 226, g: 88, b: 62 }), 'rgb(226, 88, 62)');
-  assert.equal(formatRgbGlowCss({ r: 226, g: 88, b: 62 }, 0.34), 'rgba(226, 88, 62, 0.34)');
+  assert.equal(formatRgbGlowCss({ r: 226, g: 88, b: 62 }, 0.24), 'rgba(226, 88, 62, 0.24)');
   assert.equal(formatRgbCss(null), null);
+
+  const modes: IdleMode[] = ['mini_pill', 'dot', 'hidden'];
+  assert.equal(DEFAULT_IDLE_MODE, 'mini_pill');
+  assert.equal(modes.includes(DEFAULT_IDLE_MODE), true);
 });

@@ -2,10 +2,12 @@
   import type { DeviceSummary, MediaAction, NowPlaying } from '../../lib/ipc/engine';
   import type { MonitorSummary, SpringPreset, ThemeKind } from '../../lib/ipc/types';
   import {
+    DEFAULT_IDLE_MODE,
     formatTimecode,
     isMediaActive,
     mediaProgressPercent,
     shortDeviceName,
+    type IdleMode,
   } from '../../lib/notch/scheduler';
   import AlbumArtTile from './AlbumArtTile.svelte';
   import DeviceIcon from './DeviceIcon.svelte';
@@ -20,6 +22,7 @@
     micMuted: boolean;
     media?: NowPlaying | null;
     instant?: boolean;
+    idleMode?: IdleMode;
     activeMonitor: number;
     monitors: MonitorSummary[];
     preset: SpringPreset;
@@ -32,6 +35,7 @@
     onSwitchDevice: (deviceId: string) => void;
     onToggleMicMute: () => void;
     onMediaAction?: (action: MediaAction) => void;
+    onSetIdleMode?: (mode: IdleMode) => void;
     onCycleMonitor: () => void;
     onOpenSettings: () => void;
     onSetPreset: (preset: SpringPreset) => void;
@@ -48,6 +52,7 @@
     micMuted,
     media = null,
     instant = false,
+    idleMode = DEFAULT_IDLE_MODE,
     activeMonitor,
     monitors,
     preset,
@@ -60,6 +65,7 @@
     onSwitchDevice,
     onToggleMicMute,
     onMediaAction = () => {},
+    onSetIdleMode = () => {},
     onCycleMonitor,
     onOpenSettings,
     onSetPreset,
@@ -193,6 +199,19 @@
     </div>
 
     <div class="meta">
+      <div class="preset-row" role="group" aria-label="Idle style">
+        {#each [['mini_pill', 'Pill'], ['dot', 'Dot'], ['hidden', 'Hide']] as [IdleMode, string][] as [m, label]}
+          <button
+            class="mini-btn"
+            class:active={idleMode === m}
+            type="button"
+            title={`Idle state: ${label}`}
+            onclick={() => onSetIdleMode(m)}
+          >
+            {label}
+          </button>
+        {/each}
+      </div>
       <div class="preset-row">
         {#each ['snappy', 'smooth', 'bouncy', 'off'] as SpringPreset[] as p}
           <button class="mini-btn" class:active={preset === p} type="button" onclick={() => onSetPreset(p)}>

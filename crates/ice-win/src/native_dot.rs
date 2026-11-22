@@ -35,14 +35,38 @@ const WM_DOT_CMD: u32 = WM_APP + 1;
 const ACTIVITY_TIMER_ID: usize = 0x4943_4531;
 const LOGICAL_TOP_OFFSET: i32 = 6;
 
-const IDLE_W: i32 = 88;
-const IDLE_H: i32 = 16;
+const IDLE_W: i32 = 92;
+const IDLE_H: i32 = 18;
+const IDLE_DOT_W: i32 = 38;
+const IDLE_DOT_H: i32 = 16;
 const VOLUME_W: i32 = 192;
 const VOLUME_H: i32 = 30;
 const MIC_W: i32 = 156;
 const MIC_H: i32 = 30;
 const DEVICE_W: i32 = 184;
 const DEVICE_H: i32 = 30;
+
+/// Settled Q-10 idle appearance options (`MiniPill` default, `Dot`, or `Hidden`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum IdleStyle {
+    Dot,
+    #[default]
+    MiniPill,
+    Hidden,
+}
+
+impl IdleStyle {
+    /// Parses `"mini_pill"`, `"dot"`, or `"hidden"` (case-insensitive).
+    #[must_use]
+    pub fn from_name(name: &str) -> Option<Self> {
+        match name.trim().to_ascii_lowercase().as_str() {
+            "mini_pill" | "minipill" | "pill" => Some(Self::MiniPill),
+            "dot" => Some(Self::Dot),
+            "hidden" | "hide" => Some(Self::Hidden),
+            _ => None,
+        }
+    }
+}
 
 const SWP_KEEP_SIZE: SET_WINDOW_POS_FLAGS =
     SET_WINDOW_POS_FLAGS(SWP_NOACTIVATE.0 | SWP_NOOWNERZORDER.0 | SWP_NOSENDCHANGING.0 | SWP_NOMOVE.0 | SWP_NOSIZE.0);
@@ -134,12 +158,12 @@ impl NativePillTheme {
         }
     }
 
-    /// Neutral Windows 11 dark-grey `Fluent` theme.
+    /// Neutral Windows 11 dark-grey `Fluent` theme (contrast-tuned for WCAG AA over light desktops).
     #[must_use]
     pub const fn fluent() -> Self {
         Self {
-            bg: Rgba::new(32, 32, 32, 224),
-            surface: Rgba::new(44, 44, 44, 235),
+            bg: Rgba::new(24, 24, 27, 237),
+            surface: Rgba::new(36, 36, 40, 240),
             rim: Rgba::new(107, 197, 255, 89),
             ..Self::ice()
         }
@@ -378,6 +402,7 @@ pub struct PillState {
     pub active_device: Option<String>,
     pub spatial_active: bool,
     pub mode: PillMode,
+    pub idle_style: IdleStyle,
     pub theme: NativePillTheme,
 }
 
@@ -399,6 +424,7 @@ impl PillState {
             active_device: None,
             spatial_active: false,
             mode: PillMode::Idle,
+            idle_style: IdleStyle::default(),
             theme,
         }
     }
@@ -607,16 +633,45 @@ impl NativeDotHandle {
         Ok(Self { shared, thread: Some(handle) })
     }
 
-    /// Shows the subtle idle dot/mini-pill at top-center (or muted-mic badge if `mic_muted`).
+    /// Shows the subtle idle dot/mini-pill at top-center (or hides when [`IdleStyle::Hidden`]).
     pub fn show_idle(&self) {
-        {
+        let should_hide = {
             let mut rt = self.shared.lock();
             rt.pulse_accent_override = None;
             rt.pill.theme = rt.base_theme;
             rt.pill.mode = PillMode::Idle;
-            rt.desired_visible = true;
+            let hide = rt.pill.idle_style == IdleStyle::Hidden;
+            rt.desired_visible = !hide;
+            hide
+        };
+        if should_hide {
+            self.shared.post_signal(ThreadSignal::Hide);
+        } else {
+            self.shared.post_signal(ThreadSignal::Idle);
         }
-        self.shared.post_signal(ThreadSignal::Idle);
+    }
+
+    /// Configures the Q-10 idle state appearance (`MiniPill` default, `Dot`, or `Hidden`).
+    pub fn set_idle_style(&self, style: IdleStyle) {
+        let signal = {
+            let mut rt = self.shared.lock();
+            rt.pill.idle_style = style;
+            if matches!(rt.pill.mode, PillMode::Idle) {
+                if style == IdleStyle::Hidden {
+                    rt.desired_visible = false;
+                    Some(ThreadSignal::Hide)
+                } else if rt.desired_visible {
+                    Some(ThreadSignal::Sync { restart_timer: false })
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        };
+        if let Some(sig) = signal {
+            self.shared.post_signal(sig);
+        }
     }
 
     /// Updates the native dot into an immediate activity pill (with optional volume progress `0.0..=1.0`).
@@ -737,8 +792,11 @@ impl NativeDotHandle {
         let repaint_idle = {
             let mut rt = self.shared.lock();
             let prev_mic = rt.pill.mic_muted;
+            let prev_vol = rt.pill.volume;
             rt.pill.apply_snapshot(snapshot);
-            rt.desired_visible && matches!(rt.pill.mode, PillMode::Idle) && rt.pill.mic_muted != prev_mic
+            rt.desired_visible
+                && matches!(rt.pill.mode, PillMode::Idle)
+                && (rt.pill.mic_muted != prev_mic || rt.pill.volume != prev_vol)
         };
         if repaint_idle {
             self.shared.post_signal(ThreadSignal::Sync { restart_timer: false });
@@ -931,12 +989,19 @@ fn dot_thread_main(monitor: MonitorInfo, shared: Arc<SharedState>, ready_tx: mps
                 rt.pulse_accent_override = None;
                 rt.pill.theme = rt.base_theme;
                 rt.pill.mode = PillMode::Idle;
+                if rt.pill.idle_style == IdleStyle::Hidden {
+                    rt.desired_visible = false;
+                }
                 (rt.pill.clone(), rt.monitor.clone(), rt.desired_visible)
             };
             if still_visible {
                 let _ = paint_pill(hwnd, &active_mon, &pill);
                 reveal_topmost_noactivate(hwnd);
                 shared.visible.store(true, Ordering::Release);
+            } else {
+                // SAFETY: hides layered window when idle_style is Hidden.
+                let _ = unsafe { ShowWindow(hwnd, SW_HIDE) };
+                shared.visible.store(false, Ordering::Release);
             }
             continue;
         }
@@ -1076,9 +1141,12 @@ impl Drop for BitmapGuard {
     }
 }
 
-const fn logical_dimensions(mode: PillMode) -> (i32, i32) {
+const fn logical_dimensions(mode: PillMode, idle_style: IdleStyle) -> (i32, i32) {
     match mode {
-        PillMode::Idle => (IDLE_W, IDLE_H),
+        PillMode::Idle => match idle_style {
+            IdleStyle::Dot => (IDLE_DOT_W, IDLE_DOT_H),
+            IdleStyle::MiniPill | IdleStyle::Hidden => (IDLE_W, IDLE_H),
+        },
         PillMode::Volume { .. } | PillMode::MicVolume { .. } => (VOLUME_W, VOLUME_H),
         PillMode::MicMute { .. } => (MIC_W, MIC_H),
         PillMode::DeviceEvent { .. } => (DEVICE_W, DEVICE_H),
@@ -1086,7 +1154,7 @@ const fn logical_dimensions(mode: PillMode) -> (i32, i32) {
 }
 
 fn paint_pill(hwnd: HWND, monitor: &MonitorInfo, state: &PillState) -> Result<()> {
-    let (logical_w, logical_h) = logical_dimensions(state.mode);
+    let (logical_w, logical_h) = logical_dimensions(state.mode, state.idle_style);
     let w = monitor.logical_to_physical(logical_w).max(16);
     let h = monitor.logical_to_physical(logical_h).max(8);
     let x = monitor.left + (monitor.width - w) / 2;
@@ -1168,6 +1236,7 @@ pub(crate) fn rasterize_pill_frame(pixels: &mut [u32], w: i32, h: i32, scale: f3
     let (bg_r, bg_g, bg_b, bg_a) = state.theme.bg.as_f32_rgba();
     let (surf_r, surf_g, surf_b, surf_a) = state.theme.surface.as_f32_rgba();
     let (fg_r, fg_g, fg_b, _) = state.theme.fg.as_f32_rgba();
+    let (fgm_r, fgm_g, fgm_b, _) = state.theme.fg_muted.as_f32_rgba();
     let (acc_r, acc_g, acc_b, _) = state.theme.accent.as_f32_rgba();
     let (ok_r, ok_g, ok_b, _) = state.theme.ok.as_f32_rgba();
     let (dng_r, dng_g, dng_b, _) = state.theme.danger.as_f32_rgba();
@@ -1190,11 +1259,29 @@ pub(crate) fn rasterize_pill_frame(pixels: &mut [u32], w: i32, h: i32, scale: f3
     let mut label_str = "";
     let mut label_x = 0.0f32;
     let mut label_w = 0.0f32;
+    let mut label_h = 10.5f32;
     let mut label_color = (fg_r, fg_g, fg_b);
     let mut bar_bounds: Option<(f32, f32, f32, bool)> = None;
 
     match state.mode {
-        PillMode::Idle => {}
+        PillMode::Idle => {
+            if state.idle_style == IdleStyle::MiniPill {
+                if let Some(v) = state.volume {
+                    label_buf = if v.muted { "MUTE".to_string() } else { format!("{}%", v.percent.min(100)) };
+                    label_str = &label_buf;
+                    label_x = 27.0;
+                    label_w = 55.0;
+                    label_h = 8.4;
+                    label_color = if v.muted { (dng_r, dng_g, dng_b) } else { (fgm_r, fgm_g, fgm_b) };
+                } else if state.mic_muted {
+                    label_str = "MIC OFF";
+                    label_x = 26.0;
+                    label_w = 56.0;
+                    label_h = 8.0;
+                    label_color = (dng_r, dng_g, dng_b);
+                }
+            }
+        }
         PillMode::Volume { percent, muted } | PillMode::MicVolume { percent, muted } => {
             label_buf = if muted { "MUTE".to_string() } else { format!("{}%", percent.min(100)) };
             label_str = &label_buf;
@@ -1257,11 +1344,24 @@ pub(crate) fn rasterize_pill_frame(pixels: &mut [u32], w: i32, h: i32, scale: f3
 
             match state.mode {
                 PillMode::Idle => {
-                    let dot_d = sd_circle(lx, ly, cx, cy, 2.3);
-                    let dot_cov = smooth_cov(dot_d, aa);
-                    if dot_cov > 0.0 {
-                        let (dr, dg, db) = if state.mic_muted { (dng_r, dng_g, dng_b) } else { (acc_r, acc_g, acc_b) };
-                        blend_over(&mut cr, &mut cg, &mut cb, dr, dg, db, dot_cov * 0.90);
+                    let icon_cx =
+                        if state.idle_style == IdleStyle::MiniPill && !label_str.is_empty() { 15.0 } else { cx };
+                    if state.mic_muted {
+                        // D-12 accessibility: render a distinct slashed-mic glyph shape in addition to danger colour.
+                        let inv_scale = 1.42f32;
+                        let sx = icon_cx + (lx - icon_cx) * inv_scale;
+                        let sy = cy + (ly - cy) * inv_scale;
+                        let (icon_cov, is_slash) = mic_icon_cov(sx, sy, icon_cx, cy, true, aa * inv_scale);
+                        if icon_cov > 0.0 {
+                            let (ir, ig, ib) = if is_slash { (dng_r, dng_g, dng_b) } else { (fg_r, fg_g, fg_b) };
+                            blend_over(&mut cr, &mut cg, &mut cb, ir, ig, ib, icon_cov);
+                        }
+                    } else {
+                        let dot_d = sd_circle(lx, ly, icon_cx, cy, 2.4);
+                        let dot_cov = smooth_cov(dot_d, aa);
+                        if dot_cov > 0.0 {
+                            blend_over(&mut cr, &mut cg, &mut cb, acc_r, acc_g, acc_b, dot_cov * 0.92);
+                        }
                     }
                 }
                 PillMode::Volume { muted, .. } => {
@@ -1332,7 +1432,7 @@ pub(crate) fn rasterize_pill_frame(pixels: &mut [u32], w: i32, h: i32, scale: f3
             }
 
             if !label_str.is_empty() && lx >= label_x - 2.0 && lx <= label_x + label_w + 2.0 {
-                let cov = text_cov_sdf(label_str, lx, ly, (label_x, label_w, cy, 10.5), aa);
+                let cov = text_cov_sdf(label_str, lx, ly, (label_x, label_w, cy, label_h), aa);
                 if cov > 0.0 {
                     blend_over(&mut cr, &mut cg, &mut cb, label_color.0, label_color.1, label_color.2, cov);
                 }
@@ -1640,7 +1740,7 @@ mod tests {
         } else if let PillMode::MicVolume { percent, .. } = mode {
             st.mic_volume = Some(percent);
         }
-        let (lw, lh) = logical_dimensions(mode);
+        let (lw, lh) = logical_dimensions(mode, st.idle_style);
         let w = (lw as f32 * scale).round() as i32;
         let h = (lh as f32 * scale).round() as i32;
         let mut px = vec![0u32; (w * h) as usize];
@@ -1660,7 +1760,8 @@ mod tests {
         assert_eq!(mid.rim, Rgba::new(255, 255, 255, 61));
 
         let fluent = NativePillTheme::fluent();
-        assert_eq!(fluent.bg, Rgba::new(32, 32, 32, 224));
+        assert_eq!(fluent.bg, Rgba::new(24, 24, 27, 237));
+        assert_eq!(fluent.surface, Rgba::new(36, 36, 40, 240));
 
         let min = NativePillTheme::minimal();
         assert_eq!(min.bg, Rgba::new(18, 22, 29, 255));
@@ -1668,6 +1769,46 @@ mod tests {
 
         assert_eq!(NativePillTheme::from_name("MIDNIGHT"), Some(mid));
         assert_eq!(NativePillTheme::from_name("unknown"), None);
+    }
+
+    #[test]
+    fn idle_styles_compare_minipill_dot_and_hidden_with_d12_mic_glyph() {
+        assert_eq!(IdleStyle::default(), IdleStyle::MiniPill);
+        assert_eq!(IdleStyle::from_name("mini_pill"), Some(IdleStyle::MiniPill));
+        assert_eq!(IdleStyle::from_name("dot"), Some(IdleStyle::Dot));
+        assert_eq!(IdleStyle::from_name("hidden"), Some(IdleStyle::Hidden));
+
+        for scale in [1.0f32, 1.5f32] {
+            let mut st_pill = PillState::new(NativePillTheme::ice());
+            st_pill.idle_style = IdleStyle::MiniPill;
+            st_pill.volume = Some(VolumeState { percent: 40, muted: false });
+            let (pw, ph) = logical_dimensions(PillMode::Idle, IdleStyle::MiniPill);
+            let w_pill = (pw as f32 * scale).round() as i32;
+            let h_pill = (ph as f32 * scale).round() as i32;
+            let mut px_pill = vec![0u32; (w_pill * h_pill) as usize];
+            rasterize_pill_frame(&mut px_pill, w_pill, h_pill, scale, &st_pill);
+
+            let mut st_pill_mic = st_pill.clone();
+            st_pill_mic.mic_muted = true;
+            let mut px_pill_mic = vec![0u32; (w_pill * h_pill) as usize];
+            rasterize_pill_frame(&mut px_pill_mic, w_pill, h_pill, scale, &st_pill_mic);
+            assert_ne!(px_pill, px_pill_mic, "MiniPill mic_muted must render distinct slashed-mic glyph");
+
+            let mut st_dot = PillState::new(NativePillTheme::ice());
+            st_dot.idle_style = IdleStyle::Dot;
+            let (dw, dh) = logical_dimensions(PillMode::Idle, IdleStyle::Dot);
+            let w_dot = (dw as f32 * scale).round() as i32;
+            let h_dot = (dh as f32 * scale).round() as i32;
+            assert!(w_dot < w_pill);
+            let mut px_dot = vec![0u32; (w_dot * h_dot) as usize];
+            rasterize_pill_frame(&mut px_dot, w_dot, h_dot, scale, &st_dot);
+
+            let mut st_dot_mic = st_dot.clone();
+            st_dot_mic.mic_muted = true;
+            let mut px_dot_mic = vec![0u32; (w_dot * h_dot) as usize];
+            rasterize_pill_frame(&mut px_dot_mic, w_dot, h_dot, scale, &st_dot_mic);
+            assert_ne!(px_dot, px_dot_mic, "Dot mic_muted must render distinct slashed-mic glyph");
+        }
     }
 
     #[test]

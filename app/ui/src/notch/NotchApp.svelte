@@ -7,6 +7,7 @@
   import { SpringGroup } from '../lib/motion/spring.svelte';
   import {
     createMediaCommand,
+    DEFAULT_IDLE_MODE,
     formatRgbCss,
     formatRgbGlowCss,
     formatSpatialBadge,
@@ -14,6 +15,7 @@
     NotchActivityScheduler,
     shortDeviceName,
     type ActivityView,
+    type IdleMode,
   } from '../lib/notch/scheduler';
   import ExpandedNotch from './activities/ExpandedNotch.svelte';
   import IdlePill from './activities/IdlePill.svelte';
@@ -34,6 +36,7 @@
   let benchOverride = $state<ActivityView | null>(null);
   let hoverExpanded = $state(false);
   let pointerInside = $state(false);
+  let idleMode = $state<IdleMode>(DEFAULT_IDLE_MODE);
   let pillSize = $state({ w: 116, h: 28, r: 14, vol: 40 });
   let frameRate = $state(0);
 
@@ -80,11 +83,19 @@
   );
   const activeGlowCss = $derived(
     isMediaActive(displayedMedia)
-      ? (formatRgbGlowCss(displayedMedia.art?.accent, 0.34) ?? 'var(--ice-accent-glow)')
+      ? (formatRgbGlowCss(displayedMedia.art?.accent, 0.24) ?? 'var(--ice-accent-glow)')
       : 'var(--ice-accent-glow)',
   );
+  const isIdleHidden = $derived(
+    !isExpanded && activeView.kind === 'idle' && idleMode === 'hidden',
+  );
 
-  function targetGeometry(view: ActivityView, expandedNow: boolean, micMutedNow: boolean) {
+  function targetGeometry(
+    view: ActivityView,
+    expandedNow: boolean,
+    micMutedNow: boolean,
+    idleModeNow: IdleMode = idleMode,
+  ) {
     const vol =
       view.kind === 'volume'
         ? view.percent
@@ -106,6 +117,15 @@
         return { w: 296, h: 48, r: 24, vol };
       case 'idle':
       default:
+        if (idleModeNow === 'hidden') {
+          return { w: 96, h: 10, r: 5, vol };
+        }
+        if (idleModeNow === 'dot') {
+          if (hasMedia) {
+            return { w: micMutedNow ? 58 : 44, h: 18, r: 9, vol };
+          }
+          return { w: micMutedNow ? 42 : 36, h: 18, r: 9, vol };
+        }
         if (hasMedia) {
           return { w: micMutedNow ? 216 : 196, h: 28, r: 14, vol };
         }
@@ -186,7 +206,7 @@
     const view = benchOverride ?? engineState.activity;
     const expandedNow = (snap?.expanded ?? false) || hoverExpanded;
     const micMutedNow = engineState.micMuted ?? snap?.micMuted ?? false;
-    const target = targetGeometry(view, expandedNow, micMutedNow);
+    const target = targetGeometry(view, expandedNow, micMutedNow, idleMode);
 
     if (instantMove || preset === 'off' || paused) {
       springs.snapAll(target);
@@ -462,12 +482,20 @@
     }
   }
 
+  function setIdleMode(mode: IdleMode) {
+    idleMode = mode;
+    scheduler.markInteraction(Date.now());
+    syncGeometry(false);
+    scheduleNextTick();
+    void invoke('set_idle_style', { style: mode }).catch(() => {});
+  }
+
   const insetLeft = $derived(Math.max(0, (CANVAS_W - pillSize.w) / 2));
   const insetBottom = $derived(Math.max(0, CANVAS_H - TOP_PAD - pillSize.h));
   const clipPath = $derived(
     `inset(${TOP_PAD}px ${insetLeft.toFixed(2)}px ${insetBottom.toFixed(2)}px ${insetLeft.toFixed(2)}px round ${pillSize.r.toFixed(2)}px)`,
   );
-  const targetBox = $derived(targetGeometry(activeView, isExpanded, effectiveMicMuted));
+  const targetBox = $derived(targetGeometry(activeView, isExpanded, effectiveMicMuted, idleMode));
 
   const rimStroke = $derived.by(() => {
     if (isExpanded) return 'var(--ice-rim)';
@@ -490,6 +518,7 @@
 <div
   class="stage"
   class:hidden={(notchSnapshot?.hiddenForBench ?? false) || isSuspended}
+  class:idle-hidden={isIdleHidden}
   class:instant={isInstant}
   style:width={`${CANVAS_W}px`}
   style:height={`${CANVAS_H}px`}
@@ -538,6 +567,7 @@
               muted={effectiveVolumeMuted}
               micMuted={effectiveMicMuted}
               media={engineState.media}
+              {idleMode}
             />
           {/if}
         {:else if notchSnapshot && isExpanded}
@@ -551,6 +581,7 @@
             micMuted={effectiveMicMuted}
             media={engineState.media}
             instant={isInstant}
+            {idleMode}
             activeMonitor={notchSnapshot.activeMonitor}
             monitors={notchSnapshot.monitors}
             preset={notchSnapshot.preset}
@@ -563,6 +594,7 @@
             onSwitchDevice={(deviceId) => void invoke('switch_to_device', { deviceId })}
             onToggleMicMute={() => void invoke('toggle_mic_mute')}
             onMediaAction={(action) => void sendMediaAction(action)}
+            onSetIdleMode={setIdleMode}
             onCycleMonitor={() => void invoke('cycle_monitor')}
             onOpenSettings={() => void invoke('open_settings')}
             onSetPreset={(preset) => void invoke('set_preset', { preset })}
@@ -603,6 +635,11 @@
     pointer-events: none;
   }
 
+  .stage.idle-hidden .pill-surface,
+  .stage.idle-hidden .rim-svg {
+    opacity: 0;
+  }
+
   .pill-clip {
     position: absolute;
     inset: 0;
@@ -618,11 +655,12 @@
   .accent-glow {
     position: absolute;
     inset: 0;
+    opacity: 0.28;
     pointer-events: none;
     background: radial-gradient(
-      65% 48% at 50% 0%,
+      62% 44% at 50% 0%,
       var(--ice-active-glow, var(--ice-accent-glow)),
-      transparent 74%
+      transparent 72%
     );
     transition: opacity 400ms cubic-bezier(0.22, 1, 0.36, 1);
   }

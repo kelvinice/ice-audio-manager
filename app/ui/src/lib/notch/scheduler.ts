@@ -23,6 +23,10 @@ export const TRACK_CHANGE_DURATION_MS = 2400;
 export const PLUG_SWITCH_MERGE_WINDOW_MS = 1500;
 export const IDLE_SUSPEND_LINGER_MS = 15_000;
 
+/** Q-10 idle appearance modes: settled default is `'mini_pill'`, with `'dot'` and `'hidden'` kept as options. */
+export type IdleMode = 'mini_pill' | 'dot' | 'hidden';
+export const DEFAULT_IDLE_MODE: IdleMode = 'mini_pill';
+
 export type ActivityView =
   | { kind: 'idle' }
   | {
