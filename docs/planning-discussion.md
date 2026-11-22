@@ -622,7 +622,11 @@ and Spotify/media in Phase 3.
   capture device, and changing gain should preserve its mute state.
   [Windows endpoint volume](https://learn.microsoft.com/en-us/windows/win32/api/endpointvolume/nn-endpointvolume-iaudioendpointvolume)
 
-### D-06 · MVP cut (what ships as the first public alpha)
+### D-06 · MVP cut (original public alpha vote)
+
+> **Owner update (2026-11-22).** The first public release moves to Phase 6. The Phase 1–2 scope below
+> now applies to the private daily-use build. Store onboarding, signing, and public distribution are
+> scheduled in [Phase 6](plan.md#phase-6-hardening-and-first-public-release).
 
 - **Option 1 (Claude):** Phases 1 and 2. Tray switcher + hotkeys + notch for volume/switch/mic.
   Media comes in the next alpha.
@@ -1311,7 +1315,7 @@ can verify the same behavior on the owner's setup.
 - Tray icon states: default, muted, mic-muted, switching (monochrome, 16/20/24/32 px)
 - Device-type glyphs not in Segoe Fluent Icons (e.g. HDMI/monitor speaker, USB DAC, virtual cable)
 - Notch mockups for each activity (idle, volume, switch, mic-mute, now-playing, expanded) at 100% & 150% scale
-- Store listing: 1:1 logo, hero banner, 4 screenshots
+- Store listing (Phase 6): 1:1 logo, hero banner, 4 screenshots
 - *(optional)* soft "switch" chime (`.wav`, < 30 KB), disabled by default
 
 ---
@@ -1329,7 +1333,7 @@ A decision passes when all three agents have voted and the rules produce a resul
 | D-03 | Architecture / layout        | **Workspace as proposed (+6)**                                                                       | **Closed 2026-11-22 (owner)** | + typed IPC codegen, snapshot/delta with revisions, `iceart://`, event names `…/v1` (Tauri rejects `@`) |
 | D-04 | Config & theme format        | **TOML + CSS (+6)**                                                                                  | **Closed 2026-11-22 (owner)** | Strict CSP, validated `--ice-*` tokens, keep last valid config on bad reload                                 |
 | D-05 | Feature inventory & phases   | **Accepted as listed**, with F05 tray scroll cut (+3), F18 mixer → Phase 5 (+6), F21 clock cut (+5) | **Closed 2026-11-22 (owner)** | + Codex's F02 role semantics and F13/F14 pinned-display rules                                                  |
-| D-06 | MVP cut                      | **Option 1: Phases 1–2 (+6)**                                                                       | **Closed 2026-11-22 (owner)** | Private daily-use build first; public only once signing is ready                                               |
+| D-06 | MVP cut                      | **Option 1: Phases 1–2 (+6)**                                                                       | **Closed 2026-11-22 (owner)** | Phases 1–2 are for private daily use. The owner moved the first public release to Phase 6                                               |
 | D-07 | Native volume flyout         | **A: Coexist (+6)**                                                                                  | **Closed 2026-11-22 (owner)** | F29 stays research; ModernFlyouts uses an LL hook, so it can't be copied                                       |
 | D-08 | Windows versions             | **Win11 only** (owner)                                                                               | 2026-11-22                      | Owner decision via Q-01                                                                                        |
 | D-09 | Code signing                 | **Store MSIX (+6) + SignPath (+5)**                                                                  | **Closed 2026-11-22 (owner)** | Only matters at public release; private builds need no signing                                                 |

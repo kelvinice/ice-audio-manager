@@ -3,6 +3,7 @@
 > **Status: APPROVED.** D-01 to D-14 signed off by the owner on 2026-11-22 (see the Decision Log in
 > [planning-discussion.md](planning-discussion.md)). Stack: **Rust + Tauri 2 + Svelte 5, TOML + CSS** (D-01 to D-04).
 > D-15 (memory policy), D-16 (device identity) and D-17 (spatial sound) were also signed off on 2026-11-22.
+> The owner deferred the first public release to [Phase 6](#phase-6-hardening-and-first-public-release).
 > Coding rules live in [code-practices.md](code-practices.md).
 
 ## Guiding constraints
@@ -127,7 +128,7 @@ replugging the dongle in a different USB port, power-cycling the headset, restar
 
 ## Phase 2: Notch v1 (volume, switch, mic)
 
-**Goal:** the "wow" moment. **Features:** F08–F14. **Content of the first public alpha (D-06).**
+**Goal:** add the notch to the private daily-use build (D-06). **Features:** F08–F14.
 
 - [ ] Notch window: **exactly one** transparent window, moved between monitors with `SetWindowPos`, DPI-aware (per-monitor v2)
 - [ ] **Performance profiles (D-15):** `Instant` (WebView always warm) · `Balanced` (WebView created on activity, released after
@@ -155,14 +156,6 @@ replugging the dongle in a different USB port, power-cycling the headset, restar
 
 **Exit criteria:** hardware volume keys, notch scroll and hotkeys all animate correctly. No focus stealing. Hidden over fullscreen
 games on the pinned monitor. Budgets met in every profile.
-
-### Alpha release (between Phase 2 and Phase 3)
-
-- [ ] Owner uses the private portable build daily first
-- [ ] Microsoft Store individual developer registration (free; identity verification) and a separate MSIX packaging step
-      (Tauri's own outputs are NSIS/WiX). Smoke-test Core Audio, GSMTC, tray recovery, settings paths and `StartupTask` in the packaged build
-- [ ] Audit the release tree and git history before the repo goes public; make it public under MIT (Q-02)
-- [ ] Network trace of the release build: zero app-initiated requests (D-11)
 
 ---
 
@@ -215,13 +208,20 @@ games on the pinned monitor. Budgets met in every profile.
 
 ---
 
-## Phase 6: Hardening, distribution & 1.0
+## Phase 6: Hardening and first public release
 
+**Goal:** harden and publish the app after Phases 1–5 and private daily use. Start Store onboarding, public signing, and distribution in this phase.
+
+- [ ] Microsoft Store individual developer registration (free, with identity verification) and a separate MSIX packaging step.
+      Tauri's standard Windows installers are NSIS and WiX. Smoke-test Core Audio, GSMTC, tray recovery,
+      settings paths, and `StartupTask` in the packaged build
+- [ ] Audit the release tree and Git history before publishing the source under MIT (Q-02)
 - [ ] Signing per D-09: Store MSIX first; **SignPath** for GitHub artifacts once eligible (its terms require an OSS project with a prior release).
       Sign the exe inside the portable zip as well as the NSIS installer
 - [ ] Packaging per D-10: MSIX, per-user NSIS installer (no admin), portable zip
 - [ ] Release workflow: tag → CI build → sign → SHA256SUMS (after signing) → GitHub artifact attestation (public repo) → draft release
-- [ ] Optional **notify-only** update check: off by default, never downloads (D-11). About page shows the version
+- [ ] Optional **notify-only** update check: off by default, never downloads (D-11). About page shows the version.
+      Trace the release build to verify zero app-initiated network requests by default
 - [ ] Release checklist: VirusTotal scan of final artifacts (record results); submit any false positive to Microsoft
 - [ ] winget manifest PR
 - [ ] Crash-resilience: COM call timeouts, audio-thread watchdog, recover from `AUDCLNT_E_DEVICE_INVALIDATED`, re-create tray on `TaskbarCreated`
@@ -245,6 +245,5 @@ games on the pinned monitor. Budgets met in every profile.
 ## Dependency map
 
 ```
-Phase 0 ─► Phase 1 ─► Phase 2 ─► Alpha ─► Phase 3 ─► Phase 4 ─► Phase 5 ─► Phase 6
-                          └── Store registration + MSIX step can start in parallel after Phase 1
+Phase 0 ─► Phase 1 ─► Phase 2 ─► Phase 3 ─► Phase 4 ─► Phase 5 ─► Phase 6 (first public release)
 ```
