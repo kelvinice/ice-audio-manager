@@ -13,6 +13,18 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: spikes/overlay/ui/package-lock.json
+      - name: UI install, check, test, build
+        working-directory: spikes/overlay/ui
+        run: |
+          npm ci
+          npm run check
+          npm test
+          npm run build
       # rust-toolchain.toml pins the version; rustup installs it on first cargo call.
       - name: Show toolchain
         run: rustup show active-toolchain

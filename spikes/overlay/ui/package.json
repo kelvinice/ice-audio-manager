@@ -1,0 +1,22 @@
+{
+  "name": "ice-overlay-spike-ui",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "check": "tsc --noEmit",
+    "test": "node --experimental-strip-types --test src/lib/motion/spring.test.ts"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.9.0"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^5.0.3",
+    "@types/node": "^26.6.6",
+    "svelte": "^5.28.0",
+    "typescript": "^5.8.0",
+    "vite": "^6.3.0"
+  }
+}

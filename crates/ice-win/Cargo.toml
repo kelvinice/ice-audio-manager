@@ -8,6 +8,7 @@ publish.workspace = true
 
 [dependencies]
 ice-core.workspace = true
+webview2-com = { workspace = true, optional = true }
 windows-core.workspace = true
 
 [dependencies.windows]
@@ -20,6 +21,10 @@ features = [
     "Win32_UI_Shell",
     "Win32_UI_WindowsAndMessaging",
 ]
+
+[features]
+default = []
+webview2 = ["dep:webview2-com"]
 
 [lints]
 workspace = true

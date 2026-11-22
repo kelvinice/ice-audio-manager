@@ -1,0 +1,68 @@
+:root {
+  /* Portfolio-seeded Ice defaults (planning-discussion.md §1.6 + D-12) */
+  --ice-bg: rgba(14, 17, 22, 0.9);
+  --ice-surface: rgba(23, 29, 39, 0.92);
+  --ice-border: rgba(107, 197, 255, 0.22);
+  --ice-rim: rgba(154, 214, 255, 0.45);
+  --ice-shadow: 0 10px 28px rgba(0, 0, 0, 0.48), 0 2px 8px rgba(0, 0, 0, 0.32);
+  --ice-radius: 22px;
+
+  --ice-fg: #edf1f7;
+  --ice-fg-muted: #98a4b8;
+  --ice-font: 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif;
+  --ice-mono: 'Cascadia Mono', 'Consolas', monospace;
+
+  --ice-accent: #6bc5ff;
+  --ice-accent-strong: #9ad6ff;
+  --ice-accent-soft: #13283c;
+  --ice-accent-glow: rgba(107, 197, 255, 0.28);
+  --ice-ok: #4ade80;
+  --ice-danger: #f07148;
+
+  --ice-scale: 1;
+  --ice-bar-height: 5px;
+}
+
+:root[data-theme='midnight'] {
+  --ice-bg: rgba(0, 0, 0, 0.96);
+  --ice-surface: rgba(12, 12, 14, 0.96);
+  --ice-border: rgba(255, 255, 255, 0.14);
+  --ice-rim: rgba(255, 255, 255, 0.24);
+  --ice-accent-glow: rgba(255, 255, 255, 0.12);
+}
+
+:root[data-theme='fluent'] {
+  --ice-bg: rgba(32, 32, 32, 0.88);
+  --ice-surface: rgba(44, 44, 44, 0.92);
+  --ice-border: rgba(255, 255, 255, 0.12);
+  --ice-rim: rgba(107, 197, 255, 0.35);
+}
+
+:root[data-theme='minimal'] {
+  --ice-bg: rgb(18, 22, 29);
+  --ice-surface: rgb(26, 32, 42);
+  --ice-border: rgba(255, 255, 255, 0.14);
+  --ice-rim: transparent;
+  --ice-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+  --ice-accent-glow: transparent;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  background: transparent;
+  color: var(--ice-fg);
+  font-family: var(--ice-font);
+  overflow: hidden;
+  user-select: none;
+  -webkit-font-smoothing: antialiased;
+}

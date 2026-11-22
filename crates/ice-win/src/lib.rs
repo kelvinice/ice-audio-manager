@@ -11,10 +11,16 @@ pub mod endpoints;
 pub mod fullscreen;
 pub mod media;
 pub mod meter;
+pub mod monitors;
+pub mod native_dot;
 pub mod notify;
+pub mod overlay_win;
 pub mod policy;
+pub mod proc_metrics;
 pub mod props;
 pub mod spatial;
 pub mod volume;
+#[cfg(feature = "webview2")]
+pub mod webview2;
 
 pub use windows::core::{Error, Result};
