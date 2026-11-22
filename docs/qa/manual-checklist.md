@@ -137,3 +137,19 @@ Keep the `engine` window visible. "Expect" lines refer to what it prints. In lat
 | D4 | ✅ (after fix) | Re-switched to the current device with 2 favourites; fixed in `f24b9b5`; owner confirmed the fix works |
 | A3 (repeat) | ✅ | 2nd run: ~10 rapid toggles 260 ms apart, all confirmed, Atmos each time |
 | E1 / E3 / E4 | ✅ | Live test: alias applied, broken file → one notice, file not renamed |
+
+### Run: 2026-11-22 · `phase-1/real-engine` @ `127e709` · Codex
+
+Windows tray app with a separate test config. The native menu integration test exercised toggle-pair creation, the spatial preference, and the knob check item with the fake engine. The Windows smoke checks below used the real engine inside the tray process and inspected its event log.
+
+| ID | Result | Notes |
+|---|---|---|
+| A1–A6 | Pending hands-on | Confirm audible switching, rapid alternation, the third-device fallback, the missing-headset notification, and Communications switching from the tray. |
+| B1–B7 | Pending hands-on | Power-cycle, USB reconnect and re-link, sleep/wake, monitor changes, and audio-service restart still need the reference machine run. |
+| D1–D6 | Pending hands-on | Confirm the physical knob modifiers, mute, and spin response against the tray volume readings. |
+| D7 | App log verified | The audio spike held Ctrl+Alt+F12. The tray app's initial snapshot contained `HotkeyConflict` for the chord. Visual menu check pending. |
+| E1 | App log verified | `DevicesChanged` showed the Arctis alias without restart in about 0.55 s, including the log polling interval. Visual menu check pending. |
+| E2 | App log verified in part | `SettingsChanged` exposed Ctrl+Alt+F11 on the pair and Windows let the spike register the released F12 chord. An audible switch with F11 still needs a hands-on check. |
+| E3 | App log and file verified | `ConfigInvalid` included line and column. The corrupted file stayed in place during reload. Visual menu check pending. |
+| E4 | App log verified | Restoring the file emitted `NoticesChanged` with an empty list and a total of one `ConfigInvalid` notice for the broken save. Visual clearing check pending. |
+| E5 | App log and file verified | Startup reported `ConfigReplaced` in the initial snapshot. The original contents were preserved in `config.invalid-*.toml`. Visual menu check pending. |
