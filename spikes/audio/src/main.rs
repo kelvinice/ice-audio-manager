@@ -10,7 +10,10 @@
 //! audio-spike spatial [device]             spatial sound status (all active playback devices if omitted)
 //! audio-spike spatial-set <device> <off|sonic|atmos|atmos-ht|atmos-spk|dts-hx|dtsx-ultra|dtsx-ht>
 //! audio-spike hotkeys [seconds]            F31 knob test: registers Ctrl/Shift/Alt + volume keys, prints presses
+//! audio-spike make-config [path]           write the owner's setup (Arctis ↔ Speakers on Ctrl+Alt+F12, Atmos, knob)
+//! audio-spike engine [path] [seconds]      run the real engine with that config and print its events
 //! ```
+//! Config path defaults to `spikes/audio/out/config.toml` (gitignored).
 //! `<device>` = an endpoint ID, or a case-insensitive part of the name of an *Active* endpoint.
 
 use std::io::Write as _;
@@ -56,8 +59,97 @@ fn run() -> AnyResult<()> {
             arg(2).ok_or("usage: spatial-set <device> <format>")?,
         ),
         "hotkeys" => hotkeys(arg(1).and_then(|s| s.parse().ok()).unwrap_or(30)),
+        "make-config" => make_config(&eps, arg(1).unwrap_or(DEFAULT_CONFIG)),
+        "engine" => run_engine(arg(1).unwrap_or(DEFAULT_CONFIG), arg(2).and_then(|s| s.parse().ok()).unwrap_or(120)),
         other => Err(format!("unknown command `{other}` (see the header of spikes/audio/src/main.rs)").into()),
     }
+}
+
+const DEFAULT_CONFIG: &str = "spikes/audio/out/config.toml";
+
+/// Writes the owner's workflow as a config: toggle pair Arctis (primary) ↔ Realtek speakers on Ctrl+Alt+F12,
+/// Dolby Atmos applied when switching to the Arctis, both as favourites, knob gestures on.
+fn make_config(eps: &Endpoints, path: &str) -> AnyResult<()> {
+    use ice_core::config::{Config, ConfigStore, DevicePrefs, Favourites, KnobGestures, TogglePair};
+    use ice_core::engine::SpatialMode;
+    use ice_core::resolve::{DeviceRef, MatchMode};
+    let find = |needle: &str| -> AnyResult<EndpointInfo> {
+        eps.list(false)?
+            .into_iter()
+            .find(|e| e.flow == Flow::Render && e.friendly_name.as_deref().unwrap_or_default().contains(needle))
+            .ok_or_else(|| format!("no active playback device containing `{needle}`").into())
+    };
+    let arctis = DeviceRef::from_endpoint(&find("Arctis")?, MatchMode::SameModel);
+    let speakers = DeviceRef::from_endpoint(&find("Realtek")?, MatchMode::SameModel);
+    let cfg = Config {
+        toggle_pairs: vec![TogglePair {
+            id: "main".into(),
+            hotkey: Some("Ctrl+Alt+F12".parse()?),
+            primary: arctis.clone(),
+            secondary: speakers.clone(),
+            roles: None,
+        }],
+        devices: vec![DevicePrefs {
+            device: arctis.clone(),
+            spatial: SpatialMode::DolbyAtmosHeadphones,
+            alias: None,
+            hidden: false,
+        }],
+        favourites: Favourites { playback: vec![arctis, speakers], ..Favourites::default() },
+        knob: KnobGestures { enabled: true, ..KnobGestures::default() },
+        ..Config::default()
+    };
+    ConfigStore::new(path).save(&cfg)?;
+    println!("wrote {path}:\n\n{}", cfg.to_toml());
+    Ok(())
+}
+
+fn run_engine(path: &str, secs: u64) -> AnyResult<()> {
+    use ice_core::config::ConfigStore;
+    use ice_core::engine::{Engine, EngineEvent};
+    use ice_win::audio_engine::AudioEngine;
+    let started = Instant::now();
+    let engine = AudioEngine::start(ConfigStore::new(path))?;
+    let events = engine.subscribe();
+    let snap = engine.snapshot();
+    println!("engine ready in {:?} (revision {})", started.elapsed(), snap.revision);
+    for d in &snap.playback {
+        println!(
+            "  {} {}{}{}",
+            if d.is_default { "▶" } else { " " },
+            d.name,
+            d.spatial.map(|s| format!("  [{s:?}]")).unwrap_or_default(),
+            if d.is_virtual { "  (virtual)" } else { "" }
+        );
+    }
+    println!("volume {:?}, mic muted {:?}", snap.volume, snap.mic_muted);
+    println!(
+        "\nfor {secs} s: press Ctrl+Alt+F12 (toggle), Ctrl+knob (browse, commits when it rests), Shift+knob (1% steps),"
+    );
+    println!("Alt+knob (mic volume), unplug/replug the headset…");
+    let t0 = Instant::now();
+    while let Some(left) = Duration::from_secs(secs).checked_sub(t0.elapsed()) {
+        let Ok(env) = events.recv_timeout(left) else { continue };
+        let what = match &env.event {
+            EngineEvent::Switched { device, roles, relinked, spatial_applied } => format!(
+                "SWITCHED → {} ({roles:?}){}{}",
+                device.name,
+                if *relinked { " [re-linked]" } else { "" },
+                spatial_applied.map(|s| format!(" [{s:?}]")).unwrap_or_default()
+            ),
+            EngineEvent::DevicesChanged { playback, .. } => format!(
+                "devices: {}",
+                playback
+                    .iter()
+                    .map(|d| if d.is_default { format!("▶{}", d.name) } else { d.name.clone() })
+                    .collect::<Vec<_>>()
+                    .join(" | ")
+            ),
+            other => format!("{other:?}"),
+        };
+        println!("{:>8} ms  r{:<4} {what}", t0.elapsed().as_millis(), env.revision);
+    }
+    Ok(())
 }
 
 /// F31 check: do knob turns with a modifier held reach `RegisterHotKey`? Plain turns are *not* registered,

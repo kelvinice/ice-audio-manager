@@ -175,6 +175,8 @@ pub enum Notice {
     SpatialUnavailable { name: String, mode: SpatialMode, reason: String },
     /// A hotkey couldn't be registered because another app owns it.
     HotkeyConflict { binding_id: String, keys: String },
+    /// `config.toml` was unreadable; it was renamed to `backup` and defaults are in use.
+    ConfigReplaced { backup: String, error: String },
 }
 
 /// Deltas. The notch maps these onto activities (switch, plug/unplug, volume, mic).

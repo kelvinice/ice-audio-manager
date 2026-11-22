@@ -131,6 +131,13 @@ pub fn normalize_name(name: &str) -> String {
     }
 }
 
+/// Built-in and virtual devices all share Windows' placeholder container
+/// `{00000000-0000-0000-FFFF-FFFFFFFFFFFF}` (seen on the owner's Realtek and Steam endpoints).
+/// It identifies nothing, so treat it as "no container".
+fn real_container(c: Option<&str>) -> Option<&str> {
+    c.filter(|c| !c.trim_matches(['{', '}']).eq_ignore_ascii_case("00000000-0000-0000-FFFF-FFFFFFFFFFFF"))
+}
+
 fn eq_ci(a: Option<&str>, b: Option<&str>) -> Option<bool> {
     Some(a?.trim().eq_ignore_ascii_case(b?.trim()))
 }
@@ -156,7 +163,7 @@ pub fn resolve<'a>(r: &DeviceRef, endpoints: &'a [EndpointInfo]) -> Resolution<'
     // Hardware anchor: without one we never re-link by name alone.
     let anchored = |e: &&&EndpointInfo| {
         let hw = eq_ci(r.hardware_key.as_deref(), e.hardware_key.as_deref());
-        let ct = eq_ci(r.container_id.as_deref(), e.container_id.as_deref());
+        let ct = eq_ci(real_container(r.container_id.as_deref()), real_container(e.container_id.as_deref()));
         // A known container that differs is a different physical unit, even for the same model.
         hw == Some(true) && ct != Some(false) || ct == Some(true) && hw != Some(false)
     };
@@ -398,6 +405,26 @@ mod tests {
             3,
         )];
         assert_eq!(resolve(&saved, &list), Resolution::NotConnected);
+    }
+
+    #[test]
+    fn placeholder_container_is_not_an_anchor() {
+        // Realtek speakers and a Steam virtual device share the placeholder container; the speakers'
+        // binding must never re-link onto the virtual device.
+        let saved = DeviceRef::from_endpoint(&realtek("r", DeviceState::Active), MatchMode::SameModel);
+        let mut steam = ep(
+            "steam",
+            DeviceState::Active,
+            Flow::Render,
+            "Speakers",
+            "Steam Streaming Speakers",
+            r"{1}.ROOT\STEAMSTREAMINGSPEAKERS\0000",
+            NULL_CT,
+            1,
+        );
+        steam.hardware_key = None;
+        steam.stable_id = None;
+        assert_eq!(resolve(&saved, &[steam]), Resolution::NotConnected);
     }
 
     #[test]

@@ -43,6 +43,26 @@ pub fn get(dev: &IMMDevice) -> Result<(f32, bool)> {
     unsafe { Ok((vol.GetMasterVolumeLevelScalar()?, vol.GetMute()?.as_bool())) }
 }
 
+/// Sets master volume (clamped to 0.0–1.0). The change comes back through [`VolumeWatch`] like any other.
+///
+/// # Errors
+/// Fails if the endpoint is invalidated.
+pub fn set_scalar(dev: &IMMDevice, scalar: f32) -> Result<()> {
+    let vol = endpoint_volume(dev)?;
+    // SAFETY: plain setter; a null event-context GUID is allowed.
+    unsafe { vol.SetMasterVolumeLevelScalar(scalar.clamp(0.0, 1.0), std::ptr::null()) }
+}
+
+/// Sets the mute state.
+///
+/// # Errors
+/// Fails if the endpoint is invalidated.
+pub fn set_mute(dev: &IMMDevice, muted: bool) -> Result<()> {
+    let vol = endpoint_volume(dev)?;
+    // SAFETY: plain setter; a null event-context GUID is allowed.
+    unsafe { vol.SetMute(muted, std::ptr::null()) }
+}
+
 /// Watches one endpoint's volume; unregisters on drop. Re-create it when the default device changes.
 pub struct VolumeWatch {
     vol: IAudioEndpointVolume,

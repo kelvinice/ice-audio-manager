@@ -4,6 +4,7 @@
 //! and reusable by a future native notch or CLI (see `docs/planning-discussion.md`, D-03).
 #![forbid(unsafe_code)]
 
+pub mod config;
 pub mod device;
 pub mod engine;
 pub mod event;

@@ -8,6 +8,8 @@ publish.workspace = true
 
 [dependencies]
 serde.workspace = true
+# config.toml (D-04)
+toml = "1"
 # Optional: TypeScript bindings for the engine contract (typed IPC, D-03). Enabled by the app shell.
 ts-rs = { version = "12", optional = true }
 

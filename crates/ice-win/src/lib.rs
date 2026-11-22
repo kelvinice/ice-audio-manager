@@ -6,6 +6,7 @@
 //! COM threading: callers create one [`com::ComGuard`] (MTA) on the thread that owns these objects.
 //! COM callbacks never block. They only push [`ice_core::event::AudioEvent`]s into a channel.
 
+pub mod audio_engine;
 pub mod com;
 pub mod endpoints;
 pub mod fullscreen;
