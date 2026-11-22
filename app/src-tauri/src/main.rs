@@ -8,14 +8,14 @@ mod tray;
 
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, AtomicIsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicIsize, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, mpsc};
 use std::time::{Duration, Instant};
 
 use ice_core::engine::{Command, Engine, EngineSnapshot, RoleSet, fake::FakeEngine};
 use ice_win::desktop::InstanceGuard;
 use ice_win::monitors::{MonitorInfo, list_monitors};
-use ice_win::native_dot::NativeDotHandle;
+use ice_win::native_dot::{NativeDotHandle, NativePillTheme};
 use ice_win::overlay_win;
 use ice_win::proc_metrics::{TreeSnapshot, cpu_percent_between, current_pid, sample_pids};
 use ice_win::webview2;
@@ -30,9 +30,14 @@ const NOTCH_TOP_OFFSET: i32 = 0;
 
 struct SharedRuntime {
     engine: Arc<dyn Engine>,
+    bench_mode: bool,
     cursor_poll_running: AtomicBool,
     notch_opening: AtomicBool,
     settings_opening: AtomicBool,
+    notch_suspended: AtomicBool,
+    want_suspended: AtomicBool,
+    suspend_gen: AtomicU64,
+    pending_wake_seq: AtomicU64,
     snapshot: Mutex<NotchSnapshot>,
     monitors: Mutex<Vec<MonitorInfo>>,
     hit_rect: Mutex<HitRect>,
@@ -40,6 +45,7 @@ struct SharedRuntime {
     notch_visible: AtomicBool,
     allow_exit: AtomicBool,
     wv2_data_dir: PathBuf,
+    settings_wv2_data_dir: PathBuf,
     known_wv2_pids: Mutex<HashMap<u32, String>>,
     first_paint_tx: Mutex<Option<mpsc::SyncSender<Instant>>>,
     settings_ready_tx: Mutex<Option<mpsc::SyncSender<Instant>>>,
@@ -51,6 +57,8 @@ impl SharedRuntime {
     fn new(
         monitors: Vec<MonitorInfo>,
         wv2_data_dir: PathBuf,
+        settings_wv2_data_dir: PathBuf,
+        bench_mode: bool,
         engine: Arc<dyn Engine>,
         initial: &EngineSnapshot,
     ) -> Self {
@@ -82,6 +90,7 @@ impl SharedRuntime {
             system_reduce_motion: reduce_motion,
             theme: ThemeKind::Ice,
             expanded: false,
+            suspended: false,
             hidden_for_bench: false,
             active_monitor: 0,
             monitors: summaries,
@@ -89,9 +98,14 @@ impl SharedRuntime {
         engine_bridge::project(initial, &mut snapshot);
         Self {
             engine,
+            bench_mode,
             cursor_poll_running: AtomicBool::new(false),
             notch_opening: AtomicBool::new(false),
             settings_opening: AtomicBool::new(false),
+            notch_suspended: AtomicBool::new(false),
+            want_suspended: AtomicBool::new(false),
+            suspend_gen: AtomicU64::new(0),
+            pending_wake_seq: AtomicU64::new(0),
             snapshot: Mutex::new(snapshot),
             monitors: Mutex::new(monitors),
             hit_rect: Mutex::new(HitRect { x: 154.0, y: 6.0, width: 112.0, height: 28.0 }),
@@ -99,6 +113,7 @@ impl SharedRuntime {
             notch_visible: AtomicBool::new(false),
             allow_exit: AtomicBool::new(false),
             wv2_data_dir,
+            settings_wv2_data_dir,
             known_wv2_pids: Mutex::new(HashMap::new()),
             first_paint_tx: Mutex::new(None),
             settings_ready_tx: Mutex::new(None),
@@ -153,6 +168,12 @@ fn report_first_paint(state: State<'_, Arc<SharedRuntime>>) {
     if let Some(tx) = state.first_paint_tx.lock().unwrap_or_else(std::sync::PoisonError::into_inner).take() {
         let _ = tx.send(now);
     }
+    if !state.bench_mode
+        && let Some(dot) = state.native_dot.lock().unwrap_or_else(std::sync::PoisonError::into_inner).as_ref()
+    {
+        dot.set_standby_only(true);
+        dot.hide();
+    }
 }
 
 #[tauri::command]
@@ -172,6 +193,24 @@ fn report_event_rendered(event_seq: u64, state: State<'_, Arc<SharedRuntime>>) {
         && let Some((_, tx)) = guard.take()
     {
         let _ = tx.send(now);
+    }
+    drop(guard);
+
+    if !state.bench_mode {
+        let pending = state.pending_wake_seq.load(Ordering::Acquire);
+        if pending > 0 && event_seq >= pending && !state.want_suspended.load(Ordering::Acquire) {
+            state.pending_wake_seq.store(0, Ordering::Release);
+            state.notch_visible.store(true, Ordering::Release);
+            let hwnd = state.notch_hwnd.load(Ordering::Acquire);
+            if hwnd != 0 {
+                let _ = overlay_win::ensure_topmost(hwnd);
+            }
+            if let Some(dot) = state.native_dot.lock().unwrap_or_else(std::sync::PoisonError::into_inner).as_ref() {
+                dot.set_standby_only(true);
+                dot.hide();
+            }
+            spawn_cursor_poll(Arc::clone(&state), false);
+        }
     }
 }
 
@@ -199,6 +238,11 @@ fn trigger_switch(state: State<'_, Arc<SharedRuntime>>) {
 }
 
 #[tauri::command]
+fn switch_to_device(device_id: String, state: State<'_, Arc<SharedRuntime>>) {
+    state.engine.send(Command::SwitchTo { device_id, roles: RoleSet::Default });
+}
+
+#[tauri::command]
 fn toggle_expand(app: AppHandle, state: State<'_, Arc<SharedRuntime>>) {
     state.update_and_emit(&app, |s| {
         s.expanded = !s.expanded;
@@ -213,11 +257,121 @@ fn set_preset(preset: SpringPreset, app: AppHandle, state: State<'_, Arc<SharedR
     });
 }
 
+const fn theme_to_native(theme: ThemeKind) -> NativePillTheme {
+    match theme {
+        ThemeKind::Ice => NativePillTheme::ice(),
+        ThemeKind::Midnight => NativePillTheme::midnight(),
+        ThemeKind::Fluent => NativePillTheme::fluent(),
+        ThemeKind::Minimal => NativePillTheme::minimal(),
+    }
+}
+
 #[tauri::command]
 fn set_theme(theme: ThemeKind, app: AppHandle, state: State<'_, Arc<SharedRuntime>>) {
+    if let Some(dot) = state.native_dot.lock().unwrap_or_else(std::sync::PoisonError::into_inner).as_ref() {
+        dot.set_theme(theme_to_native(theme));
+    }
     state.update_and_emit(&app, |s| {
         s.theme = theme;
     });
+}
+
+#[tauri::command]
+fn request_idle_suspend(app: AppHandle, state: State<'_, Arc<SharedRuntime>>) {
+    if state.bench_mode {
+        return;
+    }
+    if state.snapshot_clone().expanded
+        || !state.notch_visible.load(Ordering::Acquire)
+        || state.want_suspended.load(Ordering::Acquire)
+    {
+        return;
+    }
+    let Some(win) = app.get_webview_window("notch") else {
+        return;
+    };
+
+    let epoch = state.suspend_gen.fetch_add(1, Ordering::AcqRel).saturating_add(1);
+    state.want_suspended.store(true, Ordering::Release);
+    state.notch_visible.store(false, Ordering::Release);
+    state.pending_wake_seq.store(0, Ordering::Release);
+
+    if let Some(dot) = state.native_dot.lock().unwrap_or_else(std::sync::PoisonError::into_inner).as_ref() {
+        dot.set_standby_only(false);
+        dot.show_idle();
+    }
+
+    state.update_and_emit(&app, |s| {
+        s.suspended = true;
+        s.activity = ActivityKind::Idle;
+    });
+
+    let app_cb = app.clone();
+    let state_cb = Arc::clone(&state);
+    if win.hide().is_err() {
+        state.want_suspended.store(false, Ordering::Release);
+        return;
+    }
+    let res = win.with_webview(move |wv| {
+        let ctrl = wv.controller();
+        if let Err(error) = webview2::try_suspend(&ctrl, move |done| match done {
+            Ok(true) => {
+                if state_cb.suspend_gen.load(Ordering::Acquire) == epoch
+                    && state_cb.want_suspended.load(Ordering::Acquire)
+                {
+                    state_cb.notch_suspended.store(true, Ordering::Release);
+                    tracing::debug!("Notch WebView suspended (TrySuspend)");
+                } else if let Some(w) = app_cb.get_webview_window("notch") {
+                    let _ = w.with_webview(|wv2| {
+                        let _ = webview2::resume(&wv2.controller());
+                    });
+                }
+            }
+            Ok(false) => {
+                tracing::debug!("TrySuspend returned false; keeping native idle dot active");
+            }
+            Err(error) => {
+                tracing::warn!(%error, "TrySuspend callback failed; keeping native idle dot");
+            }
+        }) {
+            tracing::warn!(%error, "TrySuspend call failed; keeping native idle dot");
+        }
+    });
+    if let Err(error) = res {
+        tracing::warn!(%error, "Could not access notch webview for TrySuspend");
+    }
+}
+
+pub(crate) fn wake_notch_on_main(app: &AppHandle, state: &Arc<SharedRuntime>, wake_seq: u64) {
+    let Some(win) = app.get_webview_window("notch") else {
+        return;
+    };
+    state.suspend_gen.fetch_add(1, Ordering::AcqRel);
+    state.want_suspended.store(false, Ordering::Release);
+    state.notch_suspended.store(false, Ordering::Release);
+    state.pending_wake_seq.store(wake_seq.max(1), Ordering::Release);
+
+    let resume_res = win.with_webview(|wv| {
+        if let Err(error) = webview2::resume(&wv.controller()) {
+            tracing::warn!(%error, "WebView2 Resume failed; keeping native feedback visible");
+        }
+    });
+    if let Err(error) = resume_res {
+        tracing::warn!(%error, "Could not resume notch WebView; keeping native feedback");
+        return;
+    }
+
+    if let Some(mon) = state.active_monitor_info()
+        && let Ok(hw) = win.hwnd()
+    {
+        let hwnd = hw.0 as isize;
+        let _ = overlay_win::move_top_center(hwnd, &mon, NOTCH_CANVAS_W, NOTCH_CANVAS_H, NOTCH_TOP_OFFSET);
+        let _ = win.show();
+        let _ = overlay_win::ensure_topmost(hwnd);
+        state.notch_hwnd.store(hwnd, Ordering::Release);
+    } else {
+        let _ = win.show();
+    }
 }
 
 #[tauri::command]
@@ -269,6 +423,19 @@ fn request_preview(app: &AppHandle, state: &Arc<SharedRuntime>, preview: Preview
 fn create_notch_window(app: &AppHandle, state: &Arc<SharedRuntime>) -> Result<isize, String> {
     if let Some(existing) = app.get_webview_window("notch") {
         let hwnd = existing.hwnd().map_err(|e| e.to_string())?.0 as isize;
+        if !state.bench_mode && !state.notch_visible.load(Ordering::Acquire) {
+            on_main_sync(app, {
+                let st = Arc::clone(state);
+                move |h| {
+                    let snap = st.update_and_emit(h, |s| {
+                        s.suspended = false;
+                        s.event_seq = s.event_seq.saturating_add(1);
+                    });
+                    wake_notch_on_main(h, &st, snap.event_seq);
+                    Ok(())
+                }
+            })?;
+        }
         return Ok(hwnd);
     }
 
@@ -325,7 +492,7 @@ fn create_settings_window(app: &AppHandle, state: &Arc<SharedRuntime>) -> Result
         .inner_size(560.0, 420.0)
         .resizable(false)
         .visible(true)
-        .data_directory(state.wv2_data_dir.clone())
+        .data_directory(state.settings_wv2_data_dir.clone())
         .build()
         .map_err(|e| e.to_string())?;
 
@@ -1092,7 +1259,10 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     let events = (!bench_mode).then(|| engine.subscribe());
     let initial = engine.snapshot();
     let wv2_data_dir = app_data.join(if bench_mode { "spike-overlay-wv2" } else { "webview" });
-    let runtime = Arc::new(SharedRuntime::new(monitors, wv2_data_dir, engine, &initial));
+    let settings_wv2_data_dir =
+        app_data.join(if bench_mode { "spike-overlay-wv2-settings" } else { "webview-settings" });
+    let runtime =
+        Arc::new(SharedRuntime::new(monitors, wv2_data_dir, settings_wv2_data_dir, bench_mode, engine, &initial));
     let setup_state = Arc::clone(&runtime);
     let exit_flag_ref = Arc::clone(&runtime);
 
@@ -1109,9 +1279,11 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             toggle_mute,
             toggle_mic_mute,
             trigger_switch,
+            switch_to_device,
             toggle_expand,
             set_preset,
             set_theme,
+            request_idle_suspend,
             cycle_monitor,
             open_settings,
         ])
@@ -1130,6 +1302,15 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             } else {
                 tray::build(&handle, Arc::clone(&setup_state))?;
                 tray::refresh_tooltip(&handle, &initial);
+                if let Some(primary) =
+                    setup_state.monitors.lock().unwrap_or_else(std::sync::PoisonError::into_inner).first().cloned()
+                    && let Ok(dot) = NativeDotHandle::spawn(primary)
+                {
+                    dot.set_theme(NativePillTheme::ice());
+                    dot.apply_snapshot(&initial);
+                    dot.set_standby_only(true);
+                    *setup_state.native_dot.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = Some(dot);
+                }
                 if let Some(events) = events {
                     engine_bridge::watch(handle.clone(), Arc::clone(&setup_state), events, initial.revision)?;
                 }
@@ -1144,7 +1325,16 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             if window.label() == "notch" && matches!(event, tauri::WindowEvent::Destroyed) {
                 let state = window.state::<Arc<SharedRuntime>>();
                 state.notch_visible.store(false, Ordering::Release);
+                state.notch_suspended.store(false, Ordering::Release);
+                state.want_suspended.store(false, Ordering::Release);
+                state.pending_wake_seq.store(0, Ordering::Release);
                 state.notch_hwnd.store(0, Ordering::Release);
+                if !state.bench_mode
+                    && let Some(dot) =
+                        state.native_dot.lock().unwrap_or_else(std::sync::PoisonError::into_inner).as_ref()
+                {
+                    dot.set_standby_only(false);
+                }
             }
         })
         .build(tauri::generate_context!())?;

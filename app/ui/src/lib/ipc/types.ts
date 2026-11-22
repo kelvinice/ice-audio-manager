@@ -11,6 +11,6 @@ export type MonitorSummary = { index: number, id: string, isPrimary: boolean, wi
 
 export type HitRect = { x: number, y: number, width: number, height: number, };
 
-export type NotchSnapshot = { revision: number, eventSeq: number, activity: ActivityKind, volumePercent: number, muted: boolean, micMuted: boolean, activeDevice: string, targetDevice: string, spatialBadge: string | null, preset: SpringPreset, systemReduceMotion: boolean, theme: ThemeKind, expanded: boolean, hiddenForBench: boolean, activeMonitor: number, monitors: Array<MonitorSummary>, };
+export type NotchSnapshot = { revision: number, eventSeq: number, activity: ActivityKind, volumePercent: number, muted: boolean, micMuted: boolean, activeDevice: string, targetDevice: string, spatialBadge: string | null, preset: SpringPreset, systemReduceMotion: boolean, theme: ThemeKind, expanded: boolean, suspended: boolean, hiddenForBench: boolean, activeMonitor: number, monitors: Array<MonitorSummary>, };
 
 export type NotchDelta = { "kind": "state", snapshot: NotchSnapshot, };

@@ -25,10 +25,14 @@ All `--ice-*` variables are defined with their `Ice` defaults in CSS `:root`. An
 | --- | --- | --- | --- | --- |
 | `--ice-bg` | Surface | `rgba(14, 17, 22, 0.9)` | Yes | Primary pill / island backdrop |
 | `--ice-surface` | Surface | `rgba(23, 29, 39, 0.92)` | Yes | Elevated cards, tracks, chips, expanded panel sections |
+| `--ice-track` | Surface | `rgba(255, 255, 255, 0.14)` | No | Unfilled progress bar track inside volume / switch pills |
 | `--ice-border` | Surface | `rgba(107, 197, 255, 0.22)` | No | Inner hairline border around pill and cards |
 | `--ice-rim` | Surface | `rgba(154, 214, 255, 0.45)` | Yes | 1 px specular rim highlight around the notch capsule |
-| `--ice-shadow` | Surface | `0 10px 28px rgba(0, 0, 0, 0.48), 0 2px 8px rgba(0, 0, 0, 0.32)` | No | Drop shadow beneath floating WebView cards |
+| `--ice-shadow` | Surface | `0 10px 28px rgba(0, 0, 0, 0.48), 0 2px 8px rgba(0, 0, 0, 0.32)` | No | Box shadow beneath Settings / card elements |
+| `--ice-drop-shadow` | Surface | `0 8px 18px rgba(0, 0, 0, 0.45)` | No | Composited `drop-shadow(...)` filter under the floating notch stage |
 | `--ice-radius` | Surface | `22px` | No | Expanded card corner radius (compact pills compute capsule radii dynamically) |
+| `--ice-radius-sm` | Surface | `8px` | No | Small control, chip, and mini button corner radius |
+| `--ice-radius-pill` | Surface | `999px` | No | Full-capsule radius for tracks, status dots, and spatial/status badges |
 | `--ice-fg` | Typography | `#edf1f7` | Yes | Primary text, icons, and volume `%` readout |
 | `--ice-fg-muted` | Typography | `#98a4b8` | Yes | Secondary captions, device subtitles, inactive icons |
 | `--ice-font` | Typography | `'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif` | No | Primary UI font stack (ships with Win11; optional local `IBM Plex Sans`) |
@@ -38,7 +42,8 @@ All `--ice-*` variables are defined with their `Ice` defaults in CSS `:root`. An
 | `--ice-accent-soft` | Accent & Status | `#13283c` | No | Subtle tinted chip / badge fill |
 | `--ice-accent-glow` | Accent & Status | `rgba(107, 197, 255, 0.28)` | No | Soft radial ambient glow behind active notch states |
 | `--ice-ok` | Accent & Status | `#4ade80` | Yes | Positive status (device plugged in, mic live) |
-| `--ice-danger` | Accent & Status | `#f07148` | Yes | Warning/muted state (speaker mute, mic mute, device removed) |
+| `--ice-warn` | Accent & Status | `#f59e0b` | No | Non-destructive warning state (device unplugged / disconnected) |
+| `--ice-danger` | Accent & Status | `#f07148` | Yes | Muted/destructive status (speaker mute, mic mute) |
 | `--ice-scale` | Geometry | `1` | No | User scale multiplier for notch geometry |
 | `--ice-bar-height` | Geometry | `5px` | No | Thickness of the volume progress bar track/fill |
 
@@ -85,7 +90,7 @@ Four built-in themes ship out of the box (selected via config / Settings `Appear
 | **`ice`** *(default)* | Translucent obsidian-ice pill with cyan rim and ambient glow | Base defaults in §2 |
 | **`midnight`** | Near-pure-black high-contrast OLED/DynamicWin look | `--ice-bg: rgba(0, 0, 0, 0.96)` · `--ice-surface: rgba(12, 12, 14, 0.96)` · `--ice-border: rgba(255, 255, 255, 0.14)` · `--ice-rim: rgba(255, 255, 255, 0.24)` · `--ice-accent-glow: rgba(255, 255, 255, 0.12)` |
 | **`fluent`** | Neutral Windows 11 Dark-grey chrome matching stock Flyouts | `--ice-bg: rgba(32, 32, 32, 0.88)` · `--ice-surface: rgba(44, 44, 44, 0.92)` · `--ice-border: rgba(255, 255, 255, 0.12)` · `--ice-rim: rgba(107, 197, 255, 0.35)` |
-| **`minimal`** | Solid opaque slate with zero glow or specular rim (lowest GPU overdraw) | `--ice-bg: rgb(18, 22, 29)` · `--ice-surface: rgb(26, 32, 42)` · `--ice-border: rgba(255, 255, 255, 0.14)` · `--ice-rim: transparent` · `--ice-shadow: 0 4px 12px rgba(0, 0, 0, 0.35)` · `--ice-accent-glow: transparent` |
+| **`minimal`** | Solid opaque slate with zero glow or specular rim (lowest GPU overdraw) | `--ice-bg: rgb(18, 22, 29)` · `--ice-surface: rgb(26, 32, 42)` · `--ice-border: rgba(255, 255, 255, 0.14)` · `--ice-rim: transparent` · `--ice-shadow: 0 4px 12px rgba(0, 0, 0, 0.35)` · `--ice-drop-shadow: 0 4px 10px rgba(0, 0, 0, 0.3)` · `--ice-accent-glow: transparent` |
 
 ---
 

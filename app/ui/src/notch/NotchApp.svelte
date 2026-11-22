@@ -2,47 +2,90 @@
   import { invoke } from '@tauri-apps/api/core';
   import { listen } from '@tauri-apps/api/event';
   import { onMount } from 'svelte';
+  import type { EngineSnapshot, Envelope } from '../lib/ipc/engine';
   import type { HitRect, NotchDelta, NotchSnapshot, SpringPreset, ThemeKind } from '../lib/ipc/types';
   import { SpringGroup } from '../lib/motion/spring.svelte';
+  import { formatSpatialBadge, NotchActivityScheduler, shortDeviceName, type ActivityView } from '../lib/notch/scheduler';
+  import ExpandedNotch from './activities/ExpandedNotch.svelte';
+  import IdlePill from './activities/IdlePill.svelte';
+  import MicActivity from './activities/MicActivity.svelte';
+  import PlugActivity from './activities/PlugActivity.svelte';
+  import SwitchActivity from './activities/SwitchActivity.svelte';
+  import VolumeActivity from './activities/VolumeActivity.svelte';
 
   const CANVAS_W = 420;
   const CANVAS_H = 190;
   const TOP_PAD = 6;
 
-  let snapshot = $state<NotchSnapshot | null>(null);
+  const scheduler = new NotchActivityScheduler(Date.now());
+
+  let notchSnapshot = $state<NotchSnapshot | null>(null);
+  let engineState = $state(scheduler.state);
+  let benchOverride = $state<ActivityView | null>(null);
   let hoverExpanded = $state(false);
-  let pillSize = $state({ w: 112, h: 28, r: 14, vol: 64 });
+  let pointerInside = $state(false);
+  let pillSize = $state({ w: 116, h: 28, r: 14, vol: 40 });
   let frameRate = $state(0);
 
   let hoverTimer: number | null = null;
   let leaveTimer: number | null = null;
+  let activityTimer: number | null = null;
   let lastReportedSeq = 0;
   let lastFrameTs = 0;
   let frameCount = 0;
   let fpsWindowStart = 0;
+  let resnapshotting = false;
 
-  const isExpanded = $derived((snapshot?.expanded ?? false) || hoverExpanded);
+  const isExpanded = $derived((notchSnapshot?.expanded ?? false) || hoverExpanded);
+  const isInstant = $derived(
+    (notchSnapshot?.systemReduceMotion ?? false) || (notchSnapshot?.preset ?? 'smooth') === 'off',
+  );
+  const isSuspended = $derived(notchSnapshot?.suspended ?? false);
+  const activeView = $derived<ActivityView>(benchOverride ?? engineState.activity);
 
-  function computeTarget(snap: NotchSnapshot | null, expandedNow: boolean) {
-    if (!snap) return { w: 112, h: 28, r: 14, vol: 64 };
+  const effectiveMicMuted = $derived(engineState.micMuted ?? notchSnapshot?.micMuted ?? false);
+  const effectiveVolumePercent = $derived(
+    activeView.kind === 'volume'
+      ? activeView.percent
+      : (engineState.volume?.percent ?? notchSnapshot?.volumePercent ?? 0),
+  );
+  const effectiveVolumeMuted = $derived(
+    activeView.kind === 'volume' ? activeView.muted : (engineState.volume?.muted ?? notchSnapshot?.muted ?? false),
+  );
+  const effectiveDeviceName = $derived(
+    engineState.activeDevice?.name ?? (notchSnapshot?.activeDevice || 'No playback device'),
+  );
+  const effectiveSpatialBadge = $derived(
+    engineState.activeDevice
+      ? formatSpatialBadge(engineState.activeDevice.spatial)
+      : (notchSnapshot?.spatialBadge ?? null),
+  );
+
+  function targetGeometry(view: ActivityView, expandedNow: boolean, micMutedNow: boolean) {
+    const vol =
+      view.kind === 'volume'
+        ? view.percent
+        : (engineState.volume?.percent ?? notchSnapshot?.volumePercent ?? 40);
     if (expandedNow) {
-      return { w: 368, h: 158, r: 22, vol: snap.volumePercent };
+      return { w: 372, h: 170, r: 22, vol };
     }
-    switch (snap.activity) {
+    switch (view.kind) {
       case 'volume':
-        return { w: 232, h: 38, r: 19, vol: snap.volumePercent };
+        return { w: 236, h: 38, r: 19, vol: view.percent };
       case 'switch':
-        return { w: 292, h: 44, r: 21, vol: snap.volumePercent };
-      case 'mic_mute':
-        return { w: 204, h: 36, r: 18, vol: snap.volumePercent };
+        return { w: 296, h: 44, r: 22, vol };
+      case 'plug':
+        return { w: 268, h: 44, r: 22, vol };
+      case 'mic':
+        return { w: 204, h: 38, r: 19, vol };
       case 'idle':
       default:
-        return { w: 112, h: 28, r: 14, vol: snap.volumePercent };
+        return { w: micMutedNow ? 132 : 116, h: 28, r: 14, vol };
     }
   }
 
   const springs = new SpringGroup<'w' | 'h' | 'r' | 'vol'>(
-    { w: 112, h: 28, r: 14, vol: 64 },
+    { w: 116, h: 28, r: 14, vol: 40 },
     'smooth',
     (vals) => {
       pillSize = { w: vals.w, h: vals.h, r: vals.r, vol: vals.vol };
@@ -61,20 +104,62 @@
     },
   );
 
-  function effectivePreset(snap: NotchSnapshot): SpringPreset {
+  function effectivePreset(snap: NotchSnapshot | null): SpringPreset {
+    if (!snap) return 'smooth';
     return snap.systemReduceMotion ? 'off' : snap.preset;
   }
 
-  function applySnapshot(next: NotchSnapshot, instant = false) {
-    snapshot = next;
-    document.documentElement.dataset.theme = next.theme;
-    const preset = effectivePreset(next);
-    springs.setPaused(next.hiddenForBench);
+  function clearActivityTimer() {
+    if (activityTimer !== null) {
+      clearTimeout(activityTimer);
+      activityTimer = null;
+    }
+  }
+
+  function scheduleNextTick() {
+    clearActivityTimer();
+    const snap = notchSnapshot;
+    if (!snap || snap.hiddenForBench || snap.suspended || benchOverride !== null) {
+      return;
+    }
+    const holdOpen = snap.expanded || hoverExpanded || pointerInside;
+    const delay = scheduler.nextTickDelayMs(Date.now(), holdOpen);
+    if (delay === null) {
+      return;
+    }
+    activityTimer = window.setTimeout(() => {
+      activityTimer = null;
+      const nowSnap = notchSnapshot;
+      if (!nowSnap || nowSnap.hiddenForBench || nowSnap.suspended) {
+        return;
+      }
+      const holding = nowSnap.expanded || hoverExpanded || pointerInside;
+      const outcome = scheduler.tick(Date.now(), holding);
+      engineState = { ...scheduler.state };
+      if (outcome.dismissedToIdle) {
+        syncGeometry(false);
+      }
+      if (outcome.shouldRequestSuspend && !nowSnap.hiddenForBench && !nowSnap.suspended) {
+        void invoke('request_idle_suspend');
+        return;
+      }
+      scheduleNextTick();
+    }, delay);
+  }
+
+  function syncGeometry(instantMove: boolean) {
+    const snap = notchSnapshot;
+    const preset = effectivePreset(snap);
+    const paused = (snap?.hiddenForBench ?? false) || (snap?.suspended ?? false);
+    springs.setPaused(paused);
     springs.setPreset(preset);
 
-    const expandedNow = next.expanded || hoverExpanded;
-    const target = computeTarget(next, expandedNow);
-    if (instant || preset === 'off') {
+    const view = benchOverride ?? engineState.activity;
+    const expandedNow = (snap?.expanded ?? false) || hoverExpanded;
+    const micMutedNow = engineState.micMuted ?? snap?.micMuted ?? false;
+    const target = targetGeometry(view, expandedNow, micMutedNow);
+
+    if (instantMove || preset === 'off' || paused) {
       springs.snapAll(target);
     } else {
       springs.setTargets(target);
@@ -87,46 +172,153 @@
       height: target.h,
     };
     void invoke('report_hit_rect', { rect: hitRect });
+  }
 
-    if (next.eventSeq > lastReportedSeq) {
-      const seq = next.eventSeq;
-      lastReportedSeq = seq;
+  function acknowledgeRenderedSeq(seq: number) {
+    if (seq <= lastReportedSeq) return;
+    lastReportedSeq = seq;
+    requestAnimationFrame(() => {
       requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          void invoke('report_event_rendered', { eventSeq: seq });
-        });
+        void invoke('report_event_rendered', { eventSeq: seq });
       });
+    });
+  }
+
+  function applyNotchSnapshot(next: NotchSnapshot, instant = false) {
+    const prevActivity = notchSnapshot?.activity;
+    const prevSeq = notchSnapshot?.eventSeq ?? 0;
+    const wasSuspended = notchSnapshot?.suspended ?? false;
+    notchSnapshot = next;
+    document.documentElement.dataset.theme = next.theme;
+
+    // Preserve --bench driver compatibility when NotchSnapshot changes outside EngineEvent.
+    if (next.hiddenForBench) {
+      benchOverride = null;
+    } else if (next.activity !== prevActivity && (next.eventSeq > prevSeq || next.activity === 'idle')) {
+      if (next.activity === 'idle') {
+        benchOverride = null;
+      } else if (engineState.activity.kind === 'idle') {
+        if (next.activity === 'volume') {
+          benchOverride = {
+            kind: 'volume',
+            channel: 'playback',
+            percent: next.volumePercent,
+            muted: next.muted,
+            deviceName: next.activeDevice,
+            formFactor: null,
+            entrySeq: next.eventSeq,
+            boundBump: 0,
+            bumpSeq: 0,
+            expiresAtMs: Date.now(),
+          };
+        } else if (next.activity === 'mic_mute') {
+          benchOverride = {
+            kind: 'mic',
+            muted: next.micMuted,
+            deviceName: 'Microphone',
+            entranceSeq: next.eventSeq,
+            expiresAtMs: Date.now(),
+          };
+        }
+      }
+    }
+
+    syncGeometry(instant || wasSuspended !== next.suspended);
+    scheduleNextTick();
+
+    if (next.eventSeq > lastReportedSeq && !next.suspended) {
+      acknowledgeRenderedSeq(next.eventSeq);
+    }
+  }
+
+  function applyEngineSnapshot(snapshot: EngineSnapshot) {
+    scheduler.applySnapshot(snapshot, Date.now());
+    engineState = { ...scheduler.state };
+    syncGeometry(true);
+    scheduleNextTick();
+  }
+
+  async function resnapshotEngine() {
+    if (resnapshotting) return;
+    resnapshotting = true;
+    try {
+      const fresh = await invoke<EngineSnapshot>('get_engine_snapshot');
+      applyEngineSnapshot(fresh);
+    } finally {
+      resnapshotting = false;
+    }
+  }
+
+  function applyEngineEnvelope(delta: Envelope) {
+    benchOverride = null;
+    const res = scheduler.applyEnvelope(delta, Date.now());
+    if (res.status === 'needs_resnapshot') {
+      void resnapshotEngine();
+      return;
+    }
+    if (res.status === 'ignored_stale') {
+      return;
+    }
+    engineState = { ...scheduler.state };
+    syncGeometry(false);
+    scheduleNextTick();
+    if (notchSnapshot && !notchSnapshot.suspended && notchSnapshot.eventSeq > lastReportedSeq) {
+      acknowledgeRenderedSeq(notchSnapshot.eventSeq);
     }
   }
 
   onMount(() => {
     let disposed = false;
-    const buffered: NotchDelta[] = [];
-    let initialized = false;
+    const bufferedNotch: NotchDelta[] = [];
+    const bufferedEngine: Envelope[] = [];
+    let notchInitialized = false;
+    let engineInitialized = false;
 
-    const unlistenPromise = listen<NotchDelta>('notch://delta/v1', (ev) => {
+    const unlistenNotchPromise = listen<NotchDelta>('notch://delta/v1', (ev) => {
       if (disposed) return;
-      if (!initialized) {
-        buffered.push(ev.payload);
+      if (!notchInitialized) {
+        bufferedNotch.push(ev.payload);
         return;
       }
       const next = ev.payload.snapshot;
-      if (!snapshot || next.revision > snapshot.revision) {
-        applySnapshot(next);
+      if (!notchSnapshot || next.revision > notchSnapshot.revision) {
+        applyNotchSnapshot(next);
       }
     });
 
-    void (async () => {
-      const initial = await invoke<NotchSnapshot>('get_notch_snapshot');
+    const unlistenEnginePromise = listen<Envelope>('engine://delta/v1', (ev) => {
       if (disposed) return;
-      initialized = true;
-      let latest = initial;
-      for (const delta of buffered) {
-        if (delta.snapshot.revision > latest.revision) {
-          latest = delta.snapshot;
+      if (!engineInitialized) {
+        bufferedEngine.push(ev.payload);
+        return;
+      }
+      applyEngineEnvelope(ev.payload);
+    });
+
+    void (async () => {
+      const [initialNotch, initialEngine] = await Promise.all([
+        invoke<NotchSnapshot>('get_notch_snapshot'),
+        invoke<EngineSnapshot>('get_engine_snapshot'),
+      ]);
+      if (disposed) return;
+
+      engineInitialized = true;
+      applyEngineSnapshot(initialEngine);
+      for (const delta of bufferedEngine) {
+        if (delta.revision > scheduler.state.revision) {
+          applyEngineEnvelope(delta);
         }
       }
-      applySnapshot(latest, true);
+
+      notchInitialized = true;
+      let latestNotch = initialNotch;
+      for (const delta of bufferedNotch) {
+        if (delta.snapshot.revision > latestNotch.revision) {
+          latestNotch = delta.snapshot;
+        }
+      }
+      applyNotchSnapshot(latestNotch, true);
+
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           void invoke('report_first_paint');
@@ -137,9 +329,10 @@
     return () => {
       disposed = true;
       springs.dispose();
-      if (hoverTimer !== null) clearTimeout(hoverTimer);
-      if (leaveTimer !== null) clearTimeout(leaveTimer);
-      void unlistenPromise.then((fn) => fn());
+      clearTimers();
+      clearActivityTimer();
+      void unlistenNotchPromise.then((fn) => fn());
+      void unlistenEnginePromise.then((fn) => fn());
     };
   });
 
@@ -156,24 +349,35 @@
 
   function onPointerEnter() {
     clearTimers();
-    if (hoverExpanded || snapshot?.expanded) return;
+    pointerInside = true;
+    scheduler.markInteraction(Date.now());
+    scheduleNextTick();
+    if (hoverExpanded || notchSnapshot?.expanded) return;
     hoverTimer = window.setTimeout(() => {
       hoverExpanded = true;
-      if (snapshot) applySnapshot(snapshot);
+      syncGeometry(false);
+      scheduleNextTick();
     }, 120);
   }
 
   function onPointerLeave() {
     clearTimers();
-    if (!hoverExpanded) return;
+    pointerInside = false;
+    scheduler.markInteraction(Date.now());
+    if (!hoverExpanded) {
+      scheduleNextTick();
+      return;
+    }
     leaveTimer = window.setTimeout(() => {
       hoverExpanded = false;
-      if (snapshot) applySnapshot(snapshot);
+      syncGeometry(false);
+      scheduleNextTick();
     }, 250);
   }
 
   function onWheel(e: WheelEvent) {
     e.preventDefault();
+    scheduler.markInteraction(Date.now());
     if (e.shiftKey) {
       void invoke('trigger_switch');
     } else {
@@ -185,6 +389,7 @@
   function onAuxClick(e: MouseEvent) {
     if (e.button === 1) {
       e.preventDefault();
+      scheduler.markInteraction(Date.now());
       void invoke('toggle_mute');
     }
   }
@@ -194,13 +399,30 @@
   const clipPath = $derived(
     `inset(${TOP_PAD}px ${insetLeft.toFixed(2)}px ${insetBottom.toFixed(2)}px ${insetLeft.toFixed(2)}px round ${pillSize.r.toFixed(2)}px)`,
   );
-  const currentMonitor = $derived(snapshot?.monitors[snapshot.activeMonitor]);
-  const targetBox = $derived(computeTarget(snapshot, isExpanded));
+  const targetBox = $derived(targetGeometry(activeView, isExpanded, effectiveMicMuted));
+
+  const rimStroke = $derived.by(() => {
+    if (isExpanded) return 'var(--ice-rim)';
+    switch (activeView.kind) {
+      case 'mic':
+        return activeView.muted ? 'var(--ice-danger)' : 'var(--ice-ok)';
+      case 'volume':
+        return activeView.muted ? 'var(--ice-danger)' : 'var(--ice-rim)';
+      case 'plug':
+        return activeView.direction === 'arrived' ? 'var(--ice-ok)' : 'var(--ice-warn)';
+      case 'switch':
+        return 'var(--ice-rim)';
+      case 'idle':
+      default:
+        return effectiveMicMuted ? 'var(--ice-danger)' : 'var(--ice-rim)';
+    }
+  });
 </script>
 
 <div
   class="stage"
-  class:hidden={snapshot?.hiddenForBench ?? false}
+  class:hidden={(notchSnapshot?.hiddenForBench ?? false) || isSuspended}
+  class:instant={isInstant}
   style:width={`${CANVAS_W}px`}
   style:height={`${CANVAS_H}px`}
 >
@@ -221,116 +443,48 @@
         style:width={`${targetBox.w}px`}
         style:height={`${targetBox.h}px`}
       >
-        {#if snapshot && !isExpanded}
-          {#if snapshot.activity === 'idle'}
-            <div class="row idle-row">
-              <span class="dot" class:mic-muted={snapshot.micMuted}></span>
-              <span class="idle-label">{snapshot.activeDevice.split('(')[0].trim()}</span>
-              <span class="vol-mini">{snapshot.muted ? 'Mute' : `${snapshot.volumePercent}%`}</span>
-            </div>
-          {:else if snapshot.activity === 'volume'}
-            <div class="row compact-row">
-              <span class="badge-icon">{snapshot.muted ? '🔇' : '🔊'}</span>
-              <div class="bar-track">
-                <div
-                  class="bar-fill"
-                  class:muted={snapshot.muted}
-                  style:transform={`scaleX(${Math.max(0, Math.min(1, pillSize.vol / 100)).toFixed(4)})`}
-                ></div>
-              </div>
-              <span class="pct">{snapshot.muted ? 'Mute' : `${snapshot.volumePercent}%`}</span>
-            </div>
-          {:else if snapshot.activity === 'switch'}
-            <div class="row compact-row">
-              <span class="badge-icon">🎧</span>
-              <span class="dev-name">{snapshot.activeDevice}</span>
-              {#if snapshot.spatialBadge}
-                <span class="spatial-pill">{snapshot.spatialBadge}</span>
-              {/if}
-            </div>
+        {#if notchSnapshot && !isExpanded}
+          {#if activeView.kind === 'volume'}
+            <VolumeActivity activity={activeView} barPercent={pillSize.vol} instant={isInstant} />
+          {:else if activeView.kind === 'switch'}
+            <SwitchActivity activity={activeView} instant={isInstant} />
+          {:else if activeView.kind === 'plug'}
+            <PlugActivity activity={activeView} instant={isInstant} />
+          {:else if activeView.kind === 'mic'}
+            <MicActivity activity={activeView} instant={isInstant} />
           {:else}
-            <div class="row compact-row">
-              <span class="dot mic-dot" class:mic-muted={snapshot.micMuted}></span>
-              <span class="dev-name">{snapshot.micMuted ? 'Mic Muted' : 'Mic Live'}</span>
-            </div>
+            <IdlePill
+              deviceLabel={shortDeviceName(effectiveDeviceName)}
+              volumePercent={effectiveVolumePercent}
+              muted={effectiveVolumeMuted}
+              micMuted={effectiveMicMuted}
+            />
           {/if}
-        {:else if snapshot && isExpanded}
-          <div class="expanded-card">
-            <div class="exp-header">
-              <div class="exp-title">
-                <span class="accent-dot"></span>
-                <span>{snapshot.activeDevice}</span>
-                {#if snapshot.spatialBadge}
-                  <span class="spatial-pill">{snapshot.spatialBadge}</span>
-                {/if}
-              </div>
-              <button class="chip" type="button" onclick={() => void invoke('toggle_expand')}>Pin</button>
-            </div>
-
-            <div class="exp-vol">
-              <button class="chip" type="button" onclick={() => void invoke('toggle_mute')}>
-                {snapshot.muted ? 'Unmute' : 'Mute'}
-              </button>
-              <div class="bar-track">
-                <div
-                  class="bar-fill"
-                  class:muted={snapshot.muted}
-                  style:transform={`scaleX(${Math.max(0, Math.min(1, pillSize.vol / 100)).toFixed(4)})`}
-                ></div>
-              </div>
-              <span class="pct">{snapshot.volumePercent}%</span>
-              <button class="chip" type="button" onclick={() => void invoke('adjust_volume', { delta: -8 })}>-</button>
-              <button class="chip" type="button" onclick={() => void invoke('adjust_volume', { delta: 8 })}>+</button>
-            </div>
-
-            <div class="exp-actions">
-              <button class="chip primary" type="button" onclick={() => void invoke('trigger_switch')}>
-                Switch ↔ {snapshot.targetDevice.split('(')[0].trim()}
-              </button>
-              <button
-                class="chip"
-                class:danger-chip={snapshot.micMuted}
-                type="button"
-                onclick={() => void invoke('toggle_mic_mute')}
-              >
-                {snapshot.micMuted ? 'Mic Off' : 'Mic On'}
-              </button>
-              {#if snapshot.monitors.length > 1}
-                <button class="chip" type="button" onclick={() => void invoke('cycle_monitor')}>
-                  Mon {snapshot.activeMonitor + 1} ({currentMonitor?.refreshHz ?? 60}Hz)
-                </button>
-              {/if}
-              <button class="chip" type="button" onclick={() => void invoke('open_settings')}>Settings</button>
-            </div>
-
-            <div class="exp-footer">
-              <div class="preset-row">
-                {#each ['snappy', 'smooth', 'bouncy', 'off'] as SpringPreset[] as p}
-                  <button
-                    class="mini-btn"
-                    class:active={snapshot.preset === p}
-                    type="button"
-                    onclick={() => void invoke('set_preset', { preset: p })}
-                  >
-                    {p}
-                  </button>
-                {/each}
-              </div>
-              <div class="meta">
-                {#each ['ice', 'midnight', 'fluent', 'minimal'] as ThemeKind[] as t}
-                  <button
-                    class="mini-btn"
-                    class:active={snapshot.theme === t}
-                    type="button"
-                    onclick={() => void invoke('set_theme', { theme: t })}
-                  >
-                    {t[0].toUpperCase()}
-                  </button>
-                {/each}
-                <span class="fps">{frameRate > 0 ? `${frameRate}Hz` : `${currentMonitor?.refreshHz ?? 60}Hz`}</span>
-              </div>
-            </div>
-          </div>
+        {:else if notchSnapshot && isExpanded}
+          <ExpandedNotch
+            playback={engineState.playback}
+            activeDeviceName={effectiveDeviceName}
+            spatialBadge={effectiveSpatialBadge}
+            volumePercent={effectiveVolumePercent}
+            muted={effectiveVolumeMuted}
+            barPercent={pillSize.vol}
+            micMuted={effectiveMicMuted}
+            activeMonitor={notchSnapshot.activeMonitor}
+            monitors={notchSnapshot.monitors}
+            preset={notchSnapshot.preset}
+            theme={notchSnapshot.theme}
+            {frameRate}
+            expanded={notchSnapshot.expanded}
+            onToggleExpand={() => void invoke('toggle_expand')}
+            onToggleMute={() => void invoke('toggle_mute')}
+            onAdjustVolume={(delta) => void invoke('adjust_volume', { delta })}
+            onSwitchDevice={(deviceId) => void invoke('switch_to_device', { deviceId })}
+            onToggleMicMute={() => void invoke('toggle_mic_mute')}
+            onCycleMonitor={() => void invoke('cycle_monitor')}
+            onOpenSettings={() => void invoke('open_settings')}
+            onSetPreset={(preset) => void invoke('set_preset', { preset })}
+            onSetTheme={(theme) => void invoke('set_theme', { theme })}
+          />
         {/if}
       </div>
     </div>
@@ -346,7 +500,7 @@
       rx={pillSize.r}
       ry={pillSize.r}
       fill="none"
-      stroke={snapshot?.micMuted && !isExpanded ? 'var(--ice-danger)' : 'var(--ice-rim)'}
+      stroke={rimStroke}
       stroke-width="1"
       vector-effect="non-scaling-stroke"
     />
@@ -358,7 +512,7 @@
     position: relative;
     margin: 0 auto;
     background: transparent;
-    filter: drop-shadow(0 8px 18px rgba(0, 0, 0, 0.45));
+    filter: drop-shadow(var(--ice-drop-shadow));
   }
 
   .stage.hidden {
@@ -394,160 +548,5 @@
     position: absolute;
     inset: 0;
     pointer-events: none;
-  }
-
-  .row {
-    width: 100%;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 12px;
-    font-weight: 500;
-    white-space: nowrap;
-  }
-
-  .idle-row {
-    justify-content: space-between;
-    font-size: 11px;
-  }
-
-  .idle-label,
-  .dev-name {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    color: var(--ice-fg);
-  }
-
-  .vol-mini,
-  .pct {
-    font-family: var(--ice-mono);
-    font-size: 11px;
-    color: var(--ice-fg-muted);
-  }
-
-  .dot,
-  .accent-dot {
-    width: 7px;
-    height: 7px;
-    border-radius: 999px;
-    background: var(--ice-accent);
-    flex-shrink: 0;
-  }
-
-  .dot.mic-muted {
-    background: var(--ice-danger);
-  }
-
-  .badge-icon {
-    font-size: 12px;
-    flex-shrink: 0;
-  }
-
-  .bar-track {
-    flex: 1;
-    height: var(--ice-bar-height);
-    border-radius: 999px;
-    background: rgba(255, 255, 255, 0.14);
-    overflow: hidden;
-  }
-
-  .bar-fill {
-    width: 100%;
-    height: 100%;
-    border-radius: 999px;
-    transform-origin: left center;
-    background: linear-gradient(90deg, var(--ice-accent), var(--ice-accent-strong));
-  }
-
-  .bar-fill.muted {
-    background: var(--ice-danger);
-  }
-
-  .spatial-pill {
-    padding: 1px 6px;
-    border-radius: 999px;
-    font-size: 10px;
-    background: var(--ice-accent-soft);
-    color: var(--ice-accent-strong);
-    border: 1px solid var(--ice-border);
-    flex-shrink: 0;
-  }
-
-  .expanded-card {
-    width: 100%;
-    height: 100%;
-    padding: 10px 2px;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    gap: 8px;
-  }
-
-  .exp-header,
-  .exp-vol,
-  .exp-actions,
-  .exp-footer,
-  .preset-row,
-  .meta {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-
-  .exp-header,
-  .exp-footer {
-    justify-content: space-between;
-  }
-
-  .exp-title {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 12px;
-    font-weight: 600;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .chip,
-  .mini-btn {
-    appearance: none;
-    border: 1px solid var(--ice-border);
-    background: var(--ice-surface);
-    color: var(--ice-fg);
-    border-radius: 8px;
-    padding: 3px 8px;
-    font-size: 11px;
-    font-family: inherit;
-    cursor: pointer;
-  }
-
-  .chip.primary {
-    border-color: var(--ice-accent);
-    background: var(--ice-accent-soft);
-    color: var(--ice-accent-strong);
-  }
-
-  .chip.danger-chip {
-    border-color: var(--ice-danger);
-    color: var(--ice-danger);
-  }
-
-  .mini-btn {
-    padding: 2px 6px;
-    font-size: 10px;
-    color: var(--ice-fg-muted);
-  }
-
-  .mini-btn.active {
-    border-color: var(--ice-accent);
-    color: var(--ice-accent-strong);
-  }
-
-  .fps {
-    font-family: var(--ice-mono);
-    font-size: 10px;
-    color: var(--ice-fg-muted);
   }
 </style>

@@ -1,8 +1,9 @@
+use std::sync::atomic::Ordering;
 use std::sync::{Arc, mpsc::Receiver};
 
 use ice_core::device::Flow;
 use ice_core::engine::{DeviceSummary, EngineEvent, EngineSnapshot, Envelope, RoleSet, SpatialMode};
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 
 use super::{ActivityKind, NotchSnapshot, SharedRuntime, tray};
 
@@ -51,31 +52,52 @@ pub(super) fn watch(
     Ok(())
 }
 
-fn apply_event(app: &AppHandle, state: &SharedRuntime, delta: Envelope) {
+fn apply_event(app: &AppHandle, state: &Arc<SharedRuntime>, delta: Envelope) {
+    if !state.bench_mode
+        && let Some(dot) = state.native_dot.lock().unwrap_or_else(std::sync::PoisonError::into_inner).as_ref()
+    {
+        let _ = dot.apply_envelope(&delta);
+    }
+
     let snapshot = state.engine.snapshot();
     let activity = match &delta.event {
-        EngineEvent::VolumeChanged { .. } => Some(ActivityKind::Volume),
+        EngineEvent::VolumeChanged { .. } | EngineEvent::MicVolumeChanged { .. } => Some(ActivityKind::Volume),
         EngineEvent::MicMuteChanged { .. } => Some(ActivityKind::MicMute),
         EngineEvent::Switched { device, roles, .. } => {
             tracing::info!(device_id = %device.id, ?roles, "Audio switch confirmed");
             (device.flow == Flow::Render && *roles != RoleSet::Communications).then_some(ActivityKind::Switch)
         }
+        EngineEvent::DeviceArrived { .. } | EngineEvent::DeviceLeft { .. } => Some(ActivityKind::Switch),
         EngineEvent::Notice { notice } => {
             tracing::warn!(?notice, "Audio engine notice");
             None
         }
-        _ => None,
+        EngineEvent::DevicesChanged { .. }
+        | EngineEvent::NoticesChanged { .. }
+        | EngineEvent::SettingsChanged { .. } => None,
     };
 
-    state.update_and_emit(app, |view| {
+    let waking = activity.is_some()
+        && !state.bench_mode
+        && app.get_webview_window("notch").is_some()
+        && (state.want_suspended.load(Ordering::Acquire)
+            || state.notch_suspended.load(Ordering::Acquire)
+            || !state.notch_visible.load(Ordering::Acquire));
+
+    let _ = app.emit_to("notch", "engine://delta/v1", &delta);
+    let _ = app.emit_to("settings", "engine://delta/v1", &delta);
+
+    let view = state.update_and_emit(app, |view| {
         project(&snapshot, view);
-        if let Some(activity) = activity
-            && snapshot.revision == delta.revision
-        {
+        if let Some(activity) = activity {
             view.activity = activity;
             view.event_seq = view.event_seq.saturating_add(1);
+            if waking {
+                view.suspended = false;
+            }
         }
     });
+
     if matches!(
         delta.event,
         EngineEvent::Switched { .. }
@@ -85,6 +107,8 @@ fn apply_event(app: &AppHandle, state: &SharedRuntime, delta: Envelope) {
     ) {
         tray::refresh_tooltip(app, &snapshot);
     }
-    let _ = app.emit_to("notch", "engine://delta/v1", &delta);
-    let _ = app.emit_to("settings", "engine://delta/v1", &delta);
+
+    if waking {
+        super::wake_notch_on_main(app, state, view.event_seq);
+    }
 }

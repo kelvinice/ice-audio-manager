@@ -2,10 +2,14 @@
   /* Portfolio-seeded Ice defaults (planning-discussion.md §1.6 + D-12) */
   --ice-bg: rgba(14, 17, 22, 0.9);
   --ice-surface: rgba(23, 29, 39, 0.92);
+  --ice-track: rgba(255, 255, 255, 0.14);
   --ice-border: rgba(107, 197, 255, 0.22);
   --ice-rim: rgba(154, 214, 255, 0.45);
   --ice-shadow: 0 10px 28px rgba(0, 0, 0, 0.48), 0 2px 8px rgba(0, 0, 0, 0.32);
+  --ice-drop-shadow: 0 8px 18px rgba(0, 0, 0, 0.45);
   --ice-radius: 22px;
+  --ice-radius-sm: 8px;
+  --ice-radius-pill: 999px;
 
   --ice-fg: #edf1f7;
   --ice-fg-muted: #98a4b8;
@@ -17,6 +21,7 @@
   --ice-accent-soft: #13283c;
   --ice-accent-glow: rgba(107, 197, 255, 0.28);
   --ice-ok: #4ade80;
+  --ice-warn: #f59e0b;
   --ice-danger: #f07148;
 
   --ice-scale: 1;
@@ -44,6 +49,7 @@
   --ice-border: rgba(255, 255, 255, 0.14);
   --ice-rim: transparent;
   --ice-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+  --ice-drop-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
   --ice-accent-glow: transparent;
 }
 

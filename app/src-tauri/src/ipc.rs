@@ -67,6 +67,7 @@ pub struct NotchSnapshot {
     pub system_reduce_motion: bool,
     pub theme: ThemeKind,
     pub expanded: bool,
+    pub suspended: bool,
     pub hidden_for_bench: bool,
     pub active_monitor: usize,
     pub monitors: Vec<MonitorSummary>,
