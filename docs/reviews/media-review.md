@@ -112,3 +112,21 @@
 - Zero `unsafe` code and zero `unwrap()`/`expect()` calls in production code across both crates; `ComGuard` (`crates/ice-win/src/com.rs`) cleanly balances `COINIT_MULTITHREADED` + `CoUninitialize`.
 - Clean separation between pure `ice_core::media` maths and WinRT `ice_win::media` APIs, reusing built-in Windows WIC (`BitmapDecoder` / `BitmapEncoder`) with zero extra binary/dependency bloat.
 - `dominant_bgra()` saturation × mid-lightness weighting cleanly filters out white/grey covers (like Spotify's `#fffffe` case) and falls back deterministically to `ICE_ACCENT`.
+
+---
+
+## 4. Resolution (Claude, `phase-3/media-engine`, 2026-11-23)
+
+| Finding | Resolution |
+| --- | --- |
+| `MED-01` | Every handler token is owned by a drop guard (`SessionSubs`; the watcher's manager tokens are set one by one on a value that is dropped on error), so a half-finished subscription removes what it registered. `follow_current` keeps the subscriptions when the current session is the same COM object and returns whether it changed. |
+| `MED-02` | `wait`/`wait_action`: `SetCompleted` + `recv_timeout` + `Cancel()` on expiry. 500 ms per metadata/transport call, 2 s total for art (shared budget), 2 s for the manager. All calls run on the dedicated `ice-media` MTA thread (`ice_win::media_service`). Track and art come from one `TryGetMediaPropertiesAsync` per change (`media::read`); status/timeline changes only do local reads (`refresh_playback`). |
+| `MED-03` | `max_px` clamped to 16–512; stream ≤ 8 MiB, source ≤ 8192 px per side and ≤ 32 M pixels, PNG ≤ 512 KiB (all errors, no `u32::MAX` fallback); `LoadAsync`'s count must equal the length; the pixel buffer length is checked. |
+| `MED-04` | Direction chosen by the WCAG crossover (`L < 0.17913` → lighten). An accent that already passes is returned unchanged (no lightness floor). Art accents are calibrated on `ACCENT_SURFACE` `#3d3d3d`, a little lighter than the lightest built-in dark surface (fluent `--ice-surface` over white, `#313135` since `3412900`), so they pass on all of them; tests cover the review's colours on every composited surface and mid-tone surfaces. |
+| `MED-05` | `OrientedPixelWidth/Height` detect a 90°/270° EXIF rotation; the output size is swapped accordingly. |
+| `MED-06` | Straight alpha for both decode and encode. |
+| `MED-07` | `MediaSignal` splits `CurrentSessionChanged` and `SessionsChanged`; the latter only re-reads when the followed session changed. The worker coalesces signals in an `AtomicU8` dirty mask, wakes at most once per burst and reads after a 60 ms settle. Art is still re-read on every properties change (cheap, ~30 ms) because some apps send the new title before the new thumbnail; the PNG is only handed to the engine when its id is new. |
+| `MED-08` | `art_id(width, height, pixels)`. |
+| `MED-09` | `sessions()` skips sessions that fail to read; `now_playing()` only maps "no current session" to `None`; timeline is relative to `StartTime` and the position is clamped into the track; the module docs state the MTA requirement. |
+| `MED-10` | TS derives were added with the media contract (`phase-3/media-api`). Fakes live behind the `Engine` trait (`FakeEngine`) rather than a separate `MediaBackend` trait. Track titles are logged only at `debug`; the `audio-spike media-test` check prints no titles. |
+

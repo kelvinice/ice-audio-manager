@@ -181,19 +181,23 @@ games on the pinned monitor. Budgets met in every profile.
   commands, and an art pipeline using Windows' own imaging API: decode, Fant downscale to ≤ 128 px, content-hash id
   for `iceart://`, accent, PNG.
 - Measured with Spotify: session read ~5 ms, timeline event → read ~4 ms, art pipeline 34–60 ms (debug build).
-- Gemini's [media review](reviews/media-review.md) (MED-01–MED-10) is being fixed in `phase-3/media-engine`.
+- Gemini's [media review](reviews/media-review.md) (MED-01–MED-10) is fixed (`phase-3/media-engine`; resolution table in the review).
+- Real engine (`phase-3/media-engine`, Claude): `ice_win::media_service` runs GSMTC on its own `ice-media` MTA thread, coalesces
+  signals (dirty mask + 60 ms settle), bounds every WinRT wait (500 ms per call, 2 s per art read), and feeds
+  `snapshot.media` / `MediaChanged` / `Command::Media`; `Engine::art` serves the last 8 PNGs. Measured with Spotify: first
+  `MediaChanged` ~100 ms after engine start, art read ~31 ms.
 - Media contract (`phase-3/media-api`, Claude): `EngineSnapshot.media`, `EngineEvent::MediaChanged`, `Command::Media { action }`,
   `Engine::art(id)`; the fake engine simulates three Spotify tracks with art so UI work can start.
 
 - [x] `ice-win::media`: GSMTC manager, current-session tracking, timeline, playback status, transport commands (event-driven)
 - [x] Media contract in the engine API, with a fake implementation
-- [ ] Real engine wiring: dedicated media worker thread, coalesced signals, bounded WinRT waits (MED fixes)
+- [x] Real engine wiring: dedicated media worker thread, coalesced signals, bounded WinRT waits (MED fixes)
 - [x] Scoped `iceart://<id>` handler in the app shell: engine PNGs only, no paths/queries/other methods, in the production CSP (Codex)
-- [ ] Album art: downscale (≤ 128 px) + content hash + readable accent ✅; review fixes (bounds, EXIF, straight alpha,
-      composited-surface contrast) open in `phase-3/media-engine`
+- [x] Album art: downscale (≤ 128 px) + content hash (incl. size) + readable accent on every built-in dark surface; size/time
+      bounds, EXIF orientation, straight alpha
 - [x] Activities: **Track change** and compact **Now playing** idle state (Gemini, against the fake engine)
 - [x] Expanded notch: media card (art, title, artist, scrubber, prev/play/next) (Gemini, against the fake engine). Real-engine data
-      arrives with `phase-3/media-engine`
+      now comes from the real engine too
 - [ ] Visualizer: `IAudioMeterInformation` peaks at ≤ 30 Hz, subscribed **only while visible**, rendered as 4–6 bars with fast-attack/slow-decay springs
 - [ ] Secondary QA: Chromium/Edge/Firefox media sessions
 

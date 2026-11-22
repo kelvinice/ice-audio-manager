@@ -1,14 +1,23 @@
 //! Now playing via Global System Media Transport Controls (GSMTC). Phase 3 (F15–F17).
 //!
 //! Event-driven: [`MediaWatcher`] forwards GSMTC change events to a non-blocking sink; the owner re-reads
-//! [`now_playing`] (and [`current_art`] only when the track changed). No polling (code-practices §2).
-//! Album art is decoded and downscaled with Windows' own imaging API (no image crate), hashed for caching
-//! (`iceart://<id>`), and given a readable accent colour (`ice_core::media`).
+//! what changed ([`read`] for track + art, [`refresh_playback`] for status and timeline). No polling
+//! (code-practices §2). Album art is decoded and downscaled with Windows' own imaging API (no image crate),
+//! hashed for caching (`iceart://<id>`), and given a readable accent colour (`ice_core::media`).
+//!
+//! **Threading (review MED-09):** every function here blocks on cross-process WinRT calls and must run on an
+//! MTA thread ([`crate::com::ComGuard::init_mta`]), never on a UI (STA) thread. The engine runs them on its own
+//! `ice-media` thread ([`crate::media_service`]).
+//!
+//! **Bounded (review MED-02/03):** a hung media app costs at most [`CALL_LIMIT`] per call and [`ART_BUDGET`]
+//! for all of the art work; oversized art is rejected before it is decoded or copied.
 
-use std::sync::Arc;
+use std::sync::{Arc, mpsc};
+use std::time::{Duration, Instant};
 
-use ice_core::media::{ArtInfo, NowPlaying, PlaybackStatus, accent_for_art, content_id};
-use windows::Foundation::{TimeSpan, TypedEventHandler};
+use ice_core::engine::MediaAction;
+use ice_core::media::{ArtInfo, NowPlaying, PlaybackStatus, accent_for_art, art_id};
+use windows::Foundation::TypedEventHandler;
 use windows::Graphics::Imaging::{
     BitmapAlphaMode, BitmapDecoder, BitmapEncoder, BitmapInterpolationMode, BitmapPixelFormat, BitmapTransform,
     ColorManagementMode, ExifOrientationMode,
@@ -22,59 +31,121 @@ use windows::Media::Control::{
     PlaybackInfoChangedEventArgs, SessionsChangedEventArgs, TimelinePropertiesChangedEventArgs,
 };
 use windows::Storage::Streams::{DataReader, IRandomAccessStream, InMemoryRandomAccessStream};
-use windows::core::{Interface, Result};
+use windows::Win32::Foundation::{E_BOUNDS, E_UNEXPECTED, ERROR_TIMEOUT};
+use windows::core::{Error, Interface, Result, RuntimeType};
+use windows_future::{AsyncActionCompletedHandler, AsyncOperationCompletedHandler, IAsyncAction, IAsyncOperation};
 
 pub use windows::Media::Control::GlobalSystemMediaTransportControlsSessionManager as MediaManager;
 
-/// Requests the session manager (blocks until Windows answers; ~25 ms measured).
-///
-/// # Errors
-/// Fails if GSMTC is unavailable.
-pub fn manager() -> Result<Manager> {
-    Manager::RequestAsync()?.join()
+/// Longest wait for one metadata or transport call to another app.
+pub const CALL_LIMIT: Duration = Duration::from_millis(500);
+/// Longest wait for the session manager (once, at start-up; ~25 ms measured).
+const MANAGER_LIMIT: Duration = Duration::from_secs(2);
+/// Total time for one album art read: open, decode, scale, encode.
+pub const ART_BUDGET: Duration = Duration::from_secs(2);
+/// Downscaled art size limits (longer side).
+const ART_PX: std::ops::RangeInclusive<u32> = 16..=512;
+/// Ceilings applied before decoding or copying (review MED-03).
+const MAX_ART_STREAM: u64 = 8 * 1024 * 1024;
+const MAX_SOURCE_SIDE: u32 = 8192;
+const MAX_SOURCE_PIXELS: u64 = 32_000_000;
+const MAX_PNG: u64 = 512 * 1024;
+
+fn timed_out() -> Error {
+    Error::new(ERROR_TIMEOUT.to_hresult(), "the media app did not answer in time")
 }
 
-/// What Windows considers the current session, without art (fast).
-///
-/// # Errors
-/// Fails if the session's properties can't be read.
-pub fn now_playing(mgr: &Manager) -> Result<Option<NowPlaying>> {
-    match mgr.GetCurrentSession() {
-        Ok(s) => describe(&s).map(Some),
-        Err(_) => Ok(None),
+fn too_big(what: &str) -> Error {
+    Error::new(E_BOUNDS, format!("{what} is too large"))
+}
+
+/// Waits for `op` for at most `limit`, cancelling it on expiry (review MED-02).
+fn wait<T: RuntimeType + 'static>(op: &IAsyncOperation<T>, limit: Duration) -> Result<T> {
+    let (tx, rx) = mpsc::sync_channel(1);
+    // Runs at once if the operation already finished.
+    op.SetCompleted(&AsyncOperationCompletedHandler::new(move |_, _| {
+        let _ = tx.try_send(());
+        Ok(())
+    }))?;
+    if rx.recv_timeout(limit).is_err() {
+        let _ = op.Cancel();
+        return Err(timed_out());
+    }
+    op.GetResults()
+}
+
+fn wait_action(op: &IAsyncAction, limit: Duration) -> Result<()> {
+    let (tx, rx) = mpsc::sync_channel(1);
+    op.SetCompleted(&AsyncActionCompletedHandler::new(move |_, _| {
+        let _ = tx.try_send(());
+        Ok(())
+    }))?;
+    if rx.recv_timeout(limit).is_err() {
+        let _ = op.Cancel();
+        return Err(timed_out());
+    }
+    op.GetResults()
+}
+
+/// A shared time budget for several waits.
+struct Budget(Instant);
+
+impl Budget {
+    fn new(total: Duration) -> Self {
+        Self(Instant::now() + total)
+    }
+
+    fn left(&self) -> Duration {
+        self.0.saturating_duration_since(Instant::now())
     }
 }
 
-/// Every media session Windows knows about, without art.
+/// Requests the session manager.
+///
+/// # Errors
+/// Fails if GSMTC is unavailable or doesn't answer within 2 s.
+pub fn manager() -> Result<Manager> {
+    wait(&Manager::RequestAsync()?, MANAGER_LIMIT)
+}
+
+/// What Windows considers the current session, without art. `Ok(None)` when nothing is playing.
+///
+/// # Errors
+/// Fails if the current session's properties can't be read (review MED-09: not masked as "nothing").
+pub fn now_playing(mgr: &Manager) -> Result<Option<NowPlaying>> {
+    // `GetCurrentSession` fails with a null result when there is no session.
+    let Ok(s) = mgr.GetCurrentSession() else { return Ok(None) };
+    read(&s, None).map(|(n, _)| Some(n))
+}
+
+/// Every media session Windows knows about, without art. Sessions that fail to read (typically closing
+/// right now) are skipped rather than failing the whole list (review MED-09).
 ///
 /// # Errors
 /// Fails if the session list can't be read.
 pub fn sessions(mgr: &Manager) -> Result<Vec<NowPlaying>> {
-    mgr.GetSessions()?.into_iter().map(|s| describe(&s)).collect()
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum MediaCommand {
-    PlayPause,
-    Play,
-    Pause,
-    Next,
-    Previous,
+    Ok(mgr
+        .GetSessions()?
+        .into_iter()
+        .filter_map(|s| read(&s, None).inspect_err(|e| tracing::debug!(error = %e, "skipping a media session")).ok())
+        .map(|(n, _)| n)
+        .collect())
 }
 
 /// Sends a transport command to the current session. `Ok(false)` if the app refused it.
 ///
 /// # Errors
-/// Fails if there is no current session.
-pub fn send(mgr: &Manager, cmd: MediaCommand) -> Result<bool> {
+/// Fails if there is no current session or the app doesn't answer in time.
+pub fn send(mgr: &Manager, action: MediaAction) -> Result<bool> {
     let s = mgr.GetCurrentSession()?;
-    match cmd {
-        MediaCommand::PlayPause => s.TryTogglePlayPauseAsync()?.join(),
-        MediaCommand::Play => s.TryPlayAsync()?.join(),
-        MediaCommand::Pause => s.TryPauseAsync()?.join(),
-        MediaCommand::Next => s.TrySkipNextAsync()?.join(),
-        MediaCommand::Previous => s.TrySkipPreviousAsync()?.join(),
-    }
+    let op = match action {
+        MediaAction::PlayPause => s.TryTogglePlayPauseAsync()?,
+        MediaAction::Play => s.TryPlayAsync()?,
+        MediaAction::Pause => s.TryPauseAsync()?,
+        MediaAction::Next => s.TrySkipNextAsync()?,
+        MediaAction::Previous => s.TrySkipPreviousAsync()?,
+    };
+    wait(&op, CALL_LIMIT)
 }
 
 /// Downscaled album art: PNG bytes for the UI plus its id and accent.
@@ -84,23 +155,48 @@ pub struct Art {
     pub png: Vec<u8>,
 }
 
-/// The current session's art, downscaled so the longer side is at most `max_px`. `Ok(None)` without art.
+/// The current session's art, downscaled so the longer side is at most `max_px` (clamped to 16–512).
+/// `Ok(None)` without a session or art.
 ///
 /// # Errors
-/// Fails if the image can't be decoded or encoded.
+/// Fails if the image is too large, can't be decoded or encoded, or takes longer than [`ART_BUDGET`].
 pub fn current_art(mgr: &Manager, max_px: u32) -> Result<Option<Art>> {
     let Ok(session) = mgr.GetCurrentSession() else { return Ok(None) };
-    read_art(&session.TryGetMediaPropertiesAsync()?.join()?, max_px)
+    read_art(&wait(&session.TryGetMediaPropertiesAsync()?, CALL_LIMIT)?, max_px)
 }
 
-fn ms(t: TimeSpan) -> u64 {
-    // TimeSpan counts 100 ns ticks.
-    u64::try_from(t.Duration / 10_000).unwrap_or(0)
+/// Reads a session once: track, playback status, timeline and, with `art_px`, the art from the *same*
+/// properties, so track and art can't tear (review MED-02). An art failure is logged and leaves `art` empty;
+/// the track is still returned.
+///
+/// # Errors
+/// Fails if the track or playback state can't be read.
+pub fn read(s: &Session, art_px: Option<u32>) -> Result<(NowPlaying, Option<Art>)> {
+    let props = wait(&s.TryGetMediaPropertiesAsync()?, CALL_LIMIT)?;
+    let mut now = NowPlaying {
+        app_id: s.SourceAppUserModelId()?.to_string(),
+        title: props.Title()?.to_string(),
+        artist: props.Artist()?.to_string(),
+        album: props.AlbumTitle()?.to_string(),
+        status: PlaybackStatus::Closed,
+        position_ms: None,
+        duration_ms: None,
+        art: None,
+    };
+    refresh_playback(s, &mut now)?;
+    let art = art_px.and_then(|px| {
+        read_art(&props, px).inspect_err(|e| tracing::debug!(error = %e, "album art unavailable")).ok().flatten()
+    });
+    now.art = art.as_ref().map(|a| a.info.clone());
+    Ok((now, art))
 }
 
-fn describe(s: &Session) -> Result<NowPlaying> {
-    let props = s.TryGetMediaPropertiesAsync()?.join()?;
-    let status = match s.GetPlaybackInfo()?.PlaybackStatus()? {
+/// Updates only the playback status and timeline (local reads; no request to the media app).
+///
+/// # Errors
+/// Fails if the playback state can't be read.
+pub fn refresh_playback(s: &Session, now: &mut NowPlaying) -> Result<()> {
+    now.status = match s.GetPlaybackInfo()?.PlaybackStatus()? {
         st if st == Status::Playing => PlaybackStatus::Playing,
         st if st == Status::Paused => PlaybackStatus::Paused,
         st if st == Status::Stopped => PlaybackStatus::Stopped,
@@ -108,60 +204,96 @@ fn describe(s: &Session) -> Result<NowPlaying> {
         st if st == Status::Opened => PlaybackStatus::Opened,
         _ => PlaybackStatus::Closed,
     };
-    let timeline: Option<Timeline> = s.GetTimelineProperties().ok();
-    let duration_ms = timeline.as_ref().and_then(|t| t.EndTime().ok()).map(ms).filter(|d| *d > 0);
-    let position_ms = duration_ms.and(timeline.as_ref().and_then(|t| t.Position().ok()).map(ms));
-    Ok(NowPlaying {
-        app_id: s.SourceAppUserModelId()?.to_string(),
-        title: props.Title()?.to_string(),
-        artist: props.Artist()?.to_string(),
-        album: props.AlbumTitle()?.to_string(),
-        status,
-        position_ms,
-        duration_ms,
-        art: None,
-    })
+    (now.position_ms, now.duration_ms) = s.GetTimelineProperties().ok().map_or((None, None), |t: Timeline| {
+        let tick = |r: Result<windows::Foundation::TimeSpan>| r.map_or(0, |t| t.Duration);
+        timeline_ms(tick(t.StartTime()), tick(t.EndTime()), tick(t.Position()))
+    });
+    Ok(())
+}
+
+/// `(position, duration)` in ms from GSMTC's 100 ns ticks. Both are relative to the start time, and the
+/// position is clamped into the track (review MED-09). No duration (live streams, some browsers) = neither.
+fn timeline_ms(start: i64, end: i64, position: i64) -> (Option<u64>, Option<u64>) {
+    let duration = end.saturating_sub(start);
+    if duration <= 0 {
+        return (None, None);
+    }
+    let position = position.saturating_sub(start).clamp(0, duration);
+    let ms = |ticks: i64| u64::try_from(ticks / 10_000).unwrap_or(0);
+    (Some(ms(position)), Some(ms(duration)))
+}
+
+/// The size `(w, h)` scaled so the longer side is at most `max_px`, never below 1 px.
+fn fit(w: u32, h: u32, max_px: u32) -> (u32, u32) {
+    let scale = (f64::from(max_px) / f64::from(w.max(h))).min(1.0);
+    // Both results are ≤ the inputs (scale ≤ 1), so the casts can't truncate or go negative.
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let px = |v: u32| (f64::from(v) * scale).round().max(1.0) as u32;
+    (px(w), px(h))
 }
 
 fn read_art(props: &MediaProperties, max_px: u32) -> Result<Option<Art>> {
+    let budget = Budget::new(ART_BUDGET);
+    let max_px = max_px.clamp(*ART_PX.start(), *ART_PX.end());
     let Ok(thumb) = props.Thumbnail() else { return Ok(None) };
-    let stream: IRandomAccessStream = thumb.OpenReadAsync()?.join()?.cast()?;
-    let decoder = BitmapDecoder::CreateAsync(&stream)?.join()?;
+    let stream: IRandomAccessStream = wait(&thumb.OpenReadAsync()?, budget.left())?.cast()?;
+    match stream.Size()? {
+        0 => return Ok(None),
+        n if n > MAX_ART_STREAM => return Err(too_big("album art")),
+        _ => {}
+    }
+    let decoder = wait(&BitmapDecoder::CreateAsync(&stream)?, budget.left())?;
     let (w, h) = (decoder.PixelWidth()?, decoder.PixelHeight()?);
     if w == 0 || h == 0 {
         return Ok(None);
     }
-    let scale = (f64::from(max_px) / f64::from(w.max(h))).min(1.0);
-    // Bounded by `max_px` (≤ u32), so the casts can't truncate.
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-    let (tw, th) = ((f64::from(w) * scale).round().max(1.0) as u32, (f64::from(h) * scale).round().max(1.0) as u32);
+    if w.max(h) > MAX_SOURCE_SIDE || u64::from(w) * u64::from(h) > MAX_SOURCE_PIXELS {
+        return Err(too_big("album art"));
+    }
+    // Scaling happens before the EXIF rotation, so a 90°/270° image comes out transposed (review MED-05).
+    let transposed = (decoder.OrientedPixelWidth()?, decoder.OrientedPixelHeight()?) != (w, h);
+    let (sw, sh) = fit(w, h, max_px);
+    let (out_w, out_h) = if transposed { (sh, sw) } else { (sw, sh) };
     let transform = BitmapTransform::new()?;
-    transform.SetScaledWidth(tw)?;
-    transform.SetScaledHeight(th)?;
+    transform.SetScaledWidth(sw)?;
+    transform.SetScaledHeight(sh)?;
     transform.SetInterpolationMode(BitmapInterpolationMode::Fant)?;
-    let pixels = decoder
-        .GetPixelDataTransformedAsync(
+    let pixels = wait(
+        &decoder.GetPixelDataTransformedAsync(
             BitmapPixelFormat::Bgra8,
-            BitmapAlphaMode::Premultiplied,
+            // Straight alpha: what the colour maths and PNG expect (review MED-06).
+            BitmapAlphaMode::Straight,
             &transform,
             ExifOrientationMode::RespectExifOrientation,
             ColorManagementMode::DoNotColorManage,
-        )?
-        .join()?
-        .DetachPixelData()?;
+        )?,
+        budget.left(),
+    )?
+    .DetachPixelData()?;
     let pixels: &[u8] = &pixels;
-    let info = ArtInfo { id: content_id(pixels), width: tw, height: th, accent: accent_for_art(Some(pixels)) };
-    Ok(Some(Art { info, png: encode_png(pixels, tw, th)? }))
+    if pixels.len() as u64 != u64::from(out_w) * u64::from(out_h) * 4 {
+        return Err(Error::new(E_UNEXPECTED, "album art pixel buffer has an unexpected size"));
+    }
+    let info =
+        ArtInfo { id: art_id(out_w, out_h, pixels), width: out_w, height: out_h, accent: accent_for_art(Some(pixels)) };
+    Ok(Some(Art { info, png: encode_png(pixels, out_w, out_h, &budget)? }))
 }
 
-fn encode_png(pixels: &[u8], w: u32, h: u32) -> Result<Vec<u8>> {
+fn encode_png(pixels: &[u8], w: u32, h: u32, budget: &Budget) -> Result<Vec<u8>> {
     let mem = InMemoryRandomAccessStream::new()?;
-    let encoder = BitmapEncoder::CreateAsync(BitmapEncoder::PngEncoderId()?, &mem)?.join()?;
-    encoder.SetPixelData(BitmapPixelFormat::Bgra8, BitmapAlphaMode::Premultiplied, w, h, 96.0, 96.0, pixels)?;
-    encoder.FlushAsync()?.join()?;
-    let len = u32::try_from(mem.Size()?).unwrap_or(u32::MAX);
+    let encoder = wait(&BitmapEncoder::CreateAsync(BitmapEncoder::PngEncoderId()?, &mem)?, budget.left())?;
+    encoder.SetPixelData(BitmapPixelFormat::Bgra8, BitmapAlphaMode::Straight, w, h, 96.0, 96.0, pixels)?;
+    wait_action(&encoder.FlushAsync()?, budget.left())?;
+    let size = mem.Size()?;
+    if size > MAX_PNG {
+        return Err(too_big("encoded album art"));
+    }
+    let len = u32::try_from(size).map_err(|_| too_big("encoded album art"))?;
     let reader = DataReader::CreateDataReader(&mem.GetInputStreamAt(0)?)?;
-    reader.LoadAsync(len)?.join()?;
+    let loaded = wait(&reader.LoadAsync(len)?, budget.left())?;
+    if loaded != len {
+        return Err(Error::new(E_UNEXPECTED, "album art PNG was read short"));
+    }
     let mut buf = vec![0u8; len as usize];
     reader.ReadBytes(&mut buf)?;
     Ok(buf)
@@ -170,8 +302,11 @@ fn encode_png(pixels: &[u8], w: u32, h: u32) -> Result<Vec<u8>> {
 /// What changed. The owner re-reads what it needs; callbacks never do work themselves.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MediaSignal {
-    /// Another app became the current session (or the session list changed): call [`MediaWatcher::follow_current`].
-    SessionChanged,
+    /// Another app became the current session: call [`MediaWatcher::follow_current`] and re-read.
+    CurrentSessionChanged,
+    /// An app opened or closed a session (often not the current one; review MED-07). Call
+    /// [`MediaWatcher::follow_current`]; re-read only if it reports a change.
+    SessionsChanged,
     /// Track, artist, album or art changed.
     PropertiesChanged,
     /// Playing/paused/stopped changed.
@@ -180,35 +315,94 @@ pub enum MediaSignal {
     TimelineChanged,
 }
 
+impl MediaSignal {
+    /// A distinct bit per signal, for coalescing bursts into one dirty mask.
+    #[must_use]
+    pub const fn bit(self) -> u8 {
+        1 << self as u8
+    }
+}
+
 type Sink = Arc<dyn Fn(MediaSignal) + Send + Sync>;
+
+fn handler<S, A: RuntimeType + 'static>(sink: &Sink, signal: MediaSignal) -> TypedEventHandler<S, A>
+where
+    S: RuntimeType + 'static,
+{
+    let sink = Arc::clone(sink);
+    TypedEventHandler::new(move |_, _| {
+        sink(signal);
+        Ok(())
+    })
+}
+
+/// The followed session's event registrations. Each token is removed on drop, so a subscription that fails
+/// half-way leaks nothing (review MED-01).
+struct SessionSubs {
+    session: Session,
+    properties: Option<i64>,
+    playback: Option<i64>,
+    timeline: Option<i64>,
+}
+
+impl SessionSubs {
+    fn subscribe(session: Session, sink: &Sink) -> Result<Self> {
+        let mut subs = Self { session, properties: None, playback: None, timeline: None };
+        subs.properties = Some(subs.session.MediaPropertiesChanged(&handler::<
+            Session,
+            MediaPropertiesChangedEventArgs,
+        >(sink, MediaSignal::PropertiesChanged))?);
+        subs.playback = Some(subs.session.PlaybackInfoChanged(&handler::<Session, PlaybackInfoChangedEventArgs>(
+            sink,
+            MediaSignal::PlaybackChanged,
+        ))?);
+        subs.timeline = Some(subs.session.TimelinePropertiesChanged(&handler::<
+            Session,
+            TimelinePropertiesChangedEventArgs,
+        >(sink, MediaSignal::TimelineChanged))?);
+        Ok(subs)
+    }
+}
+
+impl Drop for SessionSubs {
+    fn drop(&mut self) {
+        if let Some(t) = self.properties {
+            let _ = self.session.RemoveMediaPropertiesChanged(t);
+        }
+        if let Some(t) = self.playback {
+            let _ = self.session.RemovePlaybackInfoChanged(t);
+        }
+        if let Some(t) = self.timeline {
+            let _ = self.session.RemoveTimelinePropertiesChanged(t);
+        }
+    }
+}
 
 /// Subscribes to GSMTC events for the manager and the current session; unsubscribes on drop.
 pub struct MediaWatcher {
+    session: Option<SessionSubs>,
+    current_token: Option<i64>,
+    list_token: Option<i64>,
     mgr: Manager,
     sink: Sink,
-    mgr_tokens: [i64; 2],
-    session: Option<(Session, [i64; 3])>,
 }
 
 impl MediaWatcher {
-    /// `sink` runs on WinRT thread-pool threads and must not block (e.g. a channel send).
+    /// `sink` runs on WinRT thread-pool threads and must not block (e.g. set a flag and send a wake-up).
     ///
     /// # Errors
-    /// Fails if the manager events can't be subscribed.
+    /// Fails if the manager events can't be subscribed (anything registered so far is removed again).
     pub fn start(mgr: Manager, sink: impl Fn(MediaSignal) + Send + Sync + 'static) -> Result<Self> {
-        let sink: Sink = Arc::new(sink);
-        let (s1, s2) = (Arc::clone(&sink), Arc::clone(&sink));
-        let current = mgr.CurrentSessionChanged(&TypedEventHandler::<Manager, CurrentSessionChangedEventArgs>::new(
-            move |_, _| {
-                s1(MediaSignal::SessionChanged);
-                Ok(())
-            },
-        ))?;
-        let list = mgr.SessionsChanged(&TypedEventHandler::<Manager, SessionsChangedEventArgs>::new(move |_, _| {
-            s2(MediaSignal::SessionChanged);
-            Ok(())
-        }))?;
-        let mut w = Self { mgr, sink, mgr_tokens: [current, list], session: None };
+        let mut w = Self { session: None, current_token: None, list_token: None, mgr, sink: Arc::new(sink) };
+        w.current_token = Some(w.mgr.CurrentSessionChanged(&handler::<Manager, CurrentSessionChangedEventArgs>(
+            &w.sink,
+            MediaSignal::CurrentSessionChanged,
+        ))?);
+        w.list_token =
+            Some(w.mgr.SessionsChanged(&handler::<Manager, SessionsChangedEventArgs>(
+                &w.sink,
+                MediaSignal::SessionsChanged,
+            ))?);
         w.follow_current();
         Ok(w)
     }
@@ -218,52 +412,70 @@ impl MediaWatcher {
         &self.mgr
     }
 
-    /// Moves the session subscriptions to whatever is current now. Call after [`MediaSignal::SessionChanged`].
-    pub fn follow_current(&mut self) {
-        self.unfollow();
-        let Ok(session) = self.mgr.GetCurrentSession() else { return };
-        let (p, b, t) = (Arc::clone(&self.sink), Arc::clone(&self.sink), Arc::clone(&self.sink));
-        let tokens = (|| -> Result<[i64; 3]> {
-            Ok([
-                session.MediaPropertiesChanged(&TypedEventHandler::<Session, MediaPropertiesChangedEventArgs>::new(
-                    move |_, _| {
-                        p(MediaSignal::PropertiesChanged);
-                        Ok(())
-                    },
-                ))?,
-                session.PlaybackInfoChanged(&TypedEventHandler::<Session, PlaybackInfoChangedEventArgs>::new(
-                    move |_, _| {
-                        b(MediaSignal::PlaybackChanged);
-                        Ok(())
-                    },
-                ))?,
-                session.TimelinePropertiesChanged(
-                    &TypedEventHandler::<Session, TimelinePropertiesChangedEventArgs>::new(move |_, _| {
-                        t(MediaSignal::TimelineChanged);
-                        Ok(())
-                    }),
-                )?,
-            ])
-        })();
-        match tokens {
-            Ok(tokens) => self.session = Some((session, tokens)),
+    /// Moves the session subscriptions to whatever is current now. Keeps them (no gap, no re-subscribe) when
+    /// the current session hasn't changed (review MED-01). Returns whether the followed session changed.
+    pub fn follow_current(&mut self) -> bool {
+        let current = self.mgr.GetCurrentSession().ok();
+        if current.is_some() && current.as_ref() == self.session.as_ref().map(|s| &s.session) {
+            return false;
+        }
+        let had = self.session.take().is_some();
+        let Some(session) = current else { return had };
+        match SessionSubs::subscribe(session, &self.sink) {
+            Ok(subs) => self.session = Some(subs),
             Err(e) => tracing::warn!(error = %e, "media session events unavailable"),
         }
-    }
-
-    fn unfollow(&mut self) {
-        if let Some((s, [a, b, c])) = self.session.take() {
-            let _ = s.RemoveMediaPropertiesChanged(a);
-            let _ = s.RemovePlaybackInfoChanged(b);
-            let _ = s.RemoveTimelinePropertiesChanged(c);
-        }
+        true
     }
 }
 
 impl Drop for MediaWatcher {
     fn drop(&mut self) {
-        self.unfollow();
-        let _ = self.mgr.RemoveCurrentSessionChanged(self.mgr_tokens[0]);
-        let _ = self.mgr.RemoveSessionsChanged(self.mgr_tokens[1]);
+        self.session = None;
+        if let Some(t) = self.current_token {
+            let _ = self.mgr.RemoveCurrentSessionChanged(t);
+        }
+        if let Some(t) = self.list_token {
+            let _ = self.mgr.RemoveSessionsChanged(t);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn timeline_is_relative_to_start_and_clamped() {
+        // 100 ns ticks: 10_000 per ms.
+        assert_eq!(timeline_ms(0, 200_000_000, 50_000_000), (Some(5_000), Some(20_000)));
+        assert_eq!(timeline_ms(10_000_000, 210_000_000, 60_000_000), (Some(5_000), Some(20_000)));
+        assert_eq!(timeline_ms(0, 200_000_000, 900_000_000), (Some(20_000), Some(20_000)));
+        assert_eq!(timeline_ms(0, 200_000_000, -5), (Some(0), Some(20_000)));
+        assert_eq!(timeline_ms(0, 0, 5), (None, None));
+    }
+
+    #[test]
+    fn fit_keeps_the_aspect_and_never_upscales() {
+        assert_eq!(fit(640, 640, 128), (128, 128));
+        assert_eq!(fit(1000, 500, 128), (128, 64));
+        assert_eq!(fit(64, 32, 128), (64, 32));
+        assert_eq!(fit(8000, 1, 128), (128, 1));
+    }
+
+    #[test]
+    fn signal_bits_are_distinct() {
+        let all = [
+            MediaSignal::CurrentSessionChanged,
+            MediaSignal::SessionsChanged,
+            MediaSignal::PropertiesChanged,
+            MediaSignal::PlaybackChanged,
+            MediaSignal::TimelineChanged,
+        ];
+        let mask = all.iter().fold(0u8, |m, s| {
+            assert_eq!(m & s.bit(), 0);
+            m | s.bit()
+        });
+        assert_eq!(mask.count_ones(), 5);
     }
 }

@@ -64,12 +64,61 @@ fn run() -> AnyResult<()> {
         "make-config" => make_config(&eps, arg(1).unwrap_or(DEFAULT_CONFIG)),
         "resolve" => resolve_saved(&eps, arg(1).unwrap_or(DEFAULT_CONFIG)),
         "settings-test" => settings_test(),
+        "media-test" => media_test(),
         "engine" => run_engine(arg(1).unwrap_or(DEFAULT_CONFIG), arg(2).and_then(|s| s.parse().ok()).unwrap_or(120)),
         other => Err(format!("unknown command `{other}` (see the header of spikes/audio/src/main.rs)").into()),
     }
 }
 
 const DEFAULT_CONFIG: &str = "spikes/audio/out/config.toml";
+
+/// Checks the real engine's now playing: the first `MediaChanged` and its art. Sends no media commands.
+fn media_test() -> AnyResult<()> {
+    use ice_core::config::ConfigStore;
+    use ice_core::engine::{Engine, EngineEvent};
+    use ice_win::audio_engine::AudioEngine;
+    let path = "spikes/audio/out/media-test.toml";
+    let _ = std::fs::remove_file(path);
+    let started = Instant::now();
+    let engine = AudioEngine::start(ConfigStore::new(path))?;
+    let events = engine.subscribe();
+    let media = match engine.snapshot().media {
+        Some(m) => Some(m),
+        None => loop {
+            match events.recv_timeout(Duration::from_secs(3)) {
+                Ok(env) => {
+                    if let EngineEvent::MediaChanged { media } = env.event {
+                        break media;
+                    }
+                }
+                Err(_) => break None,
+            }
+        },
+    };
+    println!("first media after {:?}", started.elapsed());
+    let Some(m) = media else {
+        println!("no media session (start Spotify and play something)");
+        return Ok(());
+    };
+    // Titles stay out of the output (privacy, code-practices §4).
+    println!("app {} | {:?} | position {:?} / {:?} ms", m.app_id, m.status, m.position_ms, m.duration_ms);
+    match m.art {
+        Some(a) => {
+            let png = engine.art(&a.id).ok_or("art id not served by Engine::art")?;
+            let is_png = png.starts_with(b"\x89PNG");
+            println!(
+                "art {}x{} id {} accent {} | served {} bytes, PNG: {is_png}",
+                a.width,
+                a.height,
+                a.id,
+                a.accent.hex(),
+                png.len()
+            );
+        }
+        None => println!("no art"),
+    }
+    Ok(())
+}
 
 /// Exercises the settings commands on the real engine with a throwaway config. Switches nothing.
 fn settings_test() -> AnyResult<()> {

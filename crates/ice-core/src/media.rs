@@ -45,6 +45,12 @@ impl Rgb {
 pub const ICE_SURFACE: Rgb = Rgb::new(0x0e, 0x11, 0x16);
 /// The brand accent, used when there's no album art (docs/theming.md).
 pub const ICE_ACCENT: Rgb = Rgb::new(0x6b, 0xc5, 0xff);
+/// Calibration surface for art accents, a little lighter than the lightest built-in dark notch surface
+/// (`fluent`'s translucent `--ice-surface`, `rgba(36, 36, 40, 0.94)`, over a white desktop ≈ `#313135`).
+/// An accent readable here is readable on every darker theme surface too (review MED-04).
+pub const ACCENT_SURFACE: Rgb = Rgb::new(0x3d, 0x3d, 0x3d);
+/// WCAG crossover: below this surface luminance, white text contrasts more than black.
+const DARK_SURFACE_MAX_LUMINANCE: f64 = 0.179_13;
 
 /// Album art, downscaled and cached by content hash (served to the UI as `iceart://<id>`).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -83,6 +89,16 @@ pub fn content_id(bytes: &[u8]) -> String {
         h = h.wrapping_mul(0x0000_0100_0000_01b3);
     }
     format!("{h:016x}")
+}
+
+/// Cache id for downscaled art: the size and the pixels, so a transposed image never shares an id (MED-08).
+#[must_use]
+pub fn art_id(width: u32, height: u32, bgra: &[u8]) -> String {
+    let mut bytes = Vec::with_capacity(8 + bgra.len());
+    bytes.extend_from_slice(&width.to_le_bytes());
+    bytes.extend_from_slice(&height.to_le_bytes());
+    bytes.extend_from_slice(bgra);
+    content_id(&bytes)
 }
 
 /// The most prominent *colourful* colour of a BGRA8 image (4 bytes per pixel), or `None` if the image has
@@ -142,29 +158,34 @@ pub fn contrast(a: Rgb, b: Rgb) -> f64 {
     (la.max(lb) + 0.05) / (la.min(lb) + 0.05)
 }
 
-/// Adjusts an accent so it reads on `surface`: keeps the hue, tames neon saturation, and raises (or lowers)
-/// lightness until the contrast is at least 4.5:1 (WCAG AA for text).
+/// Adjusts an accent so it reads on `surface` with at least 4.5:1 contrast (WCAG AA for text). A colour that
+/// already passes is returned unchanged; otherwise the hue is kept, neon saturation is tamed, and lightness
+/// moves in small steps towards white (dark surface) or black (light surface) until it passes.
 #[must_use]
 pub fn readable_accent(c: Rgb, surface: Rgb) -> Rgb {
-    let (h, s, l) = rgb_to_hsl(c);
+    if contrast(c, surface) >= 4.5 {
+        return c;
+    }
+    let (h, s, mut l) = rgb_to_hsl(c);
     let s = s.min(0.85);
-    let dark_surface = luminance(surface) < 0.5;
-    let mut l = if dark_surface { l.max(0.55) } else { l.min(0.45) };
+    let lighten = luminance(surface) < DARK_SURFACE_MAX_LUMINANCE;
     let mut out = hsl_to_rgb(h, s, l);
-    for _ in 0..40 {
+    // 0.005 steps: at most 200 to reach white/black, which always passes against a surface on that side.
+    for _ in 0..=200 {
         if contrast(out, surface) >= 4.5 {
             break;
         }
-        l = if dark_surface { (l + 0.02).min(1.0) } else { (l - 0.02).max(0.0) };
+        l = if lighten { (l + 0.005).min(1.0) } else { (l - 0.005).max(0.0) };
         out = hsl_to_rgb(h, s, l);
     }
     out
 }
 
-/// The accent to use for some art: readable on the Ice surface, or the brand accent without art.
+/// The accent to use for some art: readable on every built-in dark notch surface ([`ACCENT_SURFACE`]), or the
+/// brand accent without (colourful) art.
 #[must_use]
 pub fn accent_for_art(bgra: Option<&[u8]>) -> Rgb {
-    bgra.and_then(dominant_bgra).map_or(ICE_ACCENT, |c| readable_accent(c, ICE_SURFACE))
+    bgra.and_then(dominant_bgra).map_or(ICE_ACCENT, |c| readable_accent(c, ACCENT_SURFACE))
 }
 
 fn rgb_to_hsl(c: Rgb) -> (f64, f64, f64) {
@@ -246,6 +267,52 @@ mod tests {
         // And it works for light surfaces too.
         let light = Rgb::new(0xf6, 0xf7, 0xf9);
         assert!(contrast(readable_accent(Rgb::new(255, 230, 0), light), light) >= 4.5);
+    }
+
+    #[test]
+    fn mid_tone_surfaces_get_dark_accents() {
+        // Above the WCAG crossover (L ≈ 0.179) black contrasts more than white, so the accent darkens (MED-04).
+        for surface in [Rgb::new(0x80, 0x80, 0x80), Rgb::new(0x99, 0x99, 0x99), Rgb::new(0xb0, 0xb0, 0xb0)] {
+            for c in [Rgb::new(255, 255, 255), Rgb::new(255, 200, 0), Rgb::new(100, 150, 255)] {
+                let a = readable_accent(c, surface);
+                assert!(contrast(a, surface) >= 4.5, "{c:?} on {surface:?} -> {a:?} ({:.2})", contrast(a, surface));
+            }
+        }
+    }
+
+    #[test]
+    fn art_accents_read_on_every_dark_theme_surface() {
+        // Composited over a white desktop (the worst case): ice --ice-bg, ice --ice-surface, the review's old
+        // fluent --ice-bg, today's fluent --ice-surface; plus the calibration and the opaque Ice surface.
+        let surfaces = [
+            Rgb::new(0x26, 0x29, 0x2d),
+            Rgb::new(0x2a, 0x2f, 0x38),
+            Rgb::new(0x3b, 0x3b, 0x3b),
+            Rgb::new(0x31, 0x31, 0x35),
+            ACCENT_SURFACE,
+            ICE_SURFACE,
+        ];
+        for c in [Rgb::new(10, 20, 80), Rgb::new(180, 20, 20), Rgb::new(220, 40, 40), Rgb::new(130, 30, 180)] {
+            let a = accent_for_art(Some(&image(&[(c, 100)])));
+            for s in surfaces {
+                assert!(contrast(a, s) >= 4.5, "{c:?} -> {a:?} on {s:?} ({:.2})", contrast(a, s));
+            }
+        }
+        assert!(contrast(ICE_ACCENT, ACCENT_SURFACE) >= 4.5);
+    }
+
+    #[test]
+    fn accents_that_already_pass_are_left_alone() {
+        // Gold already reads on the darkest surface; it must not be washed out (MED-04).
+        let gold = Rgb::new(0xb8, 0x86, 0x0b);
+        assert_eq!(readable_accent(gold, ICE_SURFACE), gold);
+    }
+
+    #[test]
+    fn art_ids_include_the_size() {
+        let px = [0u8; 128 * 64 * 4];
+        assert_ne!(art_id(128, 64, &px), art_id(64, 128, &px));
+        assert_eq!(art_id(128, 64, &px), art_id(128, 64, &px));
     }
 
     #[test]

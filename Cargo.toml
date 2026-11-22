@@ -24,6 +24,8 @@ tracing = "0.1"
 webview2-com = "0.39"
 # Must match the `windows` crate's core version; the #[implement]/#[interface] macros expand to `windows_core::…`.
 windows-core = "0.62"
+# `IAsyncOperation` & co. (the `windows` crate doesn't re-export them); must match its windows-future version.
+windows-future = "0.3"
 
 [workspace.dependencies.windows]
 version = "0.62"

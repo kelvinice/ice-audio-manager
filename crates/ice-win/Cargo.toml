@@ -11,6 +11,7 @@ ice-core.workspace = true
 tracing.workspace = true
 webview2-com = { workspace = true, optional = true }
 windows-core.workspace = true
+windows-future.workspace = true
 
 [dependencies.windows]
 workspace = true

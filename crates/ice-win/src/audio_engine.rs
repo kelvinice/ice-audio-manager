@@ -7,7 +7,7 @@
 //! "The current playback device" means the **Multimedia** default throughout (what media plays on and what
 //! the volume events follow); switches set Console + Multimedia together (review ENG-13).
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, VecDeque};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender, SyncSender, TrySendError};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::thread::JoinHandle;
@@ -27,6 +27,7 @@ use crate::com::ComGuard;
 use crate::endpoints::Endpoints;
 use crate::file_watch::DirWatch;
 use crate::hotkeys::HotkeyService;
+use crate::media_service::{MediaService, MediaUpdate};
 use crate::spatial::{self, SpatialFormat};
 use crate::{notify, policy, volume};
 
@@ -45,6 +46,8 @@ const SPATIAL_WRITE_LIMIT: Duration = Duration::from_secs(3);
 const SUBSCRIBER_BUFFER: usize = 1024;
 /// Unanswered device pickers kept at most.
 const MAX_PENDING_CHOICES: usize = 8;
+/// Album-art PNGs kept for `Engine::art` (the current track and a few before it; ≤ ~40 KB each).
+const ART_CACHE: usize = 8;
 
 enum Msg {
     Command(Command),
@@ -58,12 +61,16 @@ enum Msg {
     Hotkey(i32),
     /// Something in the config folder changed (debounced, then re-read).
     ConfigChanged,
+    /// A finished now-playing read from the `ice-media` thread.
+    Media(Box<MediaUpdate>),
     Quit,
 }
 
 struct Shared {
     snapshot: EngineSnapshot,
     subscribers: Vec<SyncSender<Envelope>>,
+    /// Recent album art by id, newest last.
+    art: VecDeque<(String, Vec<u8>)>,
 }
 
 fn lock(m: &Mutex<Shared>) -> MutexGuard<'_, Shared> {
@@ -84,7 +91,11 @@ impl AudioEngine {
     /// A readable reason if COM or the audio service is unavailable.
     pub fn start(store: ConfigStore) -> Result<Self, String> {
         let (tx, rx) = mpsc::channel();
-        let shared = Arc::new(Mutex::new(Shared { snapshot: EngineSnapshot::default(), subscribers: Vec::new() }));
+        let shared = Arc::new(Mutex::new(Shared {
+            snapshot: EngineSnapshot::default(),
+            subscribers: Vec::new(),
+            art: VecDeque::new(),
+        }));
         let (ready_tx, ready_rx) = mpsc::channel::<Result<(), String>>();
         let (worker_shared, worker_tx) = (Arc::clone(&shared), tx.clone());
         let join = std::thread::Builder::new()
@@ -118,6 +129,10 @@ impl Engine for AudioEngine {
         let (tx, rx) = mpsc::sync_channel(SUBSCRIBER_BUFFER);
         lock(&self.shared).subscribers.push(tx);
         rx
+    }
+
+    fn art(&self, id: &str) -> Option<Vec<u8>> {
+        lock(&self.shared).art.iter().find(|(k, _)| k == id).map(|(_, png)| png.clone())
     }
 }
 
@@ -196,6 +211,8 @@ struct Worker {
     /// Direction of the first detent of the current Ctrl+knob gesture.
     knob_first: i32,
     knob_at: Option<Instant>,
+    /// Now playing (GSMTC) on its own thread; `None` if it couldn't start.
+    media: Option<MediaService>,
     // Must drop last: every COM object above is released before COM is uninitialised.
     _com: ComGuard,
 }
@@ -249,6 +266,12 @@ impl Worker {
             .inspect_err(|e| tracing::warn!(error = %e, "config watcher failed; hot reload disabled"))
             .ok()
         });
+        let media_tx = engine_tx.clone();
+        let media = MediaService::start(move |u| {
+            let _ = media_tx.send(Msg::Media(Box::new(u)));
+        })
+        .inspect_err(|e| tracing::warn!(error = %e, "media thread failed to start; now playing disabled"))
+        .ok();
         let mut w = Self {
             eps,
             endpoints: Vec::new(),
@@ -276,6 +299,7 @@ impl Worker {
             knob_steps: 0,
             knob_first: 0,
             knob_at: None,
+            media,
             _com: com,
         };
         w.refresh(false);
@@ -311,6 +335,7 @@ impl Worker {
                 Msg::Mic { scalar, muted } => self.on_mic(scalar, muted),
                 Msg::Hotkey(id) => self.hotkey(id),
                 Msg::ConfigChanged => self.reload_at = Some(Instant::now() + RELOAD_DEBOUNCE),
+                Msg::Media(u) => self.on_media(*u),
             }
         }
     }
@@ -355,6 +380,27 @@ impl Worker {
             }
             Err(TrySendError::Disconnected(_)) => false,
         });
+    }
+
+    /// Caches new art before announcing it, so the UI's `iceart://` request finds it.
+    fn on_media(&mut self, u: MediaUpdate) {
+        let changed = {
+            let mut sh = lock(&self.shared);
+            if let Some(art) = u.art
+                && !sh.art.iter().any(|(id, _)| *id == art.info.id)
+            {
+                if sh.art.len() >= ART_CACHE {
+                    sh.art.pop_front();
+                }
+                sh.art.push_back((art.info.id, art.png));
+            }
+            let changed = sh.snapshot.media != u.media;
+            sh.snapshot.media.clone_from(&u.media);
+            changed
+        };
+        if changed {
+            self.emit(EngineEvent::MediaChanged { media: u.media });
+        }
     }
 
     fn notice(&mut self, notice: Notice) {
@@ -837,8 +883,10 @@ impl Worker {
                 }
             }
             Command::Refresh => self.refresh(true),
-            // Wired to the GSMTC worker in `phase-3/media-engine`; until then the real engine has no media.
-            Command::Media { action } => tracing::debug!(?action, "media command ignored (media not wired yet)"),
+            Command::Media { action } => match &self.media {
+                Some(m) => m.send(action),
+                None => tracing::debug!(?action, "media command ignored: now playing is unavailable"),
+            },
             Command::SetTogglePair { .. }
             | Command::RemoveTogglePair { .. }
             | Command::SetBinding { .. }

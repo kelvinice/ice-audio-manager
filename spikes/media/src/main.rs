@@ -1,4 +1,4 @@
-﻿//! Phase 0.4 / Phase 3 media spike. Throwaway CLI; the reusable code lives in `ice_win::media`.
+//! Phase 0.4 / Phase 3 media spike. Throwaway CLI; the reusable code lives in `ice_win::media`.
 //!
 //! ```text
 //! media-spike list                 every GSMTC session + which one Windows calls current
@@ -10,9 +10,10 @@
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
+use ice_core::engine::MediaAction;
 use ice_core::media::NowPlaying;
 use ice_win::com::ComGuard;
-use ice_win::media::{self, MediaCommand, MediaSignal, MediaWatcher};
+use ice_win::media::{self, MediaSignal, MediaWatcher};
 
 type AnyResult<T> = Result<T, Box<dyn std::error::Error>>;
 
@@ -76,13 +77,15 @@ fn run() -> AnyResult<()> {
             let mut last_art = None;
             while let Some(left) = Duration::from_secs(secs).checked_sub(start.elapsed()) {
                 let Ok((signal, at)) = rx.recv_timeout(left) else { continue };
-                if signal == MediaSignal::SessionChanged {
-                    watcher.follow_current();
+                if matches!(signal, MediaSignal::CurrentSessionChanged | MediaSignal::SessionsChanged)
+                    && !watcher.follow_current()
+                {
+                    continue;
                 }
                 let now = media::now_playing(watcher.manager()).ok().flatten();
                 let read = at.elapsed();
                 let mut extra = String::new();
-                if matches!(signal, MediaSignal::PropertiesChanged | MediaSignal::SessionChanged) {
+                if matches!(signal, MediaSignal::PropertiesChanged | MediaSignal::CurrentSessionChanged) {
                     let t = Instant::now();
                     if let Ok(Some(a)) = media::current_art(watcher.manager(), 128)
                         && last_art.as_ref() != Some(&a.info.id)
@@ -98,7 +101,7 @@ fn run() -> AnyResult<()> {
                 );
             }
         }
-        "toggle" => println!("toggle accepted: {}", media::send(&mgr, MediaCommand::PlayPause)?),
+        "toggle" => println!("toggle accepted: {}", media::send(&mgr, MediaAction::PlayPause)?),
         other => return Err(format!("unknown command `{other}`").into()),
     }
     Ok(())

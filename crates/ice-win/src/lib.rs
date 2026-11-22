@@ -15,6 +15,7 @@ pub mod file_watch;
 pub mod fullscreen;
 pub mod hotkeys;
 pub mod media;
+pub mod media_service;
 pub mod meter;
 pub mod monitors;
 pub mod native_dot;
