@@ -35,5 +35,7 @@ jobs:
         run: cargo clippy --workspace --all-targets -- -D warnings
       - name: Test
         run: cargo test --workspace
+      - name: Test engine contract with TypeScript bindings
+        run: cargo test -p ice-core --all-features
       - name: Build (release)
         run: cargo build --workspace --release

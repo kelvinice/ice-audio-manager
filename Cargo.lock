@@ -1405,6 +1405,8 @@ name = "ice-core"
 version = "0.0.1"
 dependencies = [
  "serde",
+ "serde_json",
+ "ts-rs",
 ]
 
 [[package]]

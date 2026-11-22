@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 
 /// Direction of an audio endpoint.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "lowercase")]
 pub enum Flow {
     /// Playback (speakers, headphones).
@@ -17,6 +18,7 @@ pub enum Flow {
 /// Windows keeps `NotPresent` endpoints forever, often with the same name as a live one,
 /// so resolvers must only ever pick `Active` endpoints (D-16).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case")]
 pub enum DeviceState {
     Active,
@@ -42,6 +44,7 @@ impl DeviceState {
 
 /// Default-device roles (`ERole`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "lowercase")]
 pub enum Role {
     Console,

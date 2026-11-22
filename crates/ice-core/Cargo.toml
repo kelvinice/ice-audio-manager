@@ -8,6 +8,14 @@ publish.workspace = true
 
 [dependencies]
 serde.workspace = true
+# Optional: TypeScript bindings for the engine contract (typed IPC, D-03). Enabled by the app shell.
+ts-rs = { version = "12", optional = true }
+
+[features]
+ts = ["dep:ts-rs"]
+
+[dev-dependencies]
+serde_json.workspace = true
 
 [lints]
 workspace = true

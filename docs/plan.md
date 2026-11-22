@@ -52,6 +52,9 @@
 - ✅ 0.2 overlay spike code (Gemini) merged: `spikes/overlay` (Tauri + Svelte, typed IPC export, spring module, native dot,
   process metrics). **Missing:** the measurement write-up (`docs/spikes/phase0-overlay.md`) that picks the D-15 default profile.
 - ✅ D-16 resolver (Claude): `ice_core::resolve` (`DeviceRef`, `resolve`, `toggle`), 12 tests built from the owner's real endpoints.
+- ✅ Engine contract (Claude, `phase-1/engine-api`): `ice_core::engine`: `Command`, `EngineSnapshot`, `Envelope { revision, event }`,
+  `EngineEvent`, `Notice`, and the `Engine` trait. **Codex and Gemini: build against `ice_core::engine::fake::FakeEngine`** (owner's devices,
+  no Windows calls) until `phase-1/engine` merges. Enable `ice-core/ts` in the app to export TypeScript bindings (camelCase, `type`-tagged).
 - ✅ 0.5 fullscreen spike (Codex): see [dual-monitor results](spikes/phase0-fullscreen.md). Phase 2 still needs to cover
   exclusive-mode transitions that can be missed by window notifications.
 
