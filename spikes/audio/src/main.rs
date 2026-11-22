@@ -13,6 +13,7 @@
 //! audio-spike make-config [path]           write the owner's setup (Arctis ↔ Speakers on Ctrl+Alt+F12, Atmos, knob)
 //! audio-spike engine [path] [seconds]      run the real engine with that config and print its events
 //! audio-spike resolve [path]              read-only: how each saved device in the config resolves right now
+//! audio-spike settings-test                set up a toggle pair through engine commands on a throwaway config (no switching)
 //! ```
 //! Config path defaults to `spikes/audio/out/config.toml` (gitignored).
 //! `<device>` = an endpoint ID, or a case-insensitive part of the name of an *Active* endpoint.
@@ -62,12 +63,93 @@ fn run() -> AnyResult<()> {
         "hotkeys" => hotkeys(arg(1).and_then(|s| s.parse().ok()).unwrap_or(30)),
         "make-config" => make_config(&eps, arg(1).unwrap_or(DEFAULT_CONFIG)),
         "resolve" => resolve_saved(&eps, arg(1).unwrap_or(DEFAULT_CONFIG)),
+        "settings-test" => settings_test(),
         "engine" => run_engine(arg(1).unwrap_or(DEFAULT_CONFIG), arg(2).and_then(|s| s.parse().ok()).unwrap_or(120)),
         other => Err(format!("unknown command `{other}` (see the header of spikes/audio/src/main.rs)").into()),
     }
 }
 
 const DEFAULT_CONFIG: &str = "spikes/audio/out/config.toml";
+
+/// Exercises the settings commands on the real engine with a throwaway config. Switches nothing.
+fn settings_test() -> AnyResult<()> {
+    use ice_core::config::ConfigStore;
+    use ice_core::engine::{Command, Engine, EngineEvent};
+    use ice_win::audio_engine::AudioEngine;
+    let path = "spikes/audio/out/settings-test.toml";
+    let _ = std::fs::remove_file(path);
+    let engine = AudioEngine::start(ConfigStore::new(path))?;
+    let events = engine.subscribe();
+    let snap = engine.snapshot();
+    let find = |needle: &str| snap.playback.iter().find(|d| d.name.contains(needle)).map(|d| d.id.clone());
+    let (arctis, speakers) = (find("Arctis").ok_or("no Arctis")?, find("Realtek").ok_or("no Realtek")?);
+    let wait = |label: &str| {
+        while let Ok(env) = events.recv_timeout(Duration::from_secs(3)) {
+            match env.event {
+                EngineEvent::SettingsChanged { settings } => {
+                    println!(
+                        "{label}: SettingsChanged -> {} pair(s), {} device pref(s)",
+                        settings.toggle_pairs.len(),
+                        settings.devices.len()
+                    );
+                    for p in &settings.toggle_pairs {
+                        println!(
+                            "    {} [{}]: {} ↔ {}",
+                            p.id,
+                            p.hotkey.as_deref().unwrap_or("-"),
+                            p.primary.name,
+                            p.secondary.name
+                        );
+                    }
+                    return;
+                }
+                EngineEvent::Notice { notice } => {
+                    println!("{label}: {notice:?}");
+                    return;
+                }
+                _ => {}
+            }
+        }
+        println!("{label}: (no event)");
+    };
+    engine.send(Command::SetTogglePair {
+        pair_id: "main".into(),
+        primary_id: arctis.clone(),
+        secondary_id: speakers.clone(),
+        hotkey: Some("Ctrl+Alt+F10".into()),
+        roles: None,
+    });
+    wait("set pair");
+    engine.send(Command::SetDevicePrefs {
+        device_id: arctis.clone(),
+        spatial: Some(ice_core::engine::SpatialMode::DolbyAtmosHeadphones),
+        alias: None,
+        hidden: None,
+    });
+    wait("atmos pref");
+    engine.send(Command::SetBinding {
+        binding_id: "x".into(),
+        device_id: speakers,
+        hotkey: Some("Ctrl+Alt+F10".into()),
+        roles: None,
+    });
+    wait("duplicate hotkey");
+    engine.send(Command::SetBinding {
+        binding_id: "x".into(),
+        device_id: arctis,
+        hotkey: Some("VolumeUp".into()),
+        roles: None,
+    });
+    wait("plain volume key");
+    drop(engine);
+    println!(
+        "
+{path}:
+{}",
+        std::fs::read_to_string(path)?
+    );
+    Ok(())
+}
 
 /// Read-only diagnostic: resolves every saved reference against the live endpoints. Changes nothing.
 fn resolve_saved(eps: &Endpoints, path: &str) -> AnyResult<()> {

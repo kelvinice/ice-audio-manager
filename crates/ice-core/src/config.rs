@@ -8,9 +8,12 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use crate::engine::{RoleSet, SpatialMode};
+use crate::device::{DeviceState, EndpointInfo, Flow};
+use crate::engine::{
+    BindingView, Command, DevicePrefsView, RoleSet, SavedDevice, SettingsView, SpatialMode, TogglePairView,
+};
 use crate::hotkey::Chord;
-use crate::resolve::DeviceRef;
+use crate::resolve::{DeviceRef, MatchMode, resolve};
 
 pub const SCHEMA_VERSION: u32 = 1;
 
@@ -196,6 +199,183 @@ impl Config {
             }
         }
         n
+    }
+
+    /// The settings as the UI shows them, resolved against the live endpoints.
+    #[must_use]
+    pub fn view(&self, endpoints: &[EndpointInfo]) -> SettingsView {
+        let saved = |r: &DeviceRef| SavedDevice {
+            name: r.display_name.clone(),
+            flow: r.flow,
+            device_id: resolve(r, endpoints).target().map(|e| e.id.clone()),
+        };
+        SettingsView {
+            default_roles: self.default_roles,
+            toggle_pairs: self
+                .toggle_pairs
+                .iter()
+                .map(|p| TogglePairView {
+                    id: p.id.clone(),
+                    hotkey: p.hotkey.map(|c| c.to_string()),
+                    primary: saved(&p.primary),
+                    secondary: saved(&p.secondary),
+                    roles: p.roles,
+                })
+                .collect(),
+            bindings: self
+                .bindings
+                .iter()
+                .map(|b| BindingView {
+                    id: b.id.clone(),
+                    hotkey: b.hotkey.map(|c| c.to_string()),
+                    device: saved(&b.device),
+                    roles: b.roles,
+                })
+                .collect(),
+            favourites_playback: self.favourites.playback.iter().map(saved).collect(),
+            favourites_recording: self.favourites.recording.iter().map(saved).collect(),
+            devices: self
+                .devices
+                .iter()
+                .map(|d| DevicePrefsView {
+                    device: saved(&d.device),
+                    spatial: d.spatial,
+                    alias: d.alias.clone(),
+                    hidden: d.hidden,
+                })
+                .collect(),
+            knob_gestures: self.knob.enabled,
+        }
+    }
+
+    /// Applies a settings command. `Ok(true)` = changed, `Ok(false)` = not a settings command or nothing to change.
+    ///
+    /// # Errors
+    /// A user-facing reason (device not connected, invalid or duplicate hotkey, …); the config is left unchanged.
+    pub fn apply_setting(&mut self, cmd: &Command, endpoints: &[EndpointInfo]) -> Result<bool, String> {
+        let mut next = self.clone();
+        match cmd {
+            Command::SetTogglePair { pair_id, primary_id, secondary_id, hotkey, roles } => {
+                let (a, b) = (live(endpoints, primary_id)?, live(endpoints, secondary_id)?);
+                if a.id == b.id {
+                    return Err("a toggle pair needs two different devices".into());
+                }
+                if a.flow != b.flow {
+                    return Err("a toggle pair can't mix playback and recording devices".into());
+                }
+                let hotkey = parse_hotkey(hotkey.as_deref())?;
+                next.toggle_pairs.retain(|p| p.id != *pair_id);
+                next.toggle_pairs.push(TogglePair {
+                    id: pair_id.clone(),
+                    hotkey,
+                    primary: DeviceRef::from_endpoint(a, MatchMode::SameModel),
+                    secondary: DeviceRef::from_endpoint(b, MatchMode::SameModel),
+                    roles: *roles,
+                });
+                next.check_hotkeys_unique()?;
+            }
+            Command::RemoveTogglePair { pair_id } => next.toggle_pairs.retain(|p| p.id != *pair_id),
+            Command::SetBinding { binding_id, device_id, hotkey, roles } => {
+                let device = DeviceRef::from_endpoint(live(endpoints, device_id)?, MatchMode::SameModel);
+                let hotkey = parse_hotkey(hotkey.as_deref())?;
+                next.bindings.retain(|b| b.id != *binding_id);
+                next.bindings.push(Binding { id: binding_id.clone(), hotkey, device, roles: *roles });
+                next.check_hotkeys_unique()?;
+            }
+            Command::RemoveBinding { binding_id } => next.bindings.retain(|b| b.id != *binding_id),
+            Command::SetFavourites { flow, device_ids } => {
+                let mut refs: Vec<DeviceRef> = Vec::with_capacity(device_ids.len());
+                for id in device_ids {
+                    let e = live(endpoints, id)?;
+                    if e.flow != *flow {
+                        return Err(format!("{} is not a {flow:?} device", display(e)));
+                    }
+                    if !refs.iter().any(|r| r.endpoint_id == e.id) {
+                        refs.push(DeviceRef::from_endpoint(e, MatchMode::SameModel));
+                    }
+                }
+                match flow {
+                    Flow::Render => next.favourites.playback = refs,
+                    Flow::Capture => next.favourites.recording = refs,
+                }
+            }
+            Command::SetDevicePrefs { device_id, spatial, alias, hidden } => {
+                let e = live(endpoints, device_id)?;
+                if spatial.is_some_and(|m| m != SpatialMode::Keep) && e.flow != Flow::Render {
+                    return Err("spatial sound only applies to playback devices".into());
+                }
+                let one = std::slice::from_ref(e);
+                let i = if let Some(i) = next.devices.iter().position(|p| resolve(&p.device, one).target().is_some()) {
+                    i
+                } else {
+                    next.devices.push(DevicePrefs {
+                        device: DeviceRef::from_endpoint(e, MatchMode::SameModel),
+                        spatial: SpatialMode::Keep,
+                        alias: None,
+                        hidden: false,
+                    });
+                    next.devices.len() - 1
+                };
+                let prefs = &mut next.devices[i];
+                if let Some(m) = spatial {
+                    prefs.spatial = *m;
+                }
+                if let Some(a) = alias {
+                    prefs.alias = Some(a.trim().to_string()).filter(|a| !a.is_empty());
+                }
+                if let Some(h) = hidden {
+                    prefs.hidden = *h;
+                }
+                // An entry back at all defaults is noise in the file.
+                if prefs.spatial == SpatialMode::Keep && prefs.alias.is_none() && !prefs.hidden {
+                    next.devices.remove(i);
+                }
+            }
+            Command::SetKnobGestures { enabled } => next.knob.enabled = *enabled,
+            Command::SetDefaultRoles { roles } => next.default_roles = *roles,
+            _ => return Ok(false),
+        }
+        let changed = next != *self;
+        *self = next;
+        Ok(changed)
+    }
+
+    /// Two actions on one chord would make one of them silently dead.
+    fn check_hotkeys_unique(&self) -> Result<(), String> {
+        let mut seen: Vec<(Chord, String)> = Vec::new();
+        let named = self
+            .toggle_pairs
+            .iter()
+            .filter_map(|p| p.hotkey.map(|c| (c, format!("toggle pair \"{}\"", p.id))))
+            .chain(self.bindings.iter().filter_map(|b| b.hotkey.map(|c| (c, format!("hotkey \"{}\"", b.id)))))
+            .chain(self.favourites.cycle_hotkey.map(|c| (c, "the favourites hotkey".to_string())));
+        for (chord, owner) in named {
+            if let Some((_, first)) = seen.iter().find(|(c, _)| *c == chord) {
+                return Err(format!("{chord} is already used by {first}"));
+            }
+            seen.push((chord, owner));
+        }
+        Ok(())
+    }
+}
+
+/// An Active endpoint by ID (settings are created from devices the user can see).
+fn live<'a>(endpoints: &'a [EndpointInfo], id: &str) -> Result<&'a EndpointInfo, String> {
+    endpoints
+        .iter()
+        .find(|e| e.id.eq_ignore_ascii_case(id) && e.state == DeviceState::Active)
+        .ok_or_else(|| format!("device {id} is not connected"))
+}
+
+fn display(e: &EndpointInfo) -> String {
+    crate::resolve::normalize_name(e.friendly_name.as_deref().unwrap_or(&e.id))
+}
+
+/// `None` or blank = no hotkey.
+fn parse_hotkey(s: Option<&str>) -> Result<Option<Chord>, String> {
+    match s.map(str::trim).filter(|s| !s.is_empty()) {
+        None => Ok(None),
+        Some(s) => s.parse::<Chord>().map(Some).map_err(|e| format!("hotkey \"{s}\": {e}")),
     }
 }
 
@@ -440,5 +620,119 @@ mod tests {
         assert_eq!(cfg.devices[0].device.endpoint_id, "arctis-new");
         assert_eq!(cfg.favourites.playback[0].endpoint_id, "arctis-new");
         assert_eq!(cfg.toggle_pairs[0].secondary.endpoint_id, "realtek");
+    }
+
+    fn live_ep(id: &str, name: &str, flow: Flow, ff: u32) -> EndpointInfo {
+        EndpointInfo {
+            id: id.into(),
+            flow,
+            state: DeviceState::Active,
+            friendly_name: Some(name.into()),
+            endpoint_name: name.split(" (").next().map(str::to_string),
+            interface_name: None,
+            devnode: None,
+            hardware_key: Some(format!("HW\\{id}")),
+            container_id: None,
+            form_factor: Some(ff),
+            stable_id: None,
+            default_for: vec![],
+        }
+    }
+
+    fn owner_devices() -> Vec<EndpointInfo> {
+        vec![
+            live_ep("arctis", "Headphones (Arctis Nova 7)", Flow::Render, 3),
+            live_ep("realtek", "Speakers (Realtek(R) Audio)", Flow::Render, 1),
+            live_ep("mic", "Microphone (Arctis Nova 7)", Flow::Capture, 4),
+        ]
+    }
+
+    #[test]
+    fn set_toggle_pair_from_live_devices_then_view_it() {
+        let devs = owner_devices();
+        let mut cfg = Config::default();
+        let cmd = Command::SetTogglePair {
+            pair_id: "main".into(),
+            primary_id: "arctis".into(),
+            secondary_id: "realtek".into(),
+            hotkey: Some("ctrl+alt+f12".into()),
+            roles: None,
+        };
+        assert_eq!(cfg.apply_setting(&cmd, &devs), Ok(true));
+        assert_eq!(cfg.apply_setting(&cmd, &devs), Ok(false), "same edit twice changes nothing");
+        let view = cfg.view(&devs);
+        assert_eq!(view.toggle_pairs[0].hotkey.as_deref(), Some("Ctrl+Alt+F12"));
+        assert_eq!(view.toggle_pairs[0].primary.name, "Headphones (Arctis Nova 7)");
+        assert_eq!(view.toggle_pairs[0].primary.device_id.as_deref(), Some("arctis"));
+        // Disconnected: still listed, just without a live device.
+        let view = cfg.view(&devs[1..]);
+        assert_eq!(view.toggle_pairs[0].primary.device_id, None);
+    }
+
+    #[test]
+    fn rejects_bad_settings_without_changing_anything() {
+        let devs = owner_devices();
+        let mut cfg = Config::default();
+        let pair = |id: &str, a: &str, b: &str, key: &str| Command::SetTogglePair {
+            pair_id: id.into(),
+            primary_id: a.into(),
+            secondary_id: b.into(),
+            hotkey: Some(key.into()),
+            roles: None,
+        };
+        assert_eq!(cfg.apply_setting(&pair("main", "arctis", "realtek", "Ctrl+Alt+F12"), &devs), Ok(true));
+        let before = cfg.clone();
+        let err = |cfg: &mut Config, c: &Command| cfg.apply_setting(c, &devs).unwrap_err();
+        assert!(err(&mut cfg, &pair("x", "arctis", "arctis", "F9")).contains("two different"));
+        assert!(err(&mut cfg, &pair("x", "arctis", "mic", "F9")).contains("mix playback"));
+        assert!(err(&mut cfg, &pair("x", "arctis", "gone", "F9")).contains("not connected"));
+        assert!(err(&mut cfg, &pair("x", "arctis", "realtek", "VolumeUp")).contains("modifier"));
+        assert!(err(&mut cfg, &pair("x", "arctis", "realtek", "Ctrl+Alt+F12")).contains("already used"));
+        assert_eq!(cfg, before);
+    }
+
+    #[test]
+    fn device_prefs_patch_and_clean_up() {
+        let devs = owner_devices();
+        let mut cfg = Config::default();
+        let set = |spatial, alias: Option<&str>, hidden| Command::SetDevicePrefs {
+            device_id: "realtek".into(),
+            spatial,
+            alias: alias.map(str::to_string),
+            hidden,
+        };
+        assert_eq!(cfg.apply_setting(&set(None, Some(" Desk speakers "), None), &devs), Ok(true));
+        assert_eq!(cfg.devices[0].alias.as_deref(), Some("Desk speakers"));
+        assert_eq!(cfg.apply_setting(&set(Some(SpatialMode::WindowsSonic), None, None), &devs), Ok(true));
+        assert_eq!(cfg.devices.len(), 1, "patched in place");
+        assert_eq!(cfg.devices[0].alias.as_deref(), Some("Desk speakers"), "untouched fields stay");
+        assert_eq!(cfg.apply_setting(&set(Some(SpatialMode::Keep), Some(""), Some(false)), &devs), Ok(true));
+        assert!(cfg.devices.is_empty(), "an all-default entry is removed");
+        let mic_spatial = Command::SetDevicePrefs {
+            device_id: "mic".into(),
+            spatial: Some(SpatialMode::DolbyAtmosHeadphones),
+            alias: None,
+            hidden: None,
+        };
+        assert!(cfg.apply_setting(&mic_spatial, &devs).is_err());
+    }
+
+    #[test]
+    fn favourites_knob_and_roles() {
+        let devs = owner_devices();
+        let mut cfg = Config::default();
+        let favs = Command::SetFavourites {
+            flow: Flow::Render,
+            device_ids: vec!["realtek".into(), "arctis".into(), "realtek".into()],
+        };
+        assert_eq!(cfg.apply_setting(&favs, &devs), Ok(true));
+        let names: Vec<_> = cfg.view(&devs).favourites_playback.into_iter().map(|d| d.name).collect();
+        assert_eq!(names, ["Speakers (Realtek(R) Audio)", "Headphones (Arctis Nova 7)"], "ordered, de-duplicated");
+        let wrong_flow = Command::SetFavourites { flow: Flow::Render, device_ids: vec!["mic".into()] };
+        assert!(cfg.apply_setting(&wrong_flow, &devs).is_err());
+        assert_eq!(cfg.apply_setting(&Command::SetKnobGestures { enabled: true }, &devs), Ok(true));
+        assert_eq!(cfg.apply_setting(&Command::SetDefaultRoles { roles: RoleSet::Both }, &devs), Ok(true));
+        assert!(cfg.view(&devs).knob_gestures);
+        assert_eq!(cfg.apply_setting(&Command::ToggleMute, &devs), Ok(false), "not a settings command");
     }
 }

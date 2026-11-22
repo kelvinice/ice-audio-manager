@@ -56,6 +56,7 @@
 - ✅ Engine contract (Claude, `phase-1/engine-api`): `ice_core::engine`: `Command`, `EngineSnapshot`, `Envelope { revision, event }`,
   `EngineEvent`, `Notice`, and the `Engine` trait. **Codex and Gemini: build against `ice_core::engine::fake::FakeEngine`** (owner's devices,
   no Windows calls) until `phase-1/engine` merges. Enable `ice-core/ts` in the app to export TypeScript bindings (camelCase, `type`-tagged).
+- ✅ Settings commands (Claude, `phase-1/config-commands`): `SetTogglePair`, `SetBinding`, `SetFavourites`, `SetDevicePrefs`, `SetKnobGestures`, `SetDefaultRoles` (+ removes), validated in `Config::apply_setting`, saved through the safe save path; `EngineSnapshot.settings` + `SettingsChanged`; `Notice::SettingRejected`. The tray can set up the owner's toggle pair without editing TOML.
 - ✅ 0.5 fullscreen spike (Codex): see [dual-monitor results](spikes/phase0-fullscreen.md). Phase 2 still needs to cover
   exclusive-mode transitions that can be missed by window notifications.
 

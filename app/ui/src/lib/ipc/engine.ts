@@ -47,6 +47,24 @@ export type VolumeState = {
  */
 percent: number, muted: boolean, };
 
+export type SavedDevice = {
+/**
+ * Name it was saved under, e.g. "Headphones (Arctis Nova 7)".
+ */
+name: string, flow: Flow,
+/**
+ * The live endpoint it resolves to right now (`None` = not connected or needs a choice).
+ */
+deviceId: string | null, };
+
+export type TogglePairView = { id: string, hotkey: string | null, primary: SavedDevice, secondary: SavedDevice, roles: RoleSet | null, };
+
+export type BindingView = { id: string, hotkey: string | null, device: SavedDevice, roles: RoleSet | null, };
+
+export type DevicePrefsView = { device: SavedDevice, spatial: SpatialMode, alias: string | null, hidden: boolean, };
+
+export type SettingsView = { defaultRoles: RoleSet, togglePairs: Array<TogglePairView>, bindings: Array<BindingView>, favouritesPlayback: Array<SavedDevice>, favouritesRecording: Array<SavedDevice>, devices: Array<DevicePrefsView>, knobGestures: boolean, };
+
 export type EngineSnapshot = { revision: number,
 /**
  * Active playback devices (ghosts excluded, D-16).
@@ -72,11 +90,15 @@ micVolume: number | null,
  * Problems that stay true until fixed (hotkey conflicts, config problems). A UI shows these after
  * (re)subscribing, instead of relying on replayed events (review ENG-08).
  */
-notices: Array<Notice>, };
+notices: Array<Notice>,
+/**
+ * The user's settings, resolved against the live devices.
+ */
+settings: SettingsView, };
 
-export type Command = { "type": "switchTo", deviceId: string, roles: RoleSet, } | { "type": "switchBinding", bindingId: string, } | { "type": "togglePair", pairId: string, } | { "type": "cycleFavourites", flow: Flow, step: number, } | { "type": "setVolume", percent: number, } | { "type": "stepVolume", delta: number, } | { "type": "toggleMute" } | { "type": "toggleMicMute" } | { "type": "setSpatial", deviceId: string, mode: SpatialMode, } | { "type": "resolveChoice", requestId: number, deviceId: string | null, } | { "type": "refresh" };
+export type Command = { "type": "switchTo", deviceId: string, roles: RoleSet, } | { "type": "switchBinding", bindingId: string, } | { "type": "togglePair", pairId: string, } | { "type": "cycleFavourites", flow: Flow, step: number, } | { "type": "setVolume", percent: number, } | { "type": "stepVolume", delta: number, } | { "type": "toggleMute" } | { "type": "toggleMicMute" } | { "type": "setSpatial", deviceId: string, mode: SpatialMode, } | { "type": "resolveChoice", requestId: number, deviceId: string | null, } | { "type": "refresh" } | { "type": "setTogglePair", pairId: string, primaryId: string, secondaryId: string, hotkey: string | null, roles: RoleSet | null, } | { "type": "removeTogglePair", pairId: string, } | { "type": "setBinding", bindingId: string, deviceId: string, hotkey: string | null, roles: RoleSet | null, } | { "type": "removeBinding", bindingId: string, } | { "type": "setFavourites", flow: Flow, deviceIds: Array<string>, } | { "type": "setDevicePrefs", deviceId: string, spatial: SpatialMode | null, alias: string | null, hidden: boolean | null, } | { "type": "setKnobGestures", enabled: boolean, } | { "type": "setDefaultRoles", roles: RoleSet, };
 
-export type Notice = { "type": "notConnected", name: string, } | { "type": "chooseDevice", requestId: number, name: string, candidates: Array<DeviceSummary>, } | { "type": "switchFailed", name: string, failedRoles: Array<Role>, } | { "type": "spatialUnavailable", name: string, mode: SpatialMode, reason: string, } | { "type": "hotkeyConflict", bindingId: string, keys: string, } | { "type": "configReplaced", backup: string, error: string, } | { "type": "configInvalid", error: string, } | { "type": "configSaveFailed", error: string, };
+export type Notice = { "type": "notConnected", name: string, } | { "type": "chooseDevice", requestId: number, name: string, candidates: Array<DeviceSummary>, } | { "type": "switchFailed", name: string, failedRoles: Array<Role>, } | { "type": "spatialUnavailable", name: string, mode: SpatialMode, reason: string, } | { "type": "hotkeyConflict", bindingId: string, keys: string, } | { "type": "configReplaced", backup: string, error: string, } | { "type": "configInvalid", error: string, } | { "type": "configSaveFailed", error: string, } | { "type": "settingRejected", error: string, };
 
 export type EngineEvent = { "type": "devicesChanged", playback: Array<DeviceSummary>, recording: Array<DeviceSummary>, } | { "type": "volumeChanged", volume: VolumeState, } | { "type": "micMuteChanged", muted: boolean, } | { "type": "micVolumeChanged", percent: number, } | { "type": "switched", device: DeviceSummary, roles: RoleSet,
 /**
@@ -86,6 +108,6 @@ relinked: boolean,
 /**
  * Set when a spatial format was applied and read back.
  */
-spatialApplied: SpatialMode | null, } | { "type": "deviceArrived", device: DeviceSummary, } | { "type": "deviceLeft", device: DeviceSummary, } | { "type": "notice", notice: Notice, } | { "type": "noticesChanged", notices: Array<Notice>, };
+spatialApplied: SpatialMode | null, } | { "type": "deviceArrived", device: DeviceSummary, } | { "type": "deviceLeft", device: DeviceSummary, } | { "type": "notice", notice: Notice, } | { "type": "noticesChanged", notices: Array<Notice>, } | { "type": "settingsChanged", settings: SettingsView, };
 
 export type Envelope = { revision: number, event: EngineEvent, };

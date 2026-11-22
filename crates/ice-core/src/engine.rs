@@ -112,6 +112,9 @@ pub struct EngineSnapshot {
     /// (re)subscribing, instead of relying on replayed events (review ENG-08).
     #[serde(default)]
     pub notices: Vec<Notice>,
+    /// The user's settings, resolved against the live devices.
+    #[serde(default)]
+    pub settings: SettingsView,
 }
 
 /// What the tray, hotkeys and UI ask the engine to do.
@@ -159,6 +162,106 @@ pub enum Command {
     },
     /// Re-enumerate and emit a fresh snapshot (rarely needed; the engine is event-driven).
     Refresh,
+
+    // ---- settings (saved to config.toml; result: `SettingsChanged` or `Notice::SettingRejected`) ----
+    /// Creates or replaces a toggle pair from two live devices. `hotkey` like `"Ctrl+Alt+F12"`; `None` = no hotkey.
+    SetTogglePair {
+        pair_id: String,
+        primary_id: String,
+        secondary_id: String,
+        hotkey: Option<String>,
+        roles: Option<RoleSet>,
+    },
+    RemoveTogglePair {
+        pair_id: String,
+    },
+    /// Creates or replaces a "switch to this device" hotkey.
+    SetBinding {
+        binding_id: String,
+        device_id: String,
+        hotkey: Option<String>,
+        roles: Option<RoleSet>,
+    },
+    RemoveBinding {
+        binding_id: String,
+    },
+    /// Replaces one flow's favourites, in order (live device IDs).
+    SetFavourites {
+        flow: Flow,
+        device_ids: Vec<String>,
+    },
+    /// Patches a device's preferences. `None` fields stay as they are; an empty `alias` clears it.
+    SetDevicePrefs {
+        device_id: String,
+        spatial: Option<SpatialMode>,
+        alias: Option<String>,
+        hidden: Option<bool>,
+    },
+    /// Turns the F31 knob gestures (Ctrl/Shift/Alt + knob) on or off.
+    SetKnobGestures {
+        enabled: bool,
+    },
+    /// Roles used by switches that don't specify their own.
+    SetDefaultRoles {
+        roles: RoleSet,
+    },
+}
+
+/// A saved device reference as the UI sees it.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(TS))]
+#[serde(rename_all = "camelCase")]
+pub struct SavedDevice {
+    /// Name it was saved under, e.g. "Headphones (Arctis Nova 7)".
+    pub name: String,
+    pub flow: Flow,
+    /// The live endpoint it resolves to right now (`None` = not connected or needs a choice).
+    pub device_id: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(TS))]
+#[serde(rename_all = "camelCase")]
+pub struct TogglePairView {
+    pub id: String,
+    pub hotkey: Option<String>,
+    pub primary: SavedDevice,
+    pub secondary: SavedDevice,
+    pub roles: Option<RoleSet>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(TS))]
+#[serde(rename_all = "camelCase")]
+pub struct BindingView {
+    pub id: String,
+    pub hotkey: Option<String>,
+    pub device: SavedDevice,
+    pub roles: Option<RoleSet>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(TS))]
+#[serde(rename_all = "camelCase")]
+pub struct DevicePrefsView {
+    pub device: SavedDevice,
+    pub spatial: SpatialMode,
+    pub alias: Option<String>,
+    pub hidden: bool,
+}
+
+/// The user's settings, resolved against the live devices. Built from `config.toml`; edit it with the settings commands.
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(TS))]
+#[serde(rename_all = "camelCase")]
+pub struct SettingsView {
+    pub default_roles: RoleSet,
+    pub toggle_pairs: Vec<TogglePairView>,
+    pub bindings: Vec<BindingView>,
+    pub favourites_playback: Vec<SavedDevice>,
+    pub favourites_recording: Vec<SavedDevice>,
+    pub devices: Vec<DevicePrefsView>,
+    pub knob_gestures: bool,
 }
 
 /// Something the user should be told about.
@@ -187,6 +290,8 @@ pub enum Notice {
     ConfigInvalid { error: String },
     /// An automatic save (e.g. a re-link) couldn't be written; the change only lasts until restart.
     ConfigSaveFailed { error: String },
+    /// A settings command was refused (unknown/disconnected device, invalid or duplicate hotkey…). Nothing changed.
+    SettingRejected { error: String },
 }
 
 /// Deltas. The notch maps these onto activities (switch, plug/unplug, volume, mic).
@@ -234,6 +339,10 @@ pub enum EngineEvent {
     NoticesChanged {
         notices: Vec<Notice>,
     },
+    /// Settings changed (a settings command, a hand edit of config.toml, a re-link) or a saved device (dis)connected.
+    SettingsChanged {
+        settings: SettingsView,
+    },
 }
 
 /// One delta with its revision.
@@ -266,10 +375,14 @@ pub mod fake {
         Command, DeviceSummary, Engine, EngineEvent, EngineSnapshot, Envelope, Notice, RoleSet, SpatialMode,
         VolumeState,
     };
+    use crate::config::Config;
+    use crate::device::EndpointInfo;
     use crate::device::{DeviceState, Flow};
 
     struct State {
         snap: EngineSnapshot,
+        /// A real config, edited with the real `Config::apply_setting` (same validation as the real engine).
+        config: Config,
         subscribers: Vec<Sender<Envelope>>,
     }
 
@@ -330,8 +443,35 @@ pub mod fake {
                 mic_muted: Some(false),
                 mic_volume: Some(80),
                 notices: Vec::new(),
+                settings: super::SettingsView::default(),
             };
-            Self { state: Mutex::new(State { snap, subscribers: Vec::new() }) }
+            let mut config = Config::default();
+            let eps = endpoints(&snap);
+            for cmd in [
+                Command::SetTogglePair {
+                    pair_id: "main".into(),
+                    primary_id: "fake-arctis".into(),
+                    secondary_id: "fake-realtek".into(),
+                    hotkey: Some("Ctrl+Alt+F12".into()),
+                    roles: None,
+                },
+                Command::SetDevicePrefs {
+                    device_id: "fake-arctis".into(),
+                    spatial: Some(SpatialMode::DolbyAtmosHeadphones),
+                    alias: None,
+                    hidden: None,
+                },
+                Command::SetFavourites {
+                    flow: crate::device::Flow::Render,
+                    device_ids: vec!["fake-arctis".into(), "fake-realtek".into()],
+                },
+                Command::SetKnobGestures { enabled: true },
+            ] {
+                let _ = config.apply_setting(&cmd, &eps);
+            }
+            let mut snap = snap;
+            snap.settings = config.view(&eps);
+            Self { state: Mutex::new(State { snap, config, subscribers: Vec::new() }) }
         }
 
         /// Simulates a device dropping out (e.g. headset powered off).
@@ -345,10 +485,42 @@ pub mod fake {
             dev.is_default_communications = false;
             dev.spatial = None;
             emit(&mut st, EngineEvent::DeviceLeft { device: dev });
+            refresh_settings(&mut st);
         }
 
         fn lock(&self) -> std::sync::MutexGuard<'_, State> {
             self.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+        }
+    }
+
+    /// Fake endpoints for the config code: one per visible device, with a unique fake hardware key.
+    fn endpoints(snap: &EngineSnapshot) -> Vec<EndpointInfo> {
+        snap.playback
+            .iter()
+            .chain(&snap.recording)
+            .map(|d| EndpointInfo {
+                id: d.id.clone(),
+                flow: d.flow,
+                state: d.state,
+                friendly_name: Some(d.name.clone()),
+                endpoint_name: d.name.split(" (").next().map(str::to_string),
+                interface_name: None,
+                devnode: None,
+                hardware_key: Some(format!("FAKE\\{}", d.id)),
+                container_id: None,
+                form_factor: d.form_factor,
+                stable_id: None,
+                default_for: Vec::new(),
+            })
+            .collect()
+    }
+
+    /// Recomputes the settings view; emits `SettingsChanged` only when it changed.
+    fn refresh_settings(st: &mut State) {
+        let view = st.config.view(&endpoints(&st.snap));
+        if view != st.snap.settings {
+            st.snap.settings = view.clone();
+            emit(st, EngineEvent::SettingsChanged { settings: view });
         }
     }
 
@@ -434,6 +606,21 @@ pub mod fake {
                     }
                     let (playback, recording) = (st.snap.playback.clone(), st.snap.recording.clone());
                     emit(&mut st, EngineEvent::DevicesChanged { playback, recording });
+                }
+                Command::SetTogglePair { .. }
+                | Command::RemoveTogglePair { .. }
+                | Command::SetBinding { .. }
+                | Command::RemoveBinding { .. }
+                | Command::SetFavourites { .. }
+                | Command::SetDevicePrefs { .. }
+                | Command::SetKnobGestures { .. }
+                | Command::SetDefaultRoles { .. } => {
+                    let eps = endpoints(&st.snap);
+                    match st.config.apply_setting(&command, &eps) {
+                        Ok(true) => refresh_settings(&mut st),
+                        Ok(false) => {}
+                        Err(error) => emit(&mut st, EngineEvent::Notice { notice: Notice::SettingRejected { error } }),
+                    }
                 }
                 Command::ResolveChoice { .. } | Command::Refresh => {
                     let (playback, recording) = (st.snap.playback.clone(), st.snap.recording.clone());
@@ -522,6 +709,8 @@ mod tests {
         assert!(
             matches!(next(&rx).event, EngineEvent::DeviceLeft { ref device } if device.state == DeviceState::NotPresent)
         );
+        // The saved toggle pair's headset is now disconnected.
+        assert!(matches!(next(&rx).event, EngineEvent::SettingsChanged { .. }));
         eng.send(Command::SwitchTo { device_id: "fake-arctis".into(), roles: RoleSet::Default });
         assert!(matches!(next(&rx).event, EngineEvent::Notice { notice: Notice::NotConnected { .. } }));
     }
@@ -548,5 +737,35 @@ mod tests {
         assert!(cmd.contains(r#""type": "switchTo""#) && cmd.contains("deviceId: string"), "{cmd}");
         let env = Envelope::decl(&cfg);
         assert!(env.contains("revision: number"), "{env}");
+    }
+
+    #[test]
+    fn fake_settings_commands_use_the_real_validation() {
+        let eng = FakeEngine::new();
+        let snap = eng.snapshot();
+        assert_eq!(snap.settings.toggle_pairs[0].hotkey.as_deref(), Some("Ctrl+Alt+F12"));
+        assert!(snap.settings.knob_gestures);
+        let rx = eng.subscribe();
+        eng.send(Command::SetBinding {
+            binding_id: "lg".into(),
+            device_id: "fake-lg".into(),
+            hotkey: Some("Ctrl+Alt+F12".into()),
+            roles: None,
+        });
+        assert!(matches!(next(&rx).event, EngineEvent::Notice { notice: Notice::SettingRejected { .. } }));
+        eng.send(Command::SetBinding {
+            binding_id: "lg".into(),
+            device_id: "fake-lg".into(),
+            hotkey: Some("Ctrl+Alt+F11".into()),
+            roles: None,
+        });
+        assert!(
+            matches!(next(&rx).event, EngineEvent::SettingsChanged { ref settings } if settings.bindings.len() == 1)
+        );
+        eng.simulate_unplug("fake-arctis");
+        let _left = next(&rx);
+        assert!(
+            matches!(next(&rx).event, EngineEvent::SettingsChanged { ref settings } if settings.toggle_pairs[0].primary.device_id.is_none())
+        );
     }
 }

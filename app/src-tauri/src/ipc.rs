@@ -84,7 +84,8 @@ mod tests {
 
     use ice_core::device::{DeviceState, Flow, Role};
     use ice_core::engine::{
-        Command, DeviceSummary, EngineEvent, EngineSnapshot, Envelope, Notice, RoleSet, SpatialMode, VolumeState,
+        BindingView, Command, DevicePrefsView, DeviceSummary, EngineEvent, EngineSnapshot, Envelope, Notice, RoleSet,
+        SavedDevice, SettingsView, SpatialMode, TogglePairView, VolumeState,
     };
 
     use super::*;
@@ -131,6 +132,16 @@ mod tests {
             &format!("export {}", DeviceSummary::decl(&cfg)),
             "",
             &format!("export {}", VolumeState::decl(&cfg)),
+            "",
+            &format!("export {}", SavedDevice::decl(&cfg)),
+            "",
+            &format!("export {}", TogglePairView::decl(&cfg)),
+            "",
+            &format!("export {}", BindingView::decl(&cfg)),
+            "",
+            &format!("export {}", DevicePrefsView::decl(&cfg)),
+            "",
+            &format!("export {}", SettingsView::decl(&cfg)),
             "",
             &format!("export {}", EngineSnapshot::decl(&cfg)),
             "",

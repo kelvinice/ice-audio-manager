@@ -466,7 +466,10 @@ impl PillState {
                     default_playback.and_then(|d| d.spatial).is_some_and(|s| s != ice_core::engine::SpatialMode::Off);
             }
             // Mic volume (Alt+knob, F31) has no pill state yet; the Phase 2 notch shows it.
-            EngineEvent::Notice { .. } | EngineEvent::MicVolumeChanged { .. } | EngineEvent::NoticesChanged { .. } => {}
+            EngineEvent::Notice { .. }
+            | EngineEvent::MicVolumeChanged { .. }
+            | EngineEvent::NoticesChanged { .. }
+            | EngineEvent::SettingsChanged { .. } => {}
         }
         EnvelopeOutcome::Updated
     }
