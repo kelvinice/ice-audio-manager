@@ -17,19 +17,29 @@ spikes/media      Phase 0.4 CLI: now playing via GSMTC (Spotify)
 app/              Tauri shell + Svelte UI (added in Phase 0.2 / Phase 1)
 ```
 
-## Build (Windows 11, from PowerShell, not Git Bash)
+## Build (Windows 11, cmd or PowerShell, not Git Bash)
 
-```powershell
-# Once per fresh clone/worktree: the Tauri crate embeds the built UI (gitignored `ui/dist`)
+Run each line on its own (no `;` chaining, which cmd doesn't support).
+
+Once per fresh clone/worktree, because the Tauri crate embeds the built UI (gitignored `ui/dist`):
+
+```
 npm --prefix spikes/overlay/ui ci
 npm --prefix spikes/overlay/ui run build
+```
 
+Build, test, and look around:
+
+```
 cargo build --workspace
 cargo test --workspace
 cargo run -p audio-spike -- list
 cargo run -p media-spike -- list
+```
 
-# Try the real engine with the owner's setup (Ctrl+Alt+F12 toggles Arctis ↔ Speakers)
+Try the real engine with the owner's setup (Ctrl+Alt+F12 toggles Arctis ↔ Speakers). These two don't need the UI build:
+
+```
 cargo run -p audio-spike -- make-config
 cargo run -p audio-spike -- engine
 ```

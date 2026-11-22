@@ -15,12 +15,19 @@ Steam Streaming virtual devices · keyboard with a **volume knob** (press = mute
 
 ## Setup
 
-```powershell
-# From the repo (PowerShell or cmd, not Git Bash). Fresh worktree only: build the UI once.
-npm --prefix spikes/overlay/ui ci; npm --prefix spikes/overlay/ui run build
-cargo run -p audio-spike -- make-config        # Arctis ↔ Speakers on Ctrl+Alt+F12, Atmos on Arctis, knob gestures on
-cargo run -p audio-spike -- engine spikes/audio/out/config.toml 600   # prints every engine event for 10 minutes
+From the repo folder, in **cmd or PowerShell** (not Git Bash). One command per line; the block has no comments, so it
+pastes safely into cmd:
+
 ```
+cargo run -p audio-spike -- make-config
+cargo run -p audio-spike -- engine spikes/audio/out/config.toml 600
+```
+
+1. `make-config` writes your setup: Arctis ↔ Speakers on **Ctrl+Alt+F12**, Atmos on the Arctis, knob gestures on.
+2. `engine … 600` prints every engine event for 10 minutes.
+
+These only build the audio tools. The UI build (`npm --prefix spikes/overlay/ui ci`, then
+`npm --prefix spikes/overlay/ui run build`, as two separate commands) is only needed to build the **whole** workspace.
 
 Keep the `engine` window visible. "Expect" lines refer to what it prints. In later phases the tray and notch must show the same thing.
 
