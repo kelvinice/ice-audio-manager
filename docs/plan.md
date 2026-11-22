@@ -118,7 +118,7 @@ Three agents work at once, each in **its own worktree** branched from the latest
 - [ ] Autostart behind an `ice-win` abstraction: HKCU Run (unpackaged) / `StartupTask` (MSIX). Start minimized, single instance
 - [ ] Logging: rotating file logs in `%LOCALAPPDATA%`, `--verbose` flag
 - [ ] CI: fmt, clippy, tests, build on `windows-latest`. Unsigned **portable zip** artifact for private use
-- [ ] Manual QA checklist (USB headset hot-plug, Bluetooth connect/disconnect, monitor sleep, duplicate device names)
+- [x] Manual QA checklist: [docs/qa/manual-checklist.md](qa/manual-checklist.md) (switching, reconnect, spatial, knob/hotkeys, hot reload, trust rules, footprint) with a run log. Phase 1 exit = sections A–G pass on the owner's machine
 
 **Exit criteria:** owner uses it as the daily switcher for 3 days with no crash. Budgets are met.
 No hook DLLs or LL hooks are visible in Process Explorer. **The Speakers ↔ Arctis hotkey keeps working after unplugging and

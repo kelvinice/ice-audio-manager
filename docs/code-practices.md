@@ -157,5 +157,5 @@ These are hard rules. A PR that breaks one is rejected, whatever else it does.
 - [ ] No rule in §1 violated; no new polling without a stop condition
 - [ ] New config fields have defaults, validation, docs; new CSS variables documented
 - [ ] Works at 100% and 150% display scaling; light and dark
-- [ ] Manual QA steps listed in the PR for hardware-dependent behaviour
+- [ ] Hardware-dependent behaviour checked against [docs/qa/manual-checklist.md](qa/manual-checklist.md) (relevant sections), results added to its run log
 - [ ] Docs updated (`plan.md` checkboxes ticked, README if user-facing)
