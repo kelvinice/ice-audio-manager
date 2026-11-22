@@ -19,7 +19,20 @@ app/              Tauri shell and Svelte notch/Settings preview
 
 ## Build (Windows 11, cmd or PowerShell, not Git Bash)
 
-Run each line on its own (no `;` chaining, which cmd doesn't support).
+**One click:** double-click `build.cmd` (or run it from a terminal):
+
+```
+build          release build of the app
+build debug    fast debug build
+build check    everything CI runs (UI check/tests, fmt, clippy -D warnings, all tests)
+build run      release build, then start the app
+```
+
+It installs UI packages when needed, finds `cargo` even in terminals opened before Rust was installed, closes a running copy
+of the same build first (Windows locks the exe), and stops at the first failing step. The first release build spends
+several minutes on the last step (full link-time optimisation on one core); `build debug` is much faster for trying changes.
+
+Or step by step. Run each line on its own (no `;` chaining, which cmd doesn't support).
 
 Once per fresh clone/worktree, because the Tauri crate embeds the built UI (gitignored `ui/dist`):
 
