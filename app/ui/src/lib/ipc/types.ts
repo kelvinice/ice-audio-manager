@@ -5,7 +5,7 @@ export type SpringPreset = "snappy" | "smooth" | "bouncy" | "off";
 
 export type ThemeKind = "ice" | "midnight" | "fluent" | "minimal";
 
-export type ActivityKind = "idle" | "volume" | "switch" | "mic_mute";
+export type ActivityKind = "idle" | "volume" | "switch" | "mic_mute" | "track";
 
 export type MonitorSummary = { index: number, id: string, isPrimary: boolean, width: number, height: number, scaleFactor: number, refreshHz: number, };
 

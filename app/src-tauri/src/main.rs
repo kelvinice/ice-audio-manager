@@ -57,6 +57,8 @@ struct SharedRuntime {
     settings_ready_tx: Mutex<Option<mpsc::SyncSender<Instant>>>,
     event_rendered_waiter: Mutex<Option<(u64, mpsc::SyncSender<Instant>)>>,
     native_dot: Mutex<Option<NativeDotHandle>>,
+    /// The last track seen, so only a *new* track wakes the notch (not position, status or art updates).
+    last_track: Mutex<Option<engine_bridge::TrackKey>>,
 }
 
 impl SharedRuntime {
@@ -90,6 +92,7 @@ impl SharedRuntime {
             monitors: summaries,
         };
         engine_bridge::project(initial, &mut snapshot);
+        let last_track = Mutex::new(initial.media.as_ref().map(engine_bridge::TrackKey::of));
         Self {
             engine,
             bench_mode,
@@ -117,6 +120,7 @@ impl SharedRuntime {
             settings_ready_tx: Mutex::new(None),
             event_rendered_waiter: Mutex::new(None),
             native_dot: Mutex::new(None),
+            last_track,
         }
     }
 

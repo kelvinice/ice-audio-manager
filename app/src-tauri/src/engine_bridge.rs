@@ -8,6 +8,7 @@ use ice_core::device::Flow;
 use ice_core::engine::{
     Command, DeviceSummary, Engine, EngineEvent, EngineSnapshot, Envelope, Notice, RoleSet, SpatialMode,
 };
+use ice_core::media::{NowPlaying, PlaybackStatus};
 use ice_win::audio_engine::AudioEngine;
 use tauri::{AppHandle, Emitter, Manager};
 
@@ -29,6 +30,36 @@ pub(super) fn project(snapshot: &EngineSnapshot, view: &mut NotchSnapshot) {
     view.volume_percent = snapshot.volume.map_or(0, |volume| volume.percent);
     view.muted = snapshot.volume.is_some_and(|volume| volume.muted);
     view.mic_muted = snapshot.mic_muted.unwrap_or(false);
+}
+
+/// What makes a track "new" for the notch: the app and the track's names (art and position don't count;
+/// some apps send the cover a moment after the title).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct TrackKey {
+    app_id: String,
+    title: String,
+    artist: String,
+    album: String,
+}
+
+impl TrackKey {
+    pub(super) fn of(m: &NowPlaying) -> Self {
+        Self { app_id: m.app_id.clone(), title: m.title.clone(), artist: m.artist.clone(), album: m.album.clone() }
+    }
+}
+
+/// Mirrors the UI's `isMediaActive`: something is (or is about to be) playing and has a name to show.
+fn media_active(m: &NowPlaying) -> bool {
+    !matches!(m.status, PlaybackStatus::Closed | PlaybackStatus::Stopped)
+        && !(m.title.trim().is_empty() && m.artist.trim().is_empty())
+}
+
+/// Remembers `media` in `last` and says whether it is a new, active track worth waking the notch for.
+fn is_new_track(last: &mut Option<TrackKey>, media: Option<&NowPlaying>) -> bool {
+    let key = media.map(TrackKey::of);
+    let changed = *last != key;
+    *last = key;
+    changed && media.is_some_and(media_active)
 }
 
 pub(super) fn preview_target(snapshot: &EngineSnapshot) -> Option<&DeviceSummary> {
@@ -234,11 +265,13 @@ fn apply_event(app: &AppHandle, state: &Arc<SharedRuntime>, delta: Envelope) {
             tray::show_notice(state, notice);
             None
         }
+        EngineEvent::MediaChanged { media } => {
+            let mut last = state.last_track.lock().unwrap_or_else(PoisonError::into_inner);
+            is_new_track(&mut last, media.as_ref()).then_some(ActivityKind::Track)
+        }
         EngineEvent::DevicesChanged { .. }
         | EngineEvent::NoticesChanged { .. }
-        | EngineEvent::SettingsChanged { .. }
-        // Track-change activity is Phase 3 UI work; the delta still reaches the notch/settings webviews below.
-        | EngineEvent::MediaChanged { .. } => None,
+        | EngineEvent::SettingsChanged { .. } => None,
     };
 
     let needs_webview = activity.is_some() && !state.bench_mode && state.placement().allows_webview();
@@ -289,6 +322,33 @@ mod tests {
     use std::sync::mpsc::{Receiver, channel};
 
     use super::*;
+
+    #[test]
+    fn only_a_new_active_track_wakes_the_notch() {
+        let track = |title: &str, status: PlaybackStatus| NowPlaying {
+            app_id: "Spotify.exe".into(),
+            title: title.into(),
+            artist: "Artist".into(),
+            album: "Album".into(),
+            status,
+            position_ms: Some(0),
+            duration_ms: Some(1000),
+            art: None,
+        };
+        let mut last = None;
+        assert!(is_new_track(&mut last, Some(&track("A", PlaybackStatus::Playing))));
+        // Position, status and late art don't count.
+        let mut later = track("A", PlaybackStatus::Paused);
+        later.position_ms = Some(500);
+        later.art =
+            Some(ice_core::media::ArtInfo { id: "x".into(), width: 1, height: 1, accent: ice_core::media::ICE_ACCENT });
+        assert!(!is_new_track(&mut last, Some(&later)));
+        assert!(is_new_track(&mut last, Some(&track("B", PlaybackStatus::Playing))));
+        // A stopped session or none at all is not a track to show.
+        assert!(!is_new_track(&mut last, Some(&track("C", PlaybackStatus::Stopped))));
+        assert!(!is_new_track(&mut last, None));
+        assert!(is_new_track(&mut last, Some(&track("C", PlaybackStatus::Playing))));
+    }
 
     struct DroppedSubscriber(AtomicU64);
 

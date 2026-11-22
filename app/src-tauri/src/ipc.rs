@@ -26,6 +26,8 @@ pub enum ActivityKind {
     Volume,
     Switch,
     MicMute,
+    /// A new track started (wakes the notch; the UI's scheduler draws the track-change activity).
+    Track,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]

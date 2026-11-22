@@ -142,14 +142,14 @@ export function isMediaActive(media: NowPlaying | null | undefined): media is No
   return media.title.trim().length > 0 || media.artist.trim().length > 0;
 }
 
+/**
+ * Same app and track names. Art doesn't count: some apps send the cover a moment after the title, and that
+ * must update the current track activity in place rather than replay the track-change animation.
+ * (Matches the shell's `TrackKey`, which decides when to wake the notch.)
+ */
 export function isSameTrack(a: NowPlaying | null | undefined, b: NowPlaying | null | undefined): boolean {
   if (!a || !b) return false;
-  return (
-    a.title === b.title &&
-    a.artist === b.artist &&
-    a.album === b.album &&
-    (a.art?.id ?? null) === (b.art?.id ?? null)
-  );
+  return a.appId === b.appId && a.title === b.title && a.artist === b.artist && a.album === b.album;
 }
 
 export function toMsNumber(value: number | bigint | null | undefined): number | null {
