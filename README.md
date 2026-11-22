@@ -20,10 +20,18 @@ app/              Tauri shell + Svelte UI (added in Phase 0.2 / Phase 1)
 ## Build (Windows 11, from PowerShell, not Git Bash)
 
 ```powershell
+# Once per fresh clone/worktree: the Tauri crate embeds the built UI (gitignored `ui/dist`)
+npm --prefix spikes/overlay/ui ci
+npm --prefix spikes/overlay/ui run build
+
 cargo build --workspace
 cargo test --workspace
 cargo run -p audio-spike -- list
 cargo run -p media-spike -- list
+
+# Try the real engine with the owner's setup (Ctrl+Alt+F12 toggles Arctis ↔ Speakers)
+cargo run -p audio-spike -- make-config
+cargo run -p audio-spike -- engine
 ```
 
 ## License
