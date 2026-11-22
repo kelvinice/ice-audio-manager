@@ -185,7 +185,7 @@ games on the pinned monitor. Budgets met in every profile.
 - [ ] Theme system: bundled `Ice` (default, portfolio palette), `Midnight`, `Fluent`, `Minimal`. User themes = CSS files in
       `%APPDATA%\IceAudioManager\themes\` overriding documented `--ice-*` tokens, **validated before applying**, with **live preview**
 - [ ] Strict CSP: a theme with remote `url()`/`@import` produces zero network requests (verified)
-- [ ] Documented theme API (`docs/theming.md`): every token, its default, an example theme
+- [x] Documented theme API (`docs/theming.md`): every token, its default, an example theme
 - [ ] Import/export config + theme bundle (`.zip`)
 - [ ] Every setting applies live without restart
 
