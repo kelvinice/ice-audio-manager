@@ -194,7 +194,7 @@
     // Preserve --bench driver compatibility when NotchSnapshot changes outside EngineEvent.
     if (next.hiddenForBench) {
       benchOverride = null;
-    } else if (next.activity !== prevActivity && (next.eventSeq > prevSeq || next.activity === 'idle')) {
+    } else if (next.eventSeq > prevSeq || (next.activity !== prevActivity && next.activity === 'idle')) {
       if (next.activity === 'idle') {
         benchOverride = null;
       } else if (engineState.activity.kind === 'idle') {
@@ -250,7 +250,6 @@
   }
 
   function applyEngineEnvelope(delta: Envelope) {
-    benchOverride = null;
     const res = scheduler.applyEnvelope(delta, Date.now());
     if (res.status === 'needs_resnapshot') {
       void resnapshotEngine();
@@ -260,9 +259,12 @@
       return;
     }
     engineState = { ...scheduler.state };
-    syncGeometry(false);
-    scheduleNextTick();
-    if (notchSnapshot && !notchSnapshot.suspended && notchSnapshot.eventSeq > lastReportedSeq) {
+    if (res.wokeActivity || delta.event.type === 'devicesChanged') {
+      benchOverride = null;
+      syncGeometry(false);
+      scheduleNextTick();
+    }
+    if (res.wokeActivity && notchSnapshot && !notchSnapshot.suspended && notchSnapshot.eventSeq > lastReportedSeq) {
       acknowledgeRenderedSeq(notchSnapshot.eventSeq);
     }
   }

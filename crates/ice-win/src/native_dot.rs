@@ -346,6 +346,10 @@ pub enum PillMode {
         percent: u8,
         muted: bool,
     },
+    MicVolume {
+        percent: u8,
+        muted: bool,
+    },
     MicMute {
         muted: bool,
     },
@@ -369,6 +373,7 @@ pub enum EnvelopeOutcome {
 pub struct PillState {
     pub revision: u64,
     pub volume: Option<VolumeState>,
+    pub mic_volume: Option<u8>,
     pub mic_muted: bool,
     pub active_device: Option<String>,
     pub spatial_active: bool,
@@ -389,6 +394,7 @@ impl PillState {
         Self {
             revision: 0,
             volume: None,
+            mic_volume: None,
             mic_muted: false,
             active_device: None,
             spatial_active: false,
@@ -409,6 +415,7 @@ impl PillState {
     pub fn apply_snapshot(&mut self, snapshot: &EngineSnapshot) {
         self.revision = snapshot.revision;
         self.volume = snapshot.volume.map(|v| VolumeState { percent: v.percent.min(100), muted: v.muted });
+        self.mic_volume = snapshot.mic_volume.map(|p| p.min(100));
         self.mic_muted = snapshot.mic_muted.unwrap_or(false);
         let default_playback = snapshot.playback.iter().find(|d| d.is_default).or_else(|| snapshot.playback.first());
         self.active_device = default_playback.map(|d| d.name.clone());
@@ -431,6 +438,11 @@ impl PillState {
                 let normalized = VolumeState { percent: volume.percent.min(100), muted: volume.muted };
                 self.volume = Some(normalized);
                 self.mode = PillMode::Volume { percent: normalized.percent, muted: normalized.muted };
+            }
+            EngineEvent::MicVolumeChanged { percent } => {
+                let pct = (*percent).min(100);
+                self.mic_volume = Some(pct);
+                self.mode = PillMode::MicVolume { percent: pct, muted: self.mic_muted };
             }
             EngineEvent::MicMuteChanged { muted } => {
                 self.mic_muted = *muted;
@@ -465,11 +477,8 @@ impl PillState {
                 self.spatial_active =
                     default_playback.and_then(|d| d.spatial).is_some_and(|s| s != ice_core::engine::SpatialMode::Off);
             }
-            // Mic volume (Alt+knob, F31) has no pill state yet; the Phase 2 notch shows it.
-            EngineEvent::Notice { .. }
-            | EngineEvent::MicVolumeChanged { .. }
-            | EngineEvent::NoticesChanged { .. }
-            | EngineEvent::SettingsChanged { .. } => {}
+            // Notices and settings sync silently without waking the pill.
+            EngineEvent::Notice { .. } | EngineEvent::NoticesChanged { .. } | EngineEvent::SettingsChanged { .. } => {}
         }
         EnvelopeOutcome::Updated
     }
@@ -743,6 +752,7 @@ impl NativeDotHandle {
             let is_activity = matches!(
                 envelope.event,
                 EngineEvent::VolumeChanged { .. }
+                    | EngineEvent::MicVolumeChanged { .. }
                     | EngineEvent::MicMuteChanged { .. }
                     | EngineEvent::Switched { .. }
                     | EngineEvent::DeviceArrived { .. }
@@ -803,6 +813,7 @@ impl NativeDotHandle {
                             let is_activity = matches!(
                                 env.event,
                                 EngineEvent::VolumeChanged { .. }
+                                    | EngineEvent::MicVolumeChanged { .. }
                                     | EngineEvent::MicMuteChanged { .. }
                                     | EngineEvent::Switched { .. }
                                     | EngineEvent::DeviceArrived { .. }
@@ -1065,7 +1076,7 @@ impl Drop for BitmapGuard {
 const fn logical_dimensions(mode: PillMode) -> (i32, i32) {
     match mode {
         PillMode::Idle => (IDLE_W, IDLE_H),
-        PillMode::Volume { .. } => (VOLUME_W, VOLUME_H),
+        PillMode::Volume { .. } | PillMode::MicVolume { .. } => (VOLUME_W, VOLUME_H),
         PillMode::MicMute { .. } => (MIC_W, MIC_H),
         PillMode::DeviceEvent { .. } => (DEVICE_W, DEVICE_H),
     }
@@ -1161,14 +1172,14 @@ pub(crate) fn rasterize_pill_frame(pixels: &mut [u32], w: i32, h: i32, scale: f3
     let (rim_color, rim_strength) = match state.mode {
         PillMode::Idle if state.mic_muted => (state.theme.danger, 0.78),
         PillMode::Idle => (state.theme.rim, 0.40),
-        PillMode::Volume { muted: true, .. } => (state.theme.danger, 0.78),
+        PillMode::Volume { muted: true, .. } | PillMode::MicVolume { muted: true, .. } => (state.theme.danger, 0.78),
         PillMode::MicMute { muted: true } | PillMode::DeviceEvent { is_removal: true, .. } => {
             (state.theme.danger, 0.85)
         }
         PillMode::MicMute { muted: false } => (state.theme.ok, 0.75),
-        PillMode::Volume { muted: false, .. } | PillMode::DeviceEvent { is_removal: false, .. } => {
-            (state.theme.rim, 0.70)
-        }
+        PillMode::Volume { muted: false, .. }
+        | PillMode::MicVolume { muted: false, .. }
+        | PillMode::DeviceEvent { is_removal: false, .. } => (state.theme.rim, 0.70),
     };
     let (rim_r, rim_g, rim_b, rim_a) = rim_color.as_f32_rgba();
 
@@ -1181,7 +1192,7 @@ pub(crate) fn rasterize_pill_frame(pixels: &mut [u32], w: i32, h: i32, scale: f3
 
     match state.mode {
         PillMode::Idle => {}
-        PillMode::Volume { percent, muted } => {
+        PillMode::Volume { percent, muted } | PillMode::MicVolume { percent, muted } => {
             label_buf = if muted { "MUTE".to_string() } else { format!("{}%", percent.min(100)) };
             label_str = &label_buf;
             label_x = 141.0;
@@ -1260,6 +1271,13 @@ pub(crate) fn rasterize_pill_frame(pixels: &mut [u32], w: i32, h: i32, scale: f3
                     if state.mic_muted {
                         let badge_cov = smooth_cov(sd_circle(lx, ly, lw - 8.0, 7.5, 2.0), aa);
                         blend_over(&mut cr, &mut cg, &mut cb, dng_r, dng_g, dng_b, badge_cov);
+                    }
+                }
+                PillMode::MicVolume { muted, .. } => {
+                    let (icon_cov, is_slash) = mic_icon_cov(lx, ly, 20.0, cy, muted, aa);
+                    if icon_cov > 0.0 {
+                        let (ir, ig, ib) = if muted && is_slash { (dng_r, dng_g, dng_b) } else { (fg_r, fg_g, fg_b) };
+                        blend_over(&mut cr, &mut cg, &mut cb, ir, ig, ib, icon_cov);
                     }
                 }
                 PillMode::MicMute { muted } => {
@@ -1614,6 +1632,8 @@ mod tests {
         st.mic_muted = mic_muted;
         if let PillMode::Volume { percent, muted } = mode {
             st.volume = Some(VolumeState { percent, muted });
+        } else if let PillMode::MicVolume { percent, .. } = mode {
+            st.mic_volume = Some(percent);
         }
         let (lw, lh) = logical_dimensions(mode);
         let w = (lw as f32 * scale).round() as i32;
@@ -1785,5 +1805,75 @@ mod tests {
 
         drop(engine);
         sub.join();
+    }
+
+    #[test]
+    fn mic_volume_updates_pill_and_silent_events_do_not_wake() {
+        let eng = FakeEngine::new();
+        let snap = eng.snapshot();
+        let mut pill = PillState::from_snapshot(&snap, NativePillTheme::ice());
+        assert_eq!(pill.mic_volume, snap.mic_volume.map(|p| p.min(100)));
+
+        // MicVolumeChanged enters MicVolume mode while preserving current mic_muted flag.
+        let mut rev = snap.revision + 1;
+        let out1 =
+            pill.apply_envelope(&Envelope { revision: rev, event: EngineEvent::MicVolumeChanged { percent: 64 } });
+        assert_eq!(out1, EnvelopeOutcome::Updated);
+        assert_eq!(pill.mic_volume, Some(64));
+        assert_eq!(pill.mode, PillMode::MicVolume { percent: 64, muted: false });
+
+        rev += 1;
+        let _ = pill.apply_envelope(&Envelope { revision: rev, event: EngineEvent::MicMuteChanged { muted: true } });
+        rev += 1;
+        let _ = pill.apply_envelope(&Envelope { revision: rev, event: EngineEvent::MicVolumeChanged { percent: 38 } });
+        assert_eq!(pill.mic_volume, Some(38));
+        assert_eq!(pill.mode, PillMode::MicVolume { percent: 38, muted: true });
+
+        // MicVolume rasterizer renders distinct mic glyph vs speaker glyph, and muted vs unmuted mic volume.
+        let (_, _, px_vol) =
+            render_test(PillMode::Volume { percent: 64, muted: false }, NativePillTheme::ice(), false, 1.0);
+        let (_, _, px_mic) =
+            render_test(PillMode::MicVolume { percent: 64, muted: false }, NativePillTheme::ice(), false, 1.0);
+        let (_, _, px_mic_muted) =
+            render_test(PillMode::MicVolume { percent: 64, muted: true }, NativePillTheme::ice(), true, 1.0);
+        assert_ne!(px_vol, px_mic);
+        assert_ne!(px_mic, px_mic_muted);
+
+        // NoticesChanged and SettingsChanged advance revision without revealing a hidden pill or overriding mode.
+        let dot = NativeDotHandle::spawn(test_monitor(1.0)).expect("spawn native dot window");
+        dot.apply_snapshot(&snap);
+        assert!(!dot.is_visible());
+
+        let mut dot_rev = snap.revision + 1;
+        let out_notices = dot.apply_envelope(&Envelope {
+            revision: dot_rev,
+            event: EngineEvent::NoticesChanged {
+                notices: vec![ice_core::engine::Notice::NotConnected { name: "Headset".into() }],
+            },
+        });
+        assert_eq!(out_notices, EnvelopeOutcome::Updated);
+        assert_eq!(dot.pill_state().mode, PillMode::Idle);
+        assert!(!dot.is_visible());
+
+        dot_rev += 1;
+        let out_settings = dot.apply_envelope(&Envelope {
+            revision: dot_rev,
+            event: EngineEvent::SettingsChanged { settings: snap.settings },
+        });
+        assert_eq!(out_settings, EnvelopeOutcome::Updated);
+        assert_eq!(dot.pill_state().mode, PillMode::Idle);
+        assert!(!dot.is_visible());
+
+        dot_rev += 1;
+        let out_mic_vol =
+            dot.apply_envelope(&Envelope { revision: dot_rev, event: EngineEvent::MicVolumeChanged { percent: 75 } });
+        assert_eq!(out_mic_vol, EnvelopeOutcome::Updated);
+        assert_eq!(dot.pill_state().mode, PillMode::MicVolume { percent: 75, muted: false });
+
+        let deadline = std::time::Instant::now() + Duration::from_secs(2);
+        while !dot.is_visible() {
+            assert!(std::time::Instant::now() < deadline, "timed out waiting for MicVolumeChanged reveal");
+            thread::sleep(Duration::from_millis(5));
+        }
     }
 }

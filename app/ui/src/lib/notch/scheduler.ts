@@ -5,6 +5,7 @@ import type {
   Envelope,
   Notice,
   RoleSet,
+  SettingsView,
   SpatialMode,
   VolumeState,
 } from '../ipc/engine.ts';
@@ -63,6 +64,7 @@ export interface NotchSchedulerState {
   micMuted: boolean | null;
   micVolume: number | null;
   notices: Notice[];
+  settings: SettingsView | null;
   activeDevice: DeviceSummary | null;
   targetDevice: DeviceSummary | null;
   activeMic: DeviceSummary | null;
@@ -174,6 +176,7 @@ export class NotchActivityScheduler {
       micMuted: null,
       micVolume: null,
       notices: [],
+      settings: null,
       activeDevice: null,
       targetDevice: null,
       activeMic: null,
@@ -198,6 +201,7 @@ export class NotchActivityScheduler {
       micMuted: snapshot.micMuted,
       micVolume: snapshot.micVolume,
       notices: snapshot.notices,
+      settings: snapshot.settings,
       activeDevice,
       targetDevice,
       activeMic,
@@ -328,7 +332,7 @@ export class NotchActivityScheduler {
           device: effectiveDevice,
           relinked: ev.relinked,
           mergedPlug,
-          spatialBadge: formatSpatialBadge(ev.spatialApplied ?? ev.device.spatial),
+          spatialBadge: formatSpatialBadge(ev.spatialApplied),
           switchSeq: ++this.seqCounter,
           expiresAtMs: nowMs + SWITCH_DURATION_MS,
         };
@@ -407,8 +411,12 @@ export class NotchActivityScheduler {
         return { status: 'applied', wokeActivity: false };
       }
 
-      case 'notice':
       case 'settingsChanged': {
+        this.state.settings = ev.settings;
+        return { status: 'applied', wokeActivity: false };
+      }
+
+      case 'notice': {
         return { status: 'applied', wokeActivity: false };
       }
     }

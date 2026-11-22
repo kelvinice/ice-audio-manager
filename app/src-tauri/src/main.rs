@@ -852,7 +852,7 @@ fn spawn_settings_and_wait(app: &AppHandle, state: &Arc<SharedRuntime>) -> Resul
         .inner_size(560.0, 420.0)
         .resizable(false)
         .visible(true)
-        .data_directory(state.wv2_data_dir.clone())
+        .data_directory(state.settings_wv2_data_dir.clone())
         .build()
         .map_err(|e| e.to_string())?;
 
@@ -1245,18 +1245,25 @@ fn main() {
 }
 
 fn run() -> Result<(), Box<dyn std::error::Error>> {
-    let Some(_instance) = InstanceGuard::acquire()? else {
-        return Ok(());
-    };
     let args: Vec<String> = std::env::args().collect();
     let bench_mode = args.iter().any(|a| a == "--bench");
+    let _instance = if bench_mode {
+        None
+    } else {
+        let Some(guard) = InstanceGuard::acquire()? else {
+            return Ok(());
+        };
+        Some(guard)
+    };
     let sample_secs: u64 = flag_value(&args, "--sample-secs").and_then(|s| s.parse().ok()).unwrap_or(10);
     let out_path = PathBuf::from(flag_value(&args, "--out").unwrap_or_else(|| "app/out/bench.json".to_string()));
 
     let show_notch = args.iter().any(|arg| arg == "--show-notch") && !args.iter().any(|arg| arg == "--start-minimized");
     let app_data =
         PathBuf::from(std::env::var_os("LOCALAPPDATA").ok_or("LOCALAPPDATA is unavailable")?).join("IceAudioManager");
-    logging::init(&app_data.join("logs"), args.iter().any(|arg| arg == "--verbose"))?;
+    if !bench_mode {
+        logging::init(&app_data.join("logs"), args.iter().any(|arg| arg == "--verbose"))?;
+    }
 
     let monitors = list_monitors().unwrap_or_default();
     let fake_engine = bench_mode || args.iter().any(|arg| arg == "--fake-engine");

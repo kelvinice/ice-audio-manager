@@ -182,6 +182,7 @@ test('deviceArrived and switched for same device merge into a single switch noti
   sched2.applyEnvelope({ revision: 3, event: { type: 'deviceArrived', device: usbDac } }, 700);
   const sw2 = expectActivity(sched2, 'switch');
   assert.equal(sw2.mergedPlug, true);
+  assert.equal(sw2.spatialBadge, null);
 });
 
 test('deviceLeft removes endpoint and triggers left plug activity', () => {
@@ -218,4 +219,58 @@ test('micMuteChanged leaves persistent static indicator on idle and schedules Tr
 
   const sus = sched.tick(25_000 + IDLE_SUSPEND_LINGER_MS, false);
   assert.equal(sus.shouldRequestSuspend, true);
+});
+
+test('noticesChanged and settingsChanged sync snapshot state silently without waking activity', () => {
+  const initialIdleMs = 1000;
+  const sched = new NotchActivityScheduler(initialIdleMs);
+  const snap = sampleSnapshot();
+  snap.settings = {
+    ...snap.settings,
+    togglePairs: [
+      {
+        id: 'main',
+        hotkey: 'Ctrl+Alt+F12',
+        primary: { name: 'Headphones (Arctis Nova 7)', flow: 'render', deviceId: 'fake-arctis' },
+        secondary: { name: 'Speakers (Realtek(R) Audio)', flow: 'render', deviceId: 'fake-realtek' },
+        roles: 'default',
+      },
+    ],
+  };
+  snap.notices = [{ type: 'notConnected', name: 'Old Device' }];
+
+  sched.applySnapshot(snap, initialIdleMs);
+  assert.deepEqual(sched.state.settings, snap.settings);
+  assert.deepEqual(sched.state.notices, snap.notices);
+
+  const noticesRes = sched.applyEnvelope(
+    { revision: 2, event: { type: 'noticesChanged', notices: [{ type: 'hotkeyConflict', bindingId: 'main', keys: 'Ctrl+Alt+F12' }] } },
+    1500,
+  );
+  assert.equal(noticesRes.status, 'applied');
+  assert.equal(noticesRes.wokeActivity, false);
+  assert.equal(sched.state.activity.kind, 'idle');
+  assert.equal(sched.state.idleSinceMs, initialIdleMs);
+  assert.deepEqual(sched.state.notices, [{ type: 'hotkeyConflict', bindingId: 'main', keys: 'Ctrl+Alt+F12' }]);
+
+  const disconnectedSettings = {
+    ...snap.settings,
+    togglePairs: [
+      {
+        ...snap.settings.togglePairs[0],
+        primary: { ...snap.settings.togglePairs[0].primary, deviceId: null },
+      },
+    ],
+  };
+  const playbackBefore = sched.state.playback;
+  const settingsRes = sched.applyEnvelope(
+    { revision: 3, event: { type: 'settingsChanged', settings: disconnectedSettings } },
+    2000,
+  );
+  assert.equal(settingsRes.status, 'applied');
+  assert.equal(settingsRes.wokeActivity, false);
+  assert.equal(sched.state.activity.kind, 'idle');
+  assert.equal(sched.state.idleSinceMs, initialIdleMs);
+  assert.equal(sched.state.playback, playbackBefore);
+  assert.equal(sched.state.settings?.togglePairs[0]?.primary.deviceId, null);
 });
