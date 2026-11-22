@@ -167,6 +167,21 @@ pub fn resolve<'a>(r: &DeviceRef, endpoints: &'a [EndpointInfo]) -> Resolution<'
         ([one], []) => Resolution::Relinked(one),
         ([], [one]) => Resolution::NeedsConfirmation(one),
         ([], []) => Resolution::NotConnected,
+        // Several identical devices: the one still in the saved container is the same physical unit.
+        (several, []) if several.len() > 1 => {
+            let same_unit: Vec<&EndpointInfo> = several
+                .iter()
+                .copied()
+                .filter(|e| {
+                    eq_ci(real_container(r.container_id.as_deref()), real_container(e.container_id.as_deref()))
+                        == Some(true)
+                })
+                .collect();
+            match same_unit.as_slice() {
+                [one] => Resolution::Relinked(one),
+                _ => Resolution::Ambiguous,
+            }
+        }
         _ => Resolution::Ambiguous,
     }
 }
@@ -190,8 +205,10 @@ fn classify_candidates<'a>(r: &DeviceRef, live: &[&'a EndpointInfo]) -> (Vec<&'a
     let anchored = |e: &&&EndpointInfo| {
         let hw = eq_ci(r.hardware_key.as_deref(), e.hardware_key.as_deref());
         let ct = eq_ci(real_container(r.container_id.as_deref()), real_container(e.container_id.as_deref()));
-        // A known container that differs is a different physical unit, even for the same model.
-        hw == Some(true) && ct != Some(false) || ct == Some(true) && hw != Some(false)
+        // The hardware key alone anchors a match. The container does NOT disqualify: Windows gives a USB device
+        // without a serial number a new container on every port (owner's Arctis dongle, 2026-11-22, QA B3).
+        // It only breaks ties between identical devices (see `resolve`).
+        hw == Some(true) || (ct == Some(true) && hw != Some(false))
     };
     // Logical endpoint: a headset's "Headphones" output must not re-link onto its "Headset" (hands-free) output.
     let logical = |e: &EndpointInfo| -> Option<bool> {
@@ -416,11 +433,32 @@ mod tests {
     }
 
     #[test]
-    fn different_unit_of_same_model_is_not_relinked() {
-        // Same hardware key, but a known, different container = another physical headset.
+    fn new_port_with_new_container_relinks() {
+        // Owner's QA B3 (2026-11-22): the Arctis dongle on another USB port got a new endpoint ID, a new stable ID
+        // and a new container (8EC256AB… → F94FF25C…). Same model + same logical endpoint = the same headset.
         let saved = DeviceRef::from_endpoint(&arctis("old", DeviceState::Active), MatchMode::SameModel);
-        let list = vec![ep(
-            "b",
+        let mut moved = ep(
+            "new",
+            DeviceState::Active,
+            Flow::Render,
+            "Headphones",
+            "Arctis Nova 7",
+            ARCTIS_DEV_OTHER_PORT,
+            "{F94FF25C-0000-0000-0000-000000000002}",
+            3,
+        );
+        moved.stable_id = Some("stable-new".into());
+        let list = vec![arctis("old", DeviceState::NotPresent), moved, realtek("r", DeviceState::Active), arctis_mic()];
+        assert_eq!(resolve(&saved, &list), Resolution::Relinked(&list[1]));
+    }
+
+    #[test]
+    fn container_breaks_the_tie_between_identical_headsets() {
+        let saved = DeviceRef::from_endpoint(&arctis("old", DeviceState::Active), MatchMode::SameModel);
+        let mut mine = arctis("mine", DeviceState::Active); // still in the saved container
+        mine.stable_id = None;
+        let mut other = ep(
+            "other",
             DeviceState::Active,
             Flow::Render,
             "Headphones",
@@ -428,8 +466,10 @@ mod tests {
             ARCTIS_DEV_OTHER_PORT,
             "{OTHER}",
             3,
-        )];
-        assert_eq!(resolve(&saved, &list), Resolution::NotConnected);
+        );
+        other.stable_id = None;
+        let list = vec![other, mine];
+        assert_eq!(resolve(&saved, &list), Resolution::Relinked(&list[1]));
     }
 
     #[test]

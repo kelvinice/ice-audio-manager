@@ -12,6 +12,7 @@
 //! audio-spike hotkeys [seconds]            F31 knob test: registers Ctrl/Shift/Alt + volume keys, prints presses
 //! audio-spike make-config [path]           write the owner's setup (Arctis ↔ Speakers on Ctrl+Alt+F12, Atmos, knob)
 //! audio-spike engine [path] [seconds]      run the real engine with that config and print its events
+//! audio-spike resolve [path]              read-only: how each saved device in the config resolves right now
 //! ```
 //! Config path defaults to `spikes/audio/out/config.toml` (gitignored).
 //! `<device>` = an endpoint ID, or a case-insensitive part of the name of an *Active* endpoint.
@@ -60,12 +61,41 @@ fn run() -> AnyResult<()> {
         ),
         "hotkeys" => hotkeys(arg(1).and_then(|s| s.parse().ok()).unwrap_or(30)),
         "make-config" => make_config(&eps, arg(1).unwrap_or(DEFAULT_CONFIG)),
+        "resolve" => resolve_saved(&eps, arg(1).unwrap_or(DEFAULT_CONFIG)),
         "engine" => run_engine(arg(1).unwrap_or(DEFAULT_CONFIG), arg(2).and_then(|s| s.parse().ok()).unwrap_or(120)),
         other => Err(format!("unknown command `{other}` (see the header of spikes/audio/src/main.rs)").into()),
     }
 }
 
 const DEFAULT_CONFIG: &str = "spikes/audio/out/config.toml";
+
+/// Read-only diagnostic: resolves every saved reference against the live endpoints. Changes nothing.
+fn resolve_saved(eps: &Endpoints, path: &str) -> AnyResult<()> {
+    use ice_core::config::Config;
+    use ice_core::resolve::{Resolution, resolve};
+    let cfg = Config::from_toml(&std::fs::read_to_string(path)?)?;
+    let live = eps.list(true)?;
+    let mut refs: Vec<(String, ice_core::resolve::DeviceRef)> = Vec::new();
+    for p in &cfg.toggle_pairs {
+        refs.push((format!("pair {} primary", p.id), p.primary.clone()));
+        refs.push((format!("pair {} secondary", p.id), p.secondary.clone()));
+    }
+    refs.extend(cfg.bindings.iter().map(|b| (format!("binding {}", b.id), b.device.clone())));
+    refs.extend(cfg.devices.iter().map(|d| ("device prefs".to_string(), d.device.clone())));
+    refs.extend(cfg.favourites.playback.iter().map(|r| ("favourite".to_string(), r.clone())));
+    for (what, r) in refs {
+        let res = match resolve(&r, &live) {
+            Resolution::Exact(e) => format!("Exact            → {}", e.id),
+            Resolution::StableId(e) => format!("StableId (moved) → {}", e.id),
+            Resolution::Relinked(e) => format!("Relinked (moved) → {}", e.id),
+            Resolution::NeedsConfirmation(e) => format!("ask the user     → {}?", e.id),
+            Resolution::Ambiguous => "Ambiguous (picker)".to_string(),
+            Resolution::NotConnected => "NOT CONNECTED".to_string(),
+        };
+        println!("{what:<22} {:<32} {res}", r.display_name);
+    }
+    Ok(())
+}
 
 /// Writes the owner's workflow as a config: toggle pair Arctis (primary) ↔ Realtek speakers on Ctrl+Alt+F12,
 /// Dolby Atmos applied when switching to the Arctis, both as favourites, knob gestures on.
