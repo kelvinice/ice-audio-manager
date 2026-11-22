@@ -47,6 +47,28 @@ export type VolumeState = {
  */
 percent: number, muted: boolean, };
 
+export type MediaAction = "playPause" | "play" | "pause" | "next" | "previous";
+
+export type PlaybackStatus = "playing" | "paused" | "stopped" | "changing" | "opened" | "closed";
+
+export type Rgb = { r: number, g: number, b: number, };
+
+export type ArtInfo = {
+/**
+ * Content hash of the downscaled image; stable across re-reads of the same art.
+ */
+id: string, width: number, height: number,
+/**
+ * Readable accent colour derived from the art.
+ */
+accent: Rgb, };
+
+export type NowPlaying = {
+/**
+ * Source app, e.g. `Spotify.exe`.
+ */
+appId: string, title: string, artist: string, album: string, status: PlaybackStatus, positionMs: bigint | null, durationMs: bigint | null, art: ArtInfo | null, };
+
 export type SavedDevice = {
 /**
  * Name it was saved under, e.g. "Headphones (Arctis Nova 7)".
@@ -94,13 +116,17 @@ notices: Array<Notice>,
 /**
  * The user's settings, resolved against the live devices.
  */
-settings: SettingsView, };
+settings: SettingsView,
+/**
+ * What's playing (Windows' current media session), `None` when nothing is.
+ */
+media: NowPlaying | null, };
 
-export type Command = { "type": "switchTo", deviceId: string, roles: RoleSet, } | { "type": "switchBinding", bindingId: string, } | { "type": "togglePair", pairId: string, } | { "type": "cycleFavourites", flow: Flow, step: number, } | { "type": "setVolume", percent: number, } | { "type": "stepVolume", delta: number, } | { "type": "toggleMute" } | { "type": "toggleMicMute" } | { "type": "setSpatial", deviceId: string, mode: SpatialMode, } | { "type": "resolveChoice", requestId: number, deviceId: string | null, } | { "type": "refresh" } | { "type": "setTogglePair", pairId: string, primaryId: string, secondaryId: string, hotkey: string | null, roles: RoleSet | null, } | { "type": "removeTogglePair", pairId: string, } | { "type": "setBinding", bindingId: string, deviceId: string, hotkey: string | null, roles: RoleSet | null, } | { "type": "removeBinding", bindingId: string, } | { "type": "setFavourites", flow: Flow, deviceIds: Array<string>, } | { "type": "setDevicePrefs", deviceId: string, spatial: SpatialMode | null, alias: string | null, hidden: boolean | null, } | { "type": "setKnobGestures", enabled: boolean, } | { "type": "setDefaultRoles", roles: RoleSet, };
+export type Command = { "type": "switchTo", deviceId: string, roles: RoleSet, } | { "type": "switchBinding", bindingId: string, } | { "type": "togglePair", pairId: string, } | { "type": "cycleFavourites", flow: Flow, step: number, } | { "type": "setVolume", percent: number, } | { "type": "stepVolume", delta: number, } | { "type": "toggleMute" } | { "type": "toggleMicMute" } | { "type": "media", action: MediaAction, } | { "type": "setSpatial", deviceId: string, mode: SpatialMode, } | { "type": "resolveChoice", requestId: number, deviceId: string | null, } | { "type": "refresh" } | { "type": "setTogglePair", pairId: string, primaryId: string, secondaryId: string, hotkey: string | null, roles: RoleSet | null, } | { "type": "removeTogglePair", pairId: string, } | { "type": "setBinding", bindingId: string, deviceId: string, hotkey: string | null, roles: RoleSet | null, } | { "type": "removeBinding", bindingId: string, } | { "type": "setFavourites", flow: Flow, deviceIds: Array<string>, } | { "type": "setDevicePrefs", deviceId: string, spatial: SpatialMode | null, alias: string | null, hidden: boolean | null, } | { "type": "setKnobGestures", enabled: boolean, } | { "type": "setDefaultRoles", roles: RoleSet, };
 
 export type Notice = { "type": "notConnected", name: string, } | { "type": "chooseDevice", requestId: number, name: string, candidates: Array<DeviceSummary>, } | { "type": "switchFailed", name: string, failedRoles: Array<Role>, } | { "type": "spatialUnavailable", name: string, mode: SpatialMode, reason: string, } | { "type": "hotkeyConflict", bindingId: string, keys: string, } | { "type": "configReplaced", backup: string, error: string, } | { "type": "configInvalid", error: string, } | { "type": "configSaveFailed", error: string, } | { "type": "settingRejected", error: string, };
 
-export type EngineEvent = { "type": "devicesChanged", playback: Array<DeviceSummary>, recording: Array<DeviceSummary>, } | { "type": "volumeChanged", volume: VolumeState, } | { "type": "micMuteChanged", muted: boolean, } | { "type": "micVolumeChanged", percent: number, } | { "type": "switched", device: DeviceSummary, roles: RoleSet,
+export type EngineEvent = { "type": "devicesChanged", playback: Array<DeviceSummary>, recording: Array<DeviceSummary>, } | { "type": "volumeChanged", volume: VolumeState, } | { "type": "micMuteChanged", muted: boolean, } | { "type": "micVolumeChanged", percent: number, } | { "type": "mediaChanged", media: NowPlaying | null, } | { "type": "switched", device: DeviceSummary, roles: RoleSet,
 /**
  * The binding followed the device to a new endpoint ID (shown as a caption, one notice).
  */

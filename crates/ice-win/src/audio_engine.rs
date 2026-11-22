@@ -837,6 +837,8 @@ impl Worker {
                 }
             }
             Command::Refresh => self.refresh(true),
+            // Wired to the GSMTC worker in `phase-3/media-engine`; until then the real engine has no media.
+            Command::Media { action } => tracing::debug!(?action, "media command ignored (media not wired yet)"),
             Command::SetTogglePair { .. }
             | Command::RemoveTogglePair { .. }
             | Command::SetBinding { .. }

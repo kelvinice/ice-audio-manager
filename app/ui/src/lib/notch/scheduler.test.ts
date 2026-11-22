@@ -68,6 +68,7 @@ function sampleSnapshot(): EngineSnapshot {
       devices: [],
       knobGestures: false,
     },
+    media: null,
   };
 }
 

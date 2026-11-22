@@ -93,7 +93,8 @@ fn retry_start<T>(
 }
 
 enum Update {
-    Snapshot(EngineSnapshot),
+    // Boxed: the snapshot (devices, settings, media) is much larger than a delta.
+    Snapshot(Box<EngineSnapshot>),
     Delta(Envelope),
 }
 
@@ -102,7 +103,7 @@ fn follow(engine: &dyn Engine, mut publish: impl FnMut(Update) -> bool) {
         let events = engine.subscribe();
         let snapshot = engine.snapshot();
         let initial_revision = snapshot.revision;
-        if !publish(Update::Snapshot(snapshot)) {
+        if !publish(Update::Snapshot(Box::new(snapshot))) {
             return;
         }
         let mut revision = 0;
@@ -227,7 +228,9 @@ fn apply_event(app: &AppHandle, state: &Arc<SharedRuntime>, delta: Envelope) {
         }
         EngineEvent::DevicesChanged { .. }
         | EngineEvent::NoticesChanged { .. }
-        | EngineEvent::SettingsChanged { .. } => None,
+        | EngineEvent::SettingsChanged { .. }
+        // Track-change activity is Phase 3 UI work; the delta still reaches the notch/settings webviews below.
+        | EngineEvent::MediaChanged { .. } => None,
     };
 
     let waking = activity.is_some()

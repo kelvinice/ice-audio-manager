@@ -478,7 +478,10 @@ impl PillState {
                     default_playback.and_then(|d| d.spatial).is_some_and(|s| s != ice_core::engine::SpatialMode::Off);
             }
             // Notices and settings sync silently without waking the pill.
-            EngineEvent::Notice { .. } | EngineEvent::NoticesChanged { .. } | EngineEvent::SettingsChanged { .. } => {}
+            EngineEvent::Notice { .. }
+            | EngineEvent::NoticesChanged { .. }
+            | EngineEvent::SettingsChanged { .. }
+            | EngineEvent::MediaChanged { .. } => {}
         }
         EnvelopeOutcome::Updated
     }

@@ -419,6 +419,11 @@ export class NotchActivityScheduler {
       case 'notice': {
         return { status: 'applied', wokeActivity: false };
       }
+
+      // Phase 3: the track-change activity will hook in here; for now the delta only advances the revision.
+      case 'mediaChanged': {
+        return { status: 'applied', wokeActivity: false };
+      }
     }
   }
 

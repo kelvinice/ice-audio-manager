@@ -5,8 +5,11 @@
 //! colour meets WCAG AA (4.5:1) on the notch background (Gemini's D-12 refinement).
 
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "ts")]
+use ts_rs::TS;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(TS))]
 #[serde(rename_all = "camelCase")]
 pub enum PlaybackStatus {
     Playing,
@@ -18,6 +21,7 @@ pub enum PlaybackStatus {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(TS))]
 pub struct Rgb {
     pub r: u8,
     pub g: u8,
@@ -44,6 +48,7 @@ pub const ICE_ACCENT: Rgb = Rgb::new(0x6b, 0xc5, 0xff);
 
 /// Album art, downscaled and cached by content hash (served to the UI as `iceart://<id>`).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(TS))]
 #[serde(rename_all = "camelCase")]
 pub struct ArtInfo {
     /// Content hash of the downscaled image; stable across re-reads of the same art.
@@ -55,6 +60,7 @@ pub struct ArtInfo {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(TS))]
 #[serde(rename_all = "camelCase")]
 pub struct NowPlaying {
     /// Source app, e.g. `Spotify.exe`.

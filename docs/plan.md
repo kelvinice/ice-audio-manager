@@ -44,14 +44,17 @@
 | 0.6 | Compare results with the budgets. Record go/no-go on D-01 and the D-15 default profile | All | Tables in the Decision Log |
 | 0.7 | Tag `legacy-python-v0`, remove the Python app, scaffold the workspace (D-03) with typed IPC codegen. **Untrack `.env`** (`git rm --cached`, add to `.gitignore`), add an MIT `LICENSE` file | Claude | Buildable skeleton + CI green |
 
+**Phase 0 status: ✅ complete (2026-11-22).** All of 0.1–0.7 are done; the notes below are kept as the record.
+
 **Progress (2026-11-22):**
+- ✅ 0.1 owner sign-off of D-01–D-17; ✅ 0.6 D-15.1 closed on the measurements (A: WebView notch + `TrySuspend`).
 - ✅ 0.3 audio + spatial spike and ✅ 0.4 media spike (Claude): see [docs/spikes/phase0-audio-media.md](spikes/phase0-audio-media.md).
-  Remaining: the owner runs `audio-spike watch` while replugging the Arctis (5 min) to record ID churn.
+  ID churn recorded by the owner: power-cycle and same-port replug keep the IDs; a **different port** gives new endpoint,
+  stable and container IDs (fixed in the resolver, QA B3/B4 ✅). Sleep/resume (QA B5) still to run.
 - ✅ 0.7 (Claude): `legacy-python-v0` tag, Python removed, `.env` untracked, MIT `LICENSE`, Rust workspace (`ice-core`, `ice-win`, spikes),
-  CI (fmt, clippy `-D warnings`, test, release build). **Not yet:** Tauri `app/` scaffold + typed IPC codegen. These belong with the 0.2
-  overlay spike (Gemini + Codex), which creates `app/`.
+  CI (fmt, clippy `-D warnings`, test, release build). The Tauri `app/` scaffold and typed IPC codegen came with Codex's `app-shell`.
 - ✅ 0.2 overlay spike + measurements (Gemini): `spikes/overlay` + [docs/spikes/phase0-overlay.md](spikes/phase0-overlay.md).
-  60 s release numbers: native dot `2.20 MB` Private Bytes (`0.000%` CPU, `0.02 ms` p95); warm/hidden WebView2 `149.84–150.39 MB` Private Bytes (`77.10–76.79 MB` Private WS); `TrySuspend` `148.01 MB` Private Bytes / **`6.44 MB` Private WS** (`27.24 ms` p95 resume); cold WebView2 spawn **`715.44 ms` p95**; 0 leaked PIDs on destroy. **D-15 strict gate verdict: Gate 3 → Option C** (native Direct2D/DirectComposition notch + lazy WebView2 Settings), with the `TrySuspend` Private WS (`6.44 MB`) vs Private Bytes (`148–167 MB`) owner option documented before Phase 2.
+  60 s release numbers: native dot `2.20 MB` Private Bytes (`0.000%` CPU, `0.02 ms` p95); warm/hidden WebView2 `149.84–150.39 MB` Private Bytes (`77.10–76.79 MB` Private WS); `TrySuspend` `148.01 MB` Private Bytes / **`6.44 MB` Private WS** (`27.24 ms` p95 resume); cold WebView2 spawn **`715.44 ms` p95**; 0 leaked PIDs on destroy. The strict D-15 gate pointed at Option C; **D-15.1 then chose A** (WebView notch + `TrySuspend`, budgets in private working set), with C as the fallback.
 - ✅ D-16 resolver (Claude): `ice_core::resolve` (`DeviceRef`, `resolve`, `toggle`), 12 tests built from the owner's real endpoints.
 - ✅ Engine contract (Claude, `phase-1/engine-api`): `ice_core::engine`: `Command`, `EngineSnapshot`, `Envelope { revision, event }`,
   `EngineEvent`, `Notice`, and the `Engine` trait. **Codex and Gemini: build against `ice_core::engine::fake::FakeEngine`** (owner's devices,
@@ -101,25 +104,33 @@ Three agents work at once, each in **its own worktree** branched from the latest
 
 **Goal:** a daily-drivable, tray-only switcher that is already better than v1. **Features:** F01–F07.
 
-- [ ] `ice-win::audio`: endpoint model (id, name, alias, flow, state, form factor/icon, is_default per role, virtual badge)
-- [ ] **`DeviceRef` + resolver (D-16):** endpoint ID first; else a unique fingerprint match among **Active** endpoints → re-link and
-      persist + notify; ambiguous → picker; missing → "not connected" message. Unit-tested in `ice-core` with fixtures built from the
-      owner's real endpoint list (duplicate ghosts, Sonar virtual devices, BT hands-free pairs)
-- [ ] **Toggle-pair hotkey** (Speakers ↔ Arctis) with one-click setup. This is the owner's primary workflow
-- [ ] Ghost endpoints hidden by default; "Show disconnected" toggle
-- [ ] `ice-win::audio`: device change notifications → `ice-core` events (debounced, coalesced)
-- [ ] `ice-win::policy`: switch default. **`Default` = Console + Multimedia; `Both` = all three roles** for the selected flow.
-      Treat each role change as observable. If one fails or the endpoint disappears mid-switch, re-read defaults and report which roles changed
-- [ ] `ice-win::hotkeys`: `RegisterHotKey` on a hidden message window; conflict detection + user-facing error
-- [x] `ice-core::config`: TOML schema v1, load/validate/migrate, atomic save, **event-driven hot reload** (`ice_win::file_watch`; verified live 2026-11-22). Still open: external-edit conflict detection on save
-      (bad reload → keep last valid config + show error), explicit portable mode
-- [ ] Tray: left-click quick-switch menu (outputs, separator, inputs, checkmarks), right-click full menu, tooltip shows current device.
+**Status (2026-11-22):** feature-complete in `main`; the exit criteria (3 days of daily use, QA A–G) are the owner's to run.
+
+- [x] `ice-win::audio`: endpoint model (id, stable id, names, flow, state, form factor, hardware key, container, default per role, virtual badge)
+- [x] **`DeviceRef` + resolver (D-16):** endpoint ID → stable ID → hardware + logical-endpoint match among **Active** endpoints;
+      re-link persisted after a confirmed switch; ambiguous → picker (`ChooseDevice`); missing → `NotConnected`. Tested with the
+      owner's real endpoints, incl. the new-USB-port case (QA B3/B4 ✅)
+- [x] **Toggle-pair hotkey** (Speakers ↔ Arctis) with one-click setup from the tray ("Toggle with the current device…")
+- [x] Ghost endpoints hidden by default
+- [ ] "Show disconnected devices" toggle (AudioSwitcher v1 parity)
+- [x] `ice-win::audio`: device change notifications → engine events (sliding, capped debounce)
+- [x] `ice-win::policy`: switch default. `Default` = Console + Multimedia; `Both` = all three roles. Defaults are re-read after
+      every switch; partial failures are reported per role
+- [x] `ice-win::hotkeys`: `RegisterHotKey` on a dedicated message-loop thread (thread-level, no hook); conflicts reported as notices
+- [x] `ice-core::config`: TOML schema v1, validation, atomic save with lock retries, **event-driven hot reload**, invalid edits keep
+      the last valid config + notice, external edits adopted before automatic saves
+- [ ] Explicit portable mode (`portable.flag` next to the exe)
+- [x] Settings commands so the tray configures pairs, hotkeys, favourites, per-device spatial/alias/hidden and knob gestures without TOML
+- [x] Tray (Codex): left-click quick-switch menu, right-click full menu, tooltip with the current device, notices and the device picker.
       (Scroll-on-icon was cut by D-05.F05.)
-- [ ] Favourites + cycle hotkey; hide devices; aliases; show disabled/disconnected toggles
-- [ ] Autostart behind an `ice-win` abstraction: HKCU Run (unpackaged) / `StartupTask` (MSIX). Start minimized, single instance
-- [ ] Logging: rotating file logs in `%LOCALAPPDATA%`, `--verbose` flag
-- [x] CI: fmt, clippy, tests, build on `windows-latest`. Unsigned **portable zip** artifact for private use
-- [x] Manual QA checklist: [docs/qa/manual-checklist.md](qa/manual-checklist.md) (switching, reconnect, spatial, knob/hotkeys, hot reload, trust rules, footprint) with a run log. Phase 1 exit = sections A–G pass on the owner's machine
+- [x] Favourites + cycle hotkey; hide devices; aliases
+- [x] Knob gestures (F31): Ctrl+turn = next device per gesture, Shift+turn = 1% steps, Alt+turn = mic volume
+- [x] Autostart (launch at sign-in), `--start-minimized`, single instance (Codex)
+- [x] Logging: file logs in `%LOCALAPPDATA%\IceAudioManager\logs`, `--verbose` (Codex)
+- [x] Engine start-up recovery: tray stays up and retries if the audio service isn't ready; event stream resubscribes (Codex, SHELL-01/02)
+- [x] CI: fmt, clippy, tests, UI check/test/build on `windows-latest`. Unsigned **portable zip** artifact for private use
+- [x] Manual QA checklist: [docs/qa/manual-checklist.md](qa/manual-checklist.md) with a run log
+- [ ] **Exit:** owner's 3 days of daily use + QA sections A–G through the tray (B5 sleep/resume still to run)
 
 **Exit criteria:** owner uses it as the daily switcher for 3 days with no crash. Budgets are met.
 No hook DLLs or LL hooks are visible in Process Explorer. **The Speakers ↔ Arctis hotkey keeps working after unplugging and
@@ -131,28 +142,27 @@ replugging the dongle in a different USB port, power-cycling the headset, restar
 
 **Goal:** add the notch to the private daily-use build (D-06). **Features:** F08–F14.
 
-- [ ] Notch window: **exactly one** transparent window, moved between monitors with `SetWindowPos`, DPI-aware (per-monitor v2)
-- [ ] **Performance profiles (D-15):** `Instant` (WebView always warm) · `Balanced` (WebView created on activity, released after
-      a linger, default 60 s) · `Lite` (no notch WebView; native dot + tray only). Default per the Phase 0.2 result
-- [ ] **Native idle dot/pill** (Direct2D/GDI layered window, ~1–2 MB est.) drawn whenever the WebView is released. It reacts within
-      one frame to any event, and the WebView takes over seamlessly once ready
-- [ ] **Gaming mode:** auto while a fullscreen app runs on the notch's monitor (or manual). The notch WebView stays released and
-      **events do not recreate it** until gaming mode ends
-- [ ] Activity Scheduler in `ice-core`: priorities, min/max durations, merge rules (repeat volume ticks extend one activity;
-      a plug event merges with the resulting switch to the same device), snapshot + delta with monotonic revisions
-- [ ] Activities: **Volume** (percent and mute glyph update instantly, only the fill springs, no entry pulse on repeats),
-      **Device switch** (reveal the confirmed new endpoint), **Plug/unplug**, **Mic mute** (distinct mic glyph, not colour alone;
-      one entrance pulse, then a static indicator)
-- [ ] Interactions: hover-intent expand (120 ms), 250 ms leave grace, scroll = volume, Shift+scroll = switch device, middle-click = mute
-- [ ] Placement: **pinned monitor is the default** (owner has 2 screens), remembered by display path. While it's disconnected, fall
-      back to primary and return when it reconnects. Primary / cursor modes as options
-- [ ] Idle state: **default = small visible notch** (dot or mini pill, picked from mockups over light and dark content at 100%/150%) (Q-10).
-      `hidden` remains an option (clock idle mode was cut by D-05.F21)
-- [ ] Springs: custom `(k, c, m)` module; presets Snappy / Smooth / Bouncy (retuned to ~8% overshoot) / Off (**instant, no fade**).
-      Windows "Animation effects" off forces Off. Identical feel at 144 Hz and 75 Hz
-- [ ] **Spatial sound on switch (D-17, experimental, only if the 0.3 spike succeeded):** per-device "On switch" action
-      (keep / Off / Windows Sonic / Dolby Atmos / DTS), re-applied after a D-16 re-link; "Atmos" badge in the switch activity;
-      clear message + fallback to `keep` when a format isn't available (e.g. Dolby Access not set up)
+**Status (2026-11-22):** activities, scheduler, springs, interactions and the wake hand-off are in `main` (Gemini). Placement,
+gaming mode and the user-selectable profiles still need wiring into the app shell.
+
+- [ ] Notch window: **exactly one** transparent window, moved between monitors with `SetWindowPos`, DPI-aware (per-monitor v2).
+      Building blocks in `ice_win::overlay_win`/`monitors`; app wiring with placement below
+- [ ] **Performance profiles (D-15.1):** `Instant` (WebView warm, `TrySuspend` when idle) · `Balanced` (suspend, not destroy) · `Lite`
+      (no notch WebView; native dot + tray only), user-selectable. `TrySuspend` wake hand-off ✅; the profile setting isn't built yet
+- [x] **Native idle dot/pill** drawn when the WebView is suspended/released: live volume %, mute, mic volume and theme colours (Gemini)
+- [ ] **Gaming mode:** auto while a fullscreen app runs on the notch's monitor (or manual); WebView released and not recreated by events.
+      `ice_win::fullscreen::FullscreenWatcher` (event-driven) ✅; app wiring open
+- [x] Activity scheduler: priorities, durations, merge rules, snapshot + delta with monotonic revisions. Lives in `app/ui`
+      (`scheduler.ts`, tested) rather than `ice-core`
+- [x] Activities: **Volume**, **Mic volume**, **Device switch** (with "re-linked" caption and the Atmos badge only after Windows
+      confirms), **Plug/unplug**, **Mic mute**
+- [x] Interactions: hover-intent expand, scroll = volume, Shift+scroll = switch device, middle-click = mute (`NotchApp.svelte`)
+- [ ] Placement: **pinned monitor is the default**, remembered by display path; fall back to primary while it's disconnected.
+      Display-path resolver in `ice_win::monitors` ✅; app wiring open
+- [ ] Idle state: **default = small visible notch** (dot or mini pill, picked from mockups) (Q-10); `hidden` remains an option
+- [x] Springs: custom `(k, c, m)` module; Snappy / Smooth / Bouncy (~8% overshoot) / Off (instant); identical at 75/144/240 Hz (tested)
+- [x] **Spatial sound on switch (D-17):** per-device preference applied after a confirmed switch (read-before-write, read-back),
+      re-applied after a re-link, Atmos badge, `SpatialUnavailable` notice; set from the tray's "Spatial sound" submenu
 - [ ] Visual QA against Codex mockups at 100%/125%/150%/200% scaling; WCAG contrast check of text over light and dark desktops
 
 **Exit criteria:** hardware volume keys, notch scroll and hotkeys all animate correctly. No focus stealing. Hidden over fullscreen
@@ -171,13 +181,15 @@ games on the pinned monitor. Budgets met in every profile.
   commands, and an art pipeline using Windows' own imaging API: decode, Fant downscale to ≤ 128 px, content-hash id
   for `iceart://`, accent, PNG.
 - Measured with Spotify: session read ~5 ms, timeline event → read ~4 ms, art pipeline 34–60 ms (debug build).
-- **Not yet:** wiring into the engine contract (`NowPlaying` in the snapshot, media events, media commands). That
-  waits until Codex's `phase-1/real-engine` and Gemini's `phase-2/notch-activities` merge, so their builds don't
-  break mid-work.
+- Gemini's [media review](reviews/media-review.md) (MED-01–MED-10) is being fixed in `phase-3/media-engine`.
+- Media contract (`phase-3/media-api`, Claude): `EngineSnapshot.media`, `EngineEvent::MediaChanged`, `Command::Media { action }`,
+  `Engine::art(id)`; the fake engine simulates three Spotify tracks with art so UI work can start.
 
-- [ ] `ice-win::media`: GSMTC manager, session tracking (pick the "current" session sensibly when several play), timeline, playback status
-- [ ] Album art pipeline: thumbnail stream → downscale in Rust (128 px) → cache by hash → served via a scoped `iceart://<id>` handler.
-      Extract the accent in Rust and clamp it for contrast. Fall back to the brand accent when art is unavailable
+- [x] `ice-win::media`: GSMTC manager, current-session tracking, timeline, playback status, transport commands (event-driven)
+- [x] Media contract in the engine API, with a fake implementation
+- [ ] Real engine wiring: dedicated media worker thread, coalesced signals, bounded WinRT waits (MED fixes)
+- [ ] Album art: downscale (≤ 128 px) + content hash + readable accent ✅; review fixes (bounds, EXIF, straight alpha, composited-surface
+      contrast) and the scoped `iceart://<id>` handler in the app shell are open
 - [ ] Activities: **Track change** (art + labels crossfade in fixed slots; controls never move; accent glow transition), compact **Now playing** idle state
 - [ ] Expanded notch: media card (art, title, artist, scrubber, prev/play/next) + device switcher row. Hold expansion while the pointer moves into controls
 - [ ] Visualizer: `IAudioMeterInformation` peaks at ≤ 30 Hz, subscribed **only while visible**, rendered as 4–6 bars with fast-attack/slow-decay springs

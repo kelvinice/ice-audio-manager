@@ -16,6 +16,7 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use crate::device::{DeviceState, Flow, Role};
+use crate::media::NowPlaying;
 
 /// Which default roles a switch sets (D-05, F02).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -57,6 +58,18 @@ pub enum SpatialMode {
     DtsHeadphoneX,
     DtsXUltra,
     DtsXHomeTheater,
+}
+
+/// Transport control for the current media session (Spotify, browser, …).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(TS))]
+#[serde(rename_all = "camelCase")]
+pub enum MediaAction {
+    PlayPause,
+    Play,
+    Pause,
+    Next,
+    Previous,
 }
 
 /// A device as the UI sees it.
@@ -115,6 +128,9 @@ pub struct EngineSnapshot {
     /// The user's settings, resolved against the live devices.
     #[serde(default)]
     pub settings: SettingsView,
+    /// What's playing (Windows' current media session), `None` when nothing is.
+    #[serde(default)]
+    pub media: Option<NowPlaying>,
 }
 
 /// What the tray, hotkeys and UI ask the engine to do.
@@ -150,6 +166,10 @@ pub enum Command {
     },
     ToggleMute,
     ToggleMicMute,
+    /// Play/pause/next/previous on the current media session.
+    Media {
+        action: MediaAction,
+    },
     SetSpatial {
         device_id: String,
         mode: SpatialMode,
@@ -315,6 +335,11 @@ pub enum EngineEvent {
     MicVolumeChanged {
         percent: u8,
     },
+    /// Track, playback state, position or art changed (or the media session went away: `None`).
+    /// Album art bytes: `Engine::art(art.id)` (the app serves them as `iceart://<id>`).
+    MediaChanged {
+        media: Option<NowPlaying>,
+    },
     /// A switch the user asked for completed and was confirmed by re-reading the defaults.
     Switched {
         device: DeviceSummary,
@@ -363,6 +388,11 @@ pub trait Engine: Send + Sync {
     fn send(&self, command: Command);
     /// A new event stream. Subscribe *before* reading the snapshot.
     fn subscribe(&self) -> std::sync::mpsc::Receiver<Envelope>;
+    /// Album-art PNG for an `ArtInfo::id` from the snapshot or a `MediaChanged` event (recent tracks only).
+    fn art(&self, id: &str) -> Option<Vec<u8>> {
+        let _ = id;
+        None
+    }
 }
 
 pub mod fake {
@@ -371,16 +401,43 @@ pub mod fake {
     use std::sync::Mutex;
     use std::sync::mpsc::{Receiver, Sender, channel};
 
+    use super::MediaAction;
     use super::{
         Command, DeviceSummary, Engine, EngineEvent, EngineSnapshot, Envelope, Notice, RoleSet, SpatialMode,
         VolumeState,
     };
     use crate::config::Config;
     use crate::device::EndpointInfo;
+    use crate::media::{ArtInfo, NowPlaying, PlaybackStatus, Rgb};
+
+    /// A 16×16 Ice-blue gradient, so UI work has a real image to style.
+    const FAKE_ART_PNG: &[u8] = include_bytes!("fake_art.png");
+    /// (artist, title, album, duration s, accent) — distinct accents so track changes are visible.
+    const FAKE_TRACKS: [(&str, &str, &str, u64, Rgb); 3] = [
+        ("Coldplay", "Higher Power", "Music Of The Spheres", 211, Rgb::new(0x6b, 0xc5, 0xff)),
+        ("Ariana Grande", "One Last Time", "My Everything (Deluxe)", 197, Rgb::new(0xf0, 0x8a, 0xc8)),
+        ("Daft Punk", "Instant Crush", "Random Access Memories", 337, Rgb::new(0xf2, 0xb8, 0x4b)),
+    ];
+
+    fn fake_track(i: usize, status: PlaybackStatus) -> NowPlaying {
+        let (artist, title, album, secs, accent) = FAKE_TRACKS[i % FAKE_TRACKS.len()];
+        NowPlaying {
+            app_id: "Spotify.exe".into(),
+            title: title.into(),
+            artist: artist.into(),
+            album: album.into(),
+            status,
+            position_ms: Some(52_000),
+            duration_ms: Some(secs * 1000),
+            art: Some(ArtInfo { id: format!("fake-art-{}", i % FAKE_TRACKS.len()), width: 16, height: 16, accent }),
+        }
+    }
     use crate::device::{DeviceState, Flow};
 
     struct State {
         snap: EngineSnapshot,
+        /// Index into `FAKE_TRACKS`.
+        track: usize,
         /// A real config, edited with the real `Config::apply_setting` (same validation as the real engine).
         config: Config,
         subscribers: Vec<Sender<Envelope>>,
@@ -444,6 +501,7 @@ pub mod fake {
                 mic_volume: Some(80),
                 notices: Vec::new(),
                 settings: super::SettingsView::default(),
+                media: Some(fake_track(0, PlaybackStatus::Paused)),
             };
             let mut config = Config::default();
             let eps = endpoints(&snap);
@@ -471,7 +529,7 @@ pub mod fake {
             }
             let mut snap = snap;
             snap.settings = config.view(&eps);
-            Self { state: Mutex::new(State { snap, config, subscribers: Vec::new() }) }
+            Self { state: Mutex::new(State { snap, track: 0, config, subscribers: Vec::new() }) }
         }
 
         /// Simulates a device dropping out (e.g. headset powered off).
@@ -622,6 +680,27 @@ pub mod fake {
                         Err(error) => emit(&mut st, EngineEvent::Notice { notice: Notice::SettingRejected { error } }),
                     }
                 }
+                Command::Media { action } => {
+                    let status = st.snap.media.as_ref().map_or(PlaybackStatus::Paused, |m| m.status);
+                    let (track, status) = match action {
+                        MediaAction::PlayPause if status == PlaybackStatus::Playing => {
+                            (st.track, PlaybackStatus::Paused)
+                        }
+                        MediaAction::PlayPause | MediaAction::Play => (st.track, PlaybackStatus::Playing),
+                        MediaAction::Pause => (st.track, PlaybackStatus::Paused),
+                        MediaAction::Next => (st.track + 1, status),
+                        MediaAction::Previous => (st.track + FAKE_TRACKS.len() - 1, status),
+                    };
+                    st.track = track % FAKE_TRACKS.len();
+                    let mut media = fake_track(st.track, status);
+                    if !matches!(action, MediaAction::Next | MediaAction::Previous) {
+                        media.position_ms = st.snap.media.as_ref().and_then(|m| m.position_ms);
+                    } else {
+                        media.position_ms = Some(0);
+                    }
+                    st.snap.media = Some(media.clone());
+                    emit(&mut st, EngineEvent::MediaChanged { media: Some(media) });
+                }
                 Command::ResolveChoice { .. } | Command::Refresh => {
                     let (playback, recording) = (st.snap.playback.clone(), st.snap.recording.clone());
                     emit(&mut st, EngineEvent::DevicesChanged { playback, recording });
@@ -633,6 +712,10 @@ pub mod fake {
             let (tx, rx) = channel();
             self.lock().subscribers.push(tx);
             rx
+        }
+
+        fn art(&self, id: &str) -> Option<Vec<u8>> {
+            id.starts_with("fake-art-").then(|| FAKE_ART_PNG.to_vec())
         }
     }
 }
@@ -767,5 +850,41 @@ mod tests {
         assert!(
             matches!(next(&rx).event, EngineEvent::SettingsChanged { ref settings } if settings.toggle_pairs[0].primary.device_id.is_none())
         );
+    }
+
+    #[test]
+    fn fake_media_plays_skips_and_serves_art() {
+        use crate::media::PlaybackStatus;
+        let eng = FakeEngine::new();
+        let first = eng.snapshot().media.unwrap();
+        assert_eq!(first.status, PlaybackStatus::Paused);
+        let png = eng.art(&first.art.as_ref().unwrap().id).unwrap();
+        assert_eq!(&png[..8], b"\x89PNG\r\n\x1a\n");
+        assert!(eng.art("unknown").is_none());
+        let rx = eng.subscribe();
+        eng.send(Command::Media { action: MediaAction::PlayPause });
+        assert!(
+            matches!(next(&rx).event, EngineEvent::MediaChanged { media: Some(ref m) } if m.status == PlaybackStatus::Playing)
+        );
+        eng.send(Command::Media { action: MediaAction::Next });
+        match next(&rx).event {
+            EngineEvent::MediaChanged { media: Some(m) } => {
+                assert_ne!(m.title, first.title);
+                assert_eq!(m.status, PlaybackStatus::Playing, "skipping keeps playing");
+                assert_eq!(m.position_ms, Some(0));
+            }
+            other => panic!("{other:?}"),
+        }
+        eng.send(Command::Media { action: MediaAction::Previous });
+        assert!(matches!(next(&rx).event, EngineEvent::MediaChanged { media: Some(ref m) } if m.title == first.title));
+    }
+
+    #[cfg(feature = "ts")]
+    #[test]
+    fn media_types_export_to_typescript() {
+        use ts_rs::{Config, TS};
+        let cfg = Config::default();
+        assert!(crate::media::NowPlaying::decl(&cfg).contains("positionMs"));
+        assert!(MediaAction::decl(&cfg).contains("\"playPause\""));
     }
 }
