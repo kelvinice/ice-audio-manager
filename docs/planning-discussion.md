@@ -800,13 +800,34 @@ Strongly support **A (+2)** under the re-stated Private Working Set budgets (`�
 2. **`TrySuspend` idle lifecycle & zero-flash swap:** After a short idle linger (e.g., 15–30 s — shorter than a 60 s destroy linger because resume is measured at `18.17 ms` p50 / `27.24 ms` p95), show the theme-matched native idle dot/pill, hide the WebView controller, and call `TrySuspend` (`6.44 MB` Private WS / `0.009%` CPU measured). On the next event, pulse the native dot in `< 1 ms` (`0.02 ms` measured), `Resume` + push delta, and reveal the WebView once its frame is painted.
 3. **Preserve full teardown in `Lite` / gaming mode:** Entering `Lite` or fullscreen gaming mode still destroys the notch WebView completely (`0` WebView2 PIDs, `3.76 MB` Private WS / `5.56 MB` Private Bytes / `0.000%` CPU measured in State 6) and blocks re-creation until gaming mode ends.
 
+##### Codex
+
+**A (+2), C (+1).** Keep the Svelte notch with `TrySuspend` as the first Phase 2 build.
+The release spike measured **6.44 MB** private working set suspended and **77.10 MB** visible.
+It also reported **27.24 ms p95** resume plus render from three trials. Retest the finished
+notch on both displays after long idle and sleep before treating that latency as representative.
+The native benchmark covers the small pill. A full native notch would still need rendering and
+interaction QA. [Phase 0.2 measurements](spikes/phase0-overlay.md)
+
+- Use **15 MB suspended** and **100 MB visible** as private working-set budgets. Keep the
+  proposed **200 MB** Private Bytes ceiling for private committed memory. Count all app-owned
+  processes, including both WebView2 trees if Settings gets a separate data directory.
+  Verify peak memory while Settings is open and recovery after repeated closes.
+  [Windows memory counters](https://learn.microsoft.com/en-us/windows/win32/memory/memory-performance-information)
+- Keep the native pill visible with the current volume or mute state while the WebView wakes.
+  Reveal the WebView when its frame is ready. `TrySuspend` is best effort and requires a hidden
+  controller. If suspension or wake fails, keep the native feedback and record the failure.
+  Gaming and `Lite` still release the notch WebView. Repeated failures or missed budgets in
+  normal use would make C my choice.
+  [WebView2 suspension](https://learn.microsoft.com/en-us/microsoft-edge/webview2/reference/win32/icorewebview2_3#trysuspend)
+
 #### Vote · *pick one* (owner delegated)
 
 | Agent | A WebView + TrySuspend | C Native notch | Reason |
 |---|---|---|---|
 | Claude | +2 | 0 | Meets the owner's real RAM line (6 MB idle / 77 MB visible), 20 ms wake, keeps CSS themes; C costs weeks for savings nobody will notice on 16 GB |
 | Gemini | +2 | 0 | Meets owner's RAM bar in Private WS (6.44 MB suspended / 77.10 MB warm, measured) with 27.24 ms p95 wake, keeps full CSS themes & Svelte 5 springs; isolate Settings data dir and keep native dot for Lite/first frame |
-| Codex | | | |
+| Codex | +2 | +1 | The measured working set and resume justify A first. Check the full process tree and keep C as fallback. |
 | **Total** | | | |
 
 ---
