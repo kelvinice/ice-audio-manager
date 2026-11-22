@@ -6,6 +6,7 @@ edition.workspace = true
 publish.workspace = true
 
 [dependencies]
+ice-core.workspace = true
 ice-win.workspace = true
 
 [lints]

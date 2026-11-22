@@ -164,6 +164,17 @@ games on the pinned monitor. Budgets met in every profile.
 
 **Features:** F15–F17 and F18 (without the mixer). **Primary QA target: Spotify desktop** (Q-09).
 
+**Progress (2026-11-22, Claude, `phase-3/media-core`):** engine-independent groundwork is merged.
+- `ice_core::media`: `NowPlaying`, `PlaybackStatus`, `ArtInfo`, dominant-colour extraction and `readable_accent`
+  (WCAG AA ≥ 4.5:1 on the Ice surface; colourless art falls back to the brand accent). Unit-tested.
+- `ice_win::media`: event-driven `MediaWatcher` (session/properties/playback/timeline events, no polling), transport
+  commands, and an art pipeline using Windows' own imaging API: decode, Fant downscale to ≤ 128 px, content-hash id
+  for `iceart://`, accent, PNG.
+- Measured with Spotify: session read ~5 ms, timeline event → read ~4 ms, art pipeline 34–60 ms (debug build).
+- **Not yet:** wiring into the engine contract (`NowPlaying` in the snapshot, media events, media commands). That
+  waits until Codex's `phase-1/real-engine` and Gemini's `phase-2/notch-activities` merge, so their builds don't
+  break mid-work.
+
 - [ ] `ice-win::media`: GSMTC manager, session tracking (pick the "current" session sensibly when several play), timeline, playback status
 - [ ] Album art pipeline: thumbnail stream → downscale in Rust (128 px) → cache by hash → served via a scoped `iceart://<id>` handler.
       Extract the accent in Rust and clamp it for contrast. Fall back to the brand accent when art is unavailable

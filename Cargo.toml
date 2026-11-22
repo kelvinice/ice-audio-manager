@@ -31,6 +31,7 @@ features = [
     "std",
     "Foundation",
     "Foundation_Collections",
+    "Graphics_Imaging",
     "Media_Audio",
     "Media_Control",
     "Media_Devices",

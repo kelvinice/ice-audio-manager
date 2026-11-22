@@ -9,4 +9,5 @@ pub mod device;
 pub mod engine;
 pub mod event;
 pub mod hotkey;
+pub mod media;
 pub mod resolve;
