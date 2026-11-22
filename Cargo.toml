@@ -5,7 +5,7 @@ members = [
     "crates/ice-win",
     "spikes/audio",
     "spikes/media",
-    "spikes/overlay/src-tauri",
+    "app/src-tauri",
 ]
 
 [workspace.package]

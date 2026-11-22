@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Ice Overlay Spike",
+  "productName": "Ice Audio Manager",
   "version": "0.0.1",
-  "identifier": "com.iceaudiomanager.overlay-spike",
+  "identifier": "com.iceaudiomanager.desktop",
   "build": {
     "beforeDevCommand": "npm --prefix ../ui run dev",
     "devUrl": "http://localhost:5173",

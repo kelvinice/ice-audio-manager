@@ -1,4 +1,4 @@
-// Auto-generated from Rust IPC types via `cargo test -p overlay-spike export_ts_bindings`.
+// Auto-generated from Rust IPC types via `cargo test -p ice-audio-manager export_ts_bindings`.
 // Do not edit manually.
 
 export type SpringPreset = "snappy" | "smooth" | "bouncy" | "off";

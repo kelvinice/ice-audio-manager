@@ -359,11 +359,16 @@ pub mod fake {
     }
 
     fn switch(st: &mut State, id: &str, roles: RoleSet) {
-        let Some(found) = st.snap.playback.iter().position(|d| d.id == id) else {
+        let devices = if st.snap.playback.iter().any(|device| device.id == id) {
+            &mut st.snap.playback
+        } else {
+            &mut st.snap.recording
+        };
+        let Some(found) = devices.iter().position(|device| device.id == id) else {
             emit(st, EngineEvent::Notice { notice: Notice::NotConnected { name: id.into() } });
             return;
         };
-        for (i, d) in st.snap.playback.iter_mut().enumerate() {
+        for (i, d) in devices.iter_mut().enumerate() {
             if roles != RoleSet::Communications {
                 d.is_default = i == found;
             }
@@ -371,7 +376,7 @@ pub mod fake {
                 d.is_default_communications = i == found;
             }
         }
-        let device = st.snap.playback[found].clone();
+        let device = devices[found].clone();
         let spatial_applied = device.spatial.filter(|s| *s != SpatialMode::Off);
         emit(st, EngineEvent::Switched { device, roles, relinked: false, spatial_applied });
     }
@@ -469,6 +474,26 @@ mod tests {
         );
         assert!(start < a.revision && a.revision < b.revision);
         assert_eq!(eng.snapshot().revision, b.revision);
+    }
+
+    #[test]
+    fn switching_recording_device_updates_only_recording_defaults() {
+        let eng = FakeEngine::new();
+        let rx = eng.subscribe();
+        let previous_playback = eng.snapshot().playback;
+        eng.send(Command::SwitchTo { device_id: "fake-ugreen".into(), roles: RoleSet::Both });
+        assert!(matches!(
+            next(&rx).event,
+            EngineEvent::Switched { device, roles: RoleSet::Both, .. } if device.id == "fake-ugreen"
+        ));
+        let snapshot = eng.snapshot();
+        assert_eq!(snapshot.playback, previous_playback);
+        assert!(
+            snapshot
+                .recording
+                .iter()
+                .any(|device| { device.id == "fake-ugreen" && device.is_default && device.is_default_communications })
+        );
     }
 
     #[test]

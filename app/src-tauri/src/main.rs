@@ -1,7 +1,10 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 #![forbid(unsafe_code)]
 
+mod engine_bridge;
 mod ipc;
+mod logging;
+mod tray;
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -9,13 +12,14 @@ use std::sync::atomic::{AtomicBool, AtomicIsize, Ordering};
 use std::sync::{Arc, Mutex, mpsc};
 use std::time::{Duration, Instant};
 
+use ice_core::engine::{Command, Engine, EngineSnapshot, fake::FakeEngine};
+use ice_win::autostart::InstanceGuard;
 use ice_win::monitors::{MonitorInfo, list_monitors};
 use ice_win::native_dot::NativeDotHandle;
 use ice_win::overlay_win;
 use ice_win::proc_metrics::{TreeSnapshot, cpu_percent_between, current_pid, sample_pids};
 use ice_win::webview2;
 use serde::Serialize;
-use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder};
 
 use crate::ipc::{ActivityKind, HitRect, MonitorSummary, NotchDelta, NotchSnapshot, SpringPreset, ThemeKind};
@@ -25,6 +29,8 @@ const NOTCH_CANVAS_H: i32 = 190;
 const NOTCH_TOP_OFFSET: i32 = 0;
 
 struct SharedRuntime {
+    engine: Arc<dyn Engine>,
+    cursor_poll_running: AtomicBool,
     snapshot: Mutex<NotchSnapshot>,
     monitors: Mutex<Vec<MonitorInfo>>,
     hit_rect: Mutex<HitRect>,
@@ -40,7 +46,12 @@ struct SharedRuntime {
 }
 
 impl SharedRuntime {
-    fn new(monitors: Vec<MonitorInfo>, wv2_data_dir: PathBuf) -> Self {
+    fn new(
+        monitors: Vec<MonitorInfo>,
+        wv2_data_dir: PathBuf,
+        engine: Arc<dyn Engine>,
+        initial: &EngineSnapshot,
+    ) -> Self {
         let summaries = monitors
             .iter()
             .enumerate()
@@ -55,16 +66,16 @@ impl SharedRuntime {
             })
             .collect();
         let reduce_motion = overlay_win::reduce_motion_enabled();
-        let snapshot = NotchSnapshot {
+        let mut snapshot = NotchSnapshot {
             revision: 1,
             event_seq: 0,
             activity: ActivityKind::Idle,
-            volume_percent: 64,
+            volume_percent: 0,
             muted: false,
             mic_muted: false,
-            active_device: "Headphones (Arctis Nova 7)".into(),
-            target_device: "Speakers (Realtek(R) Audio)".into(),
-            spatial_badge: Some("Atmos".into()),
+            active_device: String::new(),
+            target_device: String::new(),
+            spatial_badge: None,
             preset: SpringPreset::Smooth,
             system_reduce_motion: reduce_motion,
             theme: ThemeKind::Ice,
@@ -73,7 +84,10 @@ impl SharedRuntime {
             active_monitor: 0,
             monitors: summaries,
         };
+        engine_bridge::project(initial, &mut snapshot);
         Self {
+            engine,
+            cursor_poll_running: AtomicBool::new(false),
             snapshot: Mutex::new(snapshot),
             monitors: Mutex::new(monitors),
             hit_rect: Mutex::new(HitRect { x: 154.0, y: 6.0, width: 112.0, height: 28.0 }),
@@ -117,6 +131,11 @@ fn get_notch_snapshot(state: State<'_, Arc<SharedRuntime>>) -> NotchSnapshot {
 }
 
 #[tauri::command]
+fn get_engine_snapshot(state: State<'_, Arc<SharedRuntime>>) -> EngineSnapshot {
+    state.engine.snapshot()
+}
+
+#[tauri::command]
 fn report_hit_rect(rect: HitRect, state: State<'_, Arc<SharedRuntime>>) {
     let mut guard = state.hit_rect.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
     *guard = rect;
@@ -151,42 +170,23 @@ fn report_event_rendered(event_seq: u64, state: State<'_, Arc<SharedRuntime>>) {
 }
 
 #[tauri::command]
-fn adjust_volume(delta: i16, app: AppHandle, state: State<'_, Arc<SharedRuntime>>) {
-    state.update_and_emit(&app, |s| {
-        let next = (i16::from(s.volume_percent) + delta).clamp(0, 100);
-        s.volume_percent = u8::try_from(next).unwrap_or(0);
-        s.muted = s.volume_percent == 0;
-        s.activity = ActivityKind::Volume;
-        s.event_seq = s.event_seq.saturating_add(1);
-    });
+fn adjust_volume(delta: i8, state: State<'_, Arc<SharedRuntime>>) {
+    state.engine.send(Command::StepVolume { delta });
 }
 
 #[tauri::command]
-fn toggle_mute(app: AppHandle, state: State<'_, Arc<SharedRuntime>>) {
-    state.update_and_emit(&app, |s| {
-        s.muted = !s.muted;
-        s.activity = ActivityKind::Volume;
-        s.event_seq = s.event_seq.saturating_add(1);
-    });
+fn toggle_mute(state: State<'_, Arc<SharedRuntime>>) {
+    state.engine.send(Command::ToggleMute);
 }
 
 #[tauri::command]
-fn toggle_mic_mute(app: AppHandle, state: State<'_, Arc<SharedRuntime>>) {
-    state.update_and_emit(&app, |s| {
-        s.mic_muted = !s.mic_muted;
-        s.activity = ActivityKind::MicMute;
-        s.event_seq = s.event_seq.saturating_add(1);
-    });
+fn toggle_mic_mute(state: State<'_, Arc<SharedRuntime>>) {
+    state.engine.send(Command::ToggleMicMute);
 }
 
 #[tauri::command]
-fn trigger_switch(app: AppHandle, state: State<'_, Arc<SharedRuntime>>) {
-    state.update_and_emit(&app, |s| {
-        std::mem::swap(&mut s.active_device, &mut s.target_device);
-        s.spatial_badge = if s.active_device.contains("Arctis") { Some("Atmos".into()) } else { None };
-        s.activity = ActivityKind::Switch;
-        s.event_seq = s.event_seq.saturating_add(1);
-    });
+fn trigger_switch(state: State<'_, Arc<SharedRuntime>>) {
+    state.engine.send(Command::CycleFavourites { flow: ice_core::device::Flow::Render, step: 1 });
 }
 
 #[tauri::command]
@@ -280,57 +280,72 @@ fn create_settings_window(app: &AppHandle, state: &Arc<SharedRuntime>) -> Result
     Ok(())
 }
 
-fn spawn_cursor_poll(state: Arc<SharedRuntime>) {
-    std::thread::Builder::new()
-        .name("ice-cursor-poll".into())
-        .spawn(move || {
-            let mut last_ignore: Option<bool> = None;
-            loop {
-                let hwnd = state.notch_hwnd.load(Ordering::Acquire);
-                let visible = state.notch_visible.load(Ordering::Acquire);
-                if hwnd == 0 || !visible {
-                    last_ignore = None;
-                    std::thread::sleep(Duration::from_millis(120));
-                    continue;
-                }
-
-                let Some((cx, cy)) = overlay_win::cursor_pos() else {
-                    std::thread::sleep(Duration::from_millis(100));
-                    continue;
-                };
-                let Some((wl, wt, wr, wb)) = overlay_win::window_rect(hwnd) else {
-                    std::thread::sleep(Duration::from_millis(100));
-                    continue;
-                };
-
-                let near = cx >= wl - 64 && cx <= wr + 64 && cy >= wt - 32 && cy <= wb + 64;
-                if !near {
-                    if last_ignore != Some(true) {
-                        let _ = overlay_win::set_click_through(hwnd, true);
-                        last_ignore = Some(true);
+fn spawn_cursor_poll(state: Arc<SharedRuntime>, benchmark: bool) {
+    if state.cursor_poll_running.swap(true, Ordering::AcqRel) {
+        return;
+    }
+    let poll_state = Arc::clone(&state);
+    let worker = std::thread::Builder::new().name("ice-cursor-poll".into()).spawn(move || {
+        let state = poll_state;
+        let mut last_ignore: Option<bool> = None;
+        loop {
+            let hwnd = state.notch_hwnd.load(Ordering::Acquire);
+            let visible = state.notch_visible.load(Ordering::Acquire);
+            if hwnd == 0 || !visible {
+                if !benchmark {
+                    // Allow a newly opened preview to start its own worker, or keep this one.
+                    state.cursor_poll_running.store(false, Ordering::Release);
+                    if !state.notch_visible.load(Ordering::Acquire)
+                        || state.cursor_poll_running.swap(true, Ordering::AcqRel)
+                    {
+                        break;
                     }
-                    std::thread::sleep(Duration::from_millis(100));
-                    continue;
                 }
-
-                let scale = state.active_monitor_info().map_or(1.0, |m| m.scale_factor);
-                let hr = *state.hit_rect.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-                let pad = 6.0;
-                let pl = wl + ((hr.x - pad) * scale).floor() as i32;
-                let pt = wt + ((hr.y - pad) * scale).floor() as i32;
-                let pr = wl + ((hr.x + hr.width + pad) * scale).ceil() as i32;
-                let pb = wt + ((hr.y + hr.height + pad) * scale).ceil() as i32;
-
-                let inside = cx >= pl && cx <= pr && cy >= pt && cy <= pb;
-                let want_ignore = !inside;
-                if last_ignore != Some(want_ignore) {
-                    let _ = overlay_win::set_click_through(hwnd, want_ignore);
-                    last_ignore = Some(want_ignore);
-                }
-                std::thread::sleep(Duration::from_millis(16));
+                last_ignore = None;
+                std::thread::sleep(Duration::from_millis(120));
+                continue;
             }
-        })
-        .ok();
+
+            let Some((cx, cy)) = overlay_win::cursor_pos() else {
+                std::thread::sleep(Duration::from_millis(100));
+                continue;
+            };
+            let Some((wl, wt, wr, wb)) = overlay_win::window_rect(hwnd) else {
+                std::thread::sleep(Duration::from_millis(100));
+                continue;
+            };
+
+            let near = cx >= wl - 64 && cx <= wr + 64 && cy >= wt - 32 && cy <= wb + 64;
+            if !near {
+                if last_ignore != Some(true) {
+                    let _ = overlay_win::set_click_through(hwnd, true);
+                    last_ignore = Some(true);
+                }
+                std::thread::sleep(Duration::from_millis(100));
+                continue;
+            }
+
+            let scale = state.active_monitor_info().map_or(1.0, |m| m.scale_factor);
+            let hr = *state.hit_rect.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+            let pad = 6.0;
+            let pl = wl + ((hr.x - pad) * scale).floor() as i32;
+            let pt = wt + ((hr.y - pad) * scale).floor() as i32;
+            let pr = wl + ((hr.x + hr.width + pad) * scale).ceil() as i32;
+            let pb = wt + ((hr.y + hr.height + pad) * scale).ceil() as i32;
+
+            let inside = cx >= pl && cx <= pr && cy >= pt && cy <= pb;
+            let want_ignore = !inside;
+            if last_ignore != Some(want_ignore) {
+                let _ = overlay_win::set_click_through(hwnd, want_ignore);
+                last_ignore = Some(want_ignore);
+            }
+            std::thread::sleep(Duration::from_millis(if benchmark { 16 } else { 34 }));
+        }
+    });
+    if let Err(error) = worker {
+        state.cursor_poll_running.store(false, Ordering::Release);
+        tracing::warn!(%error, "Could not start the notch preview cursor worker");
+    }
 }
 
 // ---------- Automated Phase 0.2 Benchmark Harness ----------
@@ -992,89 +1007,38 @@ fn cycle_monitor_internal(app: &AppHandle, state: &Arc<SharedRuntime>) -> Result
     Ok(())
 }
 
-fn build_interactive_tray(app: &AppHandle, state: Arc<SharedRuntime>) -> tauri::Result<()> {
-    let toggle_item = tauri::menu::MenuItem::with_id(app, "toggle", "Toggle Expanded Notch", true, None::<&str>)?;
-    let vol_item = tauri::menu::MenuItem::with_id(app, "vol", "Trigger Volume Event", true, None::<&str>)?;
-    let switch_item = tauri::menu::MenuItem::with_id(app, "switch", "Trigger Switch Event", true, None::<&str>)?;
-    let mon_item = tauri::menu::MenuItem::with_id(app, "mon", "Move to Next Monitor", true, None::<&str>)?;
-    let settings_item = tauri::menu::MenuItem::with_id(app, "settings", "Open Settings (Mica)", true, None::<&str>)?;
-    let quit_item = tauri::menu::MenuItem::with_id(app, "quit", "Quit Overlay Spike", true, None::<&str>)?;
-    let menu = tauri::menu::Menu::with_items(
-        app,
-        &[&toggle_item, &vol_item, &switch_item, &mon_item, &settings_item, &quit_item],
-    )?;
-
-    let st = Arc::clone(&state);
-    let mut builder = TrayIconBuilder::new()
-        .tooltip("Ice Overlay Spike")
-        .menu(&menu)
-        .on_menu_event(move |app, ev| match ev.id.as_ref() {
-            "toggle" => {
-                st.update_and_emit(app, |s| {
-                    s.expanded = !s.expanded;
-                    s.event_seq = s.event_seq.saturating_add(1);
-                });
-            }
-            "vol" => {
-                st.update_and_emit(app, |s| {
-                    s.volume_percent = if s.volume_percent >= 92 { 24 } else { s.volume_percent + 8 };
-                    s.muted = false;
-                    s.activity = ActivityKind::Volume;
-                    s.event_seq = s.event_seq.saturating_add(1);
-                });
-            }
-            "switch" => {
-                st.update_and_emit(app, |s| {
-                    std::mem::swap(&mut s.active_device, &mut s.target_device);
-                    s.activity = ActivityKind::Switch;
-                    s.event_seq = s.event_seq.saturating_add(1);
-                });
-            }
-            "mon" => {
-                let _ = cycle_monitor_internal(app, &st);
-            }
-            "settings" => {
-                let _ = create_settings_window(app, &st);
-            }
-            "quit" => {
-                st.allow_exit.store(true, Ordering::Release);
-                app.exit(0);
-            }
-            _ => {}
-        })
-        .on_tray_icon_event(move |tray, ev| {
-            if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } = ev {
-                let app = tray.app_handle();
-                if let Some(st) = app.try_state::<Arc<SharedRuntime>>() {
-                    st.update_and_emit(app, |s| {
-                        s.expanded = !s.expanded;
-                        s.event_seq = s.event_seq.saturating_add(1);
-                    });
-                }
-            }
-        });
-    if let Some(icon) = app.default_window_icon().cloned() {
-        builder = builder.icon(icon);
-    }
-    let _tray = builder.build(app)?;
-    Ok(())
-}
-
 fn flag_value(args: &[String], flag: &str) -> Option<String> {
     args.iter().position(|a| a == flag).and_then(|i| args.get(i + 1).cloned())
 }
 
 fn main() {
+    if let Err(error) = run() {
+        tracing::error!(%error, "Ice Audio Manager could not start");
+        eprintln!("Ice Audio Manager could not start: {error}");
+        std::process::exit(1);
+    }
+}
+
+fn run() -> Result<(), Box<dyn std::error::Error>> {
+    let Some(_instance) = InstanceGuard::acquire()? else {
+        return Ok(());
+    };
     let args: Vec<String> = std::env::args().collect();
     let bench_mode = args.iter().any(|a| a == "--bench");
     let sample_secs: u64 = flag_value(&args, "--sample-secs").and_then(|s| s.parse().ok()).unwrap_or(10);
-    let out_path =
-        PathBuf::from(flag_value(&args, "--out").unwrap_or_else(|| "spikes/overlay/out/bench.json".to_string()));
+    let out_path = PathBuf::from(flag_value(&args, "--out").unwrap_or_else(|| "app/out/bench.json".to_string()));
+
+    let show_notch = args.iter().any(|arg| arg == "--show-notch") && !args.iter().any(|arg| arg == "--start-minimized");
+    let app_data =
+        PathBuf::from(std::env::var_os("LOCALAPPDATA").ok_or("LOCALAPPDATA is unavailable")?).join("IceAudioManager");
+    logging::init(&app_data.join("logs"), args.iter().any(|arg| arg == "--verbose"))?;
 
     let monitors = list_monitors().unwrap_or_default();
-    let local_app = std::env::var_os("LOCALAPPDATA").map(PathBuf::from).unwrap_or_else(std::env::temp_dir);
-    let wv2_data_dir = local_app.join("IceAudioManager").join("spike-overlay-wv2");
-    let runtime = Arc::new(SharedRuntime::new(monitors, wv2_data_dir));
+    let engine: Arc<dyn Engine> = Arc::new(FakeEngine::new());
+    let events = (!bench_mode).then(|| engine.subscribe());
+    let initial = engine.snapshot();
+    let wv2_data_dir = app_data.join(if bench_mode { "spike-overlay-wv2" } else { "webview" });
+    let runtime = Arc::new(SharedRuntime::new(monitors, wv2_data_dir, engine, &initial));
     let setup_state = Arc::clone(&runtime);
     let exit_flag_ref = Arc::clone(&runtime);
 
@@ -1082,6 +1046,7 @@ fn main() {
         .manage(Arc::clone(&runtime))
         .invoke_handler(tauri::generate_handler![
             get_notch_snapshot,
+            get_engine_snapshot,
             report_hit_rect,
             report_first_paint,
             report_settings_ready,
@@ -1098,8 +1063,8 @@ fn main() {
         ])
         .setup(move |app| {
             let handle = app.handle().clone();
-            spawn_cursor_poll(Arc::clone(&setup_state));
             if bench_mode {
+                spawn_cursor_poll(Arc::clone(&setup_state), true);
                 let st = Arc::clone(&setup_state);
                 std::thread::Builder::new()
                     .name("ice-bench-driver".into())
@@ -1109,14 +1074,27 @@ fn main() {
                     })
                     .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
             } else {
-                build_interactive_tray(&handle, Arc::clone(&setup_state))?;
-                create_notch_window(&handle, &setup_state)
-                    .map_err(|e| Box::new(std::io::Error::other(e)) as Box<dyn std::error::Error>)?;
+                tray::build(&handle, Arc::clone(&setup_state))?;
+                tray::refresh_tooltip(&handle, &initial);
+                if let Some(events) = events {
+                    engine_bridge::watch(handle.clone(), Arc::clone(&setup_state), events, initial.revision)?;
+                }
+                if show_notch {
+                    create_notch_window(&handle, &setup_state).map_err(std::io::Error::other)?;
+                    spawn_cursor_poll(Arc::clone(&setup_state), false);
+                }
+                tracing::info!(engine = "fake", "Ice Audio Manager tray ready");
             }
             Ok(())
         })
-        .build(tauri::generate_context!())
-        .expect("failed to build Tauri overlay spike");
+        .on_window_event(|window, event| {
+            if window.label() == "notch" && matches!(event, tauri::WindowEvent::Destroyed) {
+                let state = window.state::<Arc<SharedRuntime>>();
+                state.notch_visible.store(false, Ordering::Release);
+                state.notch_hwnd.store(0, Ordering::Release);
+            }
+        })
+        .build(tauri::generate_context!())?;
 
     app.run(move |_app_handle, event| {
         if let tauri::RunEvent::ExitRequested { api, .. } = event
@@ -1125,4 +1103,5 @@ fn main() {
             api.prevent_exit();
         }
     });
+    Ok(())
 }

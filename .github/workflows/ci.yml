@@ -17,9 +17,9 @@ jobs:
         with:
           node-version: '22'
           cache: npm
-          cache-dependency-path: spikes/overlay/ui/package-lock.json
+          cache-dependency-path: app/ui/package-lock.json
       - name: UI install, check, test, build
-        working-directory: spikes/overlay/ui
+        working-directory: app/ui
         run: |
           npm ci
           npm run check

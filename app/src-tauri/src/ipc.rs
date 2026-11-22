@@ -82,13 +82,18 @@ pub enum NotchDelta {
 mod tests {
     use std::path::Path;
 
+    use ice_core::device::{DeviceState, Flow, Role};
+    use ice_core::engine::{
+        Command, DeviceSummary, EngineEvent, EngineSnapshot, Envelope, Notice, RoleSet, SpatialMode, VolumeState,
+    };
+
     use super::*;
 
     #[test]
     fn export_ts_bindings() {
         let cfg = ts_rs::Config::default();
         let body = [
-            "// Auto-generated from Rust IPC types via `cargo test -p overlay-spike export_ts_bindings`.",
+            "// Auto-generated from Rust IPC types via `cargo test -p ice-audio-manager export_ts_bindings`.",
             "// Do not edit manually.",
             "",
             &format!("export {}", SpringPreset::decl(&cfg)),
@@ -107,16 +112,49 @@ mod tests {
             "",
         ]
         .join("\n");
+        write_generated("types.ts", &body);
 
-        let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../ui/src/lib/ipc/types.ts");
-        if let Some(parent) = out.parent() {
-            std::fs::create_dir_all(parent).expect("create ipc output dir");
-        }
-        // Only rewrite when the content really changed. Git on Windows checks the file out with CRLF,
-        // so an unconditional LF write leaves a phantom "modified" file after every `cargo test`.
+        let engine = [
+            "// Auto-generated from the ice-core engine contract.",
+            "// Do not edit manually.",
+            "",
+            &format!("export {}", Flow::decl(&cfg)),
+            "",
+            &format!("export {}", Role::decl(&cfg)),
+            "",
+            &format!("export {}", DeviceState::decl(&cfg)),
+            "",
+            &format!("export {}", RoleSet::decl(&cfg)),
+            "",
+            &format!("export {}", SpatialMode::decl(&cfg)),
+            "",
+            &format!("export {}", DeviceSummary::decl(&cfg)),
+            "",
+            &format!("export {}", VolumeState::decl(&cfg)),
+            "",
+            &format!("export {}", EngineSnapshot::decl(&cfg)),
+            "",
+            &format!("export {}", Command::decl(&cfg)),
+            "",
+            &format!("export {}", Notice::decl(&cfg)),
+            "",
+            &format!("export {}", EngineEvent::decl(&cfg)),
+            "",
+            &format!("export {}", Envelope::decl(&cfg)),
+            "",
+        ]
+        .join("\n");
+
+        write_generated("engine.ts", &engine);
+    }
+
+    fn write_generated(name: &str, source: &str) {
+        let body = source.split('\n').map(str::trim_end).collect::<Vec<_>>().join("\n");
+        let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../ui/src/lib/ipc").join(name);
+        // Git may check the file out with CRLF. A test should not dirty the worktree.
         let unchanged = std::fs::read_to_string(&out).is_ok_and(|old| old.replace("\r\n", "\n") == body);
         if !unchanged {
-            std::fs::write(&out, body).expect("write generated types.ts");
+            std::fs::write(out, body).expect("write generated IPC bindings");
         }
     }
 }

@@ -8,6 +8,7 @@ dist/
 
 # Spike output (endpoint churn logs etc. contain local device names)
 spikes/**/out/
+/app/out/
 *.jsonl
 
 # Local reference clones (licences vary; never commit)

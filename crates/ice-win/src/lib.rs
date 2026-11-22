@@ -7,6 +7,7 @@
 //! COM callbacks never block. They only push [`ice_core::event::AudioEvent`]s into a channel.
 
 pub mod audio_engine;
+pub mod autostart;
 pub mod com;
 pub mod endpoints;
 pub mod file_watch;
