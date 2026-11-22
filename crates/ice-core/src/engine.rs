@@ -177,6 +177,8 @@ pub enum Notice {
     HotkeyConflict { binding_id: String, keys: String },
     /// `config.toml` was unreadable; it was renamed to `backup` and defaults are in use.
     ConfigReplaced { backup: String, error: String },
+    /// An edited `config.toml` is invalid; the last valid config stays in effect until the file is fixed.
+    ConfigInvalid { error: String },
 }
 
 /// Deltas. The notch maps these onto activities (switch, plug/unplug, volume, mic).

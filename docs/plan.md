@@ -109,7 +109,7 @@ Three agents work at once, each in **its own worktree** branched from the latest
 - [ ] `ice-win::policy`: switch default. **`Default` = Console + Multimedia; `Both` = all three roles** for the selected flow.
       Treat each role change as observable. If one fails or the endpoint disappears mid-switch, re-read defaults and report which roles changed
 - [ ] `ice-win::hotkeys`: `RegisterHotKey` on a hidden message window; conflict detection + user-facing error
-- [ ] `ice-core::config`: TOML schema v1, load/validate/migrate, atomic save with external-edit conflict detection, file-watch reload
+- [x] `ice-core::config`: TOML schema v1, load/validate/migrate, atomic save, **event-driven hot reload** (`ice_win::file_watch`; verified live 2026-11-22). Still open: external-edit conflict detection on save
       (bad reload → keep last valid config + show error), explicit portable mode
 - [ ] Tray: left-click quick-switch menu (outputs, separator, inputs, checkmarks), right-click full menu, tooltip shows current device.
       (Scroll-on-icon was cut by D-05.F05.)

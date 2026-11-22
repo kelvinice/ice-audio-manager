@@ -235,6 +235,19 @@ impl ConfigStore {
         Loaded::Replaced { config: Config::default(), backup, error: error.to_string() }
     }
 
+    /// Non-destructive read for hot reload: never renames the file (the user may be mid-edit).
+    /// `Ok(None)` if the file doesn't exist.
+    ///
+    /// # Errors
+    /// I/O or parse errors, so the caller can keep the last valid config and tell the user.
+    pub fn read(&self) -> Result<Option<Config>, ConfigError> {
+        match std::fs::read_to_string(&self.path) {
+            Ok(text) => Config::from_toml(&text).map(Some),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            Err(e) => Err(ConfigError::Io(e)),
+        }
+    }
+
     /// Atomic save: write a temp file next to the target, then rename over it.
     ///
     /// # Errors
@@ -327,6 +340,19 @@ mod tests {
             }
             other => panic!("expected Replaced, got {other:?}"),
         }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn hot_reload_read_never_renames_a_broken_file() {
+        let dir = std::env::temp_dir().join(format!("ice-cfg-read-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let store = ConfigStore::new(dir.join("config.toml"));
+        assert!(matches!(store.read(), Ok(None)));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(store.path(), "half-typed = [").unwrap();
+        assert!(matches!(store.read(), Err(ConfigError::Parse(_))));
+        assert!(store.path().exists(), "the user's file must stay where it is");
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

@@ -9,6 +9,7 @@
 pub mod audio_engine;
 pub mod com;
 pub mod endpoints;
+pub mod file_watch;
 pub mod fullscreen;
 pub mod hotkeys;
 pub mod media;

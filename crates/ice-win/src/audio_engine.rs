@@ -29,11 +29,15 @@ use crate::{notify, policy, volume};
 const REFRESH_DEBOUNCE: Duration = Duration::from_millis(120);
 /// Volume step for Alt+knob (mic volume), in percent.
 const MIC_STEP: f32 = 0.02;
+/// Editors save in several writes; wait this long after the last change before re-reading.
+const RELOAD_DEBOUNCE: Duration = Duration::from_millis(300);
 
 enum Msg {
     Command(Command),
     Audio(AudioEvent),
     Hotkey(i32),
+    /// Something in the config folder changed (debounced, then re-read).
+    ConfigChanged,
     Quit,
 }
 
@@ -171,6 +175,11 @@ struct Worker {
     pending: HashMap<u64, PendingChoice>,
     next_request: u64,
     refresh_at: Option<Instant>,
+    engine_tx: Sender<Msg>,
+    _config_watch: Option<crate::file_watch::DirWatch>,
+    reload_at: Option<Instant>,
+    /// Last hot-reload error shown, so a broken file isn't reported on every save.
+    last_config_error: Option<String>,
     knob_steps: i32,
     /// Direction of the first detent of the current Ctrl+knob gesture.
     knob_first: i32,
@@ -201,6 +210,15 @@ impl Worker {
         let registration = notify::register(eps.raw(), audio_tx.clone()).map_err(|e| format!("notifications: {e}"))?;
         let loaded = store.load();
         let config = loaded.config().clone();
+        // Hot reload (code-practices §7): watch the config folder, never poll.
+        let config_watch = store.path().parent().and_then(|dir| {
+            std::fs::create_dir_all(dir).ok()?;
+            let tx = engine_tx.clone();
+            crate::file_watch::DirWatch::start(dir, move || {
+                let _ = tx.send(Msg::ConfigChanged);
+            })
+            .ok()
+        });
         let mut w = Self {
             eps,
             endpoints: Vec::new(),
@@ -216,6 +234,10 @@ impl Worker {
             pending: HashMap::new(),
             next_request: 1,
             refresh_at: None,
+            engine_tx: engine_tx.clone(),
+            _config_watch: config_watch,
+            reload_at: None,
+            last_config_error: None,
             knob_steps: 0,
             knob_first: 0,
             knob_at: None,
@@ -225,13 +247,13 @@ impl Worker {
             w.startup_notice(Notice::ConfigReplaced { backup: backup.display().to_string(), error });
         }
         w.refresh(false);
-        w.register_hotkeys(engine_tx);
+        w.register_hotkeys(true);
         Ok(w)
     }
 
     fn run(&mut self, rx: &Receiver<Msg>) {
         loop {
-            let deadline = [self.refresh_at, self.knob_at].into_iter().flatten().min();
+            let deadline = [self.refresh_at, self.knob_at, self.reload_at].into_iter().flatten().min();
             let msg = match deadline {
                 Some(d) => match rx.recv_timeout(d.saturating_duration_since(Instant::now())) {
                     Ok(m) => m,
@@ -251,12 +273,19 @@ impl Worker {
                 Msg::Command(c) => self.command(c),
                 Msg::Audio(e) => self.audio(e),
                 Msg::Hotkey(id) => self.hotkey(id),
+                Msg::ConfigChanged => {
+                    self.reload_at = Some(Instant::now() + RELOAD_DEBOUNCE);
+                }
             }
         }
     }
 
     fn on_deadlines(&mut self) {
         let now = Instant::now();
+        if self.reload_at.is_some_and(|t| t <= now) {
+            self.reload_at = None;
+            self.reload_config();
+        }
         if self.refresh_at.is_some_and(|t| t <= now) {
             self.refresh_at = None;
             self.refresh(true);
@@ -420,7 +449,33 @@ impl Worker {
 
     // ---- hotkeys ----------------------------------------------------------------------------------
 
-    fn register_hotkeys(&mut self, engine_tx: &Sender<Msg>) {
+    /// Applies an edited config.toml. Invalid files are reported once and the last valid config stays in effect;
+    /// the engine's own saves (re-links) parse equal and are ignored.
+    fn reload_config(&mut self) {
+        match self.store.read() {
+            Ok(Some(cfg)) => {
+                self.last_config_error = None;
+                if cfg == self.config {
+                    return;
+                }
+                self.config = cfg;
+                self.hotkeys = None; // dropping the service unregisters every chord
+                self.actions.clear();
+                self.register_hotkeys(false);
+                self.refresh(true);
+            }
+            Ok(None) => {} // deleted: keep running with what we have; the next save recreates it
+            Err(e) => {
+                let error = e.to_string();
+                if self.last_config_error.as_deref() != Some(error.as_str()) {
+                    self.last_config_error = Some(error.clone());
+                    self.notice(Notice::ConfigInvalid { error });
+                }
+            }
+        }
+    }
+
+    fn register_hotkeys(&mut self, startup: bool) {
         let mut wanted: Vec<(Chord, HotkeyAction, String, bool)> = Vec::new();
         for b in &self.config.bindings {
             if let Some(c) = b.hotkey {
@@ -439,13 +494,16 @@ impl Worker {
         if wanted.is_empty() {
             return;
         }
-        let Ok(svc) = HotkeyService::start(forward(engine_tx, Msg::Hotkey)) else { return };
+        let Ok(svc) = HotkeyService::start(forward(&self.engine_tx, Msg::Hotkey)) else { return };
         for (id, (chord, action, name, repeat)) in (1..).zip(wanted) {
             match svc.register(id, chord, repeat) {
                 Ok(()) => {
                     self.actions.insert(id, action);
                 }
-                Err(_) => self.startup_notice(Notice::HotkeyConflict { binding_id: name, keys: chord.to_string() }),
+                Err(_) => {
+                    let notice = Notice::HotkeyConflict { binding_id: name, keys: chord.to_string() };
+                    if startup { self.startup_notice(notice) } else { self.notice(notice) }
+                }
             }
         }
         self.hotkeys = Some(svc);
