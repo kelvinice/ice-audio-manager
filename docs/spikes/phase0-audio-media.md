@@ -82,3 +82,15 @@ cargo run -p audio-spike -- watch --log spikes/audio/out/churn.jsonl
 …then: (1) unplug/replug the dongle in the **same** port, (2) a **different** port, (3) power-cycle the headset,
 (4) sleep/resume the PC. Press Ctrl+C and share `spikes/audio/out/churn.jsonl` (it stays local and is gitignored).
 That shows which of endpoint ID / stable ID / container / name change in each case, and finalises the D-16 resolver weights.
+
+## F31 knob test (owner, 2026-11-22)
+
+`audio-spike hotkeys 60` with the owner's keyboard volume knob:
+
+- **Ctrl/Shift/Alt + turn all reach `RegisterHotKey`** as `<Mod>+VolumeUp/VolumeDown`. No hook needed, so F31 is feasible.
+- Plain turns didn't fire, so they keep changing Windows' volume as before (D-07 A).
+- **Fast spins send a detent every 13–40 ms** (slow turns 150–600 ms). Design consequences:
+  - **Ctrl+turn (cycle device)** must not switch per detent. Spinning moves a highlight through a device list in the notch,
+    and the switch commits ~400 ms after the last detent, Alt+Tab style. One switch per gesture.
+  - **Shift+turn (1% steps)** and **Alt+turn (mic volume)** act per detent, coalesced into one volume write per frame.
+- `Ctrl+VolumeMute` (knob press) did not fire. Pending the owner: whether the knob press was tried, and what it sends.
