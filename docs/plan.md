@@ -49,7 +49,9 @@
 - ✅ 0.7 (Claude): `legacy-python-v0` tag, Python removed, `.env` untracked, MIT `LICENSE`, Rust workspace (`ice-core`, `ice-win`, spikes),
   CI (fmt, clippy `-D warnings`, test, release build). **Not yet:** Tauri `app/` scaffold + typed IPC codegen. These belong with the 0.2
   overlay spike (Gemini + Codex), which creates `app/`.
-- ⏳ 0.2 overlay + memory (Gemini + Codex), ⏳ 0.5 fullscreen (Codex).
+- ⏳ 0.2 overlay + memory (Gemini + Codex).
+- ✅ 0.5 fullscreen spike (Codex): see [dual-monitor results](spikes/phase0-fullscreen.md). Phase 2 still needs to cover
+  exclusive-mode transitions that can be missed by window notifications.
 
 **0.2 details (Codex's measurement recipe):**
 - Window: transparent, topmost, non-activating (`WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW`, `WM_MOUSEACTIVATE → MA_NOACTIVATE`), no taskbar entry, one spring-animated pill.

@@ -8,6 +8,7 @@
 
 pub mod com;
 pub mod endpoints;
+pub mod fullscreen;
 pub mod media;
 pub mod meter;
 pub mod notify;
