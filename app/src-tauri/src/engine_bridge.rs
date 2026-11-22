@@ -46,7 +46,11 @@ pub(super) fn watch(
             if revision <= initial_revision
                 && !matches!(
                     delta.event,
-                    EngineEvent::Notice { notice: Notice::NotConnected { .. } | Notice::ChooseDevice { .. } }
+                    EngineEvent::Notice {
+                        notice: Notice::NotConnected { .. }
+                            | Notice::ChooseDevice { .. }
+                            | Notice::SettingRejected { .. }
+                    }
                 )
             {
                 continue;
@@ -115,10 +119,13 @@ fn apply_event(app: &AppHandle, state: &Arc<SharedRuntime>, delta: Envelope) {
             | EngineEvent::DevicesChanged { .. }
             | EngineEvent::DeviceArrived { .. }
             | EngineEvent::DeviceLeft { .. }
-            | EngineEvent::Notice { notice: Notice::NotConnected { .. } | Notice::ChooseDevice { .. } }
+            | EngineEvent::Notice {
+                notice: Notice::NotConnected { .. } | Notice::ChooseDevice { .. } | Notice::SettingRejected { .. }
+            }
             | EngineEvent::NoticesChanged { .. }
+            | EngineEvent::SettingsChanged { .. }
     ) {
-        tray::refresh_tooltip(app, state, &snapshot);
+        tray::refresh_tooltip(state, &snapshot);
     }
 
     if waking {

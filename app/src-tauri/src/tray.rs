@@ -1,26 +1,63 @@
+use std::cell::RefCell;
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
-use ice_core::device::DeviceState;
-use ice_core::engine::{Command, DeviceSummary, EngineSnapshot, Notice, RoleSet};
+use ice_core::device::{DeviceState, Flow};
+use ice_core::engine::{
+    Command, DeviceSummary, EngineSnapshot, Notice, RoleSet, SavedDevice, SettingsView, SpatialMode,
+};
 use ice_win::autostart::Autostart;
 use tauri::AppHandle;
 use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu};
-use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+use tauri::tray::{MouseButton, MouseButtonState, TrayIconEvent};
 use tauri::window::WindowBuilder;
+use tray_icon::{Icon, TrayIcon, TrayIconBuilder};
 
 use super::{Preview, SharedRuntime, cycle_monitor_internal, request_preview};
 
 const TRAY_ID: &str = "ice-audio-tray";
-const DEVICE_PREFIX: &str = "switch/";
-
+const COMMAND_PREFIX: &str = "audio/";
 const CHOICE_PREFIX: &str = "choice/";
-const DISMISS_PREFIX: &str = "dismiss/";
+const DISMISS_ID: &str = "dismiss-feedback";
+
+const SPATIAL_OPTIONS: [(SpatialMode, &str); 4] = [
+    (SpatialMode::Keep, "Keep"),
+    (SpatialMode::Off, "Off"),
+    (SpatialMode::WindowsSonic, "Windows Sonic"),
+    (SpatialMode::DolbyAtmosHeadphones, "Dolby Atmos for Headphones"),
+];
+
+struct RegisteredTray {
+    icon: TrayIcon,
+    guid: u128,
+}
+
+thread_local! {
+    // The tray icon belongs to Tauri's Windows event-loop thread.
+    static TRAY: RefCell<Option<RegisteredTray>> = const { RefCell::new(None) };
+}
+
+pub(super) fn close() {
+    TRAY.with_borrow_mut(|tray| *tray = None);
+}
+
+fn tray_guid() -> std::io::Result<u128> {
+    // Windows binds a tray GUID to an executable path. Hash it so side-by-side worktrees
+    // can each register their own icon while upgrades at the same path keep their identity.
+    let executable = std::env::current_exe()?;
+    let path = executable.canonicalize().unwrap_or(executable);
+    let hash = path
+        .as_os_str()
+        .as_encoded_bytes()
+        .iter()
+        .fold(0xcbf2_9ce4_8422_2325_u64, |hash, byte| (hash ^ u64::from(*byte)).wrapping_mul(0x0100_0000_01b3));
+    Ok(0x4046_6f6f_327c_4f4a_8000_0000_0000_0000 | u128::from(hash & 0x3fff_ffff_ffff_ffff))
+}
 
 #[derive(Clone, Default)]
 pub(super) struct Prompts {
     choice: Option<Choice>,
-    disconnected: Option<String>,
+    feedback: Option<String>,
 }
 
 #[derive(Clone)]
@@ -51,7 +88,8 @@ fn prompts(state: &SharedRuntime) -> MutexGuard<'_, Prompts> {
 
 pub(super) fn show_notice(state: &SharedRuntime, notice: &Notice) {
     match notice {
-        Notice::NotConnected { name } => prompts(state).disconnected = Some(name.clone()),
+        Notice::NotConnected { name } => notify(state, "Device not connected", &format!("{name} was not connected")),
+        Notice::SettingRejected { error } => notify(state, "Setting could not be saved", error),
         Notice::ChooseDevice { request_id, name, candidates } => {
             let choice = Choice { request_id: *request_id, name: name.clone(), candidates: candidates.clone() };
             let previous = prompts(state).choice.replace(choice);
@@ -63,25 +101,38 @@ pub(super) fn show_notice(state: &SharedRuntime, notice: &Notice) {
     }
 }
 
-pub(super) fn refresh_tooltip(app: &AppHandle, state: &SharedRuntime, snapshot: &EngineSnapshot) {
-    if let Some(tray) = app.tray_by_id(TRAY_ID) {
+fn notify(state: &SharedRuntime, title: &str, message: &str) {
+    prompts(state).feedback = Some(format!("{title} · {message}"));
+    let accepted = TRAY.with_borrow(|tray| {
+        tray.as_ref().is_some_and(|tray| {
+            ice_win::desktop::notify_tray(tray.icon.window_handle() as isize, tray.guid, title, message)
+        })
+    });
+    tracing::debug!(title, accepted, "Windows tray notification requested");
+}
+
+pub(super) fn refresh_tooltip(state: &SharedRuntime, snapshot: &EngineSnapshot) {
+    let status = {
         let prompts = prompts(state);
-        let status = if prompts.choice.is_some() {
+        if prompts.choice.is_some() {
             Some("Left-click to choose a device")
-        } else if prompts.disconnected.is_some() || !snapshot.notices.is_empty() {
+        } else if prompts.feedback.is_some() || !snapshot.notices.is_empty() {
             Some("Left-click to see audio notices")
         } else {
             snapshot.playback.iter().find(|device| device.is_default).map(|device| device.name.as_str())
-        };
-        let tooltip =
-            status.map_or_else(|| "Ice Audio Manager".to_owned(), |status| format!("Ice Audio Manager · {status}"));
-        drop(prompts);
-        let tooltip: String = tooltip.chars().take(60).collect();
-        let _ = tray.set_tooltip(Some(tooltip));
-    }
+        }
+    };
+    let tooltip =
+        status.map_or_else(|| "Ice Audio Manager".to_owned(), |status| format!("Ice Audio Manager · {status}"));
+    let tooltip: String = tooltip.chars().take(60).collect();
+    TRAY.with_borrow(|tray| {
+        if let Some(tray) = tray {
+            let _ = tray.icon.set_tooltip(Some(tooltip));
+        }
+    });
 }
 
-fn handle_prompt_action(app: &AppHandle, state: &SharedRuntime, id: &str) -> bool {
+fn handle_prompt_action(state: &SharedRuntime, id: &str) -> bool {
     if let Some(action) = id.strip_prefix(CHOICE_PREFIX) {
         let command = {
             let mut prompts = prompts(state);
@@ -93,20 +144,11 @@ fn handle_prompt_action(app: &AppHandle, state: &SharedRuntime, id: &str) -> boo
         };
         if let Some(command) = command {
             state.engine.send(command);
-            refresh_tooltip(app, state, &state.engine.snapshot());
+            refresh_tooltip(state, &state.engine.snapshot());
         }
-    } else if let Some(name) = id.strip_prefix(DISMISS_PREFIX) {
-        let dismissed = {
-            let mut prompts = prompts(state);
-            let same_notice = prompts.disconnected.as_deref() == Some(name);
-            if same_notice {
-                prompts.disconnected = None;
-            }
-            same_notice
-        };
-        if dismissed {
-            refresh_tooltip(app, state, &state.engine.snapshot());
-        }
+    } else if id == DISMISS_ID {
+        prompts(state).feedback = None;
+        refresh_tooltip(state, &state.engine.snapshot());
     } else {
         return false;
     }
@@ -147,80 +189,95 @@ pub(super) fn build(app: &AppHandle, state: Arc<SharedRuntime>) -> tauri::Result
     )?;
 
     let menu_state = Arc::clone(&state);
-    let mut builder = TrayIconBuilder::with_id(TRAY_ID)
-        .tooltip("Ice Audio Manager")
-        .menu(&menu)
-        .show_menu_on_left_click(false)
-        .on_menu_event(move |app, event| {
-            if handle_prompt_action(app, &menu_state, event.id.as_ref()) {
-                return;
-            }
-            if let Some(device_id) = event.id.as_ref().strip_prefix(DEVICE_PREFIX) {
-                menu_state.engine.send(Command::SwitchTo { device_id: device_id.to_owned(), roles: RoleSet::Default });
-                return;
-            }
-            let operation = match event.id.as_ref() {
-                "settings" => {
-                    request_preview(app, &menu_state, Preview::Settings);
-                    Ok(())
+    app.on_menu_event(move |app, event| {
+        let id = event.id.as_ref();
+        if handle_prompt_action(&menu_state, id) {
+            return;
+        }
+        if let Some(command) = id.strip_prefix(COMMAND_PREFIX) {
+            match serde_json::from_str::<Command>(command) {
+                Ok(command) => {
+                    tracing::debug!(?command, "Audio tray command");
+                    menu_state.engine.send(command);
                 }
-                "notch" => {
-                    request_preview(app, &menu_state, Preview::Notch);
-                    Ok(())
-                }
-                "monitor" => cycle_monitor_internal(app, &menu_state),
-                "launch" => {
-                    if let Some((startup, _)) = startup {
-                        let mut enabled = startup_enabled.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-                        let next = !*enabled;
-                        let result = std::env::current_exe()
-                            .map_err(|error| error.to_string())
-                            .and_then(|exe| startup.set_enabled(next, &exe).map_err(|error| error.to_string()));
-                        if result.is_ok() {
-                            *enabled = next;
-                        }
-                        let _ = launch.set_checked(*enabled);
-                        if result.is_err() {
-                            let _ = launch.set_text("Launch at sign-in (change failed)");
-                        } else {
-                            let _ = launch.set_text("Launch at sign-in");
-                        }
-                        result
-                    } else {
-                        Ok(())
+                Err(error) => tracing::warn!(%error, "Invalid audio tray action"),
+            }
+            return;
+        }
+        let operation = match id {
+            "settings" => {
+                request_preview(app, &menu_state, Preview::Settings);
+                Ok(())
+            }
+            "notch" => {
+                request_preview(app, &menu_state, Preview::Notch);
+                Ok(())
+            }
+            "monitor" => cycle_monitor_internal(app, &menu_state),
+            "launch" => {
+                if let Some((startup, _)) = startup {
+                    let mut enabled = startup_enabled.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+                    let next = !*enabled;
+                    let result = std::env::current_exe()
+                        .map_err(|error| error.to_string())
+                        .and_then(|exe| startup.set_enabled(next, &exe).map_err(|error| error.to_string()));
+                    if result.is_ok() {
+                        *enabled = next;
                     }
-                }
-                "quit" => {
-                    menu_state.allow_exit.store(true, Ordering::Release);
-                    app.exit(0);
+                    let _ = launch.set_checked(*enabled);
+                    if result.is_err() {
+                        let _ = launch.set_text("Launch at sign-in (change failed)");
+                    } else {
+                        let _ = launch.set_text("Launch at sign-in");
+                    }
+                    result
+                } else {
                     Ok(())
                 }
-                _ => Ok(()),
-            };
-            if let Err(error) = operation {
-                tracing::warn!(action = %event.id.as_ref(), %error, "Tray action failed");
             }
-        })
-        .on_tray_icon_event(move |tray, event| {
-            if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } = event {
-                let app = tray.app_handle();
+            "quit" => {
+                menu_state.allow_exit.store(true, Ordering::Release);
+                app.exit(0);
+                Ok(())
+            }
+            _ => Ok(()),
+        };
+        if let Err(error) = operation {
+            tracing::warn!(action = %event.id.as_ref(), %error, "Tray action failed");
+        }
+    });
+    app.on_tray_icon_event(move |app, event| {
+        if event.id().as_ref() != TRAY_ID {
+            return;
+        }
+        let TrayIconEvent::Click { button, button_state: MouseButtonState::Up, .. } = event else { return };
+        let result = match button {
+            MouseButton::Left => {
                 let visible_prompts = prompts(&state).clone();
                 let snapshot = state.engine.snapshot();
                 tracing::debug!(revision = snapshot.revision, "Opening audio tray menu");
-                let result =
-                    quick_menu(app, &snapshot, &visible_prompts).and_then(|menu| popup_owner.popup_menu(&menu));
-                if let Err(error) = ice_win::desktop::finish_tray_menu(owner_hwnd) {
-                    tracing::debug!(%error, "Could not signal the tray popup closed");
-                }
-                if let Err(error) = result {
-                    tracing::warn!(%error, "Could not open the audio device menu");
-                }
+                quick_menu(app, &snapshot, &visible_prompts).and_then(|menu| popup_owner.popup_menu(&menu))
             }
-        });
-    if let Some(icon) = app.default_window_icon().cloned() {
-        builder = builder.icon(icon);
+            MouseButton::Right => popup_owner.popup_menu(&menu),
+            _ => return,
+        };
+        if let Err(error) = ice_win::desktop::finish_tray_menu(owner_hwnd) {
+            tracing::debug!(%error, "Could not signal the tray popup closed");
+        }
+        if let Err(error) = result {
+            tracing::warn!(%error, "Could not open the tray menu");
+        }
+    });
+
+    let guid = tray_guid()?;
+    let mut builder = TrayIconBuilder::new().with_id(TRAY_ID).with_guid(guid).with_tooltip("Ice Audio Manager");
+    if let Some(image) = app.default_window_icon() {
+        let icon = Icon::from_rgba(image.rgba().to_vec(), image.width(), image.height())
+            .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidData, error))?;
+        builder = builder.with_icon(icon);
     }
-    builder.build(app)?;
+    let icon = builder.build()?;
+    TRAY.with_borrow_mut(|tray| *tray = Some(RegisteredTray { icon, guid }));
     Ok(())
 }
 
@@ -246,29 +303,44 @@ fn quick_menu(app: &AppHandle, snapshot: &EngineSnapshot, prompts: &Prompts) -> 
         picker.append(&item(app, &cancel, "Cancel")?)?;
         menu.append(&picker)?;
     }
-    if let Some(name) = &prompts.disconnected {
-        let unavailable = Submenu::new(app, menu_text(&format!("{name} was not connected")), true)?;
-        unavailable.append(&item(app, &format!("{DISMISS_PREFIX}{name}"), "Dismiss")?)?;
-        menu.append(&unavailable)?;
+    if let Some(message) = &prompts.feedback {
+        let feedback = Submenu::new(app, menu_text(message), true)?;
+        feedback.append(&item(app, DISMISS_ID, "Dismiss")?)?;
+        menu.append(&feedback)?;
     }
     for (index, notice) in snapshot.notices.iter().enumerate() {
         if let Some(label) = persistent_notice_text(notice) {
             append_status(app, &menu, &format!("notice/{index}"), &label)?;
         }
     }
-    if prompts.choice.is_some() || prompts.disconnected.is_some() || !snapshot.notices.is_empty() {
+    if prompts.choice.is_some() || prompts.feedback.is_some() || !snapshot.notices.is_empty() {
         menu.append(&PredefinedMenuItem::separator(app)?)?;
     }
-    append_devices(app, &menu, "playback", "Playback devices", &snapshot.playback)?;
+    append_devices(app, &menu, "playback", "Playback devices", &snapshot.playback, &snapshot.settings)?;
     if let Some(volume) = snapshot.volume {
         append_status(app, &menu, "playback-volume", &volume_text("Playback volume", volume.percent, volume.muted))?;
     }
     menu.append(&PredefinedMenuItem::separator(app)?)?;
-    append_devices(app, &menu, "recording", "Recording devices", &snapshot.recording)?;
+    append_devices(app, &menu, "recording", "Recording devices", &snapshot.recording, &snapshot.settings)?;
     if let Some(percent) = snapshot.mic_volume {
         let text = volume_text("Communications microphone", percent, snapshot.mic_muted.unwrap_or(false));
         append_status(app, &menu, "mic-volume", &text)?;
     }
+    menu.append(&PredefinedMenuItem::separator(app)?)?;
+    if !snapshot.settings.toggle_pairs.is_empty() {
+        let pairs = Submenu::new(app, "Toggle pairs", true)?;
+        for pair in &snapshot.settings.toggle_pairs {
+            let primary = saved_device_text(&pair.primary);
+            let secondary = saved_device_text(&pair.secondary);
+            let hotkey = pair.hotkey.as_deref().unwrap_or("No hotkey");
+            let label = menu_text(&format!("{primary} ↔ {secondary} · {hotkey}"));
+            pairs.append(&MenuItem::new(app, label, false, None::<&str>)?)?;
+        }
+        menu.append(&pairs)?;
+    }
+    let enabled = snapshot.settings.knob_gestures;
+    let id = command_id(&Command::SetKnobGestures { enabled: !enabled })?;
+    menu.append(&CheckMenuItem::with_id(app, id, "Knob gestures", true, enabled, None::<&str>)?)?;
     Ok(menu)
 }
 
@@ -295,21 +367,72 @@ fn persistent_notice_text(notice: &Notice) -> Option<String> {
     }
 }
 
+fn command_id(command: &Command) -> tauri::Result<String> {
+    Ok(format!("{COMMAND_PREFIX}{}", serde_json::to_string(command)?))
+}
+
+fn saved_device_text(device: &SavedDevice) -> String {
+    let suffix = if device.device_id.is_none() { " (not connected)" } else { "" };
+    format!("{}{suffix}", device.name)
+}
+
 fn append_devices(
     app: &AppHandle,
     menu: &Menu<tauri::Wry>,
     heading_id: &str,
     heading: &str,
     devices: &[DeviceSummary],
+    settings: &SettingsView,
 ) -> tauri::Result<()> {
     append_status(app, menu, heading_id, heading)?;
+    let current = devices.iter().find(|device| device.is_default && device.state == DeviceState::Active);
     for device in devices.iter().filter(|device| device.state == DeviceState::Active) {
-        let id = format!("{DEVICE_PREFIX}{}", device.id);
-        let mut label = device.name.replace('&', "&&");
-        if device.is_default_communications {
-            label.push_str(" (communications)");
+        let suffix = match (device.is_default, device.is_default_communications) {
+            (true, true) => " (default, communications)",
+            (true, false) => " (default)",
+            (false, true) => " (communications)",
+            (false, false) => "",
+        };
+        let label = menu_text(&format!("{}{suffix}", device.name));
+        let device_menu = Submenu::new(app, label, true)?;
+        let id = command_id(&Command::SwitchTo { device_id: device.id.clone(), roles: RoleSet::Default })?;
+        device_menu.append(&CheckMenuItem::with_id(app, id, "Make default", true, device.is_default, None::<&str>)?)?;
+        if let Some(current) = current.filter(|current| current.id != device.id) {
+            let id = command_id(&Command::SetTogglePair {
+                pair_id: "main".into(),
+                primary_id: device.id.clone(),
+                secondary_id: current.id.clone(),
+                hotkey: Some("Ctrl+Alt+F12".into()),
+                roles: None,
+            })?;
+            device_menu.append(&item(app, &id, "Toggle with the current device…")?)?;
         }
-        menu.append(&CheckMenuItem::with_id(app, id, label, true, device.is_default, None::<&str>)?)?;
+        if device.flow == Flow::Render {
+            let preference = settings
+                .devices
+                .iter()
+                .find(|pref| pref.device.device_id.as_deref() == Some(&device.id))
+                .map_or(SpatialMode::Keep, |pref| pref.spatial);
+            let spatial_menu = Submenu::new(app, "Spatial sound", true)?;
+            for (spatial, text) in SPATIAL_OPTIONS {
+                let id = command_id(&Command::SetDevicePrefs {
+                    device_id: device.id.clone(),
+                    spatial: Some(spatial),
+                    alias: None,
+                    hidden: None,
+                })?;
+                spatial_menu.append(&CheckMenuItem::with_id(
+                    app,
+                    id,
+                    text,
+                    true,
+                    spatial == preference,
+                    None::<&str>,
+                )?)?;
+            }
+            device_menu.append(&spatial_menu)?;
+        }
+        menu.append(&device_menu)?;
     }
     Ok(())
 }
@@ -330,5 +453,77 @@ mod tests {
         assert_eq!(choice.answer("41/1000"), None);
         assert_eq!(choice.answer("41/1"), Some(Command::ResolveChoice { request_id: 41, device_id: Some(id) }));
         assert_eq!(choice.answer("41/cancel"), Some(Command::ResolveChoice { request_id: 41, device_id: None }));
+    }
+
+    #[test]
+    fn native_device_menu_updates_pair_spatial_and_knob_settings() {
+        let app = tauri::Builder::default().any_thread().build(tauri::generate_context!()).unwrap();
+        let engine = FakeEngine::new();
+        let snapshot = engine.snapshot();
+        let default = snapshot.playback.iter().find(|device| device.is_default).unwrap();
+        let other = snapshot.playback.iter().find(|device| !device.is_default).unwrap();
+        let menu = quick_menu(app.handle(), &snapshot, &Prompts::default()).unwrap();
+        let items = menu.items().unwrap();
+        let device_menu = items
+            .iter()
+            .filter_map(|item| item.as_submenu())
+            .find(|item| item.text().unwrap() == menu_text(&other.name))
+            .unwrap();
+        let actions = device_menu.items().unwrap();
+        let pair = actions
+            .iter()
+            .filter_map(|item| item.as_menuitem())
+            .find(|item| item.text().unwrap() == "Toggle with the current device…")
+            .unwrap();
+        let command =
+            serde_json::from_str::<Command>(pair.id().as_ref().strip_prefix(COMMAND_PREFIX).unwrap()).unwrap();
+        assert_eq!(
+            command,
+            Command::SetTogglePair {
+                pair_id: "main".into(),
+                primary_id: other.id.clone(),
+                secondary_id: default.id.clone(),
+                hotkey: Some("Ctrl+Alt+F12".into()),
+                roles: None,
+            }
+        );
+        engine.send(command);
+
+        let spatial = actions
+            .iter()
+            .filter_map(|item| item.as_submenu())
+            .find(|item| item.text().unwrap() == "Spatial sound")
+            .unwrap();
+        let options = spatial.items().unwrap();
+        let off = options
+            .iter()
+            .filter_map(|item| item.as_check_menuitem())
+            .find(|item| item.text().unwrap() == "Off")
+            .unwrap();
+        let command = serde_json::from_str::<Command>(off.id().as_ref().strip_prefix(COMMAND_PREFIX).unwrap()).unwrap();
+        engine.send(command);
+
+        let knob = items
+            .iter()
+            .filter_map(|item| item.as_check_menuitem())
+            .find(|item| item.text().unwrap() == "Knob gestures")
+            .unwrap();
+        assert_eq!(knob.is_checked().unwrap(), snapshot.settings.knob_gestures);
+        let command =
+            serde_json::from_str::<Command>(knob.id().as_ref().strip_prefix(COMMAND_PREFIX).unwrap()).unwrap();
+        engine.send(command);
+
+        let settings = engine.snapshot().settings;
+        let saved_pair = settings.toggle_pairs.iter().find(|pair| pair.id == "main").unwrap();
+        assert_eq!(saved_pair.primary.device_id.as_ref(), Some(&other.id));
+        assert_eq!(saved_pair.secondary.device_id.as_ref(), Some(&default.id));
+        assert_eq!(saved_pair.hotkey.as_deref(), Some("Ctrl+Alt+F12"));
+        assert_eq!(settings.knob_gestures, !snapshot.settings.knob_gestures);
+        assert!(
+            settings
+                .devices
+                .iter()
+                .any(|pref| pref.device.device_id.as_ref() == Some(&other.id) && pref.spatial == SpatialMode::Off)
+        );
     }
 }

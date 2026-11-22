@@ -16,6 +16,8 @@ tracing = "0.1"
 tracing-appender = "0.2"
 tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt"] }
 ts-rs = "12"
+# Reuse Tauri's tray-icon dependency for its Windows GUID-based registration.
+tray-icon = { version = "0.25", default-features = false }
 
 [dev-dependencies]
 ice-core = { workspace = true, features = ["ts"] }

@@ -1317,7 +1317,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                     .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
             } else {
                 tray::build(&handle, Arc::clone(&setup_state))?;
-                tray::refresh_tooltip(&handle, &setup_state, &initial);
+                tray::refresh_tooltip(&setup_state, &initial);
                 if let Some(primary) =
                     setup_state.monitors.lock().unwrap_or_else(std::sync::PoisonError::into_inner).first().cloned()
                     && let Ok(dot) = NativeDotHandle::spawn(primary)
@@ -1356,12 +1356,12 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         })
         .build(tauri::generate_context!())?;
 
-    app.run(move |_app_handle, event| {
-        if let tauri::RunEvent::ExitRequested { api, .. } = event
-            && !exit_flag_ref.allow_exit.load(Ordering::Acquire)
-        {
+    app.run(move |_app_handle, event| match event {
+        tauri::RunEvent::Exit => tray::close(),
+        tauri::RunEvent::ExitRequested { api, .. } if !exit_flag_ref.allow_exit.load(Ordering::Acquire) => {
             api.prevent_exit();
         }
+        _ => {}
     });
     Ok(())
 }

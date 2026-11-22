@@ -1413,6 +1413,7 @@ dependencies = [
  "tracing",
  "tracing-appender",
  "tracing-subscriber",
+ "tray-icon",
  "ts-rs",
 ]
 

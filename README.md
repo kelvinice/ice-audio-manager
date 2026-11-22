@@ -51,11 +51,14 @@ cargo build --release -p ice-audio-manager
 .\target\release\ice-audio-manager.exe --start-minimized
 ```
 
-Left-click the tray icon to choose a playback or recording device. Right-click for Settings,
-the notch preview, launch at sign-in, and Quit. The left-click menu also shows volume and audio notices.
-If a saved device has more than one match, open **Choose device** in that menu to confirm or cancel.
-A normal launch stays in the tray, and a
-second launch exits without creating another instance.
+Left-click the tray icon and open a playback or recording device to switch to it or pair it with the
+current default on **Ctrl+Alt+F12**. Pairing replaces the saved **main** pair. Playback device menus
+also let you set a spatial sound preference.
+The left-click menu shows saved toggle pairs, volume, active notices, and the **Knob gestures** setting.
+If the engine needs help matching a saved device, open **Choose device** to confirm or cancel.
+
+Right-click for Settings, the notch preview, launch at sign-in, and Quit. A normal launch stays in the tray,
+and a second launch exits without creating another instance.
 
 The app uses Windows audio and reads `%APPDATA%\IceAudioManager\config.toml`. It uses the default
 configuration when the file is absent. Use `--fake-engine` to simulate devices and volume changes.
