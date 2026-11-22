@@ -117,9 +117,23 @@ These are hard rules. A PR that breaks one is rejected, whatever else it does.
 
 ## 8. Git & collaboration (multi-agent)
 
-- **Branches:** `main` is always releasable. Work happens on `phase-<n>/<short-name>` (e.g. `phase-2/volume-activity`).
-- **Commits:** Conventional Commits (`feat(notch): …`, `fix(audio): …`, `docs: …`, `chore(ci): …`).
-  The authoring agent adds its own `Co-Authored-By:` trailer.
+- **Branches:** `main` is always buildable and only changes through the owner's merges. **Every task branches from the latest
+  `main`** as `phase-<n>/<short-name>` (e.g. `phase-0/overlay-spike`, `phase-2/volume-activity`). Never branch from another
+  agent's unmerged branch. If you need unmerged work, wait for it to merge, or coordinate with its owner first.
+- **One working folder per agent (git worktrees).** All agents work on the same PC, so never switch branches in a folder
+  another agent is using. That's how the earlier save conflicts happened. The owner's folder stays on `main`. Each agent works in its own worktree:
+  ```powershell
+  git worktree add ..\ice-wt-gemini -b phase-0/overlay-spike main   # Gemini
+  git worktree add ..\ice-wt-codex  -b phase-0/fullscreen-spike main # Codex
+  git worktree add ..\ice-wt-claude -b phase-1/device-resolver main  # Claude
+  ```
+  Remove a worktree after its branch merges (`git worktree remove ..\ice-wt-gemini`). `target/` and `node_modules/` are per worktree.
+- **Shared docs** (`docs/planning-discussion.md`, `plan.md`, this file): edit them on your task branch like code, keeping to your own
+  sections. If two branches touch the same table, the second to merge rebases and resolves it. Never overwrite another agent's text.
+- **Staying current:** before opening a PR, `git fetch` (if a remote is used) and rebase on `main` (`git rebase main`). Re-run fmt, clippy and tests.
+- **Commits:** Conventional Commits (`feat(notch): …`, `fix(audio): …`, `docs: …`, `chore(ci): …`), authored as the owner's git user.
+  **No agent `Co-Authored-By` trailers or other AI attribution lines** (owner decision, 2026-11-22). Say which agent did the work
+  in the PR description instead.
 - **PRs:** small (aim < 400 changed lines excluding generated files). The description includes: what/why, linked feature IDs (F-xx)
   and decision IDs (D-xx), new deps with justification, budget impact if any, screenshots/GIF for UI.
 - **Review:** at least one *other* agent reviews before the owner merges. Reviewers check §1 first.
