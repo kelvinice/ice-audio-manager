@@ -16,5 +16,9 @@ ts-rs = "12"
 [build-dependencies]
 tauri-build = "2"
 
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]
+
 [lints]
 workspace = true

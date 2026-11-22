@@ -533,12 +533,99 @@ fn spawn_notch_and_measure(app: &AppHandle, state: &Arc<SharedRuntime>) -> Resul
     *state.first_paint_tx.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = Some(tx);
 
     let start = Instant::now();
+    let monitor = state.active_monitor_info().ok_or_else(|| "no active monitor found".to_string())?;
+    let phys_w = f64::from(monitor.logical_to_physical(NOTCH_CANVAS_W));
+    let phys_x = f64::from(monitor.left) + (f64::from(monitor.width) - phys_w) * 0.5;
+    let phys_y = f64::from(monitor.top + monitor.logical_to_physical(NOTCH_TOP_OFFSET));
+
+    // Must be called from a non-main thread (`tauri-runtime-wry` dispatches window creation to main loop).
+    let win = WebviewWindowBuilder::new(app, "notch", WebviewUrl::App("index.html".into()))
+        .title("Ice Audio Notch")
+        .inner_size(f64::from(NOTCH_CANVAS_W), f64::from(NOTCH_CANVAS_H))
+        .position(phys_x / monitor.scale_factor, phys_y / monitor.scale_factor)
+        .transparent(true)
+        .decorations(false)
+        .always_on_top(true)
+        .skip_taskbar(true)
+        .resizable(false)
+        .shadow(false)
+        .focused(false)
+        .visible(false)
+        .data_directory(state.wv2_data_dir.clone())
+        .build()
+        .map_err(|e| e.to_string())?;
+
     let hwnd = on_main_sync(app, {
         let st = Arc::clone(state);
-        move |h| create_notch_window(h, &st)
+        let mon = monitor;
+        move |_h| {
+            let hwnd = win.hwnd().map_err(|e| e.to_string())?.0 as isize;
+            overlay_win::apply_overlay_styles(hwnd).map_err(|e| e.to_string())?;
+            overlay_win::move_top_center(hwnd, &mon, NOTCH_CANVAS_W, NOTCH_CANVAS_H, NOTCH_TOP_OFFSET)
+                .map_err(|e| e.to_string())?;
+            win.show().map_err(|e| e.to_string())?;
+            overlay_win::ensure_topmost(hwnd).map_err(|e| e.to_string())?;
+            st.notch_hwnd.store(hwnd, Ordering::Release);
+            st.notch_visible.store(true, Ordering::Release);
+            Ok(hwnd)
+        }
     })?;
-    let painted = rx.recv_timeout(Duration::from_secs(10)).map_err(|e| format!("first_paint timeout: {e}"))?;
+
+    let painted = rx.recv_timeout(Duration::from_secs(15)).map_err(|e| format!("first_paint timeout: {e}"))?;
     Ok((hwnd, painted.saturating_duration_since(start).as_secs_f64() * 1000.0))
+}
+
+fn destroy_notch_and_wait(app: &AppHandle, state: &Arc<SharedRuntime>) -> Result<(), String> {
+    state.notch_hwnd.store(0, Ordering::Release);
+    state.notch_visible.store(false, Ordering::Release);
+    std::thread::sleep(Duration::from_millis(40));
+
+    on_main_sync(app, {
+        let st = Arc::clone(state);
+        move |h| {
+            if let Some(win) = h.get_webview_window("notch") {
+                overlay_win::remove_overlay_subclass(win.hwnd().map_or(0, |hw| hw.0 as isize));
+                win.destroy().map_err(|e| e.to_string())?;
+            }
+            if let Some(d) = st.native_dot.lock().unwrap_or_else(std::sync::PoisonError::into_inner).as_ref() {
+                d.show_idle();
+            }
+            Ok(())
+        }
+    })?;
+
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while app.get_webview_window("notch").is_some() && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(25));
+    }
+    wait_for_wv2_exit(state, Duration::from_secs(10));
+    std::thread::sleep(Duration::from_millis(300));
+    Ok(())
+}
+
+fn spawn_settings_and_wait(app: &AppHandle, state: &Arc<SharedRuntime>) -> Result<(), String> {
+    let (tx, rx) = mpsc::sync_channel(1);
+    *state.settings_ready_tx.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = Some(tx);
+
+    let win = WebviewWindowBuilder::new(app, "settings", WebviewUrl::App("settings.html".into()))
+        .title("Ice Audio Manager — Settings")
+        .inner_size(560.0, 420.0)
+        .resizable(false)
+        .visible(true)
+        .data_directory(state.wv2_data_dir.clone())
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let hwnd = win.hwnd().map_err(|e| e.to_string())?.0 as isize;
+    let _ = overlay_win::apply_settings_mica(hwnd, true);
+    let _ = rx.recv_timeout(Duration::from_secs(5));
+
+    win.destroy().map_err(|e| e.to_string())?;
+    let deadline = Instant::now() + Duration::from_secs(3);
+    while app.get_webview_window("settings").is_some() && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(25));
+    }
+    Ok(())
 }
 
 fn trigger_event_and_measure(
@@ -747,27 +834,17 @@ fn run_benchmark_inner(
 
     // 6. Destroy WebView2 + show native dot (Balanced / Lite idle state)
     eprintln!("[bench] State 6/7: notch_destroyed_native_dot");
-    on_main_sync(app, {
-        let st = Arc::clone(state);
-        move |h| {
-            st.notch_hwnd.store(0, Ordering::Release);
-            st.notch_visible.store(false, Ordering::Release);
-            if let Some(win) = h.get_webview_window("notch") {
-                overlay_win::remove_overlay_subclass(win.hwnd().map_or(0, |hw| hw.0 as isize));
-                win.destroy().map_err(|e| e.to_string())?;
-            }
-            if let Some(d) = st.native_dot.lock().unwrap_or_else(std::sync::PoisonError::into_inner).as_ref() {
-                d.show_idle();
-            }
-            Ok(())
-        }
-    })?;
-    wait_for_wv2_exit(state, Duration::from_secs(6));
+    destroy_notch_and_wait(app, state)?;
+    eprintln!(
+        "[bench] State 6/7: wv2 exited, remaining known_wv2_pids={}",
+        state.known_wv2_pids.lock().unwrap_or_else(std::sync::PoisonError::into_inner).len()
+    );
     states.push(sample_state(app, state, "6_notch_destroyed_native_dot", "notch", settle_secs, sample_secs));
 
     let mut cold_dot_latencies = Vec::new();
     let mut cold_wv2_latencies = Vec::new();
     for i in 0..5u8 {
+        eprintln!("[bench] State 6/7: cold-wake cycle {}/5", i + 1);
         let t_dot = Instant::now();
         if let Some(d) = state.native_dot.lock().unwrap_or_else(std::sync::PoisonError::into_inner).as_ref() {
             d.pulse_activity(Some(0.6 + (f32::from(i) * 0.06)), 0x006b_c5ff);
@@ -791,23 +868,7 @@ fn run_benchmark_inner(
             d.hide();
         }
         std::thread::sleep(Duration::from_millis(120));
-        on_main_sync(app, {
-            let st = Arc::clone(state);
-            move |h| {
-                st.notch_hwnd.store(0, Ordering::Release);
-                st.notch_visible.store(false, Ordering::Release);
-                if let Some(win) = h.get_webview_window("notch") {
-                    overlay_win::remove_overlay_subclass(win.hwnd().map_or(0, |hw| hw.0 as isize));
-                    win.destroy().map_err(|e| e.to_string())?;
-                }
-                if let Some(d) = st.native_dot.lock().unwrap_or_else(std::sync::PoisonError::into_inner).as_ref() {
-                    d.show_idle();
-                }
-                Ok(())
-            }
-        })?;
-        wait_for_wv2_exit(state, Duration::from_secs(6));
-        std::thread::sleep(Duration::from_millis(250));
+        destroy_notch_and_wait(app, state)?;
     }
 
     // 7. Re-warm notch + 10x Settings open/destroy leak check
@@ -827,20 +888,9 @@ fn run_benchmark_inner(
         d.hide();
     }
 
-    for _ in 0..10 {
-        let (tx, rx) = mpsc::sync_channel(1);
-        *state.settings_ready_tx.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = Some(tx);
-        on_main_sync(app, {
-            let st = Arc::clone(state);
-            move |h| create_settings_window(h, &st)
-        })?;
-        let _ = rx.recv_timeout(Duration::from_secs(5));
-        on_main_sync(app, move |h| {
-            if let Some(sw) = h.get_webview_window("settings") {
-                sw.destroy().map_err(|e| e.to_string())?;
-            }
-            Ok(())
-        })?;
+    for i in 0..10 {
+        eprintln!("[bench] State 7/7: settings cycle {}/10", i + 1);
+        spawn_settings_and_wait(app, state)?;
         std::thread::sleep(Duration::from_millis(120));
     }
     states.push(sample_state(app, state, "7_after_10x_settings", "notch", settle_secs, sample_secs));

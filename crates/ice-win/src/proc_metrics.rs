@@ -4,12 +4,12 @@ use core::ffi::c_void;
 use std::mem::size_of;
 use std::time::Duration;
 
-use windows::Win32::Foundation::{CloseHandle, FILETIME, HANDLE};
+use windows::Win32::Foundation::{CloseHandle, FILETIME, HANDLE, STILL_ACTIVE};
 use windows::Win32::System::ProcessStatus::{
     GetProcessMemoryInfo, PROCESS_MEMORY_COUNTERS, PROCESS_MEMORY_COUNTERS_EX2,
 };
 use windows::Win32::System::Threading::{
-    GetCurrentProcessId, GetProcessTimes, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION,
+    GetCurrentProcessId, GetExitCodeProcess, GetProcessTimes, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION,
 };
 
 /// Memory and CPU counter snapshot for a single process.
@@ -99,6 +99,13 @@ pub fn cpu_percent_between(before: &TreeSnapshot, after: &TreeSnapshot, elapsed:
 fn sample_one(pid: u32, kind: &str) -> Option<ProcessSample> {
     // SAFETY: opens read-only limited query access to `pid`; wrapped in `OwnedHandle`.
     let handle = OwnedHandle(unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid).ok()? });
+
+    let mut exit_code = 0u32;
+    // SAFETY: `exit_code` points to a valid stack `u32`.
+    unsafe { GetExitCodeProcess(handle.0, &raw mut exit_code).ok()? };
+    if exit_code != u32::try_from(STILL_ACTIVE.0).unwrap_or(259) {
+        return None;
+    }
 
     let mut counters = PROCESS_MEMORY_COUNTERS_EX2 {
         cb: u32::try_from(size_of::<PROCESS_MEMORY_COUNTERS_EX2>()).ok()?,

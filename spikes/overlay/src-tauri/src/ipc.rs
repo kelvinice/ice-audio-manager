@@ -52,7 +52,9 @@ pub struct HitRect {
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct NotchSnapshot {
+    #[ts(type = "number")]
     pub revision: u64,
+    #[ts(type = "number")]
     pub event_seq: u64,
     pub activity: ActivityKind,
     pub volume_percent: u8,
