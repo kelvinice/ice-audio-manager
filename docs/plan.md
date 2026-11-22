@@ -49,8 +49,8 @@
 - ✅ 0.7 (Claude): `legacy-python-v0` tag, Python removed, `.env` untracked, MIT `LICENSE`, Rust workspace (`ice-core`, `ice-win`, spikes),
   CI (fmt, clippy `-D warnings`, test, release build). **Not yet:** Tauri `app/` scaffold + typed IPC codegen. These belong with the 0.2
   overlay spike (Gemini + Codex), which creates `app/`.
-- ✅ 0.2 overlay spike code (Gemini) merged: `spikes/overlay` (Tauri + Svelte, typed IPC export, spring module, native dot,
-  process metrics). **Missing:** the measurement write-up (`docs/spikes/phase0-overlay.md`) that picks the D-15 default profile.
+- ✅ 0.2 overlay spike + measurements (Gemini): `spikes/overlay` + [docs/spikes/phase0-overlay.md](spikes/phase0-overlay.md).
+  60 s release numbers: native dot `2.20 MB` Private Bytes (`0.000%` CPU, `0.02 ms` p95); warm/hidden WebView2 `149.84–150.39 MB` Private Bytes (`77.10–76.79 MB` Private WS); `TrySuspend` `148.01 MB` Private Bytes / **`6.44 MB` Private WS** (`27.24 ms` p95 resume); cold WebView2 spawn **`715.44 ms` p95**; 0 leaked PIDs on destroy. **D-15 strict gate verdict: Gate 3 → Option C** (native Direct2D/DirectComposition notch + lazy WebView2 Settings), with the `TrySuspend` Private WS (`6.44 MB`) vs Private Bytes (`148–167 MB`) owner option documented before Phase 2.
 - ✅ D-16 resolver (Claude): `ice_core::resolve` (`DeviceRef`, `resolve`, `toggle`), 12 tests built from the owner's real endpoints.
 - ✅ Engine contract (Claude, `phase-1/engine-api`): `ice_core::engine`: `Command`, `EngineSnapshot`, `Envelope { revision, event }`,
   `EngineEvent`, `Notice`, and the `Engine` trait. **Codex and Gemini: build against `ice_core::engine::fake::FakeEngine`** (owner's devices,
