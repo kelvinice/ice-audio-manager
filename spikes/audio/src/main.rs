@@ -9,6 +9,7 @@
 //! audio-spike peak [seconds]               peak meter of the default playback device at ~30 Hz
 //! audio-spike spatial [device]             spatial sound status (all active playback devices if omitted)
 //! audio-spike spatial-set <device> <off|sonic|atmos|atmos-ht|atmos-spk|dts-hx|dtsx-ultra|dtsx-ht>
+//! audio-spike hotkeys [seconds]            F31 knob test: registers Ctrl/Shift/Alt + volume keys, prints presses
 //! ```
 //! `<device>` = an endpoint ID, or a case-insensitive part of the name of an *Active* endpoint.
 
@@ -54,8 +55,51 @@ fn run() -> AnyResult<()> {
             arg(1).ok_or("usage: spatial-set <device> <format>")?,
             arg(2).ok_or("usage: spatial-set <device> <format>")?,
         ),
+        "hotkeys" => hotkeys(arg(1).and_then(|s| s.parse().ok()).unwrap_or(30)),
         other => Err(format!("unknown command `{other}` (see the header of spikes/audio/src/main.rs)").into()),
     }
+}
+
+/// F31 check: do knob turns with a modifier held reach `RegisterHotKey`? Plain turns are *not* registered,
+/// so they keep changing Windows' volume as usual.
+fn hotkeys(secs: u64) -> AnyResult<()> {
+    use ice_core::hotkey::Chord;
+    let chords = [
+        "Ctrl+VolumeUp",
+        "Ctrl+VolumeDown",
+        "Shift+VolumeUp",
+        "Shift+VolumeDown",
+        "Alt+VolumeUp",
+        "Alt+VolumeDown",
+        "Ctrl+VolumeMute",
+        "Ctrl+Alt+F12",
+    ];
+    let (tx, rx) = mpsc::channel();
+    let svc = ice_win::hotkeys::HotkeyService::start(tx)?;
+    let mut parsed = Vec::new();
+    for (i, s) in chords.iter().enumerate() {
+        let chord: Chord = s.parse()?;
+        let id = i32::try_from(i).unwrap_or(0) + 1;
+        match svc.register(id, chord, true) {
+            Ok(()) => println!("registered  {chord}"),
+            Err(e) => println!("FAILED      {e}"),
+        }
+        parsed.push(chord);
+    }
+    println!(
+        "\nfor {secs} s: turn/press the knob while holding Ctrl, Shift or Alt; also try plain turns (should NOT print)"
+    );
+    let start = Instant::now();
+    while let Some(left) = Duration::from_secs(secs).checked_sub(start.elapsed()) {
+        if let Ok(id) = rx.recv_timeout(left) {
+            let name = usize::try_from(id - 1)
+                .ok()
+                .and_then(|i| parsed.get(i))
+                .map_or_else(|| "?".into(), ToString::to_string);
+            println!("{:>8} ms  {name}", start.elapsed().as_millis());
+        }
+    }
+    Ok(())
 }
 
 fn flag_value<'a>(args: &'a [String], flag: &str) -> Option<&'a str> {

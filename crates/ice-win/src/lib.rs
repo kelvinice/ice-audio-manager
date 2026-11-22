@@ -1,4 +1,4 @@
-﻿//! All Windows FFI for Ice Audio Manager.
+//! All Windows FFI for Ice Audio Manager.
 //!
 //! This is the **only** crate allowed to contain `unsafe` (code-practices §3). Every `unsafe`
 //! block carries a `SAFETY:` comment, and only safe APIs are exported.
@@ -9,6 +9,7 @@
 pub mod com;
 pub mod endpoints;
 pub mod fullscreen;
+pub mod hotkeys;
 pub mod media;
 pub mod meter;
 pub mod monitors;
