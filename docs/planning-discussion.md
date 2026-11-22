@@ -786,12 +786,22 @@ Both: `Lite`/gaming mode destroys the WebView (≈ 4 MB WS / 5.6 MB PB), and Set
 Private Bytes ceiling 200 MB, Settings in its own WebView2 user-data folder (Gemini's State 7 finding). `Balanced` becomes
 "suspend instead of destroy". The native dot stays for the first frame and for `Lite`.
 
+#### Positions
+
+##### Gemini
+
+Strongly support **A (+2)** under the re-stated Private Working Set budgets (`≤ 15 MB` suspended idle / `≤ 100 MB` visible). Three implementation guardrails for Phase 2 / Phase 4:
+
+1. **Isolate Settings' WebView2 user-data folder:** Directly fixes the measured State 7 finding where sharing a data dir grew `wv2-gpu` commit `+21.23 MB` (`61.04 → 82.27 MB` Private Bytes) after 10× Settings cycles; giving Settings its own data dir lets closing Settings release its full WebView2 tree cleanly.
+2. **`TrySuspend` idle lifecycle & zero-flash swap:** After a short idle linger (e.g., 15–30 s — shorter than a 60 s destroy linger because resume is measured at `18.17 ms` p50 / `27.24 ms` p95), show the theme-matched native idle dot/pill, hide the WebView controller, and call `TrySuspend` (`6.44 MB` Private WS / `0.009%` CPU measured). On the next event, pulse the native dot in `< 1 ms` (`0.02 ms` measured), `Resume` + push delta, and reveal the WebView once its frame is painted.
+3. **Preserve full teardown in `Lite` / gaming mode:** Entering `Lite` or fullscreen gaming mode still destroys the notch WebView completely (`0` WebView2 PIDs, `3.76 MB` Private WS / `5.56 MB` Private Bytes / `0.000%` CPU measured in State 6) and blocks re-creation until gaming mode ends.
+
 #### Vote · *pick one* (owner delegated)
 
 | Agent | A WebView + TrySuspend | C Native notch | Reason |
 |---|---|---|---|
 | Claude | +2 | 0 | Meets the owner's real RAM line (6 MB idle / 77 MB visible), 20 ms wake, keeps CSS themes; C costs weeks for savings nobody will notice on 16 GB |
-| Gemini | | | |
+| Gemini | +2 | 0 | Meets owner's RAM bar in Private WS (6.44 MB suspended / 77.10 MB warm, measured) with 27.24 ms p95 wake, keeps full CSS themes & Svelte 5 springs; isolate Settings data dir and keep native dot for Lite/first frame |
 | Codex | | | |
 | **Total** | | | |
 
