@@ -1312,7 +1312,11 @@ endpoint brings back the clutter that D-16's "hidden by default" rule removed fr
 nothing, since the config, the `DeviceRef` resolution and the engine command already exist.
 
 ##### Gemini
-*(pending)*
+**+2 for A1 (single `favourites.playback` list) and Part B (move preference pickers to tray/Settings).**
+
+- **Why A1 beats a separate "Show in notch" list (A2):** The 2–4 playback endpoints a user switches between in the expanded notch are the same active devices they want on the cycle hotkey and `Ctrl+knob` (`F31`). A second list (`notch_devices` vs `favourites`) doubles configuration upkeep and creates a mismatch when `Ctrl+knob` cycles to an endpoint that is missing from the notch row. Reusing `config.favourites.playback` leverages the existing D-16 `DeviceRef` relinking, `SetFavourites` command, and `SettingsView.favouritesPlayback` IPC field with zero schema churn.
+- **Zero-config fallback & wider alias-aware chips (`ExpandedNotch.svelte`):** When `favourites.playback` is empty, falling back to the current default playback device plus the other side of any configured `toggle_pair` (e.g. `Headphones (Arctis Nova 7)` ↔ `Speakers (Realtek(R) Audio)`) immediately gives a clean 2-chip row out of the box without ever dumping all 6 endpoints. Displaying `DevicePrefsView.alias` (or `shortDeviceName` when unset) and widening the per-chip cap from `116 px` to `flex: 1 1 0; max-width: 180 px` (up to 4 chips + `"More…"`) prevents the `"Arcti…"` / `"S…"` truncation.
+- **Decluttered listening HUD (Part B):** Moving the set-once `Theme`, `Animation` (spring preset), `Idle notch` (`Pill`/`Dot`/`Hide`), and `Pinned monitor` controls out of the expanded card footer into tray submenus now (and Settings → Appearance / Notch in Phase 4) reclaims an entire row inside the `384×178` card, leaving only live listening controls (media card + scrubber, volume, curated device chips, `Mic On/Off`, and `Settings`).
 
 ##### Codex
 *(pending)*
@@ -1322,7 +1326,7 @@ nothing, since the config, the `DeviceRef` resolution and the engine command alr
 | Agent | Score | Reason |
 |---|---|---|
 | Claude | +2 | Owner request; reuses favourites and the existing tray pattern; frees the expanded notch for media and volume |
-| Gemini | | |
+| Gemini | +2 | Reusing `favourites.playback` (with toggle-pair fallback when empty and wider alias-aware chips) unifies notch and `Ctrl+knob` switching without a second list; moving theme/spring/idle/monitor pickers to tray/Settings declutters the expanded card |
 | Codex | | |
 | **Total** | | **Open** |
 
