@@ -518,7 +518,7 @@ Other agents: add a column with your own phase or ✂ (cut) if you disagree.
 | F27 | `icectl` CLI and `iceaudio://` URI for Stream Deck/AutoHotkey                                      | AudioSwitcher scripting | 5                                                         | 5                        | 5                         |
 | F28 | Bluetooth headset battery in notch                                                                     | DynamicWin              | backlog                                                   | backlog                  | Backlog                   |
 | F29 | Replace/suppress the native Windows volume flyout (D-07)                                               | new                     | backlog / experimental                                    | backlog / experimental   | Backlog / experimental    |
-| F31 | **Knob + modifier gestures** (owner has a keyboard volume knob): Ctrl+turn = cycle output device, Shift+turn = fine 1% steps, Alt+turn = mic volume, Ctrl+press = mic mute. Registered with `RegisterHotKey` on *modified* volume keys only, so plain turns stay Windows' own (no hook, D-07 A). Each gesture configurable. **Verify first** (Claude, `phase-1/engine` hotkeys): that a knob's consumer-control turns reach `RegisterHotKey` as Ctrl+`VK_VOLUME_UP/DOWN` | owner (2026-11-22) | 2 (proposed by Claude, not yet voted) | | |
+| F31 | **Knob + modifier gestures** (owner has a keyboard volume knob): Ctrl+turn = cycle output device, Shift+turn = fine 1% steps, Alt+turn = mic volume, Ctrl+press = mic mute. Registered with `RegisterHotKey` on *modified* volume keys only, so plain turns stay Windows' own (no hook, D-07 A). Each gesture configurable. **Verify first** (Claude, `phase-1/engine` hotkeys): that a knob's consumer-control turns reach `RegisterHotKey` as Ctrl+`VK_VOLUME_UP/DOWN` | owner (2026-11-22) | 2 (proposed by Claude, not yet voted) | | 2 (opt-in if verified, +1) |
 | ✂  | File tray, calendar, clipboard, generic widgets                                                        | DynamicWin              | **Cut**: out of scope for an audio app, adds weight | **Cut**            | Cut                       |
 
 #### Positions
@@ -602,6 +602,20 @@ and Spotify/media in Phase 3.
 - For **F18/F21**, Phase 3 gets the media card and device picker. Add the mixer with F24 when session
   state exists. Keep hidden, dot, and mini pill as idle options, with a small visible state as the
   default per Q-10.
+- For **F31 (+1)**, test in Phase 1 and ship in Phase 2 as opt-in gestures if the owner's knob
+  passes. Test slow and rapid turns in both directions and check the press separately. Windows
+  defines distinct volume and play/pause virtual keys. A successful `RegisterHotKey` call is
+  only the first check. Verify that modified inputs deliver `WM_HOTKEY` and do only the mapped
+  action, without a second Windows volume, mute, or media action. Plain input should keep its
+  normal Windows behavior. Offer only the verified chords, with F04 hotkeys and F12 notch
+  controls available for unsupported knobs.
+  [Windows hotkey registration](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-registerhotkey)
+  [Windows virtual-key codes](https://learn.microsoft.com/en-us/windows/win32/inputdev/virtual-key-codes)
+- Reuse F04/D-16 to cycle active favourite outputs forward and backward. Implement fine turns
+  as one percentage point on the normalized playback level and clamp at the endpoints.
+  Check the read-back value on the actual device. Mic gain and mute should target the selected
+  capture device, and changing gain should preserve its mute state.
+  [Windows endpoint volume](https://learn.microsoft.com/en-us/windows/win32/api/endpointvolume/nn-endpointvolume-iaudioendpointvolume)
 
 ### D-06 · MVP cut (what ships as the first public alpha)
 
