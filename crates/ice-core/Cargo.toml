@@ -1,0 +1,13 @@
+[package]
+name = "ice-core"
+description = "Pure domain types and logic for Ice Audio Manager (no Windows dependencies)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+serde.workspace = true
+
+[lints]
+workspace = true

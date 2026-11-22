@@ -1,56 +1,35 @@
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-env/
-build/
-develop-eggs/
+# Rust
+/target/
+**/*.rs.bk
+
+# Node / UI (app/ui, added by the UI owner)
+node_modules/
 dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
 
-# Virtual Environment
-.venv
-venv/
-ENV/
-.virtualenv/
-Pipfile.lock
+# Spike output (endpoint churn logs etc. contain local device names)
+spikes/**/out/
+*.jsonl
 
-# IDE - VSCode
+# Local reference clones (licences vary; never commit)
+docs/reference
+
+# Logs / temp
+logs/
+temp/
+*.log
+
+# Local env files (never commit)
+.env
+.env.*
+
+# IDE
 .vscode/*
 !.vscode/settings.json
-!.vscode/tasks.json
-!.vscode/launch.json
 !.vscode/extensions.json
-
-# Application specific
-hotkeys.json
-*.log
+.idea/
 
 # Windows
 Thumbs.db
 ehthumbs.db
 Desktop.ini
 $RECYCLE.BIN/
-
-# macOS
-.DS_Store
-.AppleDouble
-.LSOverride
-._*
-
-# Project specific
-logs/
-temp/

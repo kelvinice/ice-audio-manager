@@ -1,0 +1,15 @@
+﻿[package]
+name = "ice-win"
+description = "All Windows FFI for Ice Audio Manager: Core Audio, PolicyConfig, spatial sound, media (GSMTC)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+ice-core.workspace = true
+windows.workspace = true
+windows-core.workspace = true
+
+[lints]
+workspace = true

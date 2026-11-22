@@ -1,0 +1,53 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/ice-core",
+    "crates/ice-win",
+    "spikes/audio",
+    "spikes/media",
+]
+
+[workspace.package]
+version = "0.0.1"
+edition = "2024"
+license = "MIT"
+publish = false
+
+[workspace.dependencies]
+ice-core = { path = "crates/ice-core" }
+ice-win = { path = "crates/ice-win" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# Must match the `windows` crate's core version; the #[implement]/#[interface] macros expand to `windows_core::…`.
+windows-core = "0.62"
+
+[workspace.dependencies.windows]
+version = "0.62"
+features = [
+    "std",
+    "Foundation",
+    "Foundation_Collections",
+    "Media_Audio",
+    "Media_Control",
+    "Media_Devices",
+    "Storage_Streams",
+    "Win32_Devices_FunctionDiscovery",
+    "Win32_Foundation",
+    "Win32_Media_Audio",
+    "Win32_Media_Audio_Endpoints",
+    "Win32_System_Com",
+    "Win32_System_Com_StructuredStorage",
+    "Win32_System_Variant",
+    "Win32_UI_Shell_PropertiesSystem",
+]
+
+[workspace.lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true

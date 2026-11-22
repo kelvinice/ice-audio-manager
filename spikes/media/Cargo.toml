@@ -1,0 +1,12 @@
+﻿[package]
+name = "media-spike"
+description = "Phase 0.4 throwaway CLI: now playing via GSMTC"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+ice-win.workspace = true
+
+[lints]
+workspace = true
