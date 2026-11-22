@@ -1262,6 +1262,70 @@ and still needs on-screen validation.
 | Codex           | +2           | Use the table as a baseline and test hit bounds, actual cadence, and idle stop behavior.                                                                                                               |
 | **Total** | **+6** | **Passes** with Codex's refinements (Off = no fade; retune Bouncy, whose analytic overshoot is ~12.7%)                                                                                           |
 
+### D-18 · Expanded notch: owner-picked devices, settings out of the notch *(added 2026-11-23, owner request)*
+
+**Owner request (2026-11-23, after trying the expanded notch with real Spotify data):**
+1. *"I prefer the user to list what the device list will be, instead of listing all possible devices."* The expanded notch
+   currently shows **every** active playback device as a chip (`ExpandedNotch.svelte`, `exp-devices`). With the owner's six
+   endpoints (Arctis, two Sonar-style "S…" devices, ASUS and LG monitor speakers, …) the names get truncated to "Arcti…",
+   "S…" and the row is hard to use.
+2. *"The theme chooser should be in Settings."* The expanded notch's bottom row also holds the idle style (Pill/Dot/Hide), the
+   spring preset (Snappy/Smooth/Bouncy/Off) and the theme (Ice/Midnight/Fluent/Minimal). These are set-once preferences, not
+   things to change mid-song.
+
+**What already exists (Claude):**
+- `config.favourites.playback` (a list of D-16 `DeviceRef`s, so reconnects and USB port changes keep working), the
+  `SetFavourites` engine command and the favourites cycle hotkey. No UI sets favourites yet.
+- The tray already has submenus for settings without a Settings window: Performance profile, Pinned monitor, Toggle pairs,
+  per-device Spatial sound.
+- The Settings window is Phase 4 (plan.md: pages Devices / Notch / Appearance already planned).
+
+**Proposal (Claude):**
+
+*Part A: the device row shows only the devices the owner picked.*
+1. The expanded notch lists the **favourite playback devices**, in the owner's order. One list serves both the notch
+   and the favourites cycle hotkey / Ctrl+knob, so "devices I use" is set once. *(Option A2: a separate "Show in notch" list,
+   if someone wants the notch and the cycle hotkey to differ. I don't think that's worth a second list.)*
+2. If the current default device isn't a favourite, it is still shown first (marked as current), so the row never hides what is playing.
+3. With no favourites set, the notch shows the current device plus the other side of the toggle pair if one exists, and a
+   "Choose devices…" chip that opens the picker. It never falls back to "all devices".
+4. Picking: until the Settings window exists, the tray's per-device submenu gets a **"Show in notch"** check item (= favourite).
+   In Phase 4 the Devices page gets a reorderable list. Hidden and disconnected favourites are skipped (a disconnected one
+   appears greyed only if the owner turns on "Show disconnected devices").
+5. Chips show the alias (if set) and are wide enough for a readable name (no single-letter truncation); at most 4–5 chips,
+   then a "More…" chip opens the full picker.
+
+*Part B: preferences move out of the notch.*
+6. Remove the theme, spring and idle style pickers from the expanded notch. They go to the tray menu now (submenus
+   **Theme**, **Animation**, **Idle notch**, next to Performance profile / Pinned monitor) and to Settings → Appearance / Notch
+   in Phase 4.
+7. The expanded notch keeps only things you act on while listening: media card, volume, the device row, mic mute and a
+   **Settings** button. The monitor chip ("Mon 2 (75 Hz)") moves too (tray: Pinned monitor already exists).
+
+**Phase:** Part A item 4 (tray check item) and Part B in Phase 2/3 polish (small); the reorderable list in Phase 4.
+
+#### Positions
+
+##### Claude
++2 for A1 (one favourites list) and Part B as above. The owner is right: the notch is for quick actions, and listing every
+endpoint brings back the clutter that D-16's "hidden by default" rule removed from the tray. Reusing favourites costs almost
+nothing, since the config, the `DeviceRef` resolution and the engine command already exist.
+
+##### Gemini
+*(pending)*
+
+##### Codex
+*(pending)*
+
+#### Vote · *proposal* (A1 favourites drive the notch device row + Part B preferences move to tray/Settings)
+
+| Agent | Score | Reason |
+|---|---|---|
+| Claude | +2 | Owner request; reuses favourites and the existing tray pattern; frees the expanded notch for media and volume |
+| Gemini | | |
+| Codex | | |
+| **Total** | | **Open** |
+
 ---
 
 ## 6. Session S5: Team workflow
@@ -1367,3 +1431,4 @@ A decision passes when all three agents have voted and the rules produce a resul
 | D-15.1 | Notch technology (after measurements) | **A: WebView notch + TrySuspend (+6)**; C fallback (+1) | **Closed 2026-11-22 (agents, owner-delegated)** | Budgets in private working set: idle (suspended) ≤ 15 MB, visible ≤ 100 MB; Private Bytes ceiling 200 MB; Settings in its own WebView2 data folder |
 | D-16 | Device identity & reconnects | **DeviceRef + Active-only resolver + toggle pair, Phase 1 (+5)** | **Closed 2026-11-22 (owner)** | + StableId, logical-endpoint check, confirm-then-persist |
 | D-17 | Spatial sound on switch      | **0.3 spike → experimental per-device action in Phase 2 (+6)** | **Closed 2026-11-22 (owner)** | Read-before-write, un-elevated, Settings deep-link fallback |
+| D-18 | Notch device list & settings placement | *A1 favourites drive the notch device row; theme/springs/idle style move to tray → Settings* | **Open (owner request 2026-11-23)** | Waiting for Gemini and Codex votes |
