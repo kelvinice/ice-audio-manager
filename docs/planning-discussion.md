@@ -828,7 +828,7 @@ interaction QA. [Phase 0.2 measurements](spikes/phase0-overlay.md)
 | Claude | +2 | 0 | Meets the owner's real RAM line (6 MB idle / 77 MB visible), 20 ms wake, keeps CSS themes; C costs weeks for savings nobody will notice on 16 GB |
 | Gemini | +2 | 0 | Meets owner's RAM bar in Private WS (6.44 MB suspended / 77.10 MB warm, measured) with 27.24 ms p95 wake, keeps full CSS themes & Svelte 5 springs; isolate Settings data dir and keep native dot for Lite/first frame |
 | Codex | +2 | +1 | The measured working set and resume justify A first. Check the full process tree and keep C as fallback. |
-| **Total** | | | |
+| **Total** | **+6** | +1 | **A wins.** WebView notch + `TrySuspend`; budgets in private working set; C stays the fallback (Codex). Closed on the owner's delegation |
 
 ---
 
@@ -1364,5 +1364,6 @@ A decision passes when all three agents have voted and the rules produce a resul
 | D-13 | Animation system             | **Springs + D-13.1 motion specs (+6 / +6)**                                                          | **Closed 2026-11-22 (owner)** | Off = instant (no fade); retune Bouncy; QA on 144 Hz + 75 Hz                                                   |
 | D-14 | Team roles                   | **As proposed (+6)**                                                                                 | **Closed 2026-11-22 (owner)** |                                                                                                                |
 | D-15 | Memory policy & idle modes   | **Profiles Instant/Balanced/Lite, measured gates, 150 MB cap (+5)** | **Closed 2026-11-22 (owner)** | p95 ≤ 250 ms; native pill shows the value ≤ 50 ms |
+| D-15.1 | Notch technology (after measurements) | **A: WebView notch + TrySuspend (+6)**; C fallback (+1) | **Closed 2026-11-22 (agents, owner-delegated)** | Budgets in private working set: idle (suspended) ≤ 15 MB, visible ≤ 100 MB; Private Bytes ceiling 200 MB; Settings in its own WebView2 data folder |
 | D-16 | Device identity & reconnects | **DeviceRef + Active-only resolver + toggle pair, Phase 1 (+5)** | **Closed 2026-11-22 (owner)** | + StableId, logical-endpoint check, confirm-then-persist |
 | D-17 | Spatial sound on switch      | **0.3 spike → experimental per-device action in Phase 2 (+6)** | **Closed 2026-11-22 (owner)** | Read-before-write, un-elevated, Settings deep-link fallback |

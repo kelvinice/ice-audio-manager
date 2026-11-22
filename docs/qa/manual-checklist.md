@@ -26,8 +26,8 @@ cargo run -p audio-spike -- engine spikes/audio/out/config.toml 600
 1. `make-config` writes your setup: Arctis ↔ Speakers on **Ctrl+Alt+F12**, Atmos on the Arctis, knob gestures on.
 2. `engine … 600` prints every engine event for 10 minutes.
 
-These only build the audio tools. The UI build (`npm --prefix spikes/overlay/ui ci`, then
-`npm --prefix spikes/overlay/ui run build`, as two separate commands) is only needed to build the **whole** workspace.
+These only build the audio tools. The UI build (`npm --prefix app/ui ci`, then
+`npm --prefix app/ui run build`, as two separate commands) is only needed to build the **whole** workspace.
 
 Keep the `engine` window visible. "Expect" lines refer to what it prints. In later phases the tray and notch must show the same thing.
 
