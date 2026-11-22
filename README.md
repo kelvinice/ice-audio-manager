@@ -52,11 +52,14 @@ cargo build --release -p ice-audio-manager
 ```
 
 Left-click the tray icon to choose a playback or recording device. Right-click for Settings,
-the notch preview, launch at sign-in, and Quit. A normal launch stays in the tray, and a
+the notch preview, launch at sign-in, and Quit. The left-click menu also shows volume and audio notices.
+If a saved device has more than one match, open **Choose device** in that menu to confirm or cancel.
+A normal launch stays in the tray, and a
 second launch exits without creating another instance.
 
-This build uses the fake engine. Device and volume changes are simulated in the app.
-Use `--verbose` for debug messages in `%LOCALAPPDATA%\IceAudioManager\logs`.
+The app uses Windows audio and reads `%APPDATA%\IceAudioManager\config.toml`. It uses the default
+configuration when the file is absent. Use `--fake-engine` to simulate devices and volume changes.
+Use `--verbose` to log engine events in `%LOCALAPPDATA%\IceAudioManager\logs`.
 The existing `--bench` mode writes its report to `app/out/bench.json` by default.
 
 ## License

@@ -2,7 +2,7 @@ use std::sync::atomic::Ordering;
 use std::sync::{Arc, mpsc::Receiver};
 
 use ice_core::device::Flow;
-use ice_core::engine::{DeviceSummary, EngineEvent, EngineSnapshot, Envelope, RoleSet, SpatialMode};
+use ice_core::engine::{DeviceSummary, EngineEvent, EngineSnapshot, Envelope, Notice, RoleSet, SpatialMode};
 use tauri::{AppHandle, Emitter, Manager};
 
 use super::{ActivityKind, NotchSnapshot, SharedRuntime, tray};
@@ -36,12 +36,21 @@ pub(super) fn watch(
     initial_revision: u64,
 ) -> std::io::Result<()> {
     std::thread::Builder::new().name("ice-engine-events".into()).spawn(move || {
-        let mut revision = initial_revision;
+        let mut revision = 0;
         for delta in events {
             if delta.revision <= revision {
                 continue;
             }
             revision = delta.revision;
+            // A snapshot supersedes older deltas, except for transient prompts.
+            if revision <= initial_revision
+                && !matches!(
+                    delta.event,
+                    EngineEvent::Notice { notice: Notice::NotConnected { .. } | Notice::ChooseDevice { .. } }
+                )
+            {
+                continue;
+            }
             let app_for_event = app.clone();
             let state = Arc::clone(&state);
             if app.run_on_main_thread(move || apply_event(&app_for_event, &state, delta)).is_err() {
@@ -53,6 +62,7 @@ pub(super) fn watch(
 }
 
 fn apply_event(app: &AppHandle, state: &Arc<SharedRuntime>, delta: Envelope) {
+    tracing::debug!(revision = delta.revision, event = ?delta.event, "Audio engine event");
     if !state.bench_mode
         && let Some(dot) = state.native_dot.lock().unwrap_or_else(std::sync::PoisonError::into_inner).as_ref()
     {
@@ -63,13 +73,14 @@ fn apply_event(app: &AppHandle, state: &Arc<SharedRuntime>, delta: Envelope) {
     let activity = match &delta.event {
         EngineEvent::VolumeChanged { .. } | EngineEvent::MicVolumeChanged { .. } => Some(ActivityKind::Volume),
         EngineEvent::MicMuteChanged { .. } => Some(ActivityKind::MicMute),
-        EngineEvent::Switched { device, roles, .. } => {
-            tracing::info!(device_id = %device.id, ?roles, "Audio switch confirmed");
+        EngineEvent::Switched { device, roles, relinked, spatial_applied } => {
+            tracing::info!(device_id = %device.id, ?roles, relinked, ?spatial_applied, "Audio switch confirmed");
             (device.flow == Flow::Render && *roles != RoleSet::Communications).then_some(ActivityKind::Switch)
         }
         EngineEvent::DeviceArrived { .. } | EngineEvent::DeviceLeft { .. } => Some(ActivityKind::Switch),
         EngineEvent::Notice { notice } => {
             tracing::warn!(?notice, "Audio engine notice");
+            tray::show_notice(state, notice);
             None
         }
         EngineEvent::DevicesChanged { .. }
@@ -104,8 +115,10 @@ fn apply_event(app: &AppHandle, state: &Arc<SharedRuntime>, delta: Envelope) {
             | EngineEvent::DevicesChanged { .. }
             | EngineEvent::DeviceArrived { .. }
             | EngineEvent::DeviceLeft { .. }
+            | EngineEvent::Notice { notice: Notice::NotConnected { .. } | Notice::ChooseDevice { .. } }
+            | EngineEvent::NoticesChanged { .. }
     ) {
-        tray::refresh_tooltip(app, &snapshot);
+        tray::refresh_tooltip(app, state, &snapshot);
     }
 
     if waking {

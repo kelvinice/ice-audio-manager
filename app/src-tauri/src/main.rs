@@ -12,7 +12,9 @@ use std::sync::atomic::{AtomicBool, AtomicIsize, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, mpsc};
 use std::time::{Duration, Instant};
 
+use ice_core::config::ConfigStore;
 use ice_core::engine::{Command, Engine, EngineSnapshot, RoleSet, fake::FakeEngine};
+use ice_win::audio_engine::AudioEngine;
 use ice_win::desktop::InstanceGuard;
 use ice_win::monitors::{MonitorInfo, list_monitors};
 use ice_win::native_dot::{NativeDotHandle, NativePillTheme};
@@ -31,6 +33,7 @@ const NOTCH_TOP_OFFSET: i32 = 0;
 struct SharedRuntime {
     engine: Arc<dyn Engine>,
     bench_mode: bool,
+    tray_prompts: Mutex<tray::Prompts>,
     cursor_poll_running: AtomicBool,
     notch_opening: AtomicBool,
     settings_opening: AtomicBool,
@@ -99,6 +102,7 @@ impl SharedRuntime {
         Self {
             engine,
             bench_mode,
+            tray_prompts: Mutex::default(),
             cursor_poll_running: AtomicBool::new(false),
             notch_opening: AtomicBool::new(false),
             settings_opening: AtomicBool::new(false),
@@ -1255,9 +1259,21 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     logging::init(&app_data.join("logs"), args.iter().any(|arg| arg == "--verbose"))?;
 
     let monitors = list_monitors().unwrap_or_default();
-    let engine: Arc<dyn Engine> = Arc::new(FakeEngine::new());
+    let fake_engine = bench_mode || args.iter().any(|arg| arg == "--fake-engine");
+    let engine: Arc<dyn Engine> = if fake_engine {
+        Arc::new(FakeEngine::new())
+    } else {
+        let config_path = PathBuf::from(std::env::var_os("APPDATA").ok_or("APPDATA is unavailable")?)
+            .join("IceAudioManager")
+            .join("config.toml");
+        Arc::new(
+            AudioEngine::start(ConfigStore::new(&config_path))
+                .map_err(|error| format!("Audio engine startup failed ({}): {error}", config_path.display()))?,
+        )
+    };
     let events = (!bench_mode).then(|| engine.subscribe());
     let initial = engine.snapshot();
+    tracing::debug!(revision = initial.revision, notices = ?initial.notices, "Initial audio engine snapshot");
     let wv2_data_dir = app_data.join(if bench_mode { "spike-overlay-wv2" } else { "webview" });
     let settings_wv2_data_dir =
         app_data.join(if bench_mode { "spike-overlay-wv2-settings" } else { "webview-settings" });
@@ -1301,7 +1317,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                     .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
             } else {
                 tray::build(&handle, Arc::clone(&setup_state))?;
-                tray::refresh_tooltip(&handle, &initial);
+                tray::refresh_tooltip(&handle, &setup_state, &initial);
                 if let Some(primary) =
                     setup_state.monitors.lock().unwrap_or_else(std::sync::PoisonError::into_inner).first().cloned()
                     && let Ok(dot) = NativeDotHandle::spawn(primary)
@@ -1317,7 +1333,8 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 if show_notch {
                     request_preview(&handle, &setup_state, Preview::Notch);
                 }
-                tracing::info!(engine = "fake", "Ice Audio Manager tray ready");
+                let engine = if fake_engine { "fake" } else { "windows" };
+                tracing::info!(engine, "Ice Audio Manager tray ready");
             }
             Ok(())
         })
