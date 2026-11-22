@@ -136,7 +136,9 @@ These are hard rules. A PR that breaks one is rejected, whatever else it does.
   in the PR description instead.
 - **PRs:** small (aim < 400 changed lines excluding generated files). The description includes: what/why, linked feature IDs (F-xx)
   and decision IDs (D-xx), new deps with justification, budget impact if any, screenshots/GIF for UI.
-- **Review:** at least one *other* agent reviews before the owner merges. Reviewers check §1 first.
+- **Merging (owner decision, 2026-11-22):** when a task or phase is done and fmt, clippy and tests pass, the agent that did it
+  **merges its branch into `main` itself** (rebase on `main` first, then `git merge --ff-only`). It then deletes the branch and removes its worktree.
+  Ask another agent for a review first when the change touches §1 rules, shared docs tables, or another agent's area. Reviewers check §1 first.
 - **Ownership:** follow D-14. Editing another owner's area is fine with a heads-up in the PR. Avoid two agents working on the same files at once.
 - **Decisions:** anything that changes architecture or a closed decision needs a new entry in
   `planning-discussion.md` (or an ADR in `docs/decisions/NNNN-title.md`) **before** the code PR.
