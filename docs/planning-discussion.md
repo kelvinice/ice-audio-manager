@@ -163,6 +163,7 @@ which installs a global LL hook. This alone justifies the rewrite.
 | Hardware (Q-07)        | Desktop PC, **2 monitors**, RTX 3050, Ryzen 5 3600X, 16 GB             | Multi-monitor is the main case, not an edge case. Notch must be **pinnable to one specific screen** (F14 "fixed" becomes the primary mode)                                                                                                                                                            |
 | Media apps (Q-09)      | **Spotify**                                                            | Spotify desktop is the primary GSMTC QA target in Phase 3                                                                                                                                                                                                                                                   |
 | Headset (Q-12)         | No Sonar; switches **Headphones (Arctis Nova 7) ↔ Speakers (Realtek)**; wants **spatial sound** on the headset | Primary toggle-pair test case (D-16). Spatial sound on switch is D-17 |
+| Input habits (2026-11-22) | Keyboard-first, with a **volume knob** on the keyboard; sometimes changes volume with the **mouse** (on another PC) | Knob turns arrive as normal volume keys, so the notch animates with no hook. Proposed **F31** knob + modifier gestures. Mouse: notch scroll (F12) covers it; the owner's mouse use is a data point if F05 (tray scroll, cut) is ever revisited |
 | Idle state (Q-10)      | Keep all idle modes as options; **default = small (dot or mini pill)** | Default is visible, not hidden. This overrides the "`hidden` (default)" wording in Gemini's F21 note. Dot vs mini pill is picked from Codex mockups in Phase 2                                                                                                                                            |
 | Displays (Q-11)        | **144 Hz primary, 75 Hz secondary**, not OLED                          | Springs must be `dt`-independent (Gemini's D-13.1 already covers this) and feel identical when the notch moves between 144 Hz and 75 Hz screens. Animation target = display refresh rate, not a fixed 60 fps. No OLED burn-in constraint for the owner, but keep static indicators subtle for other users |
 
@@ -517,6 +518,7 @@ Other agents: add a column with your own phase or ✂ (cut) if you disagree.
 | F27 | `icectl` CLI and `iceaudio://` URI for Stream Deck/AutoHotkey                                      | AudioSwitcher scripting | 5                                                         | 5                        | 5                         |
 | F28 | Bluetooth headset battery in notch                                                                     | DynamicWin              | backlog                                                   | backlog                  | Backlog                   |
 | F29 | Replace/suppress the native Windows volume flyout (D-07)                                               | new                     | backlog / experimental                                    | backlog / experimental   | Backlog / experimental    |
+| F31 | **Knob + modifier gestures** (owner has a keyboard volume knob): Ctrl+turn = cycle output device, Shift+turn = fine 1% steps, Alt+turn = mic volume, Ctrl+press = mic mute. Registered with `RegisterHotKey` on *modified* volume keys only, so plain turns stay Windows' own (no hook, D-07 A). Each gesture configurable. **Verify first** (Claude, `phase-1/engine` hotkeys): that a knob's consumer-control turns reach `RegisterHotKey` as Ctrl+`VK_VOLUME_UP/DOWN` | owner (2026-11-22) | 2 (proposed by Claude, not yet voted) | | |
 | ✂  | File tray, calendar, clipboard, generic widgets                                                        | DynamicWin              | **Cut**: out of scope for an audio app, adds weight | **Cut**            | Cut                       |
 
 #### Positions
@@ -816,8 +818,13 @@ As above. I consider this **Phase 1 critical**: it's the bug that makes the curr
 marks a re-installed instance, so name matching is broken on this machine today, even though the endpoint ID didn't change.
 `PKEY_AudioEndpoint_StableId` (Codex's amendment) is **`{1DA5D803-D492-4EDD-8C23-E0C0FFEE7F0E},12`**, found by probing,
 since it's missing from the windows crate and SDK 26100 headers. `GetDevice` accepts it on all 9 active endpoints.
-Hot-plug churn still needs the owner to run `audio-spike watch` while replugging. See
-[docs/spikes/phase0-audio-media.md](spikes/phase0-audio-media.md).
+See [docs/spikes/phase0-audio-media.md](spikes/phase0-audio-media.md).
+
+**Owner's reconnect run (2026-11-22, headset off/on or same-port replug):** the Arctis went NotPresent → Active with the **same**
+endpoint ID, stable ID, container and hardware key, and Dolby Atmos stayed selected afterwards. While it was away, Windows
+moved Console/Multimedia to the Realtek speakers but **Communications to the ASUS monitor**, then restored the Arctis on return.
+That's the "third device steals default" case, now real; `ice_core::resolve::toggle` already handles it. Volume ticks from the
+keys/knob arrived 50–80 ms apart, so merge rapid ticks within ~150 ms. The **different-port and sleep cases weren't captured yet** (optional re-run).
 
 ##### Gemini
 
