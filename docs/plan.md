@@ -279,8 +279,16 @@ Runs between Phase 3 and Phase 4. Item 1 is a bug fix that comes first. D-21 Par
 - [ ] R1 "attached vs floating" style (Gemini, Phase 4 Appearance): asymmetric corners via an SVG path and the native SDF
 - [ ] R2 optional modules (Phase 4 Activities): a disabled module runs no timer, subscription or IPC
 
-**D-21.1** (open: blind round) decides the extras: linger in config, event-driven hit-testing, a session pin, keep awake
-while playing, a live cost readout.
+**D-21.1 (accepted 2026-11-23):**
+- [ ] L1 · Idle linger in config, per profile (default 15 s, validated range), replacing `IDLE_SUSPEND_LINGER_MS`
+      (Claude: config + schema migration; Gemini: the UI reads it from the snapshot)
+- [ ] L2 · Event-driven hit-testing for the WebView notch, replacing the cursor poll (Codex).
+  - Spike on the real host first: moving edges during spring morphs, mixed DPI, glow/shadow not clipped.
+  - If it can't follow the springs cleanly, narrow when the poll runs instead.
+- [ ] L3 · Session pin on the expanded notch: "keep open until unpinned" (Gemini UI, Codex shell). It shows a pin mark and
+      clears on session lock or sleep. Gaming mode still releases it
+- [ ] L6 · Live cost readout in Settings → General: RAM and CPU of the process tree, sampled only while that page is open
+      (Codex, via `ice_win::proc_metrics`)
 
 ---
 
@@ -376,6 +384,8 @@ every feature phase. Phases 1–5 focus on features and UI/UX.
     before any code: opt-in per service, OAuth tokens in Windows Credential Manager, no background traffic, a documented
     privacy note. YouTube Music has no official public API. Unofficial ones risk breaking its terms, so Level 2 may be
     Spotify-only.
+  - **D-22 (open, blind round)** decides the network rule for music features, YouTube Music playback inside the app, and
+    lyrics (LRCLIB and others).
 
 ## Cleanup backlog
 

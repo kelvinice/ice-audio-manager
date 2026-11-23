@@ -1774,6 +1774,127 @@ This round scores the pieces separately.
 | Codex | +1 | +2 | +1 | −1 | −1 | +1 |
 | **Total** | **+5** | **+5** | **+3** | **+1** | **−3** | **+3** |
 
+**Owner ruling · 2026-11-23:** the options that passed are accepted.
+- **Accepted:**
+  - **L1** idle linger in config (+5);
+  - **L2** event-driven hit-testing (+5), after a real-host spike covering moving edges and mixed DPI;
+  - **L3** session pin (+3), which clears on session lock or sleep and shows a pin mark;
+  - **L6** live cost readout (+3), sampled only while the Settings page is open.
+- **Rejected:** L4 keep awake while playing (+1) and L5 `Rich` profile (−3).
+- Tasks in plan.md.
+
+---
+
+### D-22 · YouTube Music playback, lyrics, and network use for music features *(added 2026-11-23, owner idea; neutral entry under §0.4)*
+
+**Owner idea (2026-11-23):** a reference app ("Auralys") can play music from YouTube Music and show lyrics ("the
+transcript"). The owner would like this as an extended feature, using open-source code as a reference, after discussion.
+Spotify and YouTube Music are already the supported services (plan.md Backlog: "Level 1" works today through Windows' media
+sessions; "Level 2" needs a network decision).
+
+**Facts (Claude, checked 2026-11-23):**
+- **What the app does today:** it shows and controls whatever Windows reports as playing (GSMTC). That covers the Spotify
+  desktop app and YouTube Music in a browser or as an installed web app. The engine has track title, artist, album, art,
+  status, `position_ms` and `duration_ms` (`crates/ice-core/src/media.rs`). It plays nothing itself and makes no network
+  calls.
+- **Rules that apply:**
+  - §1.5: "No silent network … the only network call allowed is the opt-in update check."
+  - §6: "CSP enabled. No remote URLs loaded."
+  - D-05 defines the product as an audio manager.
+  - D-21 C0: every resource cap stays.
+- **References checked:**
+  - **"Auralys":** I couldn't identify the owner's reference. The search found unrelated products with that name.
+  - **"Auralis" (GitHub `matiaszanolli/Auralis`, cloned to `docs/reference/Auralis`):** its README says "No streaming
+    service (local files only)". Its lyrics come only from tags embedded in local files
+    (`auralis-web/backend/services/lyrics_extraction.py`). It's **AGPL-3.0**: copying its code would put our MIT app under AGPL.
+  - **Open-source Windows apps that do YouTube Music + lyrics** (from search, not reviewed):
+    - YTubic: a YouTube Music desktop client with mini-players and synced lyrics;
+    - th-ch/youtube-music: an Electron wrapper around the website, with lyrics plugins;
+    - ytm-rs: a native Rust unofficial client, GPL-3.0;
+    - lyrics overlays: BetterLyrics, Lyrixound, FrontLine Lyrics.
+    
+    Licences vary and need checking before anything is reused.
+- **YouTube's rules:** the YouTube API Services developer policies prohibit API clients from letting users download or
+  separate audio tracks. YouTube Music has no official public API for playback. The consumer terms on downloading weren't
+  checked.
+- **Lyrics sources:**
+  - **LRCLIB** (lrclib.net): an open lyrics database whose `/api/get` takes track name, artist, album and duration, and
+    returns `syncedLyrics` (LRC) and/or `plainLyrics`. Whether reads need a key, and the duration unit, are unconfirmed:
+    test against the live API.
+  - YouTube Music shows its own synced lyrics on its website. They aren't available through any official API.
+  - Synced display would need the playback position. GSMTC reports position on timeline events, not continuously, so the UI
+    would interpolate between updates.
+
+**Options.**
+
+*Part A: network use for music features (pick one).* Needed by every lyrics option and by "Level 2" service features.
+- **N0 · Keep §1.5 as it is:** no network besides the update check. Rules out B2, B3 and K1–K3.
+- **N1 · Allow opt-in, per-feature network use.**
+  - Each feature is off by default and has its own switch.
+  - Destinations and the data sent are listed in Settings and the privacy note.
+  - It sends only what the feature needs (e.g. title, artist, album, duration), with no background traffic while off.
+  - Results are cached locally.
+  - *Costs and risks:* a §1 change; first-run and privacy wording; each feature still needs its own decision.
+- **N2 · General network permission** for music features, without per-feature switches.
+  - *Costs and risks:* the broadest change to §1.5 and to the "trustworthy" guiding constraint.
+
+*Part B: YouTube Music (pick many).*
+- **B1 · Control only (today), plus a shortcut.** YouTube Music plays in the browser or the installed web app; the notch
+  controls it via GSMTC. Add an "Open YouTube Music" action (e.g. in the empty state).
+  - *Costs and risks:* none new; playback stays in the browser.
+- **B2 · An embedded YouTube Music window** inside our app: the official website in its own WebView window, created on
+  demand and destroyed on close, like Settings.
+  - *Costs and risks:* the app becomes a music player too (scope, D-05). It needs §6 changed (remote URL) and N1/N2.
+    Sign-in cookies in our WebView data. A full web app's memory and CPU while open. The website's terms apply to embedding.
+- **B3 · A native player via unofficial APIs and stream extraction** (as ytm-rs and similar clients do).
+  - *Costs and risks:* conflicts with YouTube's policies on separating audio; breaks when YouTube changes; legal and trust
+    risk for a signed, published app (Phase 6, D-09).
+
+*Part C: lyrics (pick many).*
+- **K0 · No lyrics.**
+- **K1 · LRCLIB, opt-in (needs N1).** Look up the current track once per track change. Show synced lines in the expanded
+  notch (plain text when no sync), and optionally a one-line lyric activity.
+  - *Costs and risks:* sends track metadata to lrclib.net; coverage varies by language and catalogue; timing accuracy
+    depends on position interpolation.
+- **K2 · Other public lyrics providers** (e.g. Genius, plain text only; licensed providers like Musixmatch).
+  - *Costs and risks:* terms, keys or licences per provider; mostly no sync.
+- **K3 · YouTube Music's own synced lyrics** through unofficial endpoints.
+  - *Costs and risks:* the same policy and breakage risks as B3.
+
+**If adopted:** after Phase 4 (Settings must exist for the switches and the privacy listing). Lyrics UI by Gemini; fetch and
+cache in `ice-core`/`ice-win` by Claude; network permission and window wiring by Codex.
+
+#### Positions
+
+Sealed until all three agents have voted (§0.4): `docs/votes/D-22/<agent>.md`.
+
+#### Vote · Part A *pick one* (network use)
+
+| Agent | N0 keep §1.5 | N1 opt-in per feature | N2 general permission |
+|---|---|---|---|
+| Claude | *sealed* | *sealed* | *sealed* |
+| Gemini | | | |
+| Codex | | | |
+| **Total** | | | **Open (blind round)** |
+
+#### Vote · Part B *pick many* (YouTube Music)
+
+| Agent | B1 control + shortcut | B2 embedded YouTube Music window | B3 native unofficial player |
+|---|---|---|---|
+| Claude | *sealed* | *sealed* | *sealed* |
+| Gemini | | | |
+| Codex | | | |
+| **Total** | | | **Open (blind round)** |
+
+#### Vote · Part C *pick many* (lyrics)
+
+| Agent | K0 none | K1 LRCLIB opt-in | K2 other providers | K3 YouTube Music unofficial |
+|---|---|---|---|---|
+| Claude | *sealed* | *sealed* | *sealed* | *sealed* |
+| Gemini | | | | |
+| Codex | | | | |
+| **Total** | | | | **Open (blind round)** |
+
 ---
 
 ## 6. Session S5: Team workflow
@@ -1883,4 +2004,5 @@ A decision passes when all three agents have voted and the rules produce a resul
 | D-19 | Native idle pill | A1 +6 (+2/+2/+2), A2 +3 (+1/+1/+1), A3 −6 (−2/−2/−2), A4 −3 (−1/−1/−1). Part B +3 (+1/+1/+1; Claude changed after reveal from +2) | **Closed 2026-11-23 (owner)** | Accepted with the amendments: A1 click-first (+ drag per D-20), A2 hotkey, B1 `IdleContent`, B2 renderer passing the RAM gate in every idle profile (GDI first), B3 QA. Fix the "MIC OFF" bug now |
 | D-20 | Placement and modules | **P1 +5 (+2/+1/+2)** leads P2 +4 (+1/+2/+1), P3 −3. A2 +6 (+2/+2/+2). A2b −3 (−1/−1/−1). R1 +3, R2 +5 (+2/+2/+1), R3 −3, R4 −6 (−2/−2/−2) | **Closed 2026-11-23 (owner ruling)** | Owner: build both P1 and P2; Settings → Notch "Drag & snap" (default) or "Fixed position". Drag via own pointer capture, focus/keyboard release gate. A2 adopted, A2b rejected, R1+R2 adopted, R3+R4 rejected |
 | D-21 | User modes and resource caps | Part A 0 (0/+1/−1): **fails as written**. **C0 +6 (+2/+2/+2)**, C1 +1 (0/+1/0), C2 −6 | **Part B closed 2026-11-23: C0**; Part A → D-21.1 | Every cap stays. Rich bundle failed (0); its pieces are re-scored in D-21.1 |
-| D-21.1 | What replaces the Rich profile | L1 +5 (+2/+2/+1), L2 +5 (+2/+1/+2), L3 +3 (+1/+1/+1), L4 +1 (+1/+1/−1), L5 −3 (−1/−1/−1), L6 +3 (+1/+1/+1), in Claude/Gemini/Codex order | **Open for one revision round (§0.4)** | All three ballots revealed 2026-11-23 |
+| D-21.1 | What replaces the Rich profile | L1 +5 (+2/+2/+1), L2 +5 (+2/+1/+2), L3 +3 (+1/+1/+1), L4 +1 (+1/+1/−1), L5 −3 (−1/−1/−1), L6 +3 (+1/+1/+1), in Claude/Gemini/Codex order | **Closed 2026-11-23 (owner)** | Accepted: L1 linger in config, L2 event-driven hit-testing (real-host spike first), L3 session pin (clears on lock/sleep), L6 cost readout (sampled only while the page is open). Rejected: L4, L5 |
+| D-22 | YouTube Music playback, lyrics, network use | — | **Open: blind round (§0.4)** | Owner idea; Claude sealed; waiting for Gemini and Codex |
