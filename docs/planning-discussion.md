@@ -1552,6 +1552,99 @@ Dragging from the native pill depends on D-19 A1 (a hit-testable pill).
 
 ---
 
+### D-21 · User modes in Settings, and whether to raise the resource caps *(added 2026-11-23, owner idea)*
+
+**Owner idea (2026-11-23):** *"In settings we could have different user modes: an optimized one, and another where the
+user accepts the idle (or other things) using more resources … also discuss if there's a need to increase the resource
+cap."* The owner marked it as an idea for discussion, not a request.
+
+**What exists (Claude):**
+- **Performance profiles already exist** (D-15, D-15.1): `Instant` (default), `Balanced`, `Lite`. They're saved in config
+  and chosen from the tray (Settings → General in Phase 4).
+- **All three go light at idle.** `Instant` and `Balanced` `TrySuspend` the notch WebView after an idle linger, and `Lite`
+  never creates it. So the idle notch *everyone* sees is the native pill (D-19's subject).
+- **The linger is hard-coded:** `IDLE_SUSPEND_LINGER_MS = 15_000` in `app/ui/src/lib/notch/scheduler.ts` (a §3 magic number).
+- **Measured** (Phase 0.2, [phase0-overlay.md](spikes/phase0-overlay.md)), private working set = RAM in use:
+  - WebView suspended: **6.4 MB**; WebView visible: **77 MB**; Private Bytes ~150 MB either way;
+  - native pill alone: 2.2 MB; visualizer meter: 0.013% CPU (Phase 3).
+- **Current caps** (D-15.1, plan.md):
+  - idle (suspended) ≤ 15 MB WS, visible ≤ 100 MB WS, Private Bytes ceiling 200 MB;
+  - Lite / gaming < 40 MB;
+  - idle CPU < 0.2% over 60 s;
+  - the owner's original line (Q-06): more than 100 MB idle is "too heavy".
+
+**What a "richer" mode would buy.** Keeping the WebView awake at idle means the idle pill *is* the WebView mini pill:
+- it uses the real theme and type, so for users in this mode D-19's look problem disappears;
+- hover-to-expand works;
+- live visualizer bars, art-accent glow and animated idle states become possible.
+
+It costs RAM and some CPU *all the time*, not only during activity.
+
+**Proposal (Claude).**
+
+*Part A: modes (proposal).*
+1. **Add a fourth, opt-in profile, `Rich`** (working name; alternatives "Always on", "Full"). The notch WebView never
+   suspends and the idle pill is the WebView pill. Optional idle extras (live bars while music plays, art-accent glow) are
+   off by default even in Rich.
+2. **The idle linger becomes config**, per profile: Instant/Balanced 15 s (today's value), Rich = never. That fixes the §3
+   magic number.
+3. **Settings → General shows each mode with its measured cost.** Live RAM in use and CPU of the whole process tree
+   (`ice_win::proc_metrics` already does this), so the choice is informed, not guessed.
+4. **No hidden costs:**
+   - Rich never runs during fullscreen/gaming (it falls back to Lite behaviour, as today).
+   - Its cursor handling must not become a permanent poll. Today's poll runs only while the WebView notch is visible,
+     which in Rich is always. Rich therefore needs **event-driven hit-testing** (Codex to propose, e.g. a window region
+     or `WM_NCHITTEST` on the notch window), or it doesn't ship. §2 is not relaxed.
+
+*Part B: resource caps (pick one).*
+- **C0 · Keep every cap as is.** Rich must fit the existing "visible" budget (≤ 100 MB WS, 200 MB Private Bytes) and the
+  idle-CPU gate. The measured 77 MB suggests it fits.
+- **C1 · Per-mode caps.** The defaults (Instant/Balanced/Lite) keep today's caps. Rich, opt-in only, gets its own:
+  **≤ 120 MB WS, ≤ 250 MB Private Bytes, idle CPU < 0.5%** (< 1% with live bars), each measured in CI-style 60 s runs
+  like the others.
+- **C2 · Raise the caps for everyone.** The default experience gets heavier.
+
+**Phasing:** Phase 4 (Settings → General already owns the profile picker). The Rich spike (WebView-awake RAM/CPU over 60 s,
+event-driven hit-testing) comes before the UI.
+
+#### Positions
+
+##### Claude
+**Part A +2. Part B: C0 +1, C1 +2, C2 −2.**
+- A gives the owner the trade-off he described while keeping the default light. It reuses the profile system rather than
+  adding a second "mode" concept next to it. Showing live measured cost turns "trust us, it's light" into something the
+  user can check.
+- C1 because the opt-in mode should have an honest, separate budget. Squeezing it under the default caps (C0) would
+  invite cutting corners, and its numbers are still gated and measured.
+- C2 is a **block**: "lightweight" is guiding constraint 1 and the owner's Q-06 answer. The default must not get heavier
+  to make an opt-in feature easier.
+
+##### Gemini
+*(pending)*
+
+##### Codex
+*(pending)*
+
+#### Vote · Part A *proposal* (opt-in `Rich` profile + per-profile idle linger in config + live cost in Settings + no permanent poll)
+
+| Agent | Score | Reason |
+|---|---|---|
+| Claude | +2 | The owner's trade-off as an opt-in profile; the default stays light; cost shown live |
+| Gemini | | |
+| Codex | | |
+| **Total** | | **Open** |
+
+#### Vote · Part B *pick one* (resource caps)
+
+| Agent | C0 keep all caps | C1 per-mode caps (Rich opt-in) | C2 raise for everyone |
+|---|---|---|---|
+| Claude | +1 | +2 | −2 *(guiding constraint 1 / Q-06: the default must stay light)* |
+| Gemini | | | |
+| Codex | | | |
+| **Total** | | | **Open** |
+
+---
+
 ## 6. Session S5: Team workflow
 
 ### D-14 · Roles
@@ -1658,3 +1751,4 @@ A decision passes when all three agents have voted and the rules produce a resul
 | D-18 | Notch device list & settings placement | **A1 favourites drive the notch device row + Part B preferences move to tray → Settings** (Claude +2, Gemini +2, Codex voted) | **Closed 2026-11-23 (owner)** | Codex's vote row lands with its branch. Tasks in plan.md Phase 3 |
 | D-19 | Native idle pill: activation and look | *A1 hit-testable pill (+ A2 hotkey); B one Rust idle-content rule + DirectWrite rendering, RAM-gated* | **Open (owner report 2026-11-23)** | Waiting for Gemini and Codex votes |
 | D-20 | Movable notch and other notch-app ideas | *P2 drag + snap to six top/bottom anchors; R2 optional modules; no shelf, no clipboard* | **Open (owner request 2026-11-23)** | Waiting for Gemini and Codex votes |
+| D-21 | User modes and resource caps | *Opt-in `Rich` profile (WebView awake at idle), idle linger in config, live cost in Settings; C1 per-mode caps* | **Open (owner idea 2026-11-23)** | Waiting for Gemini and Codex votes |
