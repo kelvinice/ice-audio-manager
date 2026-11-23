@@ -234,6 +234,48 @@ games on the pinned monitor. Budgets met in every profile.
 
 ---
 
+## Notch interaction and placement (D-19, D-20; accepted 2026-11-23)
+
+Runs between Phase 3 and Phase 4. Item 1 is a bug fix that comes first. D-21 Part B (C0) applies: every resource cap stays.
+
+**D-19 · the idle pill (do first):**
+- [ ] **Bug fix** (Gemini, `native_dot.rs`): the idle "MIC OFF" label is unreachable while volume is known
+      (`if let Some(v) = state.volume … else if state.mic_muted`), and `MediaChanged` is ignored
+- [ ] `ice_core::IdleContent { glyph, label, tone }`: one rule for both pills, unit-tested (Claude). The design owner sets
+      the states: mic muted, speaker muted, media playing, resting
+- [ ] Hit-testable native pill (Gemini): drop `WS_EX_TRANSPARENT`, `WM_MOUSEACTIVATE → MA_NOACTIVATE`.
+  - Click-first: native pressed state within one frame. Hover-to-open is opt-in. Middle-click = mute.
+  - The wheel ships only after testing Windows' "scroll inactive windows" setting on and off.
+- [ ] Shell wiring (Codex): pill click wakes and expands the notch; in Lite, a click opens the tray quick-switch menu
+- [ ] "Show notch" hotkey, unbound by default (Claude: binding + engine; Codex: tray/Settings entry)
+- [ ] Native pill renderer (Gemini): spike GDI glyphs into the existing DIB first, then Direct2D/DirectWrite only if needed.
+      **Gate:** the RAM budget of every idle profile (Instant suspended ≤ 15 MB WS, Lite, Balanced < 30/40 MB). Size and
+      radius come from the same tokens as the WebView pill
+- [ ] Side-by-side visual QA of the native and WebView idle pills (all states, light/dark, 100 %/150 %, both monitors)
+
+**D-20 · placement (owner ruling: both methods, drag & snap by default):**
+- [ ] `ice_core::anchor_rect(anchor, work_area, size)` and six anchors (top/bottom × left/centre/right), unit-tested with
+      taskbar positions and DPI (Claude). It replaces both copies of the top-centre math (`overlay_win`, `native_dot`)
+- [ ] Config (Claude, schema bump + migration test): `notch.anchor` (default top-centre) and `notch.placement`
+      = `drag_snap` (default) | `fixed`, plus the engine commands to set them
+- [ ] Drag & snap with our own pointer capture (`SetCapture` + `SetWindowPos(SWP_NOACTIVATE)`), never the system move loop.
+      WebView notch: Codex. Native pill: Gemini.
+  - Click vs drag via `SM_CXDRAG`/`SM_CYDRAG`. Esc cancels.
+  - Anchor slots shown on every monitor while dragging. Release springs to the nearest slot; reduce motion = instant.
+  - Dropping on another monitor re-pins it there.
+- [ ] **Release gate:** during and after a drag the foreground app keeps focus and keyboard input, on both hosts, across
+      150 %/100 % monitors
+- [ ] Bottom anchors (Gemini): the notch sits above the taskbar (work area) and expands upwards (flip `.pill-slot`,
+      clip-path, glow origin)
+- [ ] Anchor list in the tray and Settings → Notch, which works in both placement modes (Codex)
+- [ ] R1 "attached vs floating" style (Gemini, Phase 4 Appearance): asymmetric corners via an SVG path and the native SDF
+- [ ] R2 optional modules (Phase 4 Activities): a disabled module runs no timer, subscription or IPC
+
+**D-21.1** (open: blind round) decides the extras: linger in config, event-driven hit-testing, a session pin, keep awake
+while playing, a live cost readout.
+
+---
+
 ## Phase 4: Settings & customization
 
 **Features:** F19–F23.

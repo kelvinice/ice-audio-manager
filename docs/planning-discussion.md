@@ -1452,6 +1452,23 @@ wiring (wake on pill click, Lite target, IPC) → Codex.
 | Codex | +1 | Shared content and visual QA, with the renderer RAM-gated |
 | **Total** | **+3** | Passes (≥ +2) as written; amendment proposed (see the note above) |
 
+**Owner ruling · 2026-11-23: accepted.** Closed with the revision-round amendments:
+- **A1 hit-testable pill, click-first.**
+  - Left-click opens the notch, with a native pressed state within one frame.
+  - Hover-to-open is opt-in. Middle-click mutes.
+  - In Lite, a click opens the tray's quick-switch menu.
+  - The wheel ships only after testing Windows' "scroll inactive windows" setting on and off.
+  - With D-20's default drag, pressing and moving past the system drag threshold starts a drag instead of a click.
+- **A2 "Show notch" hotkey**, unbound by default.
+- **B1:** one `IdleContent` rule in `ice_core`, used by both pills.
+- **B2:** the best renderer that passes the RAM gate in **every** idle profile (Instant suspended ≤ 15 MB WS, Lite, Balanced
+  < 30/40 MB), spiking GDI glyphs into the existing DIB before Direct2D/DirectWrite.
+- **B3:** side-by-side visual QA.
+- A3 and A4 rejected.
+- **Fix now, independent of the rest:** in `native_dot.rs` the idle "MIC OFF" label is unreachable while volume is known,
+  and `MediaChanged` is ignored (found by Gemini during voting).
+- Tasks in plan.md, section "Notch interaction and placement".
+
 ---
 
 ### D-20 · Movable notch with edge snapping, and ideas from other notch apps *(added 2026-11-23, owner request; rewritten neutrally the same day under §0.4)*
@@ -1584,6 +1601,32 @@ the start of Phase 4, whose Notch page owns geometry and the pinned monitor.
 | Codex | +1 | +1 | −1 | −2 |
 | **Total** | **+3** | **+5** | **−3** | **−6** |
 
+**Owner ruling · 2026-11-23: both placement methods, drag & snap by default.** The vote order was P1 +5, P2 +4. The owner
+ruled to build **both**, chosen in Settings → Notch:
+- **"Drag & snap" (default)**;
+- **"Fixed position"**, with dragging turned off.
+
+The anchor list in the tray/Settings works in both modes (keyboard, Lite). *Owner's reason:* a notch that blocks something
+can be moved right away, without opening Settings each time.
+
+**Engineering conditions** (from Codex's measurement in the vote):
+- **Own pointer capture, not the system move loop.** Implement the drag with `SetCapture` + `SetWindowPos(SWP_NOACTIVATE)`.
+  The system move loop (`HTCAPTION`/`SC_MOVE`) delivered `WM_ACTIVATE` on every completed drag in Codex's fixture.
+- **Release gate:** the foreground app keeps focus and keyboard input during and after a drag, on both hosts (WebView2
+  notch and native pill), across 150 %/100 % monitors, and Esc cancels a drag.
+- **Click vs drag:** press and move past the system drag threshold (`SM_CXDRAG`/`SM_CYDRAG`) = drag; release without moving =
+  click (D-19 A1).
+- **While dragging:** the six anchor slots show on every monitor. Release springs to the nearest slot (reduce motion = instant).
+  Dropping on another monitor re-pins it there.
+
+**Other parts:**
+- A2, six top/bottom anchors with one `ice_core::anchor_rect`: adopted (+6).
+- A2b, left/right edges: rejected (−3).
+- Part B: R1 attached vs floating (+3) and R2 optional modules (+5) adopted. R3 file shelf (−3) and R4 clipboard history (−6)
+  rejected.
+
+Tasks in plan.md, section "Notch interaction and placement".
+
 ---
 
 ### D-21 · User modes in Settings, and whether to raise the resource caps *(added 2026-11-23, owner idea; rewritten neutrally the same day under §0.4)*
@@ -1666,6 +1709,66 @@ longer, event-driven hit-testing) before the UI.
 | Gemini | +2 | +1 | −2 |
 | Codex | +2 | 0 | −2 |
 | **Total** | **+6** | +1 | −6 |
+
+**Status · 2026-11-23:**
+- **Part B closed: C0 (+6, unanimous).** Every resource cap stays as it is.
+- **Part A failed as written** (0). The owner asked to continue the discussion, so it continues as **D-21.1** below.
+
+---
+
+### D-21.1 · What replaces the "Rich" profile *(added 2026-11-23, continuing D-21 Part A; neutral entry under §0.4)*
+
+**Context.** D-21 Part A (a fourth, always-awake `Rich` profile, bundled with three other items) scored 0. The votes split on
+the profile itself, while the other items had support, and two alternatives came up. D-21 Part B set the budget: **C0**, so
+every option here must fit the current caps (visible ≤ 100 MB WS, Private Bytes ≤ 200 MB, idle CPU < 0.2 %, Lite < 40 MB).
+This round scores the pieces separately.
+
+**Facts (Claude, checked 2026-11-23):**
+- **The idle linger is hard-coded:** `IDLE_SUSPEND_LINGER_MS = 15_000` in `app/ui/src/lib/notch/scheduler.ts:22`.
+- **The cursor poll runs whenever the WebView notch is visible** (`spawn_cursor_poll`, `main.rs`): every ~34 ms near the
+  notch and every 100 ms otherwise, during activities and while expanded. §2 allows it only "while the cursor is near the
+  notch".
+- **An expanded notch never suspends.** `request_idle_suspend` returns early when `expanded` (`main.rs:276-285`).
+- **Gaming mode releases the WebView even when expanded** (`placement.rs` sets `expanded = false` when the WebView isn't
+  allowed).
+- **Playback status is available** in the engine snapshot (`media.status`: `Playing`, `Paused`, `Stopped`, …).
+- **Measured** (Phase 0.2, 60 s):
+  - visible settled WebView: 77.10 MB WS, 0.059 % CPU;
+  - suspended: 6.44 MB WS, 0.009 % CPU;
+  - visualizer bars while animating: 0.21–0.44 % CPU, 0 when silent (`manual-checklist.md`).
+- **Codex's region spike** (D-21 vote): with `SetWindowRgn`, clicks outside a rounded region reached the window beneath, with
+  no timer. That was tested with a native child, not WebView2.
+
+**Options (pick many; each stands alone).**
+- **L1 · Idle linger in config, per profile.** Defaults stay 15 s; the value is validated (e.g. 5–300 s).
+  - *Costs and risks:* a schema change (§7 migration test). Behaviour is unchanged at the defaults.
+- **L2 · Event-driven hit-testing for the visible WebView notch**, replacing the cursor poll in every profile.
+  - *Costs and risks:* untested with WebView2's child windows. A region also clips painting (shadows, glow, spring overshoot).
+    It must follow the springs, not the target (`computeHitRect` reports the target before the springs settle).
+- **L3 · Session pin:** a "keep open until unpinned" control on the expanded notch.
+  - *Costs and risks:* while pinned, ~71 MB more RAM in use than suspended. A forgotten pin keeps that all day. Gaming mode
+    still releases it.
+- **L4 · Keep awake while music plays.** While the media session is `Playing`, the WebView pill stays awake. On pause or stop
+  it suspends after the linger.
+  - *Costs and risks:* the same ~71 MB during playback, which may mean all day for some users. Optional bars follow the
+    visualizer rules.
+- **L5 · A fourth profile, `Rich`**: the WebView is awake at every idle moment (D-21's original item 1).
+  - *Costs and risks:* the most RAM in use of all options. Needs L2 first. Must fit C0.
+- **L6 · Live cost readout in Settings → General**: RAM/CPU of the process tree, sampled only while that page is open.
+  - *Costs and risks:* small. Sampling must stop when the page closes (§2).
+
+#### Positions
+
+Sealed until all three agents have voted (§0.4): `docs/votes/D-21.1/<agent>.md`.
+
+#### Vote · *pick many* (L1–L6)
+
+| Agent | L1 linger in config | L2 event-driven hit-testing | L3 session pin | L4 awake while playing | L5 `Rich` profile | L6 live cost readout |
+|---|---|---|---|---|---|---|
+| Claude | *sealed* | *sealed* | *sealed* | *sealed* | *sealed* | *sealed* |
+| Gemini | | | | | | |
+| Codex | | | | | | |
+| **Total** | | | | | | **Open (blind round)** |
 
 ---
 
@@ -1773,6 +1876,7 @@ A decision passes when all three agents have voted and the rules produce a resul
 | D-16 | Device identity & reconnects | **DeviceRef + Active-only resolver + toggle pair, Phase 1 (+5)** | **Closed 2026-11-22 (owner)** | + StableId, logical-endpoint check, confirm-then-persist |
 | D-17 | Spatial sound on switch      | **0.3 spike → experimental per-device action in Phase 2 (+6)** | **Closed 2026-11-22 (owner)** | Read-before-write, un-elevated, Settings deep-link fallback |
 | D-18 | Notch device list & settings placement | **A1 favourites drive the notch device row + Part B preferences move to tray → Settings** (Claude +2, Gemini +2, Codex voted) | **Closed 2026-11-23 (owner)** | Codex's vote row lands with its branch. Tasks in plan.md Phase 3 |
-| D-19 | Native idle pill | A1 +6 (+2/+2/+2), A2 +3 (+1/+1/+1), A3 −6 (−2/−2/−2), A4 −3 (−1/−1/−1). Part B +3 (+1/+1/+1; Claude changed after reveal from +2) | **Revision done by Claude · ready for owner** | Claude/Gemini/Codex. A1 + A2 adopted; Part B passes, with an amendment (click-first, GDI-first renderer, all-profile RAM gate). Bug found: idle "MIC OFF" unreachable |
-| D-20 | Placement and modules | **P1 +5 (+2/+1/+2)** leads P2 +4 (+1/+2/+1), P3 −3. A2 +6 (+2/+2/+2). A2b −3 (−1/−1/−1). R1 +3, R2 +5 (+2/+2/+1), R3 −3, R4 −6 (−2/−2/−2) | **Revision done by Claude · ready for owner** | Claude/Gemini/Codex. Claude changed P1/P2 and A2b after reveal (Codex's drag measurement). P1 + "Move notch…" preview first; drag after a spike. A2b fails |
-| D-21 | User modes and resource caps | Part A 0 (0/+1/−1): **fails as written**. **C0 +6 (+2/+2/+2)**, C1 +1 (0/+1/0), C2 −6 | **Revision done by Claude · ready for owner** | Claude/Gemini/Codex. Claude changed A and C0/C1 after reveal. Ship linger-in-config + no permanent poll; trial a session pin / keep-awake-while-playing under C0 instead of a fourth profile |
+| D-19 | Native idle pill | A1 +6 (+2/+2/+2), A2 +3 (+1/+1/+1), A3 −6 (−2/−2/−2), A4 −3 (−1/−1/−1). Part B +3 (+1/+1/+1; Claude changed after reveal from +2) | **Closed 2026-11-23 (owner)** | Accepted with the amendments: A1 click-first (+ drag per D-20), A2 hotkey, B1 `IdleContent`, B2 renderer passing the RAM gate in every idle profile (GDI first), B3 QA. Fix the "MIC OFF" bug now |
+| D-20 | Placement and modules | **P1 +5 (+2/+1/+2)** leads P2 +4 (+1/+2/+1), P3 −3. A2 +6 (+2/+2/+2). A2b −3 (−1/−1/−1). R1 +3, R2 +5 (+2/+2/+1), R3 −3, R4 −6 (−2/−2/−2) | **Closed 2026-11-23 (owner ruling)** | Owner: build both P1 and P2; Settings → Notch "Drag & snap" (default) or "Fixed position". Drag via own pointer capture, focus/keyboard release gate. A2 adopted, A2b rejected, R1+R2 adopted, R3+R4 rejected |
+| D-21 | User modes and resource caps | Part A 0 (0/+1/−1): **fails as written**. **C0 +6 (+2/+2/+2)**, C1 +1 (0/+1/0), C2 −6 | **Part B closed 2026-11-23: C0**; Part A → D-21.1 | Every cap stays. Rich bundle failed (0); its pieces are re-scored in D-21.1 |
+| D-21.1 | What replaces the Rich profile | — | **Open: blind round (§0.4)** | L1–L6 pick many; Claude sealed; waiting for Gemini and Codex |
