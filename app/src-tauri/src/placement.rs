@@ -214,9 +214,44 @@ fn reconcile(app: &AppHandle, state: &Arc<SharedRuntime>, settings: Option<&Sett
     tracing::debug!(?profile, gaming, "Applied notch placement");
 }
 
+/// Top-left (physical px) that centres a `logical_w × logical_h` window in `monitor`'s work area, so Settings opens
+/// on the monitor the notch is on (owner request, 2026-11-23). Clamped to the work area's top-left if it doesn't fit.
+pub(super) fn centred_in_work_area(monitor: &MonitorInfo, logical_w: i32, logical_h: i32) -> (i32, i32) {
+    let (w, h) = (monitor.logical_to_physical(logical_w), monitor.logical_to_physical(logical_h));
+    let x = monitor.work_left + ((monitor.work_width - w) / 2).max(0);
+    let y = monitor.work_top + ((monitor.work_height - h) / 2).max(0);
+    (x, y)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn settings_centre_on_the_notch_monitor_work_area() {
+        // A 150 % secondary monitor to the right of a 1920 px primary, with a 48 px bottom taskbar.
+        let monitor = MonitorInfo {
+            id: r"\\.\DISPLAY2".into(),
+            display_path: "DISPLAY2".into(),
+            friendly_name: "Secondary".into(),
+            is_primary: false,
+            left: 1920,
+            top: 0,
+            width: 2560,
+            height: 1440,
+            work_left: 1920,
+            work_top: 0,
+            work_width: 2560,
+            work_height: 1392,
+            dpi_x: 144,
+            scale_factor: 1.5,
+            refresh_hz: 75,
+        };
+        // 560×420 logical = 840×630 physical at 150 %.
+        assert_eq!(centred_in_work_area(&monitor, 560, 420), (1920 + 860, 381));
+        // Too big for the work area: pinned to its top-left instead of going off-screen.
+        assert_eq!(centred_in_work_area(&monitor, 4000, 2000), (1920, 0));
+    }
 
     #[test]
     fn gaming_and_lite_override_every_webview_profile() {

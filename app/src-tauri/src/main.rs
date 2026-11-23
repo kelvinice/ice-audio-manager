@@ -501,14 +501,25 @@ fn create_settings_window(app: &AppHandle, state: &Arc<SharedRuntime>) -> Result
         let _ = existing.set_focus();
         return Ok(());
     }
+    const SETTINGS_W: i32 = 560;
+    const SETTINGS_H: i32 = 420;
+    // Built hidden, then moved to the notch's monitor before it shows (owner request: Settings opens where the notch is).
     let win = WebviewWindowBuilder::new(app, "settings", WebviewUrl::App("settings.html".into()))
         .title("Ice Audio Manager — Settings")
-        .inner_size(560.0, 420.0)
+        .inner_size(f64::from(SETTINGS_W), f64::from(SETTINGS_H))
         .resizable(false)
-        .visible(true)
+        .visible(false)
         .data_directory(state.settings_wv2_data_dir.clone())
         .build()
         .map_err(|e| e.to_string())?;
+    if let Some(monitor) = state.active_monitor_info() {
+        let (x, y) = placement::centred_in_work_area(&monitor, SETTINGS_W, SETTINGS_H);
+        let _ = win.set_position(tauri::PhysicalPosition::new(x, y));
+        // Re-apply the logical size after the move, so a DPI change between monitors keeps it centred.
+        let _ = win.set_size(tauri::LogicalSize::new(f64::from(SETTINGS_W), f64::from(SETTINGS_H)));
+    }
+    let _ = win.show();
+    let _ = win.set_focus();
 
     let hwnd = win.hwnd().map_err(|e| e.to_string())?.0 as isize;
     let _ = overlay_win::apply_settings_mica(hwnd, true);
