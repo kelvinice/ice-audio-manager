@@ -28,6 +28,7 @@ use crate::endpoints::Endpoints;
 use crate::file_watch::DirWatch;
 use crate::hotkeys::HotkeyService;
 use crate::media_service::{MediaService, MediaUpdate};
+use crate::meter::MeterHub;
 use crate::spatial::{self, SpatialFormat};
 use crate::{notify, policy, volume};
 
@@ -71,6 +72,8 @@ struct Shared {
     subscribers: Vec<SyncSender<Envelope>>,
     /// Recent album art by id, newest last.
     art: VecDeque<(String, Vec<u8>)>,
+    /// Visualizer levels on their own thread, which runs only while subscribed.
+    meter: Arc<MeterHub>,
 }
 
 fn lock(m: &Mutex<Shared>) -> MutexGuard<'_, Shared> {
@@ -95,6 +98,7 @@ impl AudioEngine {
             snapshot: EngineSnapshot::default(),
             subscribers: Vec::new(),
             art: VecDeque::new(),
+            meter: MeterHub::new(),
         }));
         let (ready_tx, ready_rx) = mpsc::channel::<Result<(), String>>();
         let (worker_shared, worker_tx) = (Arc::clone(&shared), tx.clone());
@@ -134,10 +138,16 @@ impl Engine for AudioEngine {
     fn art(&self, id: &str) -> Option<Vec<u8>> {
         lock(&self.shared).art.iter().find(|(k, _)| k == id).map(|(_, png)| png.clone())
     }
+
+    fn meter(&self) -> Option<ice_core::meter::MeterSubscription> {
+        let hub = Arc::clone(&lock(&self.shared).meter);
+        hub.subscribe()
+    }
 }
 
 impl Drop for AudioEngine {
     fn drop(&mut self) {
+        lock(&self.shared).meter.close();
         let _ = self.tx.send(Msg::Quit);
         if let Some(j) = self.join.take() {
             let _ = j.join();
@@ -485,6 +495,7 @@ impl Worker {
         // Re-create both watches on every refresh: a same-ID reconnect can leave the old interfaces stale (ENG-07).
         self.render_watch = None;
         self.mic_watch = None;
+        lock(&self.shared).meter.rebind();
         let render_dev = self.eps.default_device(Flow::Render, Role::Multimedia).ok();
         let mic_dev = self.mic_device();
         self.render_watch = render_dev.as_ref().and_then(|d| {

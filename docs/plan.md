@@ -199,6 +199,16 @@ games on the pinned monitor. Budgets met in every profile.
 - [x] Expanded notch: media card (art, title, artist, scrubber, prev/play/next) (Gemini, against the fake engine). Real-engine data
       now comes from the real engine too
 - [ ] Visualizer: `IAudioMeterInformation` peaks at ≤ 30 Hz, subscribed **only while visible**, rendered as 4–6 bars with fast-attack/slow-decay springs
+  - [x] Engine (Claude, `phase-3/meter-api` + `phase-3/meter-engine`): `Engine::meter()` returns a `MeterSubscription` of
+        `MeterFrame { peak, channels }` (0.0–1.0, `engine.ts`). Levels bypass the snapshot and revisions. Only visible changes are
+        sent, silence once. The `ice-meter` thread runs only while a subscription is alive and re-binds on default-device changes.
+        The fake engine sends stereo levels while its track plays. The thread stopping after the last drop is tested on real Windows.
+        Measured (release, music playing, 10 s): **0.013% CPU**, 206 frames (≈ 21/s after change filtering)
+  - [ ] Shell (Codex): hold a subscription only while the notch is visible *and* the visualizer is shown. **Drop it on hide,
+        `TrySuspend`, WebView release and gaming mode**, without relying on the UI to ask. Forward frames off the main thread
+        to the notch as `audio://meter/v1`, and add a Tauri command for the UI to turn it on/off
+  - [ ] Notch (Gemini): 4–6 bars from `channels` (fall back to `peak`), fast-attack/slow-decay springs, no animation loop
+        once frames stop and the bars have settled
 - [ ] Secondary QA: Chromium/Edge/Firefox media sessions
 
 **Exit criteria:** track changes animate within 300 ms of the event. Visualizer costs < 1% CPU while visible and 0% while hidden.
