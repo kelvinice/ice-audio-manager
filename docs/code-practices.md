@@ -158,4 +158,99 @@ These are hard rules. A PR that breaks one is rejected, whatever else it does.
 - [ ] New config fields have defaults, validation, docs; new CSS variables documented
 - [ ] Works at 100% and 150% display scaling; light and dark
 - [ ] Hardware-dependent behaviour checked against [docs/qa/manual-checklist.md](qa/manual-checklist.md) (relevant sections), results added to its run log
+- [ ] No third copy of the same logic, no unexplained lint suppression, no dead or commented-out code, no new dependency or
+      config knob without a reason (§11)
 - [ ] Docs updated (`plan.md` checkboxes ticked, README if user-facing)
+
+## 11. Code hygiene: duplication, cleanliness, bloat
+
+> Added 2026-11-23 at the owner's request. **Priority:** §1 > correctness > performance budgets > §11. The rules here are
+> defaults, not absolutes: any of them may be broken with a one-line reason **at the site** (a comment or `reason = "…"`).
+> A reason in the PR description alone is not enough, because the next reader only sees the code.
+
+### 11.1 Duplication
+
+- **Duplicated knowledge is never allowed, not even twice.** A fact has exactly one home, and everything else reads it from
+  there: config defaults and limits live in `ice-core::config`, IPC payload types are generated (§5), visual values are `--ice-*` tokens
+  in `base.css`, and durations and springs come from config presets. A copied constant, validation rule or enum mapping is a bug
+  waiting to happen, even if the code around it differs.
+- **Duplicated code follows the rule of three.** A second similar block is fine, because two copies don't yet show what the shared
+  shape is. When you write the third, extract it in the same PR.
+- **Similar is not the same.** Two blocks that look alike but change for different reasons (e.g. the switch-confirm path and the
+  re-link path) stay separate. Extract only when a change to one would always have to be made to the other.
+- **Shared code lives in the lowest layer that can own it** (§3): pure logic in `ice-core`, Windows/COM wrappers in `ice-win`
+  (one helper for COM init, `PROPVARIANT` reads, HSTRING conversion and checked `f64` → pixel casts), and UI helpers in `app/ui/src/lib/`.
+  Never move code *up* a layer just to share it, and never create a `utils`/`common`/`helpers` grab-bag. Name the module after what it does.
+- **Don't copy from another owner's area.** If you need something that lives in another agent's files, give a heads-up and move it
+  to the right shared place (§8 ownership), rather than forking a private copy.
+
+**Allowed duplication (exceptions):**
+
+| Case | Why | Condition |
+|---|---|---|
+| **Native dot ↔ WebView** presentation logic (volume %, mute/mic glyph choice, theme colour mapping) | D-15: the native dot must work with no WebView alive, so Rust can't call the TS version | Each copy has a `// Twin: <path>` comment pointing at the other, and both are tested with the same input cases |
+| **Tests** | Readable tests beat clever ones (DAMP over DRY): each test should show its own fixture | Extract a test helper only when the setup is noise *and* is used by 3+ tests |
+| **`unsafe` FFI blocks** | A macro or generic that hides several `unsafe` calls also hides their `SAFETY` reasoning | Each block keeps its own `// SAFETY:` comment. Wrap repeated *safe* parts, not the `unsafe` itself |
+| **Across a layer boundary** | Sharing would need a forbidden dependency edge (e.g. `ice-core` → `ice-win`) | Short, and it carries a `// Twin:` comment |
+| **`spikes/`** | Throwaway code (Phase 0) | Never imported by `crates/` or `app/`. Promoting spike code means rewriting it to these rules |
+| **Generated files** (`ui/src/lib/ipc/types.ts`, `assets/dist/`) | Produced by tools | Not reviewed for duplication. Fix the generator, never the output |
+
+### 11.2 Cleanliness
+
+- **Names say what, and carry units:** `fade_ms`, `width_px`, `volume_pct` (0–100) vs `volume_scalar` (0.0–1.0), `peak_db`.
+  Core Audio mixes scalars and percentages, and a missing unit is how off-by-100 bugs happen.
+- **Size limits (soft; they trigger a split or a reason):**
+
+  | Unit | Limit | Counted as |
+  |---|---|---|
+  | Function / Svelte `<script>` block | ~60 lines, nesting ≤ 3 levels | Excluding comments and blank lines |
+  | Source file | ~600 lines | Excluding `#[cfg(test)]` modules and `*.test.ts` |
+  | Svelte component | ~300 lines | Whole file. One activity = one component (§5) |
+
+  `clippy::too_many_lines` and `too_many_arguments` count as hitting the limit. Suppressing them needs a reason (below).
+- **Lint suppressions are explained and self-expiring.** In new code, use `#[expect(lint, reason = "…")]`, not `#[allow]`, so the
+  compiler flags the suppression once it's no longer needed. TS: `// @ts-expect-error <reason>`, never `@ts-ignore`; `any` already
+  needs `// reason:` (§5). Existing `#[allow]`s are converted when their function is next touched.
+- **Comments explain *why*, not *what*.** Cite decision, feature and QA IDs (`D-16`, `F31`, `QA B4`) so the reasoning can be traced.
+  Delete comments that only repeat the code.
+- **No dead code.** No commented-out code (Git keeps history), no `#[allow(dead_code)]` without a reason, and no unused exports, props, CSS
+  classes or `--ice-*` tokens. Delete them when you notice them.
+- **TODOs are owned:** `// TODO(<agent>, <F-xx|D-xx|plan item>): …`. A TODO without an owner and a tracked item is rejected.
+  Anything bigger than a line goes into `plan.md`, not into a comment.
+- **One pattern per job.** Follow the pattern the module already uses (error type, channel style, store shape). If you
+  introduce a better one, migrate the old uses in the same PR or a follow-up `refactor:` PR named in the description. Never leave both patterns
+  indefinitely.
+- **Formatting is the tools' job** (`cargo fmt`, the Svelte/TS compiler). Reviews don't debate style the tools already settle.
+
+### 11.3 Bloat
+
+- **Build for the current phase (YAGNI).** No code, config field, trait, generic parameter or option for a feature that isn't in
+  `plan.md`'s current or next phase. "Might be useful later" isn't a reason, because Git can bring it back.
+- **An abstraction must pay for itself:** a new trait, generic, macro or builder needs **≥ 2 real users**. The test seams in §4
+  (`Engine`, `AudioBackend`, `MediaBackend`) qualify because the fake is a real user. A trait with one impl and no fake is a struct.
+- **New knobs need a request.** Guiding constraint 2 says knobs live in config, not that every number becomes a knob. A new config
+  field or `--ice-*` token needs an F-xx, a D-xx or an owner request. Otherwise it's a named constant in the module that owns it.
+- **Deleting is part of the feature.** When a feature is cut or replaced (e.g. D-05.F05, D-18 Part B), remove its code, config
+  fields (with a schema migration, §7), tokens, docs and tests in the same PR. Never leave it hidden behind a flag.
+- **Experimental flags have an exit:** each one (e.g. per-app routing, F25) names the condition for removing the flag, either by
+  promoting the feature or by deleting it.
+- **Dependencies and features are pruned, not only gated.** The §2 dependency budget covers additions, and removal matters too: drop a
+  crate, npm package or `windows` crate feature in the same PR that stops using it.
+- **Size is measured:** a PR that adds a dependency, a `windows` feature or a bundled asset states the release exe and UI bundle
+  size before and after. Installer and RAM gates stay in [plan.md](plan.md#performance-budgets-gates).
+
+### 11.4 How it is enforced
+
+- **Automatic:** fmt, clippy `-D warnings` (incl. `too_many_lines`), `tsc --noEmit`, tests. A rule that a tool can check
+  should eventually be checked by a tool. Propose the lint in a small PR.
+- **Author:** runs through the §10 checklist before opening the PR. **Reviewer** (when §8 requires one) checks §1 first, then §11.
+  A §11 finding blocks a merge only when it's a third copy, duplicated knowledge, dead code, or an unexplained suppression. Anything
+  else is a suggestion the author may decline with a reason.
+- **Refactors are their own PRs:** behaviour-preserving, branch `phase-<n>/refactor-<name>`, `refactor(<scope>): …` commits, tests
+  green before and after, and no feature changes mixed in. Don't refactor unrelated code inside a feature PR. If a feature needs
+  to grow a file that's over the limit, split the file first in a `refactor:` PR, then add the feature.
+- **Known debt is tracked**, not hidden: a file or module over the limits, or a taken shortcut, gets a line in
+  [plan.md → Cleanup backlog](plan.md#cleanup-backlog) with its owner. Shortcuts also get
+  `// DEBT(<agent>): <what> — <exit condition>` at the site.
+- **Every phase ends with a cleanup pass** by each owner over their own paths: dead code, over-limit files, third copies, unused deps and
+  `windows` features, stale `#[allow]`s. It is part of the phase's exit criteria, and the backlog shrinks or each remaining item is re-justified.
