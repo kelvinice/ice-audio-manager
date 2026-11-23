@@ -8,7 +8,9 @@
 
 ## Guiding constraints
 
-1. **Lightweight:** budgets below are hard gates, measured every phase, not aspirations.
+1. **Lightweight:** budgets below are hard gates. The Phase 0–3 measurements stand for now; the full benchmark suite runs
+   again once, in the **Phase 6 testing pass** (owner decision, 2026-11-23). Meanwhile the design rules in code-practices §2
+   keep the app within them.
 2. **Customizable:** every visual and behavioural knob lives in config/theme, not in code.
 3. **Trustworthy:** no LL hooks, no admin, no packers, no silent network, open source at release, signed.
 4. **Windows 11 only** (D-08): use native APIs directly. No cross-platform abstractions "just in case".
@@ -252,7 +254,8 @@ Runs between Phase 3 and Phase 4. Item 1 is a bug fix that comes first. D-21 Par
 - [ ] Shell wiring (Codex): pill click wakes and expands the notch; in Lite, a click opens the tray quick-switch menu
 - [ ] "Show notch" hotkey, unbound by default (Claude: binding + engine; Codex: tray/Settings entry)
 - [x] Native pill renderer (Gemini): spike GDI glyphs into the existing DIB first, then Direct2D/DirectWrite only if needed.
-      **Gate:** the RAM budget of every idle profile (Instant suspended ≤ 15 MB WS, Lite, Balanced < 30/40 MB). Size and
+      Its RAM budget in every idle profile (Instant suspended ≤ 15 MB WS, Lite, Balanced < 30/40 MB) is checked in the
+      Phase 6 testing pass. Size and
       radius come from the same tokens as the WebView pill. *GDI (`native_dot/glyphs.rs`, zero D2D/DWrite DLLs) passed
       every 60 s idle gate: Lite `1.69 MB` WS, Balanced `3.82 MB` WS, Instant suspended `8.58 MB` WS; matched `116×28`
       (`r=14`) and `36×18` (`r=9`) tokens. Wiring `IdleContent` follows Claude's merge.*
@@ -296,7 +299,7 @@ while playing, a live cost readout.
 - [ ] Every setting applies live without restart
 
 **Exit criteria:** a user can build a theme without reading source code. Closing Settings returns memory to the idle budget
-(verified after 10× open/close).
+(verified after 10× open/close, in the Phase 6 testing pass).
 
 ---
 
@@ -317,6 +320,23 @@ while playing, a live cost readout.
 ## Phase 6: Hardening and first public release
 
 **Goal:** harden and publish the app after Phases 1–5 and private daily use. Start Store onboarding, public signing, and distribution in this phase.
+
+**Testing pass (owner decision, 2026-11-23).** Performance, memory and security testing happens **once, here**, not in
+every feature phase. Phases 1–5 focus on features and UI/UX.
+- [ ] **Performance and RAM:**
+  - re-run the Phase 0.2 benchmark recipe across every profile and state (Instant, Balanced, Lite, gaming, Settings 10×
+    open/close), with the plan's budget table as the pass/fail line;
+  - latency: event → feedback, wake, switch;
+  - an 8-hour soak (WebView working set, handles, threads).
+- [ ] **Visualizer, native pill and drag:** CPU while visible and 0 % while hidden; native pill RAM in every idle profile;
+      pin/awake costs if D-21.1 adds them; release exe, installer and UI bundle sizes.
+- [ ] **Security:**
+  - code-practices §1 audit (no hooks, no injection, no admin, no silent network, guarded undocumented APIs);
+  - `cargo audit` + `npm audit`;
+  - CSP and the `iceart://` handler;
+  - Tauri capabilities per window (least privilege);
+  - config and theme input validation (fuzz the TOML and CSS validators).
+- [ ] Fix what the pass finds before the release items below.
 
 - [ ] Microsoft Store individual developer registration (free, with identity verification) and a separate MSIX packaging step.
       Tauri's standard Windows installers are NSIS and WiX. Smoke-test Core Audio, GSMTC, tray recovery,

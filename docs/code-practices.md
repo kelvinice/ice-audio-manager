@@ -33,7 +33,9 @@ These are hard rules. A PR that breaks one is rejected, whatever else it does.
 - **Dependency budget:** each new crate or npm package needs a one-line justification in the PR description
   ("why not std / existing dep?"). Prefer `std`, `windows`, `serde`. No UI component libraries.
 - **Heavy work in Rust, not JS:** image decoding/resizing, colour extraction, sorting device lists.
-- Check budgets from [plan.md](plan.md#performance-budgets-gates) before merging any phase-closing PR.
+- **Budgets are verified once, in the Phase 6 testing pass** (owner decision, 2026-11-23), not per PR or per phase. The
+  Phase 0–3 measurements stand until then. The design rules above (event-driven, hidden means idle, lazy windows) still
+  apply to every PR. They're what keeps the app inside the budgets between measurements.
 
 ## 3. Architecture rules
 
@@ -71,6 +73,15 @@ These are hard rules. A PR that breaks one is rejected, whatever else it does.
   info level (privacy). Use debug only.
 - **Tests:** `ice-core` is fully unit-tested (scheduler, config migration, rules). `ice-win` exposes traits
   (`AudioBackend`, `MediaBackend`) with fake implementations for tests. Hardware paths are covered by the manual QA checklist.
+- **Minimal, non-redundant testing (owner decision, 2026-11-23).** The focus until Phase 6 is features and UI/UX.
+  - **One focused test per new behaviour,** at the lowest layer that owns it (pure logic in `ice-core` or a pure TS module).
+    Don't test the same behaviour again in another layer.
+  - **No performance or RAM benchmarks, soak tests or security audits in feature work.** Those run once, in the Phase 6
+    testing pass (plan.md). Don't re-run the benchmark suite to re-confirm known numbers.
+  - **UI/UX checks stay part of feature work:** how it looks and behaves at 100 %/150 %, light/dark, on both monitors, with
+    a screenshot or a short note in the PR. Interaction details (focus never stolen, clicks land where expected) count as
+    UX, not performance.
+  - **Manual QA:** run only the checklist sections the change touches.
 
 ## 5. Frontend practices (Svelte 5 + TS) **[stack]**
 
@@ -163,7 +174,8 @@ These are hard rules. A PR that breaks one is rejected, whatever else it does.
 - [ ] No rule in §1 violated; no new polling without a stop condition
 - [ ] New config fields have defaults, validation, docs; new CSS variables documented
 - [ ] Works at 100% and 150% display scaling; light and dark
-- [ ] Hardware-dependent behaviour checked against [docs/qa/manual-checklist.md](qa/manual-checklist.md) (relevant sections), results added to its run log
+- [ ] Hardware-dependent behaviour checked against [docs/qa/manual-checklist.md](qa/manual-checklist.md) (only the sections this change touches), results added to its run log
+- [ ] Tests are minimal and not redundant (§4). No benchmark, soak or security re-runs: those belong to the Phase 6 testing pass
 - [ ] No third copy of the same logic, no unexplained lint suppression, no dead or commented-out code, no new dependency or
       config knob without a reason (§11)
 - [ ] Docs updated (`plan.md` checkboxes ticked, README if user-facing)
@@ -242,8 +254,8 @@ These are hard rules. A PR that breaks one is rejected, whatever else it does.
   promoting the feature or by deleting it.
 - **Dependencies and features are pruned, not only gated.** The §2 dependency budget covers additions, and removal matters too: drop a
   crate, npm package or `windows` crate feature in the same PR that stops using it.
-- **Size is measured:** a PR that adds a dependency, a `windows` feature or a bundled asset states the release exe and UI bundle
-  size before and after. Installer and RAM gates stay in [plan.md](plan.md#performance-budgets-gates).
+- **Size is checked in the Phase 6 testing pass** (release exe, installer, UI bundle). Until then, the one-line dependency
+  justification (§2) is enough. Installer and RAM gates stay in [plan.md](plan.md#performance-budgets-gates).
 
 ### 11.4 How it is enforced
 
