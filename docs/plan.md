@@ -307,8 +307,6 @@ own `refactor:` PR by the path's owner, or sooner if a feature needs to grow the
 |---|---|---|---|
 | `crates/ice-win/src/native_dot.rs` | Gemini | 1706 lines (limit ~600) | window/message loop · GDI drawing · layout/geometry · theme colours |
 | `app/src-tauri/src/main.rs` | Codex | 1414 lines; `#[allow(too_many_lines)]` at the setup fn | app setup · notch window lifecycle · commands · profiles/gaming mode |
-| `app/ui/src/notch/NotchApp.svelte` | Gemini | 687 lines (component limit ~300) | interactions (scroll/hover/click) and IPC sync out of the component |
-| `app/ui/src/notch/activities/ExpandedNotch.svelte` | Gemini | 485 lines | Shrinks with D-18 Part B (pickers removed). Split the media card and the device row |
 | `app/ui/src/lib/notch/scheduler.ts` | Gemini | 604 lines, at the limit | Watch it. Split the merge rules out if it grows |
 | Repeated `#[allow(clippy::cast_possible_truncation, cast_sign_loss)]` (native_dot ×5, audio_engine, media) | Claude + Gemini | Same `f64` → integer conversion repeated without a reason | One checked conversion helper in `ice-win`; remaining suppressions become `#[expect(…, reason)]` |
 
