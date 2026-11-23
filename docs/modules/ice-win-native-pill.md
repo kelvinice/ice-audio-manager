@@ -37,3 +37,4 @@ Unit tests in the file cover state and envelope handling and frame rasterisation
 
 ## Change log
 - 2026-11-23 Claude: initial recap.
+- 2026-11-23 Claude: window class now has an arrow cursor (`hCursor`); the hit-testable pill had none and could show a stale busy cursor on hover.

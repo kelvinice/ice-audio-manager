@@ -108,7 +108,7 @@ test('disconnected favourites are hidden unless showDisconnected is on, and hidd
   );
 });
 
-test('no favourites falls back to current device + togglePairs[0] partner + Choose devices…, never all devices', () => {
+test('no favourites falls back to current device + togglePairs[0] partner and no picker button, never all devices', () => {
   const playback = [
     dev({ id: 'arctis', name: 'Headphones (Arctis Nova 7)', isDefault: true, formFactor: 3 }),
     dev({ id: 'realtek', name: 'Speakers (Realtek(R) Audio)', formFactor: 1 }),
@@ -129,14 +129,14 @@ test('no favourites falls back to current device + togglePairs[0] partner + Choo
   });
 
   const row = buildNotchDeviceRow(playback, settings);
-  assert.equal(row.pickerLabel, 'Choose devices…');
+  assert.equal(row.pickerLabel, null);
   assert.deepEqual(
     row.chips.map((c) => c.id),
     ['arctis', 'realtek'],
   );
 
   const noPair = buildNotchDeviceRow(playback, baseSettings({ favouritesPlayback: [], togglePairs: [] }));
-  assert.equal(noPair.pickerLabel, 'Choose devices…');
+  assert.equal(noPair.pickerLabel, null);
   assert.deepEqual(
     noPair.chips.map((c) => c.id),
     ['arctis'],

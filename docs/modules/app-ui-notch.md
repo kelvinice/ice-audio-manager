@@ -55,3 +55,4 @@ any time (D-15). Heavy work (image decode, colour extraction, device sorting) ha
 
 ## Change log
 - 2026-11-23 Claude: initial recap.
+- 2026-11-23 Claude: `NotchDeviceRowModel.pickerLabel` is `'More…' | null`; the "Choose devices…" button is gone (no favourites = current device + toggle partner only).

@@ -91,7 +91,9 @@
         </button>
       {/if}
     {/each}
-    <button class="chip more-chip" type="button" onclick={onTogglePicker}>{row.pickerLabel}</button>
+    {#if row.pickerLabel}
+      <button class="chip more-chip" type="button" onclick={onTogglePicker}>{row.pickerLabel}</button>
+    {/if}
   </div>
 {/if}
 

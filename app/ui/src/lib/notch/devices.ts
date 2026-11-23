@@ -15,7 +15,8 @@ export interface NotchDeviceChip {
 
 export interface NotchDeviceRowModel {
   chips: NotchDeviceChip[];
-  pickerLabel: 'More…' | 'Choose devices…';
+  /** `null` = no picker button: with no favourites the row is just the current device and its toggle partner. */
+  pickerLabel: 'More…' | null;
 }
 
 function sameId(a: string | null | undefined, b: string | null | undefined): boolean {
@@ -141,7 +142,7 @@ export function buildNotchDeviceRow(
           : pair.secondary;
     pushSavedEntry(chips, partner, playback, settings, disconnected);
   }
-  return { chips: chips.slice(0, limit), pickerLabel: 'Choose devices…' };
+  return { chips: chips.slice(0, limit), pickerLabel: null };
 }
 
 export function isDeviceFavourite(

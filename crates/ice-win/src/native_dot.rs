@@ -22,7 +22,7 @@ use windows::Win32::Graphics::Gdi::{
 };
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::UI::WindowsAndMessaging::{
-    CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, GetMessageW, HWND_TOPMOST, KillTimer, MSG,
+    CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, GetMessageW, HWND_TOPMOST, IDC_ARROW, KillTimer, LoadCursorW, MSG,
     PostMessageW, PostQuitMessage, RegisterClassExW, SET_WINDOW_POS_FLAGS, SW_HIDE, SW_SHOWNOACTIVATE, SWP_NOACTIVATE,
     SWP_NOMOVE, SWP_NOOWNERZORDER, SWP_NOSENDCHANGING, SWP_NOSIZE, SetTimer, SetWindowPos, ShowWindow,
     TranslateMessage, ULW_ALPHA, UpdateLayeredWindow, WM_APP, WM_CLOSE, WM_DESTROY, WM_TIMER, WNDCLASSEXW,
@@ -971,6 +971,10 @@ fn dot_thread_main(monitor: MonitorInfo, shared: Arc<SharedState>, ready_tx: mps
         cbSize: u32::try_from(size_of::<WNDCLASSEXW>()).unwrap_or(0),
         lpfnWndProc: Some(dot_wnd_proc),
         hInstance: hinstance.into(),
+        // Without a class cursor the pill (hit-testable since D-19) leaves whatever cursor was last shown, which can be
+        // the busy one. Plain arrow.
+        // SAFETY: loading the shared system arrow; it needs no ownership or release.
+        hCursor: unsafe { LoadCursorW(None, IDC_ARROW) }.unwrap_or_default(),
         lpszClassName: class_name,
         ..Default::default()
     };

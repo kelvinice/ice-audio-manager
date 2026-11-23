@@ -227,7 +227,7 @@ games on the pinned monitor. Budgets met in every profile.
         and the native dot follow them, with the theme mapped by the shell so Phase 4 user themes can plug in. Editing
         favourites keeps a disconnected favourite in its place (`SavedDevice.savedId`)
   - [x] Notch (Gemini): the device row lists `settings.favouritesPlayback` in order. The current default is shown first if it isn't a
-        favourite. With no favourites: current device + the other side of the toggle pair + a "Choose devices…" chip, never
+        favourite. With no favourites: current device + the other side of the toggle pair and no picker button (owner, 2026-11-23: favourites are set from the tray's "Show in notch"), never
         "all devices". Alias-aware chips wide enough to read, at most 4–5, then "More…". Remove the theme, spring, idle-style and
         monitor pickers from the expanded card
   - [ ] Settings → Devices: reorderable list (Phase 4)
