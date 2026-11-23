@@ -1,13 +1,15 @@
 <script lang="ts">
-  import type { DeviceSummary, MediaAction, NowPlaying } from '../../lib/ipc/engine';
-  import type { MonitorSummary, SpringPreset, ThemeKind } from '../../lib/ipc/types';
-  import { DEFAULT_IDLE_MODE, isMediaActive, type IdleMode } from '../../lib/notch/scheduler';
+  import type { DeviceSummary, MediaAction, NowPlaying, SettingsView } from '../../lib/ipc/engine';
+  import type { SpringPreset } from '../../lib/ipc/types';
+  import { isMediaActive } from '../../lib/notch/scheduler';
   import DeviceIcon from './DeviceIcon.svelte';
   import ExpandedDeviceRow from './ExpandedDeviceRow.svelte';
   import ExpandedMediaCard from './ExpandedMediaCard.svelte';
 
   interface Props {
     playback: DeviceSummary[];
+    settings: SettingsView | null;
+    disconnected: DeviceSummary[];
     activeDeviceName: string;
     spatialBadge: string | null;
     volumePercent: number;
@@ -16,29 +18,23 @@
     micMuted: boolean;
     media?: NowPlaying | null;
     instant?: boolean;
-    idleMode?: IdleMode;
     notchVisible?: boolean;
-    activeMonitor: number;
-    monitors: MonitorSummary[];
     preset: SpringPreset;
-    theme: ThemeKind;
-    frameRate: number;
     expanded: boolean;
     onToggleExpand: () => void;
     onToggleMute: () => void;
     onAdjustVolume: (delta: number) => void;
     onSwitchDevice: (deviceId: string) => void;
+    onSetNotchDevices: (deviceIds: string[]) => void;
     onToggleMicMute: () => void;
     onMediaAction?: (action: MediaAction) => void;
-    onSetIdleMode?: (mode: IdleMode) => void;
-    onCycleMonitor: () => void;
     onOpenSettings: () => void;
-    onSetPreset: (preset: SpringPreset) => void;
-    onSetTheme: (theme: ThemeKind) => void;
   }
 
   let {
     playback,
+    settings,
+    disconnected,
     activeDeviceName,
     spatialBadge,
     volumePercent,
@@ -47,28 +43,21 @@
     micMuted,
     media = null,
     instant = false,
-    idleMode = DEFAULT_IDLE_MODE,
     notchVisible = true,
-    activeMonitor,
-    monitors,
     preset,
-    theme,
-    frameRate,
     expanded,
     onToggleExpand,
     onToggleMute,
     onAdjustVolume,
     onSwitchDevice,
+    onSetNotchDevices,
     onToggleMicMute,
     onMediaAction = () => {},
-    onSetIdleMode = () => {},
-    onCycleMonitor,
     onOpenSettings,
-    onSetPreset,
-    onSetTheme,
   }: Props = $props();
 
-  const currentMonitor = $derived(monitors[activeMonitor]);
+  let pickerOpen = $state(false);
+
   const clampedScale = $derived(Math.max(0, Math.min(1, barPercent / 100)));
   const activeMedia = $derived(isMediaActive(media) ? media : null);
 </script>
@@ -100,68 +89,44 @@
     </div>
   {/if}
 
-  <div class="exp-vol">
-    <button
-      class="chip icon-chip"
-      class:danger-chip={muted}
-      type="button"
-      aria-label={muted ? 'Unmute audio' : 'Mute audio'}
-      onclick={onToggleMute}
-    >
-      <DeviceIcon kind={muted ? 'speaker-muted' : 'speaker'} size={13} />
-    </button>
-    <div class="bar-track">
-      <div class="bar-fill" class:muted style:transform={`scaleX(${clampedScale.toFixed(4)})`}></div>
+  {#if !pickerOpen}
+    <div class="exp-vol">
+      <button
+        class="chip icon-chip"
+        class:danger-chip={muted}
+        type="button"
+        aria-label={muted ? 'Unmute audio' : 'Mute audio'}
+        onclick={onToggleMute}
+      >
+        <DeviceIcon kind={muted ? 'speaker-muted' : 'speaker'} size={13} />
+      </button>
+      <div class="bar-track">
+        <div class="bar-fill" class:muted style:transform={`scaleX(${clampedScale.toFixed(4)})`}></div>
+      </div>
+      <span class="pct" class:muted>{muted ? 'Mute' : `${volumePercent}%`}</span>
+      <button class="chip" type="button" aria-label="Decrease volume" onclick={() => onAdjustVolume(-8)}>-</button>
+      <button class="chip" type="button" aria-label="Increase volume" onclick={() => onAdjustVolume(8)}>+</button>
     </div>
-    <span class="pct" class:muted>{muted ? 'Mute' : `${volumePercent}%`}</span>
-    <button class="chip" type="button" aria-label="Decrease volume" onclick={() => onAdjustVolume(-8)}>-</button>
-    <button class="chip" type="button" aria-label="Increase volume" onclick={() => onAdjustVolume(8)}>+</button>
-  </div>
+  {/if}
 
-  <ExpandedDeviceRow {playback} {onSwitchDevice} />
+  <ExpandedDeviceRow
+    {playback}
+    {settings}
+    {disconnected}
+    {pickerOpen}
+    {onSwitchDevice}
+    {onSetNotchDevices}
+    onTogglePicker={() => {
+      pickerOpen = !pickerOpen;
+    }}
+  />
 
   <div class="exp-footer">
-    <div class="exp-actions">
-      <button class="chip mic-btn" class:danger-chip={micMuted} type="button" onclick={onToggleMicMute}>
-        <DeviceIcon kind={micMuted ? 'mic-muted' : 'mic'} size={11} />
-        <span>{micMuted ? 'Mic Off' : 'Mic On'}</span>
-      </button>
-      {#if monitors.length > 1}
-        <button class="chip" type="button" onclick={onCycleMonitor}>
-          Mon {activeMonitor + 1} ({currentMonitor?.refreshHz ?? 60}Hz)
-        </button>
-      {/if}
-      <button class="chip" type="button" onclick={onOpenSettings}>Settings</button>
-    </div>
-
-    <div class="meta">
-      <div class="preset-row" role="group" aria-label="Idle style">
-        {#each [['mini_pill', 'Pill'], ['dot', 'Dot'], ['hidden', 'Hide']] as [IdleMode, string][] as [m, label]}
-          <button
-            class="mini-btn"
-            class:active={idleMode === m}
-            type="button"
-            title={`Idle state: ${label}`}
-            onclick={() => onSetIdleMode(m)}
-          >
-            {label}
-          </button>
-        {/each}
-      </div>
-      <div class="preset-row">
-        {#each ['snappy', 'smooth', 'bouncy', 'off'] as SpringPreset[] as p}
-          <button class="mini-btn" class:active={preset === p} type="button" onclick={() => onSetPreset(p)}>
-            {p[0].toUpperCase()}
-          </button>
-        {/each}
-      </div>
-      {#each ['ice', 'midnight', 'fluent', 'minimal'] as ThemeKind[] as t}
-        <button class="mini-btn" class:active={theme === t} type="button" onclick={() => onSetTheme(t)}>
-          {t[0].toUpperCase()}
-        </button>
-      {/each}
-      <span class="fps">{frameRate > 0 ? `${frameRate}Hz` : `${currentMonitor?.refreshHz ?? 60}Hz`}</span>
-    </div>
+    <button class="chip" class:danger-chip={micMuted} type="button" onclick={onToggleMicMute}>
+      <DeviceIcon kind={micMuted ? 'mic-muted' : 'mic'} size={11} />
+      <span>{micMuted ? 'Mic Off' : 'Mic On'}</span>
+    </button>
+    <button class="chip" type="button" onclick={onOpenSettings}>Settings</button>
   </div>
 </div>
 
@@ -182,10 +147,7 @@
 
   .exp-header,
   .exp-vol,
-  .exp-actions,
-  .exp-footer,
-  .preset-row,
-  .meta {
+  .exp-footer {
     display: flex;
     align-items: center;
     gap: 5px;
@@ -263,8 +225,7 @@
     flex-shrink: 0;
   }
 
-  .chip,
-  .mini-btn {
+  .chip {
     appearance: none;
     display: inline-flex;
     align-items: center;
@@ -293,23 +254,6 @@
   .chip.danger-chip {
     border-color: var(--ice-danger);
     color: var(--ice-danger);
-  }
-
-  .mini-btn {
-    padding: 2px 5px;
-    font-size: 10px;
-    color: var(--ice-fg-muted);
-  }
-
-  .mini-btn.active {
-    border-color: var(--ice-accent);
-    color: var(--ice-accent-strong);
-  }
-
-  .fps {
-    font-family: var(--ice-mono);
-    font-size: 10px;
-    color: var(--ice-fg-muted);
   }
 
   @keyframes card-reveal {

@@ -27,9 +27,16 @@
   const barEls: Array<HTMLSpanElement | undefined> = [];
   const lastTransforms: string[] = [];
   const lastOpacities: string[] = [];
+  let available = $state(true);
   let handle: VisualizerHandle | null = null;
 
-  function applyLevels(levels: ReadonlyArray<number>): void {
+  function applyLevels(levels: ReadonlyArray<number>, nextAvailable: boolean): void {
+    available = nextAvailable;
+    if (!nextAvailable) {
+      lastTransforms.length = 0;
+      lastOpacities.length = 0;
+      return;
+    }
     for (let i = 0; i < BAR_INDICES.length; i += 1) {
       const el = barEls[i];
       if (!el) continue;
@@ -61,11 +68,13 @@
   });
 </script>
 
-<div class="visualizer-bars" class:expanded={variant === 'expanded'} aria-hidden="true">
-  {#each BAR_INDICES as idx (idx)}
-    <span class="bar" bind:this={barEls[idx]}></span>
-  {/each}
-</div>
+{#if available}
+  <div class="visualizer-bars" class:expanded={variant === 'expanded'} aria-hidden="true">
+    {#each BAR_INDICES as idx (idx)}
+      <span class="bar" bind:this={barEls[idx]}></span>
+    {/each}
+  </div>
+{/if}
 
 <style>
   .visualizer-bars {

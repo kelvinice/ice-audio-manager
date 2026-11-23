@@ -58,7 +58,7 @@
             <TrackActivity
               activity={ctrl.activeView}
               instant={ctrl.isInstant}
-              onMediaAction={(action) => void ctrl.sendMediaAction(action)}
+              onMediaAction={(action) => ctrl.sendMediaAction(action)}
             />
           {:else}
             <IdlePill
@@ -76,6 +76,8 @@
         {:else if ctrl.notchSnapshot && ctrl.isExpanded}
           <ExpandedNotch
             playback={ctrl.engineState.playback}
+            settings={ctrl.engineState.settings}
+            disconnected={ctrl.engineState.disconnected}
             activeDeviceName={ctrl.effectiveDeviceName}
             spatialBadge={ctrl.effectiveSpatialBadge}
             volumePercent={ctrl.effectiveVolumePercent}
@@ -84,25 +86,17 @@
             micMuted={ctrl.effectiveMicMuted}
             media={ctrl.engineState.media}
             instant={ctrl.isInstant}
-            idleMode={ctrl.idleMode}
             notchVisible={ctrl.isNotchVisible}
-            activeMonitor={ctrl.notchSnapshot.activeMonitor}
-            monitors={ctrl.notchSnapshot.monitors}
             preset={ctrl.notchSnapshot.preset}
-            theme={ctrl.notchSnapshot.theme}
-            frameRate={ctrl.frameRate}
             expanded={ctrl.notchSnapshot.expanded}
             onToggleExpand={ctrl.toggleExpand}
             onToggleMute={ctrl.toggleMute}
             onAdjustVolume={ctrl.adjustVolume}
             onSwitchDevice={ctrl.switchDevice}
+            onSetNotchDevices={ctrl.setNotchDevices}
             onToggleMicMute={ctrl.toggleMicMute}
-            onMediaAction={(action) => void ctrl.sendMediaAction(action)}
-            onSetIdleMode={ctrl.setIdleMode}
-            onCycleMonitor={ctrl.cycleMonitor}
+            onMediaAction={(action) => ctrl.sendMediaAction(action)}
             onOpenSettings={ctrl.openSettings}
-            onSetPreset={ctrl.setPreset}
-            onSetTheme={ctrl.setTheme}
           />
         {/if}
       </div>

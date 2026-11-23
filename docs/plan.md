@@ -221,7 +221,7 @@ games on the pinned monitor. Budgets met in every profile.
         saved (`[appearance]`, config schema v4, `Command::SetTheme/SetPreset/SetIdleStyle`) and survive restarts. The WebView
         and the native dot follow them, with the theme mapped by the shell so Phase 4 user themes can plug in. Editing
         favourites keeps a disconnected favourite in its place (`SavedDevice.savedId`)
-  - [ ] Notch (Gemini): the device row lists `settings.favouritesPlayback` in order. The current default is shown first if it isn't a
+  - [x] Notch (Gemini): the device row lists `settings.favouritesPlayback` in order. The current default is shown first if it isn't a
         favourite. With no favourites: current device + the other side of the toggle pair + a "Choose devices…" chip, never
         "all devices". Alias-aware chips wide enough to read, at most 4–5, then "More…". Remove the theme, spring, idle-style and
         monitor pickers from the expanded card

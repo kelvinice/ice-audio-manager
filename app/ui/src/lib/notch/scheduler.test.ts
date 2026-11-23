@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { DeviceSummary, EngineSnapshot, NowPlaying } from '../ipc/engine.ts';
 import {
-  createMediaCommand,
   DEFAULT_IDLE_MODE,
   formatRgbCss,
   formatRgbGlowCss,
@@ -383,11 +382,7 @@ test('snapshot.media populates compact idle state and mediaChanged wakes track a
   assert.equal(sched.state.media, null);
 });
 
-test('media helpers format timecodes, scrubber percentage, accent colours, and Command::Media payloads', () => {
-  assert.deepEqual(createMediaCommand('playPause'), { type: 'media', action: 'playPause' });
-  assert.deepEqual(createMediaCommand('next'), { type: 'media', action: 'next' });
-  assert.deepEqual(createMediaCommand('previous'), { type: 'media', action: 'previous' });
-
+test('media helpers format timecodes, scrubber percentage, and accent colours', () => {
   assert.equal(formatTimecode(52_000n), '0:52');
   assert.equal(formatTimecode(211_000), '3:31');
   assert.equal(formatTimecode(null), '0:00');

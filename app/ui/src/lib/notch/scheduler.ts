@@ -1,11 +1,9 @@
 import type {
   ArtInfo,
-  Command,
   DeviceSummary,
   EngineEvent,
   EngineSnapshot,
   Envelope,
-  MediaAction,
   Notice,
   NowPlaying,
   Rgb,
@@ -80,6 +78,7 @@ export interface NotchSchedulerState {
   revision: number;
   playback: DeviceSummary[];
   recording: DeviceSummary[];
+  disconnected: DeviceSummary[];
   volume: VolumeState | null;
   micMuted: boolean | null;
   micVolume: number | null;
@@ -131,10 +130,6 @@ export function shortDeviceName(name: string): string {
     return trimmed.slice(0, paren).trim();
   }
   return trimmed;
-}
-
-export function createMediaCommand(action: MediaAction): Command {
-  return { type: 'media', action };
 }
 
 export function isMediaActive(media: NowPlaying | null | undefined): media is NowPlaying {
@@ -253,6 +248,7 @@ export class NotchActivityScheduler {
       revision: 0,
       playback: [],
       recording: [],
+      disconnected: [],
       volume: null,
       micMuted: null,
       micVolume: null,
@@ -279,6 +275,7 @@ export class NotchActivityScheduler {
       revision: snapshot.revision,
       playback: snapshot.playback,
       recording: snapshot.recording,
+      disconnected: snapshot.disconnected ?? [],
       volume: snapshot.volume,
       micMuted: snapshot.micMuted,
       micVolume: snapshot.micVolume,
@@ -425,6 +422,7 @@ export class NotchActivityScheduler {
       }
 
       case 'deviceArrived': {
+        this.state.disconnected = this.state.disconnected.filter((d) => d.id !== ev.device.id);
         if (ev.device.flow === 'render') {
           this.state.playback = upsertArrivedDevice(this.state.playback, ev.device);
           this.state.activeDevice = findActivePlayback(this.state.playback);
@@ -483,6 +481,7 @@ export class NotchActivityScheduler {
       case 'devicesChanged': {
         this.state.playback = ev.playback;
         this.state.recording = ev.recording;
+        this.state.disconnected = ev.disconnected ?? [];
         this.state.activeDevice = findActivePlayback(ev.playback);
         this.state.targetDevice = findNextTarget(ev.playback);
         this.state.activeMic = findActiveMic(ev.recording);

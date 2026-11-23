@@ -1,7 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import type { Command, EngineSnapshot, Envelope, MediaAction } from '../ipc/engine';
-import type { NotchDelta, NotchSnapshot, SpringPreset, ThemeKind } from '../ipc/types';
+import type { EngineSnapshot, Envelope, MediaAction } from '../ipc/engine';
+import type { NotchDelta, NotchSnapshot } from '../ipc/types';
 import { SpringGroup } from '../motion/spring.svelte';
 import {
   computeClipPath,
@@ -12,7 +12,6 @@ import {
   targetGeometry,
 } from './geometry';
 import {
-  createMediaCommand,
   DEFAULT_IDLE_MODE,
   formatRgbCss,
   formatRgbGlowCss,
@@ -21,7 +20,6 @@ import {
   NotchActivityScheduler,
   shortDeviceName,
   type ActivityView,
-  type IdleMode,
 } from './scheduler';
 
 export class NotchController {
@@ -34,15 +32,11 @@ export class NotchController {
   private hoverExpanded = $state(false);
   private pointerInside = $state(false);
   pillSize = $state({ w: 116, h: 28, r: 14, vol: 40 });
-  frameRate = $state(0);
 
   private hoverTimer: number | null = null;
   private leaveTimer: number | null = null;
   private activityTimer: number | null = null;
   private lastReportedSeq = 0;
-  private lastFrameTs = 0;
-  private frameCount = 0;
-  private fpsWindowStart = 0;
   private resnapshotting = false;
 
   readonly idleMode = $derived(this.notchSnapshot?.idleStyle ?? DEFAULT_IDLE_MODE);
@@ -109,24 +103,8 @@ export class NotchController {
       'smooth',
       (vals) => {
         this.pillSize = { w: vals.w, h: vals.h, r: vals.r, vol: vals.vol };
-        this.recordFrameRate();
       },
     );
-  }
-
-  private recordFrameRate(): void {
-    const now = performance.now();
-    if (this.lastFrameTs > 0) {
-      this.frameCount += 1;
-      if (now - this.fpsWindowStart >= 350) {
-        this.frameRate = Math.round((this.frameCount * 1000) / (now - this.fpsWindowStart));
-        this.frameCount = 0;
-        this.fpsWindowStart = now;
-      }
-    } else {
-      this.fpsWindowStart = now;
-    }
-    this.lastFrameTs = now;
   }
 
   private clearActivityTimer(): void {
@@ -418,39 +396,19 @@ export class NotchController {
     }
   };
 
-  async sendMediaAction(action: MediaAction): Promise<void> {
+  sendMediaAction(action: MediaAction): void {
     this.scheduler.markInteraction(Date.now());
     this.scheduleNextTick();
-    const command: Command = createMediaCommand(action);
-    try {
-      await invoke('send_command', { command });
-      return;
-    } catch {
-      // Fall back to direct media_command if registered under that name.
-    }
-    try {
-      await invoke('media_command', { action });
-    } catch {
-      // No-op when running in standalone preview before backend media IPC lands.
-    }
+    void invoke('media_command', { action }).catch(() => {});
   }
-
-  setIdleMode = (mode: IdleMode): void => {
-    this.scheduler.markInteraction(Date.now());
-    this.syncGeometry(false);
-    this.scheduleNextTick();
-    void invoke('set_idle_style', { style: mode }).catch(() => {});
-  };
 
   toggleExpand = (): void => void invoke('toggle_expand');
   toggleMute = (): void => void invoke('toggle_mute');
   adjustVolume = (delta: number): void => void invoke('adjust_volume', { delta });
   switchDevice = (deviceId: string): void => void invoke('switch_to_device', { deviceId });
+  setNotchDevices = (deviceIds: string[]): void => void invoke('set_notch_devices', { deviceIds });
   toggleMicMute = (): void => void invoke('toggle_mic_mute');
-  cycleMonitor = (): void => void invoke('cycle_monitor');
   openSettings = (): void => void invoke('open_settings');
-  setPreset = (preset: SpringPreset): void => void invoke('set_preset', { preset });
-  setTheme = (theme: ThemeKind): void => void invoke('set_theme', { theme });
 }
 
 export function createNotchController(): NotchController {

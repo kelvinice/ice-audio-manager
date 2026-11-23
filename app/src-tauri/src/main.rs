@@ -25,7 +25,7 @@ use ice_win::webview2;
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder};
 
-use crate::ipc::{ActivityKind, HitRect, MonitorSummary, NotchDelta, NotchSnapshot, SpringPreset, ThemeKind};
+use crate::ipc::{ActivityKind, HitRect, MonitorSummary, NotchDelta, NotchSnapshot};
 
 const NOTCH_CANVAS_W: i32 = 420;
 const NOTCH_CANVAS_H: i32 = 190;
@@ -260,10 +260,8 @@ fn media_command(action: ice_core::engine::MediaAction, state: State<'_, Arc<Sha
 }
 
 #[tauri::command]
-fn set_idle_style(style: String, state: State<'_, Arc<SharedRuntime>>) {
-    if let Some(style) = ipc::IdleStyle::from_name(&style) {
-        state.engine.send(Command::SetIdleStyle { style });
-    }
+fn set_notch_devices(device_ids: Vec<String>, state: State<'_, Arc<SharedRuntime>>) {
+    state.engine.send(Command::SetFavourites { flow: ice_core::device::Flow::Render, device_ids });
 }
 
 #[tauri::command]
@@ -272,16 +270,6 @@ fn toggle_expand(app: AppHandle, state: State<'_, Arc<SharedRuntime>>) {
         s.expanded = !s.expanded;
         s.event_seq = s.event_seq.saturating_add(1);
     });
-}
-
-#[tauri::command]
-fn set_preset(preset: SpringPreset, state: State<'_, Arc<SharedRuntime>>) {
-    state.engine.send(Command::SetPreset { preset });
-}
-
-#[tauri::command]
-fn set_theme(theme: ThemeKind, state: State<'_, Arc<SharedRuntime>>) {
-    state.engine.send(Command::SetTheme { theme });
 }
 
 #[tauri::command]
@@ -388,11 +376,6 @@ pub(crate) fn wake_notch_on_main(app: &AppHandle, state: &Arc<SharedRuntime>, wa
     } else {
         let _ = win.show();
     }
-}
-
-#[tauri::command]
-fn cycle_monitor(app: AppHandle, state: State<'_, Arc<SharedRuntime>>) -> Result<(), String> {
-    cycle_monitor_internal(&app, &state)
 }
 
 #[tauri::command]
@@ -1332,14 +1315,11 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             toggle_mic_mute,
             trigger_switch,
             switch_to_device,
+            set_notch_devices,
             media_command,
             meter::set_visualizer,
-            set_idle_style,
             toggle_expand,
-            set_preset,
-            set_theme,
             request_idle_suspend,
-            cycle_monitor,
             open_settings,
         ])
         .setup(move |app| {

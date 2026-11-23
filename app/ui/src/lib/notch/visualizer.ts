@@ -9,6 +9,8 @@ export const MIN_BAR_SCALE = 0.18;
 export const BAR_SPRING_PRECISION = 0.004;
 export const MOCK_METER_INTERVAL_MS = 33;
 
+const IS_DEV = Boolean(import.meta.env && import.meta.env.DEV);
+
 const PERCEPTUAL_GAMMA = 0.42;
 const STEREO_CENTER_PEAK_BLEND = 0.35;
 const CONTOUR_BASE = 0.82;
@@ -200,7 +202,7 @@ export interface VisualizerHandle {
   dispose: () => void;
 }
 
-type LevelListener = (levels: number[]) => void;
+type LevelListener = (levels: number[], available: boolean) => void;
 
 class VisualizerController {
   private readonly bank = new VisualizerBank(DEFAULT_BAR_COUNT);
@@ -212,6 +214,7 @@ class VisualizerController {
   private mockTimerId: number | null = null;
   private mockTick = 0;
   private seenRealFrame = false;
+  private available = true;
   private backendRequested = false;
   private requestInFlight = false;
   private streamGen = 0;
@@ -237,7 +240,7 @@ class VisualizerController {
     };
 
     apply(initial);
-    onLevels(this.bank.values(this.levelsBuffer));
+    onLevels(this.bank.values(this.levelsBuffer), this.available);
 
     return {
       update: apply,
@@ -307,14 +310,23 @@ class VisualizerController {
         return;
       }
       this.backendRequested = true;
+      this.available = true;
       this.stopMock();
+      this.emitValues();
     } catch {
       if (gen === this.streamGen) {
         this.requestInFlight = false;
       }
-      // Until phase-3/meter-shell merges (or in Vite browser preview), fall back to bounded 30 Hz fake levels.
-      if (gen === this.streamGen && this.isVisibleAndActive() && !this.seenRealFrame) {
+      if (gen !== this.streamGen || !this.isVisibleAndActive()) return;
+      if (IS_DEV && !this.seenRealFrame) {
+        this.available = true;
         this.startMock();
+      } else if (!this.seenRealFrame) {
+        this.available = false;
+        this.stopRaf();
+        this.stopMock();
+        this.bank.snapSilence();
+        this.emitValues();
       }
     }
   }
@@ -337,6 +349,7 @@ class VisualizerController {
         const { listen } = await import('@tauri-apps/api/event');
         await listen<MeterFrame>('audio://meter/v1', (ev) => {
           this.seenRealFrame = true;
+          this.available = true;
           this.stopMock();
           if (!this.isVisibleAndActive()) return;
           this.pushFrame(ev.payload);
@@ -392,7 +405,7 @@ class VisualizerController {
   private emitValues(): void {
     const snapshot = this.bank.values(this.levelsBuffer);
     for (const listener of this.listeners) {
-      listener(snapshot);
+      listener(snapshot, this.available);
     }
   }
 
