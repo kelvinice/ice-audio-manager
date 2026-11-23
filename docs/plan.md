@@ -214,7 +214,10 @@ games on the pinned monitor. Budgets met in every profile.
         gaming mode, and Lite. A new document must request frames again.
   - [x] Notch (Gemini): 4–6 bars from `channels` (fall back to `peak`), fast-attack/slow-decay springs, no animation loop
         once frames stop and the bars have settled
-- [ ] Secondary QA: Chromium/Edge/Firefox media sessions
+- [ ] Secondary QA: Chromium/Edge/Firefox media sessions, **including YouTube Music** (the website, and the app installed
+      from Chrome/Edge). Owner, 2026-11-23: Spotify and YouTube Music are the supported music services (see Backlog)
+- [ ] Expanded card empty state when nothing plays: a clear hint (e.g. "Nothing playing. Start Spotify or YouTube Music"),
+      not a blank card (NotchBox reference, D-20 review)
 - [ ] **D-18 (accepted 2026-11-23): owner-picked notch devices, preferences out of the notch**
   - [x] Tray (Codex, finished by Claude): a **"Show in notch"** check item per playback device (= favourite, via `SetFavourites`, in order), and the
         submenus **Theme**, **Animation** and **Idle notch** next to Performance profile / Pinned monitor. These three are now
@@ -297,6 +300,15 @@ games on the pinned monitor. Budgets met in every profile.
 - Equalizer / APO integration (probably out of scope)
 - Spatial audio / sample-rate quick toggles
 - Localization
+- **Spotify and YouTube Music** (owner, 2026-11-23: both will be supported):
+  - *Level 1, works today without extra code:* both play through Windows' media sessions (GSMTC): Spotify desktop
+    (the primary QA target, Q-09), and YouTube Music in Chrome/Edge or as an installed app. Covered by the Phase 3
+    secondary QA. No network, no sign-in.
+  - *Level 2, a future decision:* richer features (like/save, queue, lyrics, playlists) need each service's web API,
+    which means network calls and a sign-in. §1.5 allows only the opt-in update check today, so this needs a new decision
+    before any code: opt-in per service, OAuth tokens in Windows Credential Manager, no background traffic, a documented
+    privacy note. YouTube Music has no official public API. Unofficial ones risk breaking its terms, so Level 2 may be
+    Spotify-only.
 
 ## Cleanup backlog
 

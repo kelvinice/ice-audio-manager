@@ -122,6 +122,15 @@ Remake Ice Audio Manager into an audio manager that is **as great and as cool as
 | **boring.notch**                         | macOS notch app                                                                 | Swift · **GPL-3.0**                                    | **Motion study only.** Watching it is fine; copying code or assets is not (GPL would apply to our app)                                                                                                                                                            |
 | **windows-rs** (`crates/samples` only) | Official Rust bindings samples                                                  | Rust · MIT/Apache-2.0                                        | COM/WinRT patterns (`#[implement]` callbacks, async WinRT)                                                                                                                                                                                                            |
 
+**Added 2026-11-23 (owner references; screenshots in `docs/reference/screens/`):**
+
+| Ref | What it is | Language / license | What we take from it |
+|---|---|---|---|
+| **Auralis (Microsoft Store widget)** | Compact media widget for Windows: art, title, scrubber, transport, a side rail (pin, power, modules, volume), colour themes, "nine anchors" with a vertical card on side edges | Unknown (Store page not readable; publisher unconfirmed) | **Screenshots only.** Layout, theming and anchor ideas: D-20 review and late option A2b |
+| **Auralis (GitHub, `matiaszanolli/Auralis`)** | A *different* product with the same name: Python + Electron music library with audio "mastering" | Python/JS · **AGPL-3.0** + commercial | Nothing directly. Cloned to `docs/reference/Auralis` to check. **Look, don't copy** (AGPL) |
+| **NotchBox** | macOS notch app: media card, date/calendar | Unknown (App Store) · screenshot only | The empty-state wording for "nothing playing" |
+| **FluentFlyout** (`unchihugo/FluentFlyout`) | Open-source Windows media flyout + taskbar widget with a visualizer | Not cloned; licence not checked | The closest Windows peer. Clone if we need prior art for the taskbar/visualizer |
+
 ### 1.3 Why DynamicWin is called malware (and what we learn)
 
 On DynamicWin issue #100 ("Is this a malware?"), the owner says it's just SmartScreen and that
@@ -1488,6 +1497,12 @@ references like Droppy (not very related) … for discussion."*
 - One pure function in `ice_core` (`anchor_rect(anchor, work_area, size) → rect`, unit-tested with taskbar positions and
   DPI) places **both** the WebView notch and the native pill, which removes the current twin.
 
+*Late option A2b (added 2026-11-23 after the Auralis review below; rule 5: every agent scores it).* **Add the left and
+right edges** (three anchors each: top, middle, bottom) with a **vertical layout**, on top of A2's six. Auralis ships
+this: "nine anchors" on the top, left and right edges, and a portrait card on the side edges (art on top, controls below,
+volume as a vertical slider in the side rail). Cost: a vertical variant of the idle pill, every activity and the expanded
+card, plus its own screenshot set.
+
 *Part B: ideas from Droppy and the other notch apps (pick many).*
 - **R1 · "Attached" vs "floating island" style.** Flush with the edge with flat outer corners, like a notch, or a gap
   with fully rounded corners. Mostly theme tokens; it fits the bottom anchors too.
@@ -1511,6 +1526,24 @@ Dragging from the native pill depends on D-19 A1 (a hit-testable pill).
 [WM_MOVING](https://learn.microsoft.com/en-us/windows/win32/winmsg/wm-moving) ·
 [WM_EXITSIZEMOVE](https://learn.microsoft.com/en-us/windows/win32/winmsg/wm-exitsizemove) ·
 [Snap Layouts](https://support.microsoft.com/en-US/windows/experience/snap-your-windows)
+
+**Reference review (Claude, 2026-11-23, owner-supplied screenshots in `docs/reference/screens/`, see §1.2).**
+The owner pointed at NotchBox (macOS) and **Auralis** (a Microsoft Store media widget) as visual references, not as
+targets ("doesn't necessarily mean we need to be like that"). What applies to us:
+
+| Seen in | Idea | Where it lands |
+|---|---|---|
+| Auralis | Nine anchors on top/left/right; a **vertical card** on side edges | D-20 late option **A2b** |
+| Auralis | **Pin** button: keep the card open | A cheap, per-session alternative to an always-awake profile → note for **D-21**: pin = WebView stays awake *until unpinned*, and the cost is shown |
+| Auralis | Whole-surface colour themes ("Studio Mono", "Violet") | Our theme tokens already allow it (D-12). Matters for **D-19 B2**: the native pill must follow the same surface colour |
+| Auralis | Side rail: pin, power, module icons, volume slider | Layout idea for the expanded card. Module icons ≈ **R2** (optional modules) |
+| Auralis | Weather chip | **No:** a network call (§1.5), out of scope |
+| NotchBox | Clear empty state: "Music is stopped. Please play music on Spotify or Music" | Small UX item for the expanded card (plan.md Phase 3 polish), not a decision |
+| NotchBox | Date + calendar events next to media | **No:** out of scope |
+
+Note: the GitHub repo `matiaszanolli/Auralis` (cloned to `docs/reference/Auralis`, AGPL-3.0) turned out to be a
+**different product**: a Python + Electron music library with "mastering", no widget and no anchors. The Store widget's
+publisher and licence couldn't be read (the Store page is rendered by JavaScript). Treat it as screenshots only.
 
 #### Positions
 
@@ -1549,6 +1582,15 @@ Dragging from the native pill depends on D-19 A1 (a hit-testable pill).
 |---|---|---|
 | Claude | +2 | Covers the real conflicts (title bars, Snap Layouts) without a vertical layout; removes a §11 twin |
 | Gemini | +2 | Six top/bottom work-area anchors avoid side-snap collisions and vertical activity rewrites; WebView needs only top/bottom origin + glow flips, and `ice_core::anchor_rect` removes the §11 twin |
+| Codex | | |
+| **Total** | | **Open** |
+
+#### Vote · Late option A2b *proposal* (add left/right edges with a vertical layout, Auralis-style; added 2026-11-23)
+
+| Agent | Score | Reason |
+|---|---|---|
+| Claude | +1 | Proven by Auralis and a real benefit on wide monitors, but it doubles the layout work. Do it as a follow-up after A2's six anchors ship, not together |
+| Gemini | | |
 | Codex | | |
 | **Total** | | **Open** |
 
