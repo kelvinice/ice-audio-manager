@@ -157,6 +157,8 @@ Remake Ice Audio Manager into an audio manager that is **as great and as cool as
 | **Auralis (GitHub, `matiaszanolli/Auralis`)** | A *different* product with the same name: Python + Electron music library with audio "mastering" | Python/JS · **AGPL-3.0** + commercial | Nothing directly. Cloned to `docs/reference/Auralis` to check. **Look, don't copy** (AGPL) |
 | **NotchBox** | macOS notch app: media card, date/calendar | Unknown (App Store) · screenshot only | The empty-state wording for "nothing playing" |
 | **FluentFlyout** (`unchihugo/FluentFlyout`) | Open-source Windows media flyout + taskbar widget with a visualizer | Not cloned; licence not checked | The closest Windows peer. Clone if we need prior art for the taskbar/visualizer |
+| **BitChord** (`kushagrasinghx/BitChord`) | Android YouTube Music client (Kotlin), plus a Go backend and a web app: InnerTube playback, lossless "module sources", Spotify playlist import, word-synced lyrics from 12 providers, Discord Rich Presence, scrobbling, sleep timer, "stats for nerds" | Kotlin/Go/TS · **GPL-3.0** | **Ideas only** (GPL): lyrics UX, the provider fallback chain, small audio-manager features (sleep timer, output format readout). Cloned to `docs/reference/BitChord` |
+| **Echo-Music** (`EchoMusicApp/Echo-Music`) | Android YouTube Music client (Kotlin): InnerTube playback, offline downloads, synced lyrics (LRCLIB, KuGou, BetterLyrics, SimpMusic, …), Shazam-style recognition, Genius "Music DNA" | Kotlin · **GPL-3.0** | **Ideas only** (GPL): how it queries LRCLIB (`lrclib/.../LrcLib.kt`: search, no key, duration ±2 s → ±5 s). Note it ships Firebase Analytics/Crashlytics, which our §1.5 forbids. Cloned to `docs/reference/Echo-Music` |
 
 ### 1.3 Why DynamicWin is called malware (and what we learn)
 
@@ -1819,8 +1821,18 @@ sessions; "Level 2" needs a network decision).
   checked.
 - **Lyrics sources:**
   - **LRCLIB** (lrclib.net): an open lyrics database whose `/api/get` takes track name, artist, album and duration, and
-    returns `syncedLyrics` (LRC) and/or `plainLyrics`. Whether reads need a key, and the duration unit, are unconfirmed:
-    test against the live API.
+    returns `syncedLyrics` (LRC) and/or `plainLyrics`. *Added 2026-11-23 from Echo-Music's client*
+    (`docs/reference/Echo-Music/lrclib/.../LrcLib.kt`): it calls `/api/search` with `track_name`/`artist_name`/`album_name`
+    and **no key or auth header**. It matches on **duration in seconds**, within ±2 s first and then ±5 s, after cleaning the
+    title. (Still worth one live check before building.)
+  - **Multi-provider fallback is common.** BitChord credits 12 lyrics sources: lrc.red, BiniLyrics, BetterLyrics, PaxSenix,
+    LyricsPlus, SimpMusic, Unison, Megalobiz, KuGou, LRCLIB, Musixmatch and Genius. Some offer word-level sync.
+- **Two more owner references (added 2026-11-23; §1.2):**
+  - **BitChord** and **Echo-Music** are Android YouTube Music clients. They play through YouTube's private InnerTube API with
+    their own stream extraction, ad-free, with offline downloads. That's the B3 pattern, here in production apps.
+  - Both are **GPL-3.0**, so none of their code can come into our MIT app.
+  - Both send data out: Echo-Music ships Firebase Analytics and Crashlytics in its Google build; BitChord has its own
+    backend (a live "listening now" counter) and Google Drive backup of listening history.
   - YouTube Music shows its own synced lyrics on its website. They aren't available through any official API.
   - Synced display would need the playback position. GSMTC reports position on timeline events, not continuously, so the UI
     would interpolate between updates.

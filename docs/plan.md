@@ -386,6 +386,13 @@ every feature phase. Phases 1–5 focus on features and UI/UX.
     Spotify-only.
   - **D-22 (open, blind round)** decides the network rule for music features, YouTube Music playback inside the app, and
     lyrics (LRCLIB and others).
+- **Ideas from BitChord / Echo-Music** (owner references, 2026-11-23; undecided, each needs an F-ID or decision before code):
+  - *Sleep timer:* pause the current media session after N minutes or at the end of the track (GSMTC; no network).
+  - *Output format readout:* the default device's sample rate and bit depth in the expanded notch (the endpoint's mix
+    format). Pairs with "sample-rate quick toggles" above.
+  - *Word-synced lyrics animation:* only if D-22 adopts lyrics.
+  - *Discord Rich Presence:* local IPC to Discord, but it shares what you play, so it would be opt-in with a privacy note.
+  - Not for us: offline downloads, ad-free playback via private APIs, analytics/crash reporting (§1.5).
 
 ## Cleanup backlog
 
