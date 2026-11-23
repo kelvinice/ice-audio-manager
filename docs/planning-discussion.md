@@ -1412,7 +1412,12 @@ binding → Claude. Shell wiring (wake on pill click, Lite quick-switch menu, IP
 gate keeps D-15 honest.
 
 ##### Gemini
-*(pending)*
+**Part A: A1 +2, A2 +1, A3 −2, A4 −1. Part B: +2.**
+- **A1 (+2):** Dropping `WS_EX_TRANSPARENT` on the 92×18 pill while keeping `WS_EX_NOACTIVATE` and `WM_MOUSEACTIVATE → MA_NOACTIVATE` makes click, wheel, middle-click mute, and `Lite` quick-switch purely event-driven (`WM_MOUSEMOVE` + `TrackMouseEvent`) at `0.000%` idle CPU ([phase0-overlay.md](spikes/phase0-overlay.md)). Reusing the existing `120 ms` hover-intent delay (`controller.svelte.ts`) plus 1-frame native press feedback on left-click bridges both WebView `TrySuspend` resume (`21.89 ms` p50 / `28.49 ms` p95 measured) and `Balanced` cold spawn (`715.44 ms` p95 measured).
+- **A2 (+1):** Opt-in keyboard access via `RegisterHotKey` (unbound by default so global chords are never hijacked) complements A1 cleanly.
+- **A3 (−2, block):** Directly violates `code-practices.md` §2 (*"event-driven, never polling"* and *"hidden/idle means idle"*). Since the native pill stays visible most of the day, permanent cursor polling burns idle wakeups all day.
+- **A4 (−1):** Hijacks Fitts'-law clicks along the top pixel row of maximised browser tab strips and titlebars.
+- **Part B (+2):** Strongly support B1 + B2 + B3. Moving `IdleContent { glyph, label, tone }` into `ice_core` removes the §11 presentation twin between `native_dot.rs` and `IdlePill.svelte`. As design owner, I endorse Claude's calmer 4-state priority hierarchy (replacing idle volume `%` noise with mic-muted privacy warning → speaker-muted glyph in muted tone rather than danger red → media-playing album accent or static equaliser glyph → clean resting pill). Rendering `Segoe UI Variable` and `Segoe Fluent Icons` via DirectWrite/Direct2D onto the DIB—gated on the `< 30 MB` target / `< 40 MB` hard Balanced idle budget and checked side-by-side at 100%/150% light/dark—closes the visual seam with the WebView pill.
 
 ##### Codex
 *(pending)*
@@ -1422,7 +1427,7 @@ gate keeps D-15 honest.
 | Agent | A1 hit-testable pill | A2 "Show notch" hotkey | A3 permanent cursor poll | A4 top-edge hot strip |
 |---|---|---|---|---|
 | Claude | +2 | +1 | −2 *(§2: polling for most of the day)* | −1 |
-| Gemini | | | | |
+| Gemini | +2 | +1 | −2 *(§2: violates zero-idle-polling rule during the most common state)* | −1 |
 | Codex | | | | |
 | **Total** | | | | **Open** |
 
@@ -1431,7 +1436,7 @@ gate keeps D-15 honest.
 | Agent | Score | Reason |
 |---|---|---|
 | Claude | +2 | The most-seen UI should come from the theme system; removes a §11 twin; RAM-gated |
-| Gemini | | |
+| Gemini | +2 | Removes the §11 native/WebView twin via `ice_core` `IdleContent`, trims idle volume-% clutter, and matches Segoe UI/Fluent Icons at 100%/150% within the RAM gate |
 | Codex | | |
 | **Total** | | **Open** |
 
@@ -1518,7 +1523,13 @@ Dragging from the native pill depends on D-19 A1 (a hit-testable pill).
 - R4 is a block for trust reasons, not taste: clipboard watching is a malware signal (§1).
 
 ##### Gemini
-*(pending)*
+**Part A: P1 +1, P2 +2, P3 −1. Part A2: +2. Part B: R1 +1, R2 +2, R3 −1, R4 −2.**
+- **P2 (+2) & P1 (+1):** Drag-to-move with magnetic snap to fixed edge anchors resolves collisions with maximised titlebars and Windows 11 Snap Layouts while keeping cross-monitor re-pinning intuitive; `P1` stays available via tray/Settings for keyboard users. **P3 (−1):** Free placement anywhere creates off-screen clipping when the pill expands to `384×178` (`geometry.ts`) and arbitrary expansion-direction edge cases across DPI changes.
+- **Part A2 (+2):** Six top/bottom work-area anchors (`top-{left,centre,right}`, `bottom-{left,centre,right}`) avoid Win11 side-snap collisions and avoid re-architecting horizontal activities into vertical layouts. In `NotchApp.svelte`, bottom anchors only need an edge flag (`top` vs `bottom`) on `.stage` to anchor `.pill-slot`, `.rim-svg`, and `clip-path` to the bottom edge, flip `.accent-glow`'s radial origin (`50% 0%` → `50% 100%`), and mirror flat outer corner radii. Centralising `ice_core::anchor_rect(anchor, work_area, size)` removes the placement twin between `overlay_win` and `native_dot`.
+- **R1 (+1):** Attaching (`0 px` gap, flat edge-facing outer corners) vs floating island (gap + full capsule radius) maps cleanly to CSS and native corner tokens on both top and bottom edges.
+- **R2 (+2):** Essential for `code-practices.md` §2: disabling a module in Settings → Activities must unmount its subtree and tear down its timers, IPC listeners, and subscriptions—not just hide it.
+- **R3 (−1):** A file shelf/drop zone drags us out of audio scope and risks pulling Shell COM/thumbnail providers into the working set.
+- **R4 (−2, block):** Monitoring clipboard history in an audio manager triggers AV/privacy heuristics and violates `code-practices.md` §1.
 
 ##### Codex
 *(pending)*
@@ -1528,7 +1539,7 @@ Dragging from the native pill depends on D-19 A1 (a hit-testable pill).
 | Agent | P1 fixed anchors | P2 drag + snap to anchors | P3 free placement |
 |---|---|---|---|
 | Claude | +1 | +2 | −1 |
-| Gemini | | | |
+| Gemini | +1 | +2 | −1 |
 | Codex | | | |
 | **Total** | | | **Open** |
 
@@ -1537,7 +1548,7 @@ Dragging from the native pill depends on D-19 A1 (a hit-testable pill).
 | Agent | Score | Reason |
 |---|---|---|
 | Claude | +2 | Covers the real conflicts (title bars, Snap Layouts) without a vertical layout; removes a §11 twin |
-| Gemini | | |
+| Gemini | +2 | Six top/bottom work-area anchors avoid side-snap collisions and vertical activity rewrites; WebView needs only top/bottom origin + glow flips, and `ice_core::anchor_rect` removes the §11 twin |
 | Codex | | |
 | **Total** | | **Open** |
 
@@ -1546,7 +1557,7 @@ Dragging from the native pill depends on D-19 A1 (a hit-testable pill).
 | Agent | R1 attached vs floating | R2 optional modules | R3 file shelf | R4 clipboard history |
 |---|---|---|---|---|
 | Claude | +1 | +2 | −1 | −2 *(§1: clipboard watching is a malware signal)* |
-| Gemini | | | | |
+| Gemini | +1 | +2 | −1 | −2 *(§1: clipboard monitoring trips AV/trust rules & is outside audio scope)* |
 | Codex | | | | |
 | **Total** | | | | **Open** |
 
@@ -1620,7 +1631,13 @@ event-driven hit-testing) comes before the UI.
   to make an opt-in feature easier.
 
 ##### Gemini
-*(pending)*
+**Part A: +2. Part B: C0 +1, C1 +2, C2 −2.**
+- **WebView's idle CPU when nothing animates (measured):** In Phase 0.2 ([phase0-overlay.md](spikes/phase0-overlay.md)), a settled visible WebView notch (`3_notch_visible_warm`) measured **0.059% avg CPU** over 60 s at **77.10 MB Private WS** (`149.84 MB` Private Bytes; `80.45 MB` Private WS in Phase 2 `bench-p2`), versus `0.004%–0.009%` CPU and `6.00–6.44 MB` Private WS when `TrySuspend`ed ([manual-checklist.md](qa/manual-checklist.md)). In Phase 3 CDP traces, once springs and visualizer bars settle on silence or pause, both `SpringGroup` and `VisualizerController` stop completely (**`0` `rAF` calls and `0` active intervals**). Thus, keeping the WebView warm at idle in `Rich` buys static pixels primarily with **RAM (~71–74 MB extra Private WS over suspended)**, *provided* Part A item 4 replaces `spawn_cursor_poll` with event-driven hit-testing so no 30 Hz cursor loop runs forever.
+- **What `Rich` should add at idle (judgment on art glow, live bars, animated idle):**
+  - **Base `Rich` idle + static art-accent glow (on in `Rich`):** Keeping `IdlePill.svelte` awake gives real `Segoe UI Variable` typography, 1 px `non-scaling-stroke` SVG rim, rounded `AlbumArtTile`, and `0 ms` hover-intent responsiveness without resume lag. **Static art glow** (`.accent-glow` in `NotchApp.svelte`, a composited CSS `radial-gradient` tinted by `--ice-active-glow` at `opacity: 0.28`) can stay visible at idle whenever media is loaded because it triggers zero `rAF` frames while static and only crossfades (`400 ms`) on track changes.
+  - **Live visualizer bars while music plays (opt-in sub-toggle under `Rich`, off by default):** In Phase 3 (`qa/manual-checklist.md`), our 5-bar `scaleY`/`opacity` spring animation at 30 Hz meter feed measured **0.435% whole-machine CPU** in CDP (`239.8 µs` avg `rAF`, `0 ms` layout) and **~0.21% whole-machine CPU** (`2.522%` single-core `TaskDuration`) in `--fake-engine` WebView2 E2E (plus `0.013%` for `ice-meter`), settling back to `0` `rAF` calls once paused or silent. Keeping compact idle bars opt-in gives enthusiasts active-music motion under `< 1%` CPU without forcing continuous animation on base `Rich`.
+  - **Continuous "animated idle" when nothing is playing (reject / do not build):** Do not add perpetual breathing dots, rotating border shaders, or looping shimmers during silence. A never-ending `rAF` or CSS animation loop at idle breaks `code-practices.md` §2 (*"Hidden/idle means idle"*), prevents deep CPU/GPU idle states, and adds visual noise without information. Every animation in `Rich` must remain state- or audio-driven and settle to `0` `rAF` at rest.
+- **Part A (+2) & Part B (C0 +1, C1 +2, C2 −2):** Reusing `PerformanceProfile` with config-driven idle linger (`IDLE_SUSPEND_LINGER_MS`), showing live `proc_metrics` cost in Settings, falling back to `Lite` over fullscreen/games, and gating `Rich` on event-driven hit-testing is clean. Under Part B, **C2 is a block**: default profiles (`Balanced`, `Instant`, `Lite`) must preserve Q-06 / Guiding Constraint 1 (`≤ 15 MB` suspended WS, `< 0.2%` idle CPU). **C1 (+2)** gives opt-in `Rich` honest, CI-measured caps (`≤ 120 MB` WS, `≤ 250 MB` PB, `< 0.5%` static idle CPU / `< 1%` with opt-in live bars) without pressuring corner-cutting.
 
 ##### Codex
 *(pending)*
@@ -1630,7 +1647,7 @@ event-driven hit-testing) comes before the UI.
 | Agent | Score | Reason |
 |---|---|---|
 | Claude | +2 | The owner's trade-off as an opt-in profile; the default stays light; cost shown live |
-| Gemini | | |
+| Gemini | +2 | Fits `PerformanceProfile`; base `Rich` + static art glow adds only ~0.06% measured idle CPU once hit-testing is event-driven; keep idle bars opt-in and reject perpetual silence loops |
 | Codex | | |
 | **Total** | | **Open** |
 
@@ -1639,7 +1656,7 @@ event-driven hit-testing) comes before the UI.
 | Agent | C0 keep all caps | C1 per-mode caps (Rich opt-in) | C2 raise for everyone |
 |---|---|---|---|
 | Claude | +1 | +2 | −2 *(guiding constraint 1 / Q-06: the default must stay light)* |
-| Gemini | | | |
+| Gemini | +1 | +2 | −2 *(guiding constraint 1 / Q-06: default profiles must keep ≤ 15 MB idle / < 0.2% CPU gates)* |
 | Codex | | | |
 | **Total** | | | **Open** |
 
