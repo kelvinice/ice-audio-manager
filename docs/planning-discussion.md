@@ -159,6 +159,7 @@ Remake Ice Audio Manager into an audio manager that is **as great and as cool as
 | **FluentFlyout** (`unchihugo/FluentFlyout`) | Open-source Windows media flyout + taskbar widget with a visualizer | Not cloned; licence not checked | The closest Windows peer. Clone if we need prior art for the taskbar/visualizer |
 | **BitChord** (`kushagrasinghx/BitChord`) | Android YouTube Music client (Kotlin), plus a Go backend and a web app: InnerTube playback, lossless "module sources", Spotify playlist import, word-synced lyrics from 12 providers, Discord Rich Presence, scrobbling, sleep timer, "stats for nerds" | Kotlin/Go/TS · **GPL-3.0** | **Ideas only** (GPL): lyrics UX, the provider fallback chain, small audio-manager features (sleep timer, output format readout). Cloned to `docs/reference/BitChord` |
 | **Echo-Music** (`EchoMusicApp/Echo-Music`) | Android YouTube Music client (Kotlin): InnerTube playback, offline downloads, synced lyrics (LRCLIB, KuGou, BetterLyrics, SimpMusic, …), Shazam-style recognition, Genius "Music DNA" | Kotlin · **GPL-3.0** | **Ideas only** (GPL): how it queries LRCLIB (`lrclib/.../LrcLib.kt`: search, no key, duration ±2 s → ±5 s). Note it ships Firebase Analytics/Crashlytics, which our §1.5 forbids. Cloned to `docs/reference/Echo-Music` |
+| **Auralys** (Android, v4.1.0) | Android music app: "listen together" rooms with a session code (real-time shared playback), two switchable UI styles ("Editorial" and "Liquid Glass"), song share cards for stories | Unknown · **no public source found** | **Screenshot only** (`docs/reference/screens/auralys-android-promo-v4.1.0.png`). Style as a user choice, separate from colour themes (D-23). Listen-together needs a server, which is outside D-05 and §1.5 |
 
 ### 1.3 Why DynamicWin is called malware (and what we learn)
 
@@ -1805,7 +1806,9 @@ sessions; "Level 2" needs a network decision).
   - D-05 defines the product as an audio manager.
   - D-21 C0: every resource cap stays.
 - **References checked:**
-  - **"Auralys":** I couldn't identify the owner's reference. The search found unrelated products with that name.
+  - **"Auralys":** identified later on 2026-11-23 from an owner screenshot (`docs/reference/screens/auralys-android-promo-v4.1.0.png`).
+    It is an Android music app (v4.1.0) with "listen together" rooms, two switchable styles ("Editorial" and "Liquid
+    Glass") and share cards. No public source found, so there is no code to reference.
   - **"Auralis" (GitHub `matiaszanolli/Auralis`, cloned to `docs/reference/Auralis`):** its README says "No streaming
     service (local files only)". Its lyrics come only from tags embedded in local files
     (`auralis-web/backend/services/lyrics_extraction.py`). It's **AGPL-3.0**: copying its code would put our MIT app under AGPL.
@@ -1925,6 +1928,10 @@ cleanliness, etc."*) and discuss it. Reference images:
   borders, generous spacing, large type for the title, secondary actions behind "…".
 - **Lyrics (if D-22 adopts them):** the active line is bright and large; other lines fade out with distance.
 - **The light variant** (Echo's library) uses a soft tonal palette derived from the art (pink surfaces for a red cover).
+- *Added 2026-11-23 (owner screenshot, `docs/reference/screens/auralys-android-promo-v4.1.0.png`):* **Auralys** offers
+  **two whole UI styles, "Editorial" and "Liquid Glass", switchable in Settings**. That's a style axis separate from colour
+  themes. Its "Liquid Glass" screens use the same tinted, translucent card and chip treatment as V3. (Facts only; no
+  option was changed while the round is open.)
 
 **Facts about our notch (Claude, checked 2026-11-23):**
 - **D-12 decided "tinted, not blurred"** for the notch. CSS `backdrop-filter` can't blur desktop pixels behind a transparent

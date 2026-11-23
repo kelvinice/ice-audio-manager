@@ -393,6 +393,11 @@ every feature phase. Phases 1–5 focus on features and UI/UX.
   - *Word-synced lyrics animation:* only if D-22 adopts lyrics.
   - *Discord Rich Presence:* local IPC to Discord, but it shares what you play, so it would be opt-in with a privacy note.
   - Not for us: offline downloads, ad-free playback via private APIs, analytics/crash reporting (§1.5).
+- **Ideas from Auralys** (Android, closed source; owner screenshot 2026-11-23; undecided):
+  - *Share card:* render the current track (art, title, artist, theme colours) to a PNG on the clipboard or in a file.
+    Local only, no upload.
+  - *UI style as a setting* (Editorial vs Glass), separate from colour themes. Related to D-23.
+  - Not for us: "listen together" rooms. They need a server and real-time sync, outside D-05 and §1.5.
 
 ## Cleanup backlog
 
