@@ -1881,34 +1881,38 @@ cache in `ice-core`/`ice-win` by Claude; network permission and window wiring by
 
 #### Positions
 
-Sealed until all three agents have voted (§0.4): `docs/votes/D-22/<agent>.md`.
+**Revealed 2026-11-23. One revision round is open (§0.4).** Mark each revision “changed after reveal” and record the reason.
+
+- Claude favors the external player shortcut and on-demand LRCLIB once Settings can disclose the lookup. [Claude's ballot](votes/D-22/claude.md)
+- Gemini favors per-feature consent, a native provider allowlist and lyric interpolation only while visible and playing. [Gemini's ballot](votes/D-22/gemini.md)
+- Codex proposes a single-track lookup before offering opt-in automatic lookups, with playback in the external player. [Codex's ballot](votes/D-22/codex.md)
 
 #### Vote · Part A *pick one* (network use)
 
 | Agent | N0 keep §1.5 | N1 opt-in per feature | N2 general permission |
 |---|---|---|---|
-| Claude | *sealed* | *sealed* | *sealed* |
-| Gemini | *sealed* | *sealed* | *sealed* |
-| Codex | | | |
-| **Total** | | | **Open (blind round)** |
+| Claude | −1 | +2 | −1 |
+| Gemini | +1 | +2 | −2 |
+| Codex | +1 | +2 | −2 |
+| **Total** | +1 | +6 | −5 |
 
 #### Vote · Part B *pick many* (YouTube Music)
 
 | Agent | B1 control + shortcut | B2 embedded YouTube Music window | B3 native unofficial player |
 |---|---|---|---|
-| Claude | *sealed* | *sealed* | *sealed* |
-| Gemini | *sealed* | *sealed* | *sealed* |
-| Codex | | | |
-| **Total** | | | **Open (blind round)** |
+| Claude | +2 | −1 | −2 |
+| Gemini | +2 | −1 | −2 |
+| Codex | +2 | −1 | −2 |
+| **Total** | +6 | −3 | −6 |
 
 #### Vote · Part C *pick many* (lyrics)
 
 | Agent | K0 none | K1 LRCLIB opt-in | K2 other providers | K3 YouTube Music unofficial |
 |---|---|---|---|---|
-| Claude | *sealed* | *sealed* | *sealed* | *sealed* |
-| Gemini | *sealed* | *sealed* | *sealed* | *sealed* |
-| Codex | | | | |
-| **Total** | | | | **Open (blind round)** |
+| Claude | −1 | +2 | 0 | −2 |
+| Gemini | 0 | +2 | −1 | −2 |
+| Codex | 0 | +1 | −1 | −2 |
+| **Total** | −1 | +5 | −2 | −6 |
 
 ---
 
@@ -1975,16 +1979,20 @@ so `Minimal` can switch them off (§5: components use only theme variables; new 
 
 #### Positions
 
-Sealed until all three agents have voted (§0.4): `docs/votes/D-23/<agent>.md`.
+**Revealed 2026-11-23. One revision round is open (§0.4).** Mark each revision “changed after reveal” and record the reason.
+
+- Claude prefers subtle cover blur with a gradient fallback and a directly reachable device row. [Claude's ballot](votes/D-23/claude.md)
+- Gemini prefers the gradient and translucent controls at notch scale, with optional cover blur and solid Minimal controls. [Gemini's ballot](votes/D-23/gemini.md)
+- Codex prioritizes hierarchy and favourite outputs, with theme-controlled art inside the WebView. [Codex's ballot](votes/D-23/codex.md)
 
 #### Vote · *pick many* (V1–V6)
 
 | Agent | V1 blurred art backdrop | V2 art gradient wash | V3 translucent controls | V4 cleanliness pass | V5 see-through blur | V6 lyrics styling |
 |---|---|---|---|---|---|---|
-| Claude | *sealed* | *sealed* | *sealed* | *sealed* | *sealed* | *sealed* |
-| Gemini | *sealed* | *sealed* | *sealed* | *sealed* | *sealed* | *sealed* |
-| Codex | | | | | | |
-| **Total** | | | | | | **Open (blind round)** |
+| Claude | +2 | +1 | +1 | +2 | −1 | +1 |
+| Gemini | +1 | +2 | +2 | +2 | −2 | +1 |
+| Codex | +1 | +1 | +1 | +2 | −2 | +1 |
+| **Total** | +4 | +4 | +4 | +6 | −5 | +3 |
 
 ---
 
@@ -2035,16 +2043,20 @@ closed decision changes only through a new entry.
 
 #### Positions
 
-Sealed until all three agents have voted (§0.4): `docs/votes/D-24/<agent>.md`.
+**Revealed 2026-11-23. One revision round is open (§0.4).** Mark each revision “changed after reveal” and record the reason.
+
+- Claude favors revisiting MIT for a named component that meets the project’s trust rules. [Claude's ballot](votes/D-24/claude.md)
+- Gemini prefers MIT and found no specific Android or macOS UI component worth porting. [Gemini's ballot](votes/D-24/gemini.md)
+- Codex favors revisiting MIT for a specific import. Both signing channels accommodate GPLv3, with version-specific source and notices. [Codex's ballot](votes/D-24/codex.md)
 
 #### Vote · *pick one* (licence)
 
 | Agent | G0 stay MIT, clean-room only | G1 relicense to GPL-3.0 now | G2 MIT now, relicense per component |
 |---|---|---|---|
-| Claude | *sealed* | *sealed* | *sealed* |
-| Gemini | *sealed* | *sealed* | *sealed* |
-| Codex | | | |
-| **Total** | | | **Open (blind round)** |
+| Claude | +1 | −1 | +2 |
+| Gemini | +2 | −1 | +1 |
+| Codex | +1 | −1 | +2 |
+| **Total** | +4 | −3 | +5 |
 
 ---
 
@@ -2156,6 +2168,6 @@ A decision passes when all three agents have voted and the rules produce a resul
 | D-20 | Placement and modules | **P1 +5 (+2/+1/+2)** leads P2 +4 (+1/+2/+1), P3 −3. A2 +6 (+2/+2/+2). A2b −3 (−1/−1/−1). R1 +3, R2 +5 (+2/+2/+1), R3 −3, R4 −6 (−2/−2/−2) | **Closed 2026-11-23 (owner ruling)** | Owner: build both P1 and P2; Settings → Notch "Drag & snap" (default) or "Fixed position". Drag via own pointer capture, focus/keyboard release gate. A2 adopted, A2b rejected, R1+R2 adopted, R3+R4 rejected |
 | D-21 | User modes and resource caps | Part A 0 (0/+1/−1): **fails as written**. **C0 +6 (+2/+2/+2)**, C1 +1 (0/+1/0), C2 −6 | **Part B closed 2026-11-23: C0**; Part A → D-21.1 | Every cap stays. Rich bundle failed (0); its pieces are re-scored in D-21.1 |
 | D-21.1 | What replaces the Rich profile | L1 +5 (+2/+2/+1), L2 +5 (+2/+1/+2), L3 +3 (+1/+1/+1), L4 +1 (+1/+1/−1), L5 −3 (−1/−1/−1), L6 +3 (+1/+1/+1), in Claude/Gemini/Codex order | **Closed 2026-11-23 (owner)** | Accepted: L1 linger in config, L2 event-driven hit-testing (real-host spike first), L3 session pin (clears on lock/sleep), L6 cost readout (sampled only while the page is open). Rejected: L4, L5 |
-| D-22 | YouTube Music playback, lyrics, network use | — | **Open: blind round (§0.4)** | Owner idea; Claude sealed; waiting for Gemini and Codex |
-| D-23 | Visual direction: art backdrop, translucency, cleanliness | — | **Open: blind round (§0.4)** | Owner reference (Echo-Music, BitChord); Claude sealed; waiting for Gemini and Codex |
-| D-24 | Project licence: MIT or GPL-3.0 | — | **Open: blind round (§0.4)** | Owner open to GPL-3.0 to reuse GPL code; would change Q-02 / Phase 0.7 MIT. Claude sealed; waiting for Gemini and Codex |
+| D-22 | YouTube Music playback, lyrics, network use | N0 +1 (−1/+1/+1), N1 +6 (+2/+2/+2), N2 −5 (−1/−2/−2), B1 +6 (+2/+2/+2), B2 −3 (−1/−1/−1), B3 −6 (−2/−2/−2), K0 −1 (−1/0/0), K1 +5 (+2/+2/+1), K2 −2 (0/−1/−1), K3 −6 (−2/−2/−2) | **Open for one revision round (§0.4)** | Splits in Claude/Gemini/Codex order |
+| D-23 | Visual direction: art backdrop, translucency, cleanliness | V1 +4 (+2/+1/+1), V2 +4 (+1/+2/+1), V3 +4 (+1/+2/+1), V4 +6 (+2/+2/+2), V5 −5 (−1/−2/−2), V6 +3 (+1/+1/+1) | **Open for one revision round (§0.4)** | Splits in Claude/Gemini/Codex order |
+| D-24 | Project licence: MIT or GPL-3.0 | G0 +4 (+1/+2/+1), G1 −3 (−1/−1/−1), G2 +5 (+2/+1/+2) | **Open for one revision round (§0.4)** | Splits in Claude/Gemini/Codex order |
