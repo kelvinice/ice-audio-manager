@@ -183,18 +183,6 @@ impl NativePillTheme {
         }
     }
 
-    /// Resolves a bundled theme name (`ice`, `midnight`, `fluent`, `minimal`), case-insensitively.
-    #[must_use]
-    pub fn from_name(name: &str) -> Option<Self> {
-        match name.trim().to_ascii_lowercase().as_str() {
-            "ice" => Some(Self::ice()),
-            "midnight" => Some(Self::midnight()),
-            "fluent" => Some(Self::fluent()),
-            "minimal" => Some(Self::minimal()),
-            _ => None,
-        }
-    }
-
     /// Applies user CSS `--ice-*` overrides onto `base`.
     ///
     /// Supports `#rgb`, `#rrggbb`, `#rrggbbaa`, `rgb(...)`, `rgba(...)`, and `transparent`.
@@ -1775,16 +1763,12 @@ mod tests {
         assert_eq!(min.bg, Rgba::new(18, 22, 29, 255));
         assert_eq!(min.rim, Rgba::new(0, 0, 0, 0));
 
-        assert_eq!(NativePillTheme::from_name("MIDNIGHT"), Some(mid));
-        assert_eq!(NativePillTheme::from_name("unknown"), None);
+        assert_eq!(NativePillTheme::builtin(ThemeKind::Midnight), mid);
     }
 
     #[test]
     fn idle_styles_compare_minipill_dot_and_hidden_with_d12_mic_glyph() {
         assert_eq!(IdleStyle::default(), IdleStyle::MiniPill);
-        assert_eq!(IdleStyle::from_name("mini_pill"), Some(IdleStyle::MiniPill));
-        assert_eq!(IdleStyle::from_name("dot"), Some(IdleStyle::Dot));
-        assert_eq!(IdleStyle::from_name("hidden"), Some(IdleStyle::Hidden));
 
         for scale in [1.0f32, 1.5f32] {
             let mut st_pill = PillState::new(NativePillTheme::ice());

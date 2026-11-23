@@ -37,19 +37,6 @@ pub enum IdleStyle {
     Hidden,
 }
 
-impl IdleStyle {
-    /// Parses `"mini_pill"`, `"dot"`, or `"hidden"` (case-insensitive).
-    #[must_use]
-    pub fn from_name(name: &str) -> Option<Self> {
-        match name.trim().to_ascii_lowercase().as_str() {
-            "mini_pill" | "minipill" | "pill" => Some(Self::MiniPill),
-            "dot" => Some(Self::Dot),
-            "hidden" | "hide" => Some(Self::Hidden),
-            _ => None,
-        }
-    }
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[cfg_attr(feature = "ts", derive(TS))]
 #[serde(default, deny_unknown_fields, rename_all = "camelCase")]
