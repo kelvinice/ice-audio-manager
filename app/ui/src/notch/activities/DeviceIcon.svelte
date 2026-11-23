@@ -14,7 +14,10 @@
     | 'play'
     | 'pause'
     | 'prev'
-    | 'next';
+    | 'next'
+    | 'spotify'
+    | 'youtube-music'
+    | 'pin';
 
   interface Props {
     kind?: IconKind;
@@ -97,6 +100,16 @@
   {:else if resolved === 'next'}
     <path d="M12.5 3.6v8.8" />
     <path d="M3.5 3.6L9.8 8l-6.3 4.4V3.6Z" fill="currentColor" />
+  {:else if resolved === 'spotify'}
+    <circle cx="8" cy="8" r="6" />
+    <path d="M4.8 6.4a6.4 6.4 0 0 1 6.4.4" />
+    <path d="M5.4 8.6a5 5 0 0 1 5 .3" />
+    <path d="M6 10.7a3.8 3.8 0 0 1 3.7.2" />
+  {:else if resolved === 'youtube-music'}
+    <circle cx="8" cy="8" r="6" />
+    <path d="M6.8 5.6L11 8l-4.2 2.4V5.6Z" fill="currentColor" />
+  {:else if resolved === 'pin'}
+    <path d="M5.5 2.5h5L9.8 7l1.7 1.8v1H8.7v3.7L8 14.5l-.7-1V9.8H4.5v-1L6.2 7 5.5 2.5Z" />
   {:else}
     <path d="M6 2.5v2.5M10 2.5v2.5M4.2 5h7.6v2a3.8 3.8 0 0 1-7.6 0V5Z" />
     <path d="M3 13L13 3" />

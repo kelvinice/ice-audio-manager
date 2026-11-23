@@ -297,9 +297,9 @@ Runs between Phase 3 and Phase 4. Item 1 is a bug fix that comes first. D-21 Par
 Items marked *(needs Settings)* wait for the Phase 4 Settings window. The rest can start now.
 
 **D-22 · Music services widget (owner: enabled by default):**
-- [ ] "Music services" widget in the expanded notch and the empty "nothing playing" state (Gemini UI).
-  - Quick-launch the Spotify desktop app, and YouTube Music as the installed web app or in the default browser.
-  - Shell side (Codex): find and launch the installed apps; fall back to the URL.
+- [x] "Music services" widget in the expanded notch and the empty "nothing playing" state (Gemini UI).
+  - Quick-launch buttons (`MusicServicesWidget.svelte`, `backdrop.ts#resolveMusicServices`) for Spotify and YouTube Music in the expanded footer and empty state (`open_music_service` invoke wired gracefully).
+- [ ] Shell side (Codex): find and launch the installed Spotify / YouTube Music web apps; fall back to the URL.
 - [ ] One switch per service in Settings → Activities (Spotify, YouTube Music), both on by default; config fields with defaults
       (Claude) *(the switches need Settings; the config can land first)*
 
@@ -317,10 +317,11 @@ Items marked *(needs Settings)* wait for the Phase 4 Settings window. The rest c
 
 **D-23 · Look of the expanded notch:**
 - [ ] 2–3 colour art palette and average luminance in `ice_core::media`, next to today's accent (Claude)
-- [ ] Backdrops per theme (Gemini): V2 gradient wash by default; V1 blurred art as an opt-in (`--ice-art-backdrop`) with a
-      luminance-clamped scrim. Ice/Midnight/Fluent/Minimal each get one treatment. New tokens go in `docs/theming.md`
-- [ ] V3 translucent controls and V4 cleanliness pass on the 384×178 card, keeping D-18's device row visible. Before/after
-      screenshots (Gemini)
+- [x] Backdrops per theme (Gemini): V2 gradient wash by default; V1 blurred art as an opt-in (`--ice-art-backdrop`) with a
+      luminance-clamped scrim (`--ice-scrim`). Ice/Midnight/Fluent/Minimal each get one treatment; reads `art.palette` +
+      `art.luminance` when present and derives a 2nd wash stop + luminance from `art.accent` in the meantime. New tokens in `docs/theming.md`
+- [x] V3 translucent controls and V4 cleanliness pass on the 384×178 card, keeping D-18's device row visible. Before/after
+      screenshots verified at `100%` and `150%` across light/dark desktops and all 4 themes (Gemini)
 
 ---
 

@@ -26,6 +26,22 @@
 
   --ice-scale: 1;
   --ice-bar-height: 5px;
+
+  /* D-23 Art backdrops (V2 gradient wash default; V1 blur opt-in) & V3 translucent controls */
+  --ice-art-backdrop: 0;
+  --ice-art-blur: 28px;
+  --ice-art-wash: 1;
+  --ice-scrim: linear-gradient(
+    160deg,
+    var(--ice-active-scrim-top, rgba(12, 15, 20, 0.56)) 0%,
+    var(--ice-active-scrim-bottom, rgba(10, 13, 18, 0.84)) 100%
+  );
+  --ice-control-bg: rgba(255, 255, 255, 0.09);
+  --ice-control-bg-hover: rgba(255, 255, 255, 0.15);
+  --ice-control-bg-active: rgba(255, 255, 255, 0.17);
+  --ice-control-border: rgba(255, 255, 255, 0.08);
+  --ice-play-bg: rgba(237, 241, 247, 0.94);
+  --ice-play-fg: #0e1116;
 }
 
 :root[data-theme='midnight'] {
@@ -34,6 +50,12 @@
   --ice-border: rgba(255, 255, 255, 0.14);
   --ice-rim: rgba(255, 255, 255, 0.24);
   --ice-accent-glow: rgba(255, 255, 255, 0.12);
+  --ice-art-wash: 0.55;
+  --ice-scrim: linear-gradient(160deg, rgba(0, 0, 0, 0.76) 0%, rgba(0, 0, 0, 0.94) 100%);
+  --ice-control-bg: rgba(255, 255, 255, 0.08);
+  --ice-control-bg-hover: rgba(255, 255, 255, 0.14);
+  --ice-control-bg-active: rgba(255, 255, 255, 0.16);
+  --ice-control-border: rgba(255, 255, 255, 0.08);
 }
 
 :root[data-theme='fluent'] {
@@ -42,6 +64,16 @@
   --ice-border: rgba(255, 255, 255, 0.12);
   --ice-rim: rgba(107, 197, 255, 0.35);
   --ice-accent-glow: rgba(107, 197, 255, 0.2);
+  --ice-art-wash: 0.78;
+  --ice-scrim: linear-gradient(
+    160deg,
+    var(--ice-active-scrim-top, rgba(24, 24, 27, 0.62)) 0%,
+    var(--ice-active-scrim-bottom, rgba(24, 24, 27, 0.88)) 100%
+  );
+  --ice-control-bg: rgba(255, 255, 255, 0.08);
+  --ice-control-bg-hover: rgba(255, 255, 255, 0.14);
+  --ice-control-bg-active: rgba(255, 255, 255, 0.16);
+  --ice-control-border: rgba(255, 255, 255, 0.07);
 }
 
 :root[data-theme='minimal'] {
@@ -52,6 +84,16 @@
   --ice-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
   --ice-drop-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
   --ice-accent-glow: transparent;
+  --ice-art-backdrop: 0;
+  --ice-art-blur: 0px;
+  --ice-art-wash: 0;
+  --ice-scrim: none;
+  --ice-control-bg: var(--ice-surface);
+  --ice-control-bg-hover: var(--ice-accent-soft);
+  --ice-control-bg-active: var(--ice-accent-soft);
+  --ice-control-border: var(--ice-border);
+  --ice-play-bg: var(--ice-accent-soft);
+  --ice-play-fg: var(--ice-accent-strong);
 }
 
 *,

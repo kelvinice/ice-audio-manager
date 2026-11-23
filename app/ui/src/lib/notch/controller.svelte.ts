@@ -4,6 +4,11 @@ import type { EngineSnapshot, Envelope, MediaAction } from '../ipc/engine';
 import type { NotchDelta, NotchSnapshot } from '../ipc/types';
 import { SpringGroup } from '../motion/spring.svelte';
 import {
+  computeArtBackdrop,
+  resolveMusicServices,
+  type MusicServiceId,
+} from './backdrop';
+import {
   computeClipPath,
   computeHitRect,
   deriveBenchOverride,
@@ -80,6 +85,17 @@ export class NotchController {
     isMediaActive(this.displayedMedia)
       ? (formatRgbGlowCss(this.displayedMedia.art?.accent, 0.24) ?? 'var(--ice-accent-glow)')
       : 'var(--ice-accent-glow)',
+  );
+  readonly hasBackdropArt = $derived(
+    isMediaActive(this.displayedMedia)
+      && Boolean(this.displayedMedia.art)
+      && (this.isExpanded || this.activeView.kind === 'track'),
+  );
+  readonly artBackdrop = $derived(
+    computeArtBackdrop(this.hasBackdropArt ? this.displayedMedia?.art : null),
+  );
+  readonly musicServices = $derived(
+    resolveMusicServices(this.engineState.settings, this.engineState.media),
   );
   readonly isIdleHidden = $derived(!this.isExpanded && this.activeView.kind === 'idle' && this.idleMode === 'hidden');
   private readonly clipMetrics = $derived(computeClipPath(this.pillSize));
@@ -409,6 +425,11 @@ export class NotchController {
   setNotchDevices = (deviceIds: string[]): void => void invoke('set_notch_devices', { deviceIds });
   toggleMicMute = (): void => void invoke('toggle_mic_mute');
   openSettings = (): void => void invoke('open_settings');
+  openMusicService = (service: MusicServiceId): void => {
+    this.scheduler.markInteraction(Date.now());
+    this.scheduleNextTick();
+    void invoke('open_music_service', { service }).catch(() => {});
+  };
 }
 
 export function createNotchController(): NotchController {

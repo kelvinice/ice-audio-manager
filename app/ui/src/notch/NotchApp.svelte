@@ -5,6 +5,7 @@
   import ExpandedNotch from './activities/ExpandedNotch.svelte';
   import IdlePill from './activities/IdlePill.svelte';
   import MicActivity from './activities/MicActivity.svelte';
+  import NotchBackdrop from './activities/NotchBackdrop.svelte';
   import PlugActivity from './activities/PlugActivity.svelte';
   import SwitchActivity from './activities/SwitchActivity.svelte';
   import TrackActivity from './activities/TrackActivity.svelte';
@@ -37,8 +38,12 @@
       class="pill-surface"
       style:--ice-active-accent={ctrl.activeAccentCss}
       style:--ice-active-glow={ctrl.activeGlowCss}
+      style:--ice-active-wash-primary={ctrl.artBackdrop.washPrimaryCss}
+      style:--ice-active-wash-secondary={ctrl.artBackdrop.washSecondaryCss}
+      style:--ice-active-scrim-top={ctrl.artBackdrop.scrimTopCss}
+      style:--ice-active-scrim-bottom={ctrl.artBackdrop.scrimBottomCss}
     >
-      <div class="accent-glow" class:instant={ctrl.isInstant} aria-hidden="true"></div>
+      <NotchBackdrop art={ctrl.displayedMedia?.art} hasArt={ctrl.hasBackdropArt} instant={ctrl.isInstant} />
       <div
         class="pill-slot"
         style:top={`${TOP_PAD}px`}
@@ -78,6 +83,7 @@
             playback={ctrl.engineState.playback}
             settings={ctrl.engineState.settings}
             disconnected={ctrl.engineState.disconnected}
+            musicServices={ctrl.musicServices}
             activeDeviceName={ctrl.effectiveDeviceName}
             spatialBadge={ctrl.effectiveSpatialBadge}
             volumePercent={ctrl.effectiveVolumePercent}
@@ -96,6 +102,7 @@
             onSetNotchDevices={ctrl.setNotchDevices}
             onToggleMicMute={ctrl.toggleMicMute}
             onMediaAction={(action) => ctrl.sendMediaAction(action)}
+            onOpenMusicService={ctrl.openMusicService}
             onOpenSettings={ctrl.openSettings}
           />
         {/if}
@@ -148,23 +155,6 @@
     position: absolute;
     inset: 0;
     background: var(--ice-bg);
-  }
-
-  .accent-glow {
-    position: absolute;
-    inset: 0;
-    opacity: 0.28;
-    pointer-events: none;
-    background: radial-gradient(
-      62% 44% at 50% 0%,
-      var(--ice-active-glow, var(--ice-accent-glow)),
-      transparent 72%
-    );
-    transition: opacity 400ms cubic-bezier(0.22, 1, 0.36, 1);
-  }
-
-  .accent-glow.instant {
-    transition: none;
   }
 
   .pill-slot {

@@ -111,8 +111,8 @@
     gap: 4px;
     padding: 4px 6px;
     border-radius: var(--ice-radius-sm);
-    border: 1px solid var(--ice-border);
-    background: var(--ice-surface);
+    border: 1px solid var(--ice-control-border);
+    background: var(--ice-bg);
   }
 
   .picker-head {
@@ -163,15 +163,20 @@
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    border: 1px solid var(--ice-border);
-    background: var(--ice-surface);
+    border: 1px solid var(--ice-control-border);
+    background: var(--ice-control-bg);
     color: var(--ice-fg);
-    border-radius: var(--ice-radius-sm);
-    padding: 3px 7px;
+    border-radius: var(--ice-radius-pill);
+    padding: 3px 8px;
     font-size: 10px;
+    font-weight: 500;
     font-family: inherit;
     cursor: pointer;
     white-space: nowrap;
+  }
+
+  .chip:hover:not(.disconnected) {
+    background: var(--ice-control-bg-hover);
   }
 
   .dev-chip {
@@ -206,7 +211,7 @@
 
   .chip.primary {
     border-color: var(--ice-accent);
-    background: var(--ice-accent-soft);
-    color: var(--ice-accent-strong);
+    background: var(--ice-control-bg-active);
+    color: var(--ice-fg);
   }
 </style>

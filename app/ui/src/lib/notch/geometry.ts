@@ -27,7 +27,7 @@ export function targetGeometry(
 ): PillBox {
   const vol = view.kind === 'volume' ? view.percent : fallbackVolume;
   if (expandedNow) {
-    return { w: 384, h: hasMedia ? 178 : 170, r: 22, vol };
+    return { w: 384, h: 178, r: 22, vol };
   }
   switch (view.kind) {
     case 'volume':

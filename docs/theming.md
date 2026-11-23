@@ -43,6 +43,16 @@ All `--ice-*` variables are defined with their `Ice` defaults in CSS `:root`. An
 | `--ice-accent-glow` | Accent & Status | `rgba(107, 197, 255, 0.28)` | No | Soft radial ambient glow behind active notch states |
 | `--ice-active-accent` | Dynamic Runtime | `var(--ice-accent)` *(album-art accent while media is active)* | No | Contrast-safe active media accent for visualizer bars, scrubber fill, and active transport border |
 | `--ice-active-glow` | Dynamic Runtime | `var(--ice-accent-glow)` *(album-art glow while media is active)* | No | Dynamic radial ambient glow tinted from the active track's album art |
+| `--ice-art-backdrop` | Art Backdrop (D-23) | `0` *(set e.g. `0.85` to enable blurred art image)* | No | Opacity of enlarged blurred album-art backdrop (`V1` opt-in; `V2` gradient wash stays default) |
+| `--ice-art-blur` | Art Backdrop (D-23) | `28px` | No | Gaussian blur radius applied to `.art-blur-img` when `--ice-art-backdrop > 0` |
+| `--ice-art-wash` | Art Backdrop (D-23) | `1` | No | Opacity multiplier for the 2-stop art-derived radial gradient wash (`V2` default) |
+| `--ice-scrim` | Art Backdrop (D-23) | `linear-gradient(160deg, var(--ice-active-scrim-top, rgba(12, 15, 20, 0.56)) 0%, var(--ice-active-scrim-bottom, rgba(10, 13, 18, 0.84)) 100%)` | No | Luminance-clamped protective gradient scrim holding `--ice-fg` / `--ice-fg-muted` contrast at `≥ 4.5:1` WCAG AA over bright covers |
+| `--ice-control-bg` | Translucent Controls (D-23) | `rgba(255, 255, 255, 0.09)` | No | Low-alpha button and chip fill over expanded-card backdrops (`var(--ice-surface)` in `minimal`) |
+| `--ice-control-bg-hover` | Translucent Controls (D-23) | `rgba(255, 255, 255, 0.15)` | No | Hover fill for translucent controls |
+| `--ice-control-bg-active` | Translucent Controls (D-23) | `rgba(255, 255, 255, 0.17)` | No | Active/selected chip fill (`Pinned`, current playback device, active service) |
+| `--ice-control-border` | Translucent Controls (D-23) | `rgba(255, 255, 255, 0.08)` | No | Hairline border around translucent controls (`var(--ice-border)` in `minimal`) |
+| `--ice-play-bg` | Translucent Controls (D-23) | `rgba(237, 241, 247, 0.94)` | No | High-contrast primary Play/Pause circular pill background |
+| `--ice-play-fg` | Translucent Controls (D-23) | `#0e1116` | No | Foreground icon colour inside primary Play/Pause circular pill |
 | `--ice-ok` | Accent & Status | `#4ade80` | Yes | Positive status (device plugged in, mic live) |
 | `--ice-warn` | Accent & Status | `#f59e0b` | No | Non-destructive warning state (device unplugged / disconnected) |
 | `--ice-danger` | Accent & Status | `#f07148` | Yes | Muted/destructive status (speaker mute, mic mute) |
@@ -89,10 +99,10 @@ Four built-in themes ship out of the box (selected via config / Settings `Appear
 
 | Theme ID | Character | Override Deltas vs. `Ice` |
 | --- | --- | --- |
-| **`ice`** *(default)* | Translucent obsidian-ice pill with cyan rim and ambient glow | Base defaults in §2 |
-| **`midnight`** | Near-pure-black high-contrast OLED/DynamicWin look | `--ice-bg: rgba(0, 0, 0, 0.96)` · `--ice-surface: rgba(12, 12, 14, 0.96)` · `--ice-border: rgba(255, 255, 255, 0.14)` · `--ice-rim: rgba(255, 255, 255, 0.24)` · `--ice-accent-glow: rgba(255, 255, 255, 0.12)` |
-| **`fluent`** | Neutral Windows 11 Dark-grey chrome matching stock Flyouts | `--ice-bg: rgba(24, 24, 27, 0.93)` · `--ice-surface: rgba(36, 36, 40, 0.94)` · `--ice-border: rgba(255, 255, 255, 0.12)` · `--ice-rim: rgba(107, 197, 255, 0.35)` · `--ice-accent-glow: rgba(107, 197, 255, 0.2)` |
-| **`minimal`** | Solid opaque slate with zero glow or specular rim (lowest GPU overdraw) | `--ice-bg: rgb(18, 22, 29)` · `--ice-surface: rgb(26, 32, 42)` · `--ice-border: rgba(255, 255, 255, 0.14)` · `--ice-rim: transparent` · `--ice-shadow: 0 4px 12px rgba(0, 0, 0, 0.35)` · `--ice-drop-shadow: 0 4px 10px rgba(0, 0, 0, 0.3)` · `--ice-accent-glow: transparent` |
+| **`ice`** *(default)* | Translucent obsidian-ice pill with 2-stop art wash (`V2`) and translucent controls (`V3`) | Base defaults in §2 (`--ice-art-backdrop: 0`, `--ice-art-wash: 1`) |
+| **`midnight`** | Near-pure-black OLED look with darker scrim preserving deep black backdrop | `--ice-bg: rgba(0, 0, 0, 0.96)` · `--ice-surface: rgba(12, 12, 14, 0.96)` · `--ice-rim: rgba(255, 255, 255, 0.24)` · `--ice-art-wash: 0.55` · `--ice-scrim: linear-gradient(160deg, rgba(0, 0, 0, 0.76) 0%, rgba(0, 0, 0, 0.94) 100%)` |
+| **`fluent`** | Neutral Windows 11 Dark-grey chrome with softer tonal wash (`V2`) | `--ice-bg: rgba(24, 24, 27, 0.93)` · `--ice-surface: rgba(36, 36, 40, 0.94)` · `--ice-rim: rgba(107, 197, 255, 0.35)` · `--ice-art-wash: 0.78` · tonal zinc `--ice-scrim` |
+| **`minimal`** | Solid opaque slate with zero art backdrop, zero glow, and bordered solid controls | `--ice-bg: rgb(18, 22, 29)` · `--ice-surface: rgb(26, 32, 42)` · `--ice-rim: transparent` · `--ice-art-backdrop: 0` · `--ice-art-wash: 0` · `--ice-scrim: none` · `--ice-control-bg: var(--ice-surface)` · `--ice-control-border: var(--ice-border)` |
 
 ---
 

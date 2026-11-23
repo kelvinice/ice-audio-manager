@@ -76,7 +76,8 @@
       </button>
     </div>
     <button class="chip pin-chip" class:primary={expanded} type="button" onclick={onToggleExpand}>
-      {expanded ? 'Pinned' : 'Pin'}
+      <DeviceIcon kind="pin" size={10} />
+      <span>{expanded ? 'Pinned' : 'Pin'}</span>
     </button>
   </div>
 
@@ -101,7 +102,11 @@
   .media-controls {
     display: flex;
     align-items: center;
-    gap: 5px;
+    gap: 6px;
+  }
+
+  .media-controls {
+    gap: 3px;
   }
 
   .media-info {
@@ -115,8 +120,9 @@
   }
 
   .media-title {
-    font-size: 12px;
+    font-size: 12.5px;
     font-weight: 600;
+    letter-spacing: -0.01em;
     line-height: 1.2;
     color: var(--ice-fg);
     overflow: hidden;
@@ -124,7 +130,7 @@
   }
 
   .media-sub {
-    font-size: 10px;
+    font-size: 10.5px;
     font-weight: 500;
     line-height: 1.2;
     color: var(--ice-fg-muted);
@@ -138,7 +144,7 @@
 
   .scrubber-track {
     flex: 1;
-    height: 4px;
+    height: 3.5px;
     border-radius: var(--ice-radius-pill);
     background: var(--ice-track);
     overflow: hidden;
@@ -155,7 +161,7 @@
   .timecode {
     min-width: 26px;
     font-family: var(--ice-mono);
-    font-size: 10px;
+    font-size: 9.5px;
     color: var(--ice-fg-muted);
     flex-shrink: 0;
   }
@@ -168,35 +174,51 @@
     appearance: none;
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     gap: 4px;
-    border: 1px solid var(--ice-border);
-    background: var(--ice-surface);
+    border: 1px solid var(--ice-control-border);
+    background: var(--ice-control-bg);
     color: var(--ice-fg);
-    border-radius: var(--ice-radius-sm);
-    padding: 3px 7px;
+    border-radius: var(--ice-radius-pill);
+    padding: 3px 8px;
     font-size: 10px;
+    font-weight: 500;
     font-family: inherit;
     cursor: pointer;
     white-space: nowrap;
   }
 
+  .chip:hover {
+    background: var(--ice-control-bg-hover);
+  }
+
   .icon-chip {
-    padding: 4px 5px;
+    width: 22px;
+    height: 22px;
+    padding: 0;
   }
 
   .media-play {
-    border-color: var(--ice-active-accent, var(--ice-accent));
-    background: var(--ice-accent-soft);
-    color: var(--ice-accent-strong);
+    width: 25px;
+    height: 25px;
+    border-color: transparent;
+    background: var(--ice-play-bg);
+    color: var(--ice-play-fg);
+  }
+
+  .media-play:hover {
+    background: var(--ice-play-bg);
+    filter: brightness(1.06);
   }
 
   .pin-chip {
+    gap: 3px;
     padding: 3px 6px;
   }
 
   .chip.primary {
     border-color: var(--ice-accent);
-    background: var(--ice-accent-soft);
-    color: var(--ice-accent-strong);
+    background: var(--ice-control-bg-active);
+    color: var(--ice-fg);
   }
 </style>

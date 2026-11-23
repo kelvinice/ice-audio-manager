@@ -1,15 +1,18 @@
 <script lang="ts">
   import type { DeviceSummary, MediaAction, NowPlaying, SettingsView } from '../../lib/ipc/engine';
   import type { SpringPreset } from '../../lib/ipc/types';
+  import type { MusicServiceId, MusicServiceItem } from '../../lib/notch/backdrop';
   import { isMediaActive } from '../../lib/notch/scheduler';
   import DeviceIcon from './DeviceIcon.svelte';
   import ExpandedDeviceRow from './ExpandedDeviceRow.svelte';
   import ExpandedMediaCard from './ExpandedMediaCard.svelte';
+  import MusicServicesWidget from './MusicServicesWidget.svelte';
 
   interface Props {
     playback: DeviceSummary[];
     settings: SettingsView | null;
     disconnected: DeviceSummary[];
+    musicServices: MusicServiceItem[];
     activeDeviceName: string;
     spatialBadge: string | null;
     volumePercent: number;
@@ -28,6 +31,7 @@
     onSetNotchDevices: (deviceIds: string[]) => void;
     onToggleMicMute: () => void;
     onMediaAction?: (action: MediaAction) => void;
+    onOpenMusicService?: (service: MusicServiceId) => void;
     onOpenSettings: () => void;
   }
 
@@ -35,6 +39,7 @@
     playback,
     settings,
     disconnected,
+    musicServices,
     activeDeviceName,
     spatialBadge,
     volumePercent,
@@ -53,6 +58,7 @@
     onSetNotchDevices,
     onToggleMicMute,
     onMediaAction = () => {},
+    onOpenMusicService = () => {},
     onOpenSettings,
   }: Props = $props();
 
@@ -75,18 +81,15 @@
       {onToggleExpand}
     />
   {:else}
-    <div class="exp-header">
-      <div class="exp-title">
-        <span class="accent-dot"></span>
-        <span class="title-text">{activeDeviceName}</span>
-        {#if spatialBadge}
-          <span class="spatial-pill">{spatialBadge}</span>
-        {/if}
-      </div>
-      <button class="chip" class:primary={expanded} type="button" onclick={onToggleExpand}>
-        {expanded ? 'Pinned' : 'Pin'}
-      </button>
-    </div>
+    <MusicServicesWidget
+      services={musicServices}
+      variant="empty"
+      {activeDeviceName}
+      {spatialBadge}
+      {expanded}
+      onOpenService={onOpenMusicService}
+      {onToggleExpand}
+    />
   {/if}
 
   {#if !pickerOpen}
@@ -104,8 +107,8 @@
         <div class="bar-fill" class:muted style:transform={`scaleX(${clampedScale.toFixed(4)})`}></div>
       </div>
       <span class="pct" class:muted>{muted ? 'Mute' : `${volumePercent}%`}</span>
-      <button class="chip" type="button" aria-label="Decrease volume" onclick={() => onAdjustVolume(-8)}>-</button>
-      <button class="chip" type="button" aria-label="Increase volume" onclick={() => onAdjustVolume(8)}>+</button>
+      <button class="chip vol-step" type="button" aria-label="Decrease volume" onclick={() => onAdjustVolume(-8)}>−</button>
+      <button class="chip vol-step" type="button" aria-label="Increase volume" onclick={() => onAdjustVolume(8)}>+</button>
     </div>
   {/if}
 
@@ -126,6 +129,13 @@
       <DeviceIcon kind={micMuted ? 'mic-muted' : 'mic'} size={11} />
       <span>{micMuted ? 'Mic Off' : 'Mic On'}</span>
     </button>
+    {#if activeMedia}
+      <MusicServicesWidget
+        services={musicServices}
+        variant="compact"
+        onOpenService={onOpenMusicService}
+      />
+    {/if}
     <button class="chip" type="button" onclick={onOpenSettings}>Settings</button>
   </div>
 </div>
@@ -134,7 +144,7 @@
   .expanded-card {
     width: 100%;
     height: 100%;
-    padding: 8px 2px;
+    padding: 9px 2px;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
@@ -145,7 +155,6 @@
     animation: card-reveal 200ms cubic-bezier(0.22, 1, 0.36, 1) 30ms both;
   }
 
-  .exp-header,
   .exp-vol,
   .exp-footer {
     display: flex;
@@ -153,39 +162,13 @@
     gap: 5px;
   }
 
-  .exp-header,
   .exp-footer {
     justify-content: space-between;
   }
 
-  .exp-title {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 12px;
-    font-weight: 600;
-    white-space: nowrap;
-  }
-
-  .title-text {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    color: var(--ice-fg);
-  }
-
-  .accent-dot {
-    width: 7px;
-    height: 7px;
-    border-radius: var(--ice-radius-pill);
-    background: var(--ice-accent);
-    flex-shrink: 0;
-  }
-
   .bar-track {
     flex: 1;
-    height: var(--ice-bar-height);
+    height: 4px;
     border-radius: var(--ice-radius-pill);
     background: var(--ice-track);
     overflow: hidden;
@@ -204,10 +187,10 @@
   }
 
   .pct {
-    min-width: 30px;
+    min-width: 28px;
     text-align: right;
     font-family: var(--ice-mono);
-    font-size: 11px;
+    font-size: 10.5px;
     color: var(--ice-fg-muted);
   }
 
@@ -215,40 +198,34 @@
     color: var(--ice-danger);
   }
 
-  .spatial-pill {
-    padding: 1px 6px;
-    border-radius: var(--ice-radius-pill);
-    font-size: 10px;
-    background: var(--ice-accent-soft);
-    color: var(--ice-accent-strong);
-    border: 1px solid var(--ice-border);
-    flex-shrink: 0;
-  }
-
   .chip {
     appearance: none;
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    border: 1px solid var(--ice-border);
-    background: var(--ice-surface);
+    border: 1px solid var(--ice-control-border);
+    background: var(--ice-control-bg);
     color: var(--ice-fg);
-    border-radius: var(--ice-radius-sm);
-    padding: 3px 7px;
+    border-radius: var(--ice-radius-pill);
+    padding: 3px 8px;
     font-size: 10px;
+    font-weight: 500;
     font-family: inherit;
     cursor: pointer;
     white-space: nowrap;
   }
 
-  .icon-chip {
-    padding: 4px 5px;
+  .chip:hover {
+    background: var(--ice-control-bg-hover);
   }
 
-  .chip.primary {
-    border-color: var(--ice-accent);
-    background: var(--ice-accent-soft);
-    color: var(--ice-accent-strong);
+  .icon-chip {
+    padding: 4px 6px;
+  }
+
+  .vol-step {
+    padding: 2px 6px;
+    color: var(--ice-fg-muted);
   }
 
   .chip.danger-chip {
