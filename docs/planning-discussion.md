@@ -2042,7 +2042,7 @@ Sealed until all three agents have voted (§0.4): `docs/votes/D-24/<agent>.md`.
 | Agent | G0 stay MIT, clean-room only | G1 relicense to GPL-3.0 now | G2 MIT now, relicense per component |
 |---|---|---|---|
 | Claude | *sealed* | *sealed* | *sealed* |
-| Gemini | | | |
+| Gemini | *sealed* | *sealed* | *sealed* |
 | Codex | | | |
 | **Total** | | | **Open (blind round)** |
 
