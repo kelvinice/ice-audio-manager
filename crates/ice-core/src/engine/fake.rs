@@ -106,6 +106,7 @@ impl FakeEngine {
                 device("fake-lg", "LG FULL HD (NVIDIA High Definition Audio)", Flow::Render, 9, Some(SpatialMode::Off)),
             ],
             recording: vec![mic, device("fake-ugreen", "Microphone (UGREEN Camera Audio)", Flow::Capture, 4, None)],
+            disconnected: Vec::new(),
             volume: Some(VolumeState { percent: 40, muted: false }),
             mic_muted: Some(false),
             mic_volume: Some(80),
@@ -181,6 +182,32 @@ fn endpoints(snap: &EngineSnapshot) -> Vec<EndpointInfo> {
             default_for: Vec::new(),
         })
         .collect()
+}
+
+/// The front-panel headphone jack with nothing plugged in: the fake's one disconnected device.
+fn unplugged_jack() -> DeviceSummary {
+    DeviceSummary {
+        state: DeviceState::Unplugged,
+        ..device("fake-front-jack", "Headphones (Realtek(R) Audio)", Flow::Render, 3, None)
+    }
+}
+
+fn emit_devices(st: &mut State) {
+    let event = EngineEvent::DevicesChanged {
+        playback: st.snap.playback.clone(),
+        recording: st.snap.recording.clone(),
+        disconnected: st.snap.disconnected.clone(),
+    };
+    emit(st, event);
+}
+
+/// Lists the unplugged jack while `show_disconnected` is on, like the real engine.
+fn sync_disconnected(st: &mut State) {
+    let list = if st.config.show_disconnected { vec![unplugged_jack()] } else { Vec::new() };
+    if list != st.snap.disconnected {
+        st.snap.disconnected = list;
+        emit_devices(st);
+    }
 }
 
 /// Recomputes the settings view; emits `SettingsChanged` only when it changed.
@@ -272,8 +299,7 @@ impl Engine for FakeEngine {
                 if let Some(d) = st.snap.playback.iter_mut().find(|d| d.id == device_id) {
                     d.spatial = Some(mode);
                 }
-                let (playback, recording) = (st.snap.playback.clone(), st.snap.recording.clone());
-                emit(&mut st, EngineEvent::DevicesChanged { playback, recording });
+                emit_devices(&mut st);
             }
             Command::SetTogglePair { .. }
             | Command::RemoveTogglePair { .. }
@@ -284,10 +310,14 @@ impl Engine for FakeEngine {
             | Command::SetPerformanceProfile { .. }
             | Command::SetPinnedMonitor { .. }
             | Command::SetKnobGestures { .. }
+            | Command::SetShowDisconnected { .. }
             | Command::SetDefaultRoles { .. } => {
                 let eps = endpoints(&st.snap);
                 match st.config.apply_setting(&command, &eps) {
-                    Ok(true) => refresh_settings(&mut st),
+                    Ok(true) => {
+                        refresh_settings(&mut st);
+                        sync_disconnected(&mut st);
+                    }
                     Ok(false) => {}
                     Err(error) => emit(&mut st, EngineEvent::Notice { notice: Notice::SettingRejected { error } }),
                 }
@@ -311,10 +341,7 @@ impl Engine for FakeEngine {
                 st.snap.media = Some(media.clone());
                 emit(&mut st, EngineEvent::MediaChanged { media: Some(media) });
             }
-            Command::ResolveChoice { .. } | Command::Refresh => {
-                let (playback, recording) = (st.snap.playback.clone(), st.snap.recording.clone());
-                emit(&mut st, EngineEvent::DevicesChanged { playback, recording });
-            }
+            Command::ResolveChoice { .. } | Command::Refresh => emit_devices(&mut st),
         }
     }
 

@@ -126,6 +126,10 @@ pub struct EngineSnapshot {
     pub playback: Vec<DeviceSummary>,
     /// Active recording devices.
     pub recording: Vec<DeviceSummary>,
+    /// Unplugged endpoints of both flows (`state: unplugged`), only while `settings.show_disconnected` is on.
+    /// For display only (greyed); they can't be switched to. Hidden devices and ghosts are never listed.
+    #[serde(default)]
+    pub disconnected: Vec<DeviceSummary>,
     /// Volume of the default playback device.
     pub volume: Option<VolumeState>,
     /// Mute state of the default communications microphone.
@@ -238,6 +242,10 @@ pub enum Command {
     SetKnobGestures {
         enabled: bool,
     },
+    /// Lists unplugged devices in `EngineSnapshot::disconnected` (AudioSwitcher's "Show disconnected devices").
+    SetShowDisconnected {
+        enabled: bool,
+    },
     /// Roles used by switches that don't specify their own.
     SetDefaultRoles {
         roles: RoleSet,
@@ -303,6 +311,8 @@ pub struct SettingsView {
     pub favourites_recording: Vec<SavedDevice>,
     pub devices: Vec<DevicePrefsView>,
     pub knob_gestures: bool,
+    #[serde(default)]
+    pub show_disconnected: bool,
 }
 
 /// Something the user should be told about.
@@ -344,6 +354,9 @@ pub enum EngineEvent {
     DevicesChanged {
         playback: Vec<DeviceSummary>,
         recording: Vec<DeviceSummary>,
+        /// Mirrors `EngineSnapshot::disconnected` (empty while the setting is off).
+        #[serde(default)]
+        disconnected: Vec<DeviceSummary>,
     },
     /// Volume of the default playback device changed, from any source (keys, knob, mixer, other apps).
     VolumeChanged {
@@ -606,5 +619,30 @@ mod tests {
         let playing = meter.recv_timeout(Duration::from_secs(2)).unwrap();
         assert!(!playing.is_silent() && playing.channels.len() == 2);
         assert_ne!(meter.recv_timeout(Duration::from_secs(2)).unwrap(), playing, "levels keep moving");
+    }
+
+    #[test]
+    fn fake_lists_disconnected_devices_only_when_asked_and_never_switches_to_them() {
+        use crate::device::DeviceState;
+        let eng = FakeEngine::new();
+        assert!(eng.snapshot().disconnected.is_empty());
+        let rx = eng.subscribe();
+        eng.send(Command::SetShowDisconnected { enabled: true });
+        assert!(matches!(next(&rx).event, EngineEvent::SettingsChanged { ref settings } if settings.show_disconnected));
+        match next(&rx).event {
+            EngineEvent::DevicesChanged { disconnected, .. } => {
+                assert_eq!(disconnected.len(), 1);
+                assert_eq!(disconnected[0].state, DeviceState::Unplugged);
+            }
+            other => panic!("{other:?}"),
+        }
+        let jack = eng.snapshot().disconnected[0].id.clone();
+        eng.send(Command::SwitchTo { device_id: jack, roles: RoleSet::Default });
+        assert!(matches!(next(&rx).event, EngineEvent::Notice { notice: Notice::NotConnected { .. } }));
+        eng.send(Command::SetShowDisconnected { enabled: false });
+        let _settings = next(&rx);
+        assert!(
+            matches!(next(&rx).event, EngineEvent::DevicesChanged { ref disconnected, .. } if disconnected.is_empty())
+        );
     }
 }

@@ -64,6 +64,7 @@ function sampleSnapshot(): EngineSnapshot {
         spatial: null,
       }),
     ],
+    disconnected: [],
     volume: { percent: 40, muted: false },
     micMuted: false,
     micVolume: 80,
@@ -78,6 +79,7 @@ function sampleSnapshot(): EngineSnapshot {
       performanceProfile: 'instant',
       pinnedMonitor: null,
       knobGestures: false,
+      showDisconnected: false,
     },
     media: null,
   };

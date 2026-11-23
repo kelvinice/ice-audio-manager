@@ -1,4 +1,4 @@
-//! User configuration, `config.toml` schema v2 (D-04).
+//! User configuration, `config.toml` schema v3 (D-04).
 //!
 //! Location: `%APPDATA%\IceAudioManager\config.toml` (chosen by the app). Every field has a default, so a
 //! missing or partial file is valid. Unknown future `schema_version`s are rejected rather than
@@ -16,7 +16,8 @@ use crate::engine::{
 use crate::hotkey::Chord;
 use crate::resolve::{DeviceRef, MatchMode, resolve};
 
-pub const SCHEMA_VERSION: u32 = 2;
+/// v2: performance profile and pinned monitor. v3: `show_disconnected`.
+pub const SCHEMA_VERSION: u32 = 3;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
@@ -38,6 +39,9 @@ pub struct Config {
     pub devices: Vec<DevicePrefs>,
     pub favourites: Favourites,
     pub knob: KnobGestures,
+    /// List unplugged endpoints (e.g. an empty headphone jack) greyed out, like Windows' "Show disconnected
+    /// devices". Never as switch targets, and never `NotPresent` ghosts (D-16).
+    pub show_disconnected: bool,
 }
 
 impl Default for Config {
@@ -52,6 +56,7 @@ impl Default for Config {
             devices: Vec::new(),
             favourites: Favourites::default(),
             knob: KnobGestures::default(),
+            show_disconnected: false,
         }
     }
 }
@@ -162,7 +167,8 @@ impl Config {
         let cfg: Self = toml::from_str(text).map_err(|e| ConfigError::Parse(e.to_string()))?;
         match cfg.schema_version {
             v if v > SCHEMA_VERSION => Err(ConfigError::TooNew(v)),
-            // v0/v1 gain the default profile and an initially unassigned monitor pin via serde defaults.
+            // v0/v1 gain the default profile and an initially unassigned monitor pin, and v0–v2 gain
+            // `show_disconnected = false`, all via serde defaults.
             _ => Ok(Self { schema_version: SCHEMA_VERSION, ..cfg }),
         }
     }
@@ -253,6 +259,7 @@ impl Config {
                 })
                 .collect(),
             knob_gestures: self.knob.enabled,
+            show_disconnected: self.show_disconnected,
         }
     }
 
@@ -347,6 +354,7 @@ impl Config {
                 next.pinned_monitor = Some(display_path.clone());
             }
             Command::SetKnobGestures { enabled } => next.knob.enabled = *enabled,
+            Command::SetShowDisconnected { enabled } => next.show_disconnected = *enabled,
             Command::SetDefaultRoles { roles } => next.default_roles = *roles,
             _ => return Ok(false),
         }
@@ -568,6 +576,22 @@ mod tests {
         assert_eq!(config.view(&[]).pinned_monitor.as_deref(), Some("DISPLAY#test"));
         assert_eq!(config.view(&[]).performance_profile, PerformanceProfile::Lite);
         assert_eq!(Config::from_toml(&config.to_toml()).unwrap(), config);
+    }
+
+    #[test]
+    fn v2_migrates_with_disconnected_devices_hidden() {
+        let v2 = "schema_version = 2\nperformance_profile = 'balanced'\npinned_monitor = 'DISPLAY#test'";
+        let mut config = Config::from_toml(v2).unwrap();
+        assert_eq!(config.schema_version, SCHEMA_VERSION);
+        assert_eq!(config.performance_profile, PerformanceProfile::Balanced);
+        assert!(!config.view(&[]).show_disconnected);
+        let show = Command::SetShowDisconnected { enabled: true };
+        assert_eq!(config.apply_setting(&show, &[]), Ok(true));
+        assert_eq!(config.apply_setting(&show, &[]), Ok(false), "already on");
+        assert!(config.view(&[]).show_disconnected);
+        let text = config.to_toml();
+        assert!(text.contains("schema_version = 3") && text.contains("show_disconnected = true"), "{text}");
+        assert_eq!(Config::from_toml(&text).unwrap(), config);
     }
 
     #[test]

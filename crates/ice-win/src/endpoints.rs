@@ -3,8 +3,8 @@
 use ice_core::device::{DeviceState, EndpointInfo, Flow, Role, hardware_key_from_devnode};
 use windows::Win32::Foundation::PROPERTYKEY;
 use windows::Win32::Media::Audio::{
-    DEVICE_STATE, DEVICE_STATE_ACTIVE, DEVICE_STATEMASK_ALL, EDataFlow, ERole, IMMDevice, IMMDeviceEnumerator,
-    IMMEndpoint, MMDeviceEnumerator, eCapture, eCommunications, eConsole, eMultimedia, eRender,
+    DEVICE_STATE, DEVICE_STATE_ACTIVE, DEVICE_STATE_UNPLUGGED, DEVICE_STATEMASK_ALL, EDataFlow, ERole, IMMDevice,
+    IMMDeviceEnumerator, IMMEndpoint, MMDeviceEnumerator, eCapture, eCommunications, eConsole, eMultimedia, eRender,
 };
 use windows::Win32::System::Com::{CLSCTX_ALL, CoCreateInstance, CoTaskMemFree, STGM_READ};
 use windows::Win32::UI::Shell::PropertiesSystem::IPropertyStore;
@@ -36,8 +36,19 @@ impl Endpoints {
     /// # Errors
     /// Fails only if enumeration itself fails; unreadable properties become `None`.
     pub fn list(&self, include_inactive: bool) -> Result<Vec<EndpointInfo>> {
+        self.list_states(if include_inactive { DEVICE_STATE(DEVICE_STATEMASK_ALL) } else { DEVICE_STATE_ACTIVE })
+    }
+
+    /// Lists unplugged endpoints of both flows (Windows' "disconnected"), without ghosts or disabled ones.
+    ///
+    /// # Errors
+    /// Fails only if enumeration itself fails.
+    pub fn list_unplugged(&self) -> Result<Vec<EndpointInfo>> {
+        self.list_states(DEVICE_STATE_UNPLUGGED)
+    }
+
+    fn list_states(&self, mask: DEVICE_STATE) -> Result<Vec<EndpointInfo>> {
         let defaults = self.defaults();
-        let mask = if include_inactive { DEVICE_STATE(DEVICE_STATEMASK_ALL) } else { DEVICE_STATE_ACTIVE };
         let mut out = Vec::new();
         for flow in [Flow::Render, Flow::Capture] {
             // SAFETY: valid enumerator; collection and items are reference-counted COM objects.
@@ -197,5 +208,25 @@ pub(crate) fn from_erole(role: ERole) -> Option<Role> {
         r if r == eMultimedia => Some(Role::Multimedia),
         r if r == eCommunications => Some(Role::Communications),
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::com::ComGuard;
+
+    /// Holds on any machine (none unplugged = empty). `--nocapture` prints this machine's disconnected devices.
+    #[test]
+    fn list_unplugged_returns_only_unplugged_endpoints() {
+        let _com = ComGuard::init_mta().unwrap();
+        let Ok(eps) = Endpoints::new() else { return }; // no audio service (CI): nothing to check
+        let unplugged = eps.list_unplugged().unwrap();
+        for e in &unplugged {
+            println!("unplugged: {:?} {:?}", e.flow, e.friendly_name);
+        }
+        assert!(unplugged.iter().all(|e| e.state == DeviceState::Unplugged));
+        let active = eps.list(false).unwrap();
+        assert!(unplugged.iter().all(|u| !active.iter().any(|a| a.id == u.id)));
     }
 }

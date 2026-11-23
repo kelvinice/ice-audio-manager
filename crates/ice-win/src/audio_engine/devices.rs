@@ -28,6 +28,25 @@ impl Worker {
         DeviceSummary { spatial, ..self.summary_basic(e) }
     }
 
+    /// Unplugged endpoints for display, only while `show_disconnected` is on. Kept out of `self.endpoints`, so
+    /// nothing ever resolves or switches to them (D-16). No WinRT calls: spatial stays unknown.
+    fn disconnected(&self) -> Vec<DeviceSummary> {
+        if !self.config.show_disconnected {
+            return Vec::new();
+        }
+        match self.eps.list_unplugged() {
+            Ok(list) => list
+                .iter()
+                .filter(|e| !self.config.prefs_for(e).is_some_and(|p| p.hidden))
+                .map(|e| self.summary_basic(e))
+                .collect(),
+            Err(e) => {
+                tracing::warn!(error = %e, "listing disconnected devices failed");
+                Vec::new()
+            }
+        }
+    }
+
     /// Re-enumerates, updates the snapshot and (when `notify`) emits arrivals, departures and `DevicesChanged`.
     pub(super) fn refresh(&mut self, notify: bool) {
         let fresh = match self.eps.list(false) {
@@ -56,6 +75,7 @@ impl Worker {
                 .collect()
         };
         let (playback, recording) = (visible(Flow::Render), visible(Flow::Capture));
+        let disconnected = self.disconnected();
 
         // Re-create both watches on every refresh: a same-ID reconnect can leave the old interfaces stale (ENG-07).
         self.render_watch = None;
@@ -81,9 +101,12 @@ impl Worker {
 
         let lists_changed = {
             let mut sh = lock(&self.shared);
-            let changed = sh.snapshot.playback != playback || sh.snapshot.recording != recording;
+            let changed = sh.snapshot.playback != playback
+                || sh.snapshot.recording != recording
+                || sh.snapshot.disconnected != disconnected;
             sh.snapshot.playback.clone_from(&playback);
             sh.snapshot.recording.clone_from(&recording);
+            sh.snapshot.disconnected.clone_from(&disconnected);
             sh.snapshot.volume = volume;
             sh.snapshot.mic_muted = mic.map(|(_, m)| m);
             sh.snapshot.mic_volume = mic.map(|(s, _)| percent(s));
@@ -118,7 +141,7 @@ impl Worker {
             self.emit(EngineEvent::DeviceLeft { device });
         }
         if lists_changed {
-            self.emit(EngineEvent::DevicesChanged { playback, recording });
+            self.emit(EngineEvent::DevicesChanged { playback, recording, disconnected });
         }
         if old_default != new_default
             && let Some(volume) = volume

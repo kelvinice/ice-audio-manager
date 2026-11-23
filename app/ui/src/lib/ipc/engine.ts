@@ -87,7 +87,7 @@ export type DevicePrefsView = { device: SavedDevice, spatial: SpatialMode, alias
 
 export type PerformanceProfile = "instant" | "balanced" | "lite";
 
-export type SettingsView = { performanceProfile: PerformanceProfile, pinnedMonitor: string | null, defaultRoles: RoleSet, togglePairs: Array<TogglePairView>, bindings: Array<BindingView>, favouritesPlayback: Array<SavedDevice>, favouritesRecording: Array<SavedDevice>, devices: Array<DevicePrefsView>, knobGestures: boolean, };
+export type SettingsView = { performanceProfile: PerformanceProfile, pinnedMonitor: string | null, defaultRoles: RoleSet, togglePairs: Array<TogglePairView>, bindings: Array<BindingView>, favouritesPlayback: Array<SavedDevice>, favouritesRecording: Array<SavedDevice>, devices: Array<DevicePrefsView>, knobGestures: boolean, showDisconnected: boolean, };
 
 export type EngineSnapshot = { revision: number,
 /**
@@ -98,6 +98,11 @@ playback: Array<DeviceSummary>,
  * Active recording devices.
  */
 recording: Array<DeviceSummary>,
+/**
+ * Unplugged endpoints of both flows (`state: unplugged`), only while `settings.show_disconnected` is on.
+ * For display only (greyed); they can't be switched to. Hidden devices and ghosts are never listed.
+ */
+disconnected: Array<DeviceSummary>,
 /**
  * Volume of the default playback device.
  */
@@ -124,11 +129,15 @@ settings: SettingsView,
  */
 media: NowPlaying | null, };
 
-export type Command = { "type": "switchTo", deviceId: string, roles: RoleSet, } | { "type": "switchBinding", bindingId: string, } | { "type": "togglePair", pairId: string, } | { "type": "cycleFavourites", flow: Flow, step: number, } | { "type": "setVolume", percent: number, } | { "type": "stepVolume", delta: number, } | { "type": "toggleMute" } | { "type": "toggleMicMute" } | { "type": "media", action: MediaAction, } | { "type": "setSpatial", deviceId: string, mode: SpatialMode, } | { "type": "resolveChoice", requestId: number, deviceId: string | null, } | { "type": "refresh" } | { "type": "setTogglePair", pairId: string, primaryId: string, secondaryId: string, hotkey: string | null, roles: RoleSet | null, } | { "type": "removeTogglePair", pairId: string, } | { "type": "setBinding", bindingId: string, deviceId: string, hotkey: string | null, roles: RoleSet | null, } | { "type": "removeBinding", bindingId: string, } | { "type": "setFavourites", flow: Flow, deviceIds: Array<string>, } | { "type": "setDevicePrefs", deviceId: string, spatial: SpatialMode | null, alias: string | null, hidden: boolean | null, } | { "type": "setPerformanceProfile", profile: PerformanceProfile, } | { "type": "setPinnedMonitor", displayPath: string, } | { "type": "setKnobGestures", enabled: boolean, } | { "type": "setDefaultRoles", roles: RoleSet, };
+export type Command = { "type": "switchTo", deviceId: string, roles: RoleSet, } | { "type": "switchBinding", bindingId: string, } | { "type": "togglePair", pairId: string, } | { "type": "cycleFavourites", flow: Flow, step: number, } | { "type": "setVolume", percent: number, } | { "type": "stepVolume", delta: number, } | { "type": "toggleMute" } | { "type": "toggleMicMute" } | { "type": "media", action: MediaAction, } | { "type": "setSpatial", deviceId: string, mode: SpatialMode, } | { "type": "resolveChoice", requestId: number, deviceId: string | null, } | { "type": "refresh" } | { "type": "setTogglePair", pairId: string, primaryId: string, secondaryId: string, hotkey: string | null, roles: RoleSet | null, } | { "type": "removeTogglePair", pairId: string, } | { "type": "setBinding", bindingId: string, deviceId: string, hotkey: string | null, roles: RoleSet | null, } | { "type": "removeBinding", bindingId: string, } | { "type": "setFavourites", flow: Flow, deviceIds: Array<string>, } | { "type": "setDevicePrefs", deviceId: string, spatial: SpatialMode | null, alias: string | null, hidden: boolean | null, } | { "type": "setPerformanceProfile", profile: PerformanceProfile, } | { "type": "setPinnedMonitor", displayPath: string, } | { "type": "setKnobGestures", enabled: boolean, } | { "type": "setShowDisconnected", enabled: boolean, } | { "type": "setDefaultRoles", roles: RoleSet, };
 
 export type Notice = { "type": "notConnected", name: string, } | { "type": "chooseDevice", requestId: number, name: string, candidates: Array<DeviceSummary>, } | { "type": "switchFailed", name: string, failedRoles: Array<Role>, } | { "type": "spatialUnavailable", name: string, mode: SpatialMode, reason: string, } | { "type": "hotkeyConflict", bindingId: string, keys: string, } | { "type": "configReplaced", backup: string, error: string, } | { "type": "configInvalid", error: string, } | { "type": "configSaveFailed", error: string, } | { "type": "settingRejected", error: string, };
 
-export type EngineEvent = { "type": "devicesChanged", playback: Array<DeviceSummary>, recording: Array<DeviceSummary>, } | { "type": "volumeChanged", volume: VolumeState, } | { "type": "micMuteChanged", muted: boolean, } | { "type": "micVolumeChanged", percent: number, } | { "type": "mediaChanged", media: NowPlaying | null, } | { "type": "switched", device: DeviceSummary, roles: RoleSet,
+export type EngineEvent = { "type": "devicesChanged", playback: Array<DeviceSummary>, recording: Array<DeviceSummary>,
+/**
+ * Mirrors `EngineSnapshot::disconnected` (empty while the setting is off).
+ */
+disconnected: Array<DeviceSummary>, } | { "type": "volumeChanged", volume: VolumeState, } | { "type": "micMuteChanged", muted: boolean, } | { "type": "micVolumeChanged", percent: number, } | { "type": "mediaChanged", media: NowPlaying | null, } | { "type": "switched", device: DeviceSummary, roles: RoleSet,
 /**
  * The binding followed the device to a new endpoint ID (shown as a caption, one notice).
  */

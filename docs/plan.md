@@ -113,6 +113,11 @@ Three agents work at once, each in **its own worktree** branched from the latest
 - [x] **Toggle-pair hotkey** (Speakers ↔ Arctis) with one-click setup from the tray ("Toggle with the current device…")
 - [x] Ghost endpoints hidden by default
 - [ ] "Show disconnected devices" toggle (AudioSwitcher v1 parity)
+  - [x] Engine (Claude, `phase-1/show-disconnected`): `show_disconnected` (config schema v3, v2 migration tested),
+        `Command::SetShowDisconnected`, `settings.showDisconnected`, and `EngineSnapshot.disconnected` / `DevicesChanged.disconnected`.
+        Only *Unplugged* endpoints are listed, never ghosts or disabled ones. Hidden devices are skipped. They're never switch
+        targets (`SwitchTo` → `NotConnected`). The fake engine lists one unplugged front-panel jack
+  - [ ] Tray (Codex): a "Show disconnected devices" check item, and greyed, non-clickable entries for `snapshot.disconnected`
 - [x] `ice-win::audio`: device change notifications → engine events (sliding, capped debounce)
 - [x] `ice-win::policy`: switch default. `Default` = Console + Multimedia; `Both` = all three roles. Defaults are re-read after
       every switch; partial failures are reported per role
