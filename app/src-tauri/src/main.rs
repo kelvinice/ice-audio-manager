@@ -5,6 +5,7 @@ mod art;
 mod engine_bridge;
 mod ipc;
 mod logging;
+mod meter;
 mod placement;
 mod tray;
 
@@ -32,6 +33,7 @@ const NOTCH_TOP_OFFSET: i32 = 0;
 
 struct SharedRuntime {
     engine: engine_bridge::EngineSlot,
+    meter: Mutex<meter::Visualizer>,
     bench_mode: bool,
     tray_prompts: Mutex<tray::Prompts>,
     cursor_poll_running: AtomicBool,
@@ -95,6 +97,7 @@ impl SharedRuntime {
         let last_track = Mutex::new(initial.media.as_ref().map(engine_bridge::TrackKey::of));
         Self {
             engine,
+            meter: Mutex::default(),
             bench_mode,
             tray_prompts: Mutex::default(),
             cursor_poll_running: AtomicBool::new(false),
@@ -193,7 +196,7 @@ fn report_settings_ready(state: State<'_, Arc<SharedRuntime>>) {
 }
 
 #[tauri::command]
-fn report_event_rendered(event_seq: u64, state: State<'_, Arc<SharedRuntime>>) {
+fn report_event_rendered(event_seq: u64, app: AppHandle, state: State<'_, Arc<SharedRuntime>>) {
     let now = Instant::now();
     let mut guard = state.event_rendered_waiter.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
     if let Some((expected, _)) = guard.as_ref()
@@ -208,7 +211,7 @@ fn report_event_rendered(event_seq: u64, state: State<'_, Arc<SharedRuntime>>) {
         let pending = state.pending_wake_seq.load(Ordering::Acquire);
         if pending > 0 && event_seq >= pending && !state.want_suspended.load(Ordering::Acquire) {
             state.pending_wake_seq.store(0, Ordering::Release);
-            state.notch_visible.store(true, Ordering::Release);
+            state.set_notch_visible(&app, true);
             let hwnd = state.notch_hwnd.load(Ordering::Acquire);
             if hwnd != 0 {
                 let _ = overlay_win::ensure_topmost(hwnd);
@@ -315,7 +318,7 @@ fn request_idle_suspend(app: AppHandle, state: State<'_, Arc<SharedRuntime>>) {
 
     let epoch = state.suspend_gen.fetch_add(1, Ordering::AcqRel).saturating_add(1);
     state.want_suspended.store(true, Ordering::Release);
-    state.notch_visible.store(false, Ordering::Release);
+    state.set_notch_visible(&app, false);
     state.pending_wake_seq.store(0, Ordering::Release);
 
     if let Some(dot) = state.native_dot.lock().unwrap_or_else(std::sync::PoisonError::into_inner).as_ref() {
@@ -342,6 +345,7 @@ fn request_idle_suspend(app: AppHandle, state: State<'_, Arc<SharedRuntime>>) {
                     && state_cb.want_suspended.load(Ordering::Acquire)
                 {
                     state_cb.notch_suspended.store(true, Ordering::Release);
+                    meter::reconcile(&app_cb, &state_cb);
                     tracing::debug!("Notch WebView suspended (TrySuspend)");
                 } else if state_cb.placement().allows_webview()
                     && !state_cb.want_suspended.load(Ordering::Acquire)
@@ -378,6 +382,7 @@ pub(crate) fn wake_notch_on_main(app: &AppHandle, state: &Arc<SharedRuntime>, wa
     state.want_suspended.store(false, Ordering::Release);
     state.notch_suspended.store(false, Ordering::Release);
     state.pending_wake_seq.store(wake_seq.max(1), Ordering::Release);
+    meter::reconcile(app, state);
 
     let resume_res = win.with_webview(|wv| {
         if let Err(error) = webview2::resume(&wv.controller()) {
@@ -483,6 +488,7 @@ fn create_notch_window(app: &AppHandle, state: &Arc<SharedRuntime>, generation: 
     let phys_y = f64::from(monitor.top + monitor.logical_to_physical(NOTCH_TOP_OFFSET));
 
     let win = WebviewWindowBuilder::new(app, "notch", WebviewUrl::App("index.html".into()))
+        .on_page_load(meter::page_load)
         .title("Ice Audio Notch")
         .inner_size(f64::from(NOTCH_CANVAS_W), f64::from(NOTCH_CANVAS_H))
         .position(phys_x / monitor.scale_factor, phys_y / monitor.scale_factor)
@@ -499,20 +505,21 @@ fn create_notch_window(app: &AppHandle, state: &Arc<SharedRuntime>, generation: 
         .map_err(|e| e.to_string())?;
 
     let state = Arc::clone(state);
-    on_main_sync(app, move |_| {
+    on_main_sync(app, move |app| {
         let monitor = state.active_monitor_info().unwrap_or(monitor);
         let configured = (|| {
             if !state.placement().can_reveal(generation) {
                 return Err("notch opening superseded".into());
             }
             let hwnd = win.hwnd().map_err(|e| e.to_string())?.0 as isize;
+            meter::watch_renderer(&win, &state).map_err(|e| e.to_string())?;
             overlay_win::apply_overlay_styles(hwnd).map_err(|e| e.to_string())?;
             overlay_win::move_top_center(hwnd, &monitor, NOTCH_CANVAS_W, NOTCH_CANVAS_H, NOTCH_TOP_OFFSET)
                 .map_err(|e| e.to_string())?;
             win.show().map_err(|e| e.to_string())?;
             overlay_win::ensure_topmost(hwnd).map_err(|e| e.to_string())?;
             state.notch_hwnd.store(hwnd, Ordering::Release);
-            state.notch_visible.store(true, Ordering::Release);
+            state.set_notch_visible(app, true);
             Ok(hwnd)
         })();
         if configured.is_err() {
@@ -835,7 +842,7 @@ fn spawn_notch_and_measure(app: &AppHandle, state: &Arc<SharedRuntime>) -> Resul
     let hwnd = on_main_sync(app, {
         let st = Arc::clone(state);
         let mon = monitor;
-        move |_h| {
+        move |h| {
             let hwnd = win.hwnd().map_err(|e| e.to_string())?.0 as isize;
             overlay_win::apply_overlay_styles(hwnd).map_err(|e| e.to_string())?;
             overlay_win::move_top_center(hwnd, &mon, NOTCH_CANVAS_W, NOTCH_CANVAS_H, NOTCH_TOP_OFFSET)
@@ -843,7 +850,7 @@ fn spawn_notch_and_measure(app: &AppHandle, state: &Arc<SharedRuntime>) -> Resul
             win.show().map_err(|e| e.to_string())?;
             overlay_win::ensure_topmost(hwnd).map_err(|e| e.to_string())?;
             st.notch_hwnd.store(hwnd, Ordering::Release);
-            st.notch_visible.store(true, Ordering::Release);
+            st.set_notch_visible(h, true);
             Ok(hwnd)
         }
     })?;
@@ -854,7 +861,7 @@ fn spawn_notch_and_measure(app: &AppHandle, state: &Arc<SharedRuntime>) -> Resul
 
 fn destroy_notch_and_wait(app: &AppHandle, state: &Arc<SharedRuntime>) -> Result<(), String> {
     state.notch_hwnd.store(0, Ordering::Release);
-    state.notch_visible.store(false, Ordering::Release);
+    state.set_notch_visible(app, false);
     std::thread::sleep(Duration::from_millis(40));
 
     on_main_sync(app, {
@@ -955,7 +962,7 @@ fn resume_notch(app: &AppHandle, state: &Arc<SharedRuntime>) -> Result<(), Strin
         win.show().map_err(|e| e.to_string())?;
         let hwnd = win.hwnd().map_err(|e| e.to_string())?.0 as isize;
         overlay_win::ensure_topmost(hwnd).map_err(|e| e.to_string())?;
-        st.notch_visible.store(true, Ordering::Release);
+        st.set_notch_visible(h, true);
         Ok(())
     })
 }
@@ -1068,7 +1075,7 @@ fn run_benchmark_inner(
     on_main_sync(app, {
         let st = Arc::clone(state);
         move |h| {
-            st.notch_visible.store(false, Ordering::Release);
+            st.set_notch_visible(h, false);
             st.update_and_emit(h, |s| s.hidden_for_bench = true);
             if let Some(win) = h.get_webview_window("notch") {
                 win.hide().map_err(|e| e.to_string())?;
@@ -1099,7 +1106,7 @@ fn run_benchmark_inner(
             on_main_sync(app, {
                 let st = Arc::clone(state);
                 move |h| {
-                    st.notch_visible.store(false, Ordering::Release);
+                    st.set_notch_visible(h, false);
                     st.update_and_emit(h, |s| s.hidden_for_bench = true);
                     Ok(())
                 }
@@ -1343,6 +1350,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             trigger_switch,
             switch_to_device,
             media_command,
+            meter::set_visualizer,
             set_idle_style,
             toggle_expand,
             set_preset,
@@ -1385,23 +1393,14 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         .on_window_event(|window, event| {
             if window.label() == "notch" && matches!(event, tauri::WindowEvent::Destroyed) {
                 let state = window.state::<Arc<SharedRuntime>>();
-                state.notch_visible.store(false, Ordering::Release);
-                state.notch_suspended.store(false, Ordering::Release);
-                state.want_suspended.store(false, Ordering::Release);
-                state.pending_wake_seq.store(0, Ordering::Release);
-                state.notch_hwnd.store(0, Ordering::Release);
-                if !state.bench_mode
-                    && let Some(dot) =
-                        state.native_dot.lock().unwrap_or_else(std::sync::PoisonError::into_inner).as_ref()
-                {
-                    dot.set_standby_only(state.placement().gaming);
-                }
+                placement::notch_destroyed(&state);
             }
         })
         .build(tauri::generate_context!())?;
 
     app.run(move |_app_handle, event| match event {
         tauri::RunEvent::Exit => {
+            meter::released(&exit_flag_ref);
             placement::stop(_app_handle);
             tray::close();
         }

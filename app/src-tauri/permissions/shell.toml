@@ -1,0 +1,24 @@
+[[permission]]
+identifier = "read-notch-snapshot"
+description = "Read the state shown by both shell windows."
+commands.allow = ["get_notch_snapshot"]
+
+[[permission]]
+identifier = "notch-controls"
+description = "Operate the notch and its audio controls."
+commands.allow = [
+  "get_engine_snapshot", "report_hit_rect", "report_first_paint", "report_event_rendered",
+  "adjust_volume", "toggle_mute", "toggle_mic_mute", "trigger_switch", "switch_to_device",
+  "media_command", "set_idle_style", "toggle_expand", "set_preset", "set_theme",
+  "request_idle_suspend", "cycle_monitor", "open_settings",
+]
+
+[[permission]]
+identifier = "allow-set-visualizer"
+description = "Request peak frames for the visible notch visualizer."
+commands.allow = ["set_visualizer"]
+
+[[permission]]
+identifier = "report-settings-ready"
+description = "Report first paint of the Settings window."
+commands.allow = ["report_settings_ready"]

@@ -88,6 +88,27 @@ pub(super) fn settings(app: &AppHandle, state: &Arc<SharedRuntime>, settings: &S
     reconcile(app, state, Some(settings), false);
 }
 
+impl SharedRuntime {
+    pub(super) fn set_notch_visible(&self, app: &AppHandle, visible: bool) {
+        self.notch_visible.store(visible, Ordering::Release);
+        super::meter::reconcile(app, self);
+    }
+}
+
+pub(super) fn notch_destroyed(state: &SharedRuntime) {
+    state.notch_visible.store(false, Ordering::Release);
+    state.notch_suspended.store(false, Ordering::Release);
+    state.want_suspended.store(false, Ordering::Release);
+    state.pending_wake_seq.store(0, Ordering::Release);
+    state.notch_hwnd.store(0, Ordering::Release);
+    super::meter::released(state);
+    if !state.bench_mode
+        && let Some(dot) = state.native_dot.lock().unwrap_or_else(PoisonError::into_inner).as_ref()
+    {
+        dot.set_standby_only(state.placement().gaming);
+    }
+}
+
 // All policy transitions and native window changes run serially on the shell's main thread.
 fn reconcile(app: &AppHandle, state: &Arc<SharedRuntime>, settings: Option<&SettingsView>, topology: bool) {
     let mut p = state.placement();
@@ -119,6 +140,9 @@ fn reconcile(app: &AppHandle, state: &Arc<SharedRuntime>, settings: Option<&Sett
     drop(p);
     let monitor_summaries = topology.then(|| summaries(&monitors));
     drop(monitors);
+    if changed {
+        super::meter::reconcile(app, state);
+    }
     if let Some(display_path) = first_pin {
         state.engine.send(Command::SetPinnedMonitor { display_path });
     }
@@ -129,7 +153,7 @@ fn reconcile(app: &AppHandle, state: &Arc<SharedRuntime>, settings: Option<&Sett
     if changed && !allowed {
         state.pending_wake_seq.store(0, Ordering::Release);
         state.suspend_gen.fetch_add(1, Ordering::AcqRel);
-        state.notch_visible.store(false, Ordering::Release);
+        state.set_notch_visible(app, false);
         state.want_suspended.store(false, Ordering::Release);
         state.notch_suspended.store(false, Ordering::Release);
         if let Some(win) = app.get_webview_window("notch") {

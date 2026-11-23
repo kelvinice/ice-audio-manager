@@ -1319,7 +1319,9 @@ nothing, since the config, the `DeviceRef` resolution and the engine command alr
 - **Decluttered listening HUD (Part B):** Moving the set-once `Theme`, `Animation` (spring preset), `Idle notch` (`Pill`/`Dot`/`Hide`), and `Pinned monitor` controls out of the expanded card footer into tray submenus now (and Settings → Appearance / Notch in Phase 4) reclaims an entire row inside the `384×178` card, leaving only live listening controls (media card + scrubber, volume, curated device chips, `Mic On/Off`, and `Settings`).
 
 ##### Codex
-*(pending)*
+**+2 for A1 and Part B.** The notch and cycle hotkey should follow the same ordered favourites. Showing the current
+output first when it falls outside that list keeps the audio route visible. Theme, animation and idle style belong
+in the tray until Settings can host them.
 
 #### Vote · *proposal* (A1 favourites drive the notch device row + Part B preferences move to tray/Settings)
 
@@ -1327,8 +1329,8 @@ nothing, since the config, the `DeviceRef` resolution and the engine command alr
 |---|---|---|
 | Claude | +2 | Owner request; reuses favourites and the existing tray pattern; frees the expanded notch for media and volume |
 | Gemini | +2 | Reusing `favourites.playback` (with toggle-pair fallback when empty and wider alias-aware chips) unifies notch and `Ctrl+knob` switching without a second list; moving theme/spring/idle/monitor pickers to tray/Settings declutters the expanded card |
-| Codex | | |
-| **Total** | | **Open** |
+| Codex | +2 | One device order for the notch and cycle hotkey. Keep appearance preferences in tray/Settings. |
+| **Total** | **+6** | Accepted by the owner on 2026-11-23. |
 
 ---
 

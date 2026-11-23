@@ -6,8 +6,37 @@ use webview2_com::Microsoft::Web::WebView2::Win32::{
     COREWEBVIEW2_PROCESS_KIND_SANDBOX_HELPER, COREWEBVIEW2_PROCESS_KIND_UTILITY, ICoreWebView2_3,
     ICoreWebView2Controller, ICoreWebView2Environment, ICoreWebView2Environment8,
 };
-use webview2_com::TrySuspendCompletedHandler;
+use webview2_com::{ProcessFailedEventHandler, TrySuspendCompletedHandler};
 use windows::core::{Interface, Result};
+
+/// Reports loss of the top-level document, which can leave the native window intact (F17).
+/// WebView2 owns the handler until this WebView is released.
+///
+/// # Errors
+/// Fails if the controller or event registration is unavailable.
+pub fn on_process_exit(controller: &ICoreWebView2Controller, on_exit: impl Fn() + 'static) -> Result<()> {
+    use webview2_com::Microsoft::Web::WebView2::Win32::{
+        COREWEBVIEW2_PROCESS_FAILED_KIND_BROWSER_PROCESS_EXITED, COREWEBVIEW2_PROCESS_FAILED_KIND_RENDER_PROCESS_EXITED,
+    };
+    let handler = ProcessFailedEventHandler::create(Box::new(move |_, args| {
+        if let Some(args) = args {
+            let mut kind = Default::default();
+            // SAFETY: the event arguments and the output pointer are valid throughout the callback.
+            unsafe { args.ProcessFailedKind(&raw mut kind)? };
+            if matches!(
+                kind,
+                COREWEBVIEW2_PROCESS_FAILED_KIND_BROWSER_PROCESS_EXITED
+                    | COREWEBVIEW2_PROCESS_FAILED_KIND_RENDER_PROCESS_EXITED
+            ) {
+                on_exit();
+            }
+        }
+        Ok(())
+    }));
+    let mut token = 0;
+    // SAFETY: called on the controller's UI thread. The WebView retains the COM handler.
+    unsafe { controller.CoreWebView2()?.add_ProcessFailed(&handler, &raw mut token) }
+}
 
 /// Suspends WebView2's renderer asynchronously and invokes `on_done` on the UI thread when complete.
 ///

@@ -75,7 +75,7 @@ impl EngineSlot {
         Self(Mutex::new(engine.ok_or_else(|| "Starting Windows audio…".into())))
     }
 
-    fn current(&self) -> Option<EngineRef> {
+    pub(super) fn current(&self) -> Option<EngineRef> {
         self.0.lock().unwrap_or_else(PoisonError::into_inner).as_ref().ok().cloned()
     }
 

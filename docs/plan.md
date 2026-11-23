@@ -209,9 +209,9 @@ games on the pinned monitor. Budgets met in every profile.
         sent, silence once. The `ice-meter` thread runs only while a subscription is alive and re-binds on default-device changes.
         The fake engine sends stereo levels while its track plays. The thread stopping after the last drop is tested on real Windows.
         Measured (release, music playing, 10 s): **0.013% CPU**, 206 frames (≈ 21/s after change filtering)
-  - [ ] Shell (Codex): hold a subscription only while the notch is visible *and* the visualizer is shown. **Drop it on hide,
-        `TrySuspend`, WebView release and gaming mode**, without relying on the UI to ask. Forward frames off the main thread
-        to the notch as `audio://meter/v1`, and add a Tauri command for the UI to turn it on/off
+  - [x] Shell (Codex): the notch calls `set_visualizer({ active })` to request or release `audio://meter/v1` frames.
+        The shell forwards off the main thread and drops the subscription on hide, `TrySuspend`, WebView release or crash,
+        gaming mode, and Lite. A new document must request frames again.
   - [x] Notch (Gemini): 4–6 bars from `channels` (fall back to `peak`), fast-attack/slow-decay springs, no animation loop
         once frames stop and the bars have settled
 - [ ] Secondary QA: Chromium/Edge/Firefox media sessions

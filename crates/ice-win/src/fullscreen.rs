@@ -12,6 +12,7 @@ use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, RECT, WAIT_FAILED, WPARA
 use windows::Win32::Graphics::Dwm::{DWMWA_EXTENDED_FRAME_BOUNDS, DwmGetWindowAttribute};
 use windows::Win32::Graphics::Gdi::{EnumDisplayMonitors, GetMonitorInfoW, HDC, HMONITOR, MONITORINFOEXW};
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
+use windows::Win32::System::Threading::GetCurrentThreadId;
 use windows::Win32::UI::Accessibility::{HWINEVENTHOOK, SetWinEventHook, UnhookWinEvent};
 use windows::Win32::UI::HiDpi::{
     DPI_AWARENESS_CONTEXT, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, SetThreadDpiAwarenessContext,
@@ -22,8 +23,9 @@ use windows::Win32::UI::WindowsAndMessaging::{
     EVENT_OBJECT_STATECHANGE, EVENT_SYSTEM_FOREGROUND, GWL_STYLE, GetDesktopWindow, GetForegroundWindow, GetMessageW,
     GetShellWindow, GetWindowLongPtrW, GetWindowRect, IsIconic, IsWindowVisible, IsZoomed, MONITORINFOF_PRIMARY, MSG,
     MWMO_INPUTAVAILABLE, MsgWaitForMultipleObjectsEx, OBJID_WINDOW, PM_REMOVE, PeekMessageW, PostMessageW,
-    PostQuitMessage, QS_ALLINPUT, RegisterClassExW, TranslateMessage, WINEVENT_OUTOFCONTEXT, WM_CLOSE, WM_DESTROY,
-    WM_DISPLAYCHANGE, WM_QUIT, WNDCLASSEXW, WS_CAPTION, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_POPUP,
+    PostQuitMessage, PostThreadMessageW, QS_ALLINPUT, RegisterClassExW, TranslateMessage, WINEVENT_OUTOFCONTEXT,
+    WM_CLOSE, WM_DESTROY, WM_DISPLAYCHANGE, WM_NULL, WM_QUIT, WNDCLASSEXW, WS_CAPTION, WS_EX_NOACTIVATE,
+    WS_EX_TOOLWINDOW, WS_POPUP,
 };
 use windows::core::{BOOL, Error, Result, w};
 
@@ -216,8 +218,14 @@ unsafe extern "system" fn on_window_event(
             window == unsafe { GetForegroundWindow() }
         })
     {
-        // A single flag coalesces bursts. Sampling and logging happen outside the WinEvent callback.
-        FOREGROUND_CHANGED.set(true);
+        // Out-of-context WinEvents can be delivered inside GetMessageW without making it return.
+        // Wake the sampling loop once per burst so F17 also stops on a quiet desktop.
+        if !FOREGROUND_CHANGED.replace(true) {
+            // SAFETY: this callback runs on the watcher's message-loop thread. WM_NULL carries no data.
+            unsafe {
+                let _ = PostThreadMessageW(GetCurrentThreadId(), WM_NULL, WPARAM(0), LPARAM(0));
+            }
+        }
     }
 }
 
