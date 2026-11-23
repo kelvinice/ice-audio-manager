@@ -349,7 +349,9 @@ every feature phase. Phases 1–5 focus on features and UI/UX.
 - [ ] Microsoft Store individual developer registration (free, with identity verification) and a separate MSIX packaging step.
       Tauri's standard Windows installers are NSIS and WiX. Smoke-test Core Audio, GSMTC, tray recovery,
       settings paths, and `StartupTask` in the packaged build
-- [ ] Audit the release tree and Git history before publishing the source under MIT (Q-02)
+- [x] Audit the Git history for secrets: the repo has been public since 2025-02-21. Checked 2026-11-23: `.env` only ever held
+      `PYTHONPATH`, and a credential-pattern scan of the full history (keys, tokens, passwords, private keys) found
+      nothing. Re-run before the first release
 - [ ] Signing per D-09: Store MSIX first; **SignPath** for GitHub artifacts once eligible (its terms require an OSS project with a prior release).
       Sign the exe inside the portable zip as well as the NSIS installer
 - [ ] Packaging per D-10: MSIX, per-user NSIS installer (no admin), portable zip

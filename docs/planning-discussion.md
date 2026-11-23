@@ -1995,6 +1995,9 @@ Q-02 (the owner left the licence to us; MIT was chosen) and the MIT `LICENSE` ad
 closed decision changes only through a new entry.
 
 **Facts (Claude, checked 2026-11-23):**
+- **The repo is already public**: `github.com/kelvinice/ice-audio-manager`, public since its first commit on 2025-02-21
+  (owner, 2026-11-23). It has had an MIT `LICENSE` since 2026-11-22 (Phase 0.7) and no licence file before that. So
+  "making it public" is already done, and the question is only the licence.
 - **Making the repo public isn't what GPL requires.** GPL-3.0 code may only be combined into a program that is itself
   distributed under GPL-3.0. So the condition is **relicensing the whole app to GPL-3.0**, not publicity. Whoever receives
   a build must be able to get the complete corresponding source. Private, undistributed use carries no obligations; the
