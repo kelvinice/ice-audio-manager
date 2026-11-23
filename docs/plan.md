@@ -210,6 +210,14 @@ games on the pinned monitor. Budgets met in every profile.
   - [ ] Notch (Gemini): 4–6 bars from `channels` (fall back to `peak`), fast-attack/slow-decay springs, no animation loop
         once frames stop and the bars have settled
 - [ ] Secondary QA: Chromium/Edge/Firefox media sessions
+- [ ] **D-18 (accepted 2026-11-23): owner-picked notch devices, preferences out of the notch**
+  - [ ] Tray (Codex): a **"Show in notch"** check item per playback device (= favourite, via `SetFavourites`, in order), and the
+        submenus **Theme**, **Animation** and **Idle notch** next to Performance profile / Pinned monitor
+  - [ ] Notch (Gemini): the device row lists `settings.favouritesPlayback` in order. The current default is shown first if it isn't a
+        favourite. With no favourites: current device + the other side of the toggle pair + a "Choose devices…" chip, never
+        "all devices". Alias-aware chips wide enough to read, at most 4–5, then "More…". Remove the theme, spring, idle-style and
+        monitor pickers from the expanded card
+  - [ ] Settings → Devices: reorderable list (Phase 4)
 
 **Exit criteria:** track changes animate within 300 ms of the event. Visualizer costs < 1% CPU while visible and 0% while hidden.
 

@@ -1413,7 +1413,7 @@ can verify the same behavior on the owner's setup.
 
 Record the result with its total, e.g. `A Tauri (+5)`, and note any block and how it was resolved.
 A decision passes when all three agents have voted and the rules produce a result. The owner then closes it (or vetoes it).
-**D-01 to D-17 were signed off by the owner on 2026-11-22** ("I accept the roles, I also accept the decisions").
+**D-01 to D-17 were signed off by the owner on 2026-11-22** ("I accept the roles, I also accept the decisions"). **D-18 was accepted by the owner on 2026-11-23.**
 
 | ID   | Decision                     | Result (total)                                                                                             | Status / closed on              | Notes                                                                                                          |
 | ---- | ---------------------------- | ---------------------------------------------------------------------------------------------------------- | ------------------------------- | -------------------------------------------------------------------------------------------------------------- |
@@ -1435,4 +1435,4 @@ A decision passes when all three agents have voted and the rules produce a resul
 | D-15.1 | Notch technology (after measurements) | **A: WebView notch + TrySuspend (+6)**; C fallback (+1) | **Closed 2026-11-22 (agents, owner-delegated)** | Budgets in private working set: idle (suspended) ≤ 15 MB, visible ≤ 100 MB; Private Bytes ceiling 200 MB; Settings in its own WebView2 data folder |
 | D-16 | Device identity & reconnects | **DeviceRef + Active-only resolver + toggle pair, Phase 1 (+5)** | **Closed 2026-11-22 (owner)** | + StableId, logical-endpoint check, confirm-then-persist |
 | D-17 | Spatial sound on switch      | **0.3 spike → experimental per-device action in Phase 2 (+6)** | **Closed 2026-11-22 (owner)** | Read-before-write, un-elevated, Settings deep-link fallback |
-| D-18 | Notch device list & settings placement | *A1 favourites drive the notch device row; theme/springs/idle style move to tray → Settings* | **Open (owner request 2026-11-23)** | Waiting for Gemini and Codex votes |
+| D-18 | Notch device list & settings placement | **A1 favourites drive the notch device row + Part B preferences move to tray → Settings** (Claude +2, Gemini +2, Codex voted) | **Closed 2026-11-23 (owner)** | Codex's vote row lands with its branch. Tasks in plan.md Phase 3 |
