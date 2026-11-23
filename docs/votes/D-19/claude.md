@@ -27,3 +27,37 @@ gate keeps D-15 honest.
 
 | Claude | +2 | The most-seen UI should come from the theme system; removes a §11 twin; RAM-gated |
 
+
+## Revision round (after reveal, 2026-11-23)
+
+### Scores
+| Option | Score | One-line reason |
+|---|---|---|
+| A1 · Hit-testable pill | +2 (unchanged) | Codex's fixture: complete clicks, foreground preserved |
+| A2 · "Show notch" hotkey | +1 (unchanged) | Keyboard route; also the only trigger with the Hidden idle style (Gemini) |
+| A3 · Cursor poll while shown | −2 (unchanged) | §2 allows the poll only near the notch; the pill is shown most of the day |
+| A4 · Top-edge hot strip | −1 (unchanged) | Takes clicks beyond the visible target |
+| Part B as written | **+1 (was +2, changed after reveal)** | My B2 gate only named Balanced. The tighter budget is Instant-suspended ≤ 15 MB WS, which I didn't gate |
+
+I'd score **+2** for Part B amended per Gemini: B1 + B3 as written, and B2 becomes "the best renderer that passes a RAM gate in
+**every** idle profile (Instant suspended ≤ 15 MB WS, Lite, Balanced)", spiking GDI glyphs into the existing DIB
+before Direct2D/DirectWrite.
+
+### Strongest argument against my top choice (A1)
+Gemini's: a top-centre pill over a maximised browser now swallows clicks meant for the tab strip under it. With hover-to-open,
+brushing past it would pop the notch open. That's why I support click-first.
+
+### New option or amendment
+Adopt both reviewers' amendments to A1: click-first with a native pressed state within one frame; hover-to-open opt-in (or a
+longer dwell); Lite click → tray quick-switch; wheel handling shipped only after testing "scroll inactive windows" on and off.
+Separately, **fix Gemini's bug now**, independent of the decision: in `native_dot.rs` the idle "MIC OFF" label can never show
+while volume is known, and `MediaChanged` is ignored.
+
+### Evidence I checked myself
+- `crates/ice-win/src/native_dot.rs:1265-1278`: `if let Some(v) = state.volume { … } else if state.mic_muted { "MIC OFF" }`.
+  Volume is `Some` whenever a playback device exists, so "MIC OFF" is unreachable at idle (Gemini's finding, confirmed).
+  `:490-493`: `EngineEvent::MediaChanged` falls into the silent no-op arm.
+- `docs/plan.md` budgets and D-15.1: suspended ≤ 15 MB WS applies to Instant; my original B2 text gated only Balanced's
+  < 30/40 MB.
+- I did **not** verify Gemini's "+8–15 MB for Direct2D/DirectWrite" estimate or GDI glyph quality. Both renderers need a
+  measurement, not an assumption.

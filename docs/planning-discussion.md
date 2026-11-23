@@ -1428,7 +1428,7 @@ wiring (wake on pill click, Lite target, IPC) → Codex.
 
 #### Positions
 
-**Reveal · 2026-11-23. One revision round is open (§0.4).** The original Claude and Gemini votes predate blind voting and are anchored. Gemini re-cast before reveal. Codex voted sealed. Gemini lowered Part B from +2 to +1 before reveal. No post-reveal changes are recorded.
+**Reveal · 2026-11-23. One revision round is open (§0.4).** The original Claude and Gemini votes predate blind voting and are anchored. Gemini re-cast before reveal. Codex voted sealed. Gemini lowered Part B from +2 to +1 before reveal. **Post-reveal (Claude):** Part B +2 → +1 (B2 gated only Balanced; the tighter budget is Instant-suspended ≤ 15 MB). **Proposed amendment** (Gemini, backed by Codex and Claude): A1 click-first with a native pressed state, hover opt-in, Lite → quick switch, wheel after testing; B2 = the best renderer that passes the RAM gate in every idle profile, spiking GDI glyphs before Direct2D/DirectWrite. **Bug found in voting** (Gemini, confirmed by Claude): idle "MIC OFF" is unreachable in `native_dot.rs`, and `MediaChanged` is ignored. Fix it regardless of the decision.
 
 - Claude favours native click delivery and a keyboard shortcut; the most common idle state justifies shared content and native type. [Claude's ballot](votes/D-19/claude.md)
 - Gemini wants click feedback before hover activation and would try GDI glyphs before accepting DirectWrite's idle memory cost. [Gemini's ballot](votes/D-19/gemini.md)
@@ -1447,10 +1447,10 @@ wiring (wake on pill click, Lite target, IPC) → Codex.
 
 | Agent | Score | Reason |
 |---|---|---|
-| Claude | +2 | Shared content and native type, with a RAM gate |
+| Claude | +1 *(changed after reveal, was +2)* | B2 must pass a RAM gate in every idle profile; +2 if amended per Gemini (GDI first) |
 | Gemini | +1 | Benchmark lighter glyph rendering and suspended RAM |
 | Codex | +1 | Shared content and visual QA, with the renderer RAM-gated |
-| **Total** | **+4** | Revision open |
+| **Total** | **+3** | Passes (≥ +2) as written; amendment proposed (see the note above) |
 
 ---
 
@@ -1542,7 +1542,7 @@ the start of Phase 4, whose Notch page owns geometry and the pinned monitor.
 
 #### Positions
 
-**Reveal · 2026-11-23. One revision round is open (§0.4).** The original Claude and Gemini votes predate blind voting and are anchored. Gemini re-cast before reveal. Codex voted sealed. All three ballots include late option A2b. No post-reveal changes are recorded.
+**Reveal · 2026-11-23. One revision round is open (§0.4).** The original Claude and Gemini votes predate blind voting and are anchored. Gemini re-cast before reveal. Codex voted sealed. All three ballots include late option A2b. **Post-reveal (Claude):** P1 +1 → +2 and P2 +2 → +1 (Codex measured `WM_ACTIVATE` on every completed drag); A2b +1 → −1; R4 kept at −2 with the reason corrected (§1 has no clipboard rule; the block rests on trust). P1 now leads. **Amendment with support from all three:** ship P1 plus Codex's "Move notch…" preview mode first; enable direct drag only after a spike on the real hosts.
 
 - Claude prefers drag-to-snap plus a keyboard picker and would add portrait anchors after the six horizontal layouts ship. [Claude's ballot](votes/D-20/claude.md)
 - Gemini also prefers drag-to-snap, with a picker first and a mixed-DPI focus test before enabling drag. Gemini would defer portrait layouts. [Gemini's ballot](votes/D-20/gemini.md)
@@ -1552,10 +1552,10 @@ the start of Phase 4, whose Notch page owns geometry and the pinned monitor.
 
 | Agent | P1 fixed anchors | P2 drag + snap to anchors | P3 free placement |
 |---|---|---|---|
-| Claude | +1 | +2 | −1 |
+| Claude | +2 *(was +1)* | +1 *(was +2)* | −1 |
 | Gemini | +1 | +2 | −1 |
 | Codex | +2 | +1 | −1 |
-| **Total** | **+4** | **+5** | **−3** |
+| **Total** | **+5** | +4 | −3 |
 
 #### Vote · Part A2 *proposal* (six top/bottom anchors; one `anchor_rect` for both windows)
 
@@ -1570,16 +1570,16 @@ the start of Phase 4, whose Notch page owns geometry and the pinned monitor.
 
 | Agent | Score | Reason |
 |---|---|---|
-| Claude | +1 | Follow-up for wide monitors after A2 |
+| Claude | −1 *(changed after reveal, was +1)* | Shared inner edge on a two-monitor setup; portrait card ≠ transient pill |
 | Gemini | −1 | Portrait layouts and shared monitor edges expand QA |
 | Codex | −1 | A second visual layout for every activity |
-| **Total** | **−1** | Revision open |
+| **Total** | **−3** | Fails (< +2) |
 
 #### Vote · Part B *pick many* (ideas from other notch apps)
 
 | Agent | R1 attached vs floating | R2 optional modules | R3 file shelf | R4 clipboard history |
 |---|---|---|---|---|
-| Claude | +1 | +2 | −1 | −2 |
+| Claude | +1 | +2 | −1 | −2 *(reason corrected: trust, not a §1 rule)* |
 | Gemini | +1 | +2 | −1 | −2 |
 | Codex | +1 | +1 | −1 | −2 |
 | **Total** | **+3** | **+5** | **−3** | **−6** |
@@ -1643,7 +1643,7 @@ longer, event-driven hit-testing) before the UI.
 
 #### Positions
 
-**Reveal · 2026-11-23. One revision round is open (§0.4).** The original Claude and Gemini votes predate blind voting and are anchored. Gemini re-cast before reveal. Codex voted sealed. Before reveal, Gemini lowered Part A from +2 to +1 and changed C0/C1 from +1/+2 to +2/+1. No post-reveal changes are recorded.
+**Reveal · 2026-11-23. One revision round is open (§0.4).** The original Claude and Gemini votes predate blind voting and are anchored. Gemini re-cast before reveal. Codex voted sealed. Before reveal, Gemini lowered Part A from +2 to +1 and changed C0/C1 from +1/+2 to +2/+1. **Post-reveal (Claude):** Part A +2 → 0, C0 +1 → +2, C1 +2 → 0. Part A fails as written (0 < +2). **Amendment:** ship items 2 (linger in config) and 4 (fullscreen fallback, no permanent poll); replace the fourth profile with a trial of a session pin (Codex) and/or keep-awake-while-playing (Gemini) under C0; revisit a Rich profile and C1 only if a soak test needs it.
 
 - Claude wants an opt-in Rich profile with its own budget and measured costs visible in Settings. [Claude's ballot](votes/D-21/claude.md)
 - Gemini supports Rich with static art and optional playback bars, prefers today's caps, and wants a long soak before granting extra memory. [Gemini's ballot](votes/D-21/gemini.md)
@@ -1653,19 +1653,19 @@ longer, event-driven hit-testing) before the UI.
 
 | Agent | Score | Reason |
 |---|---|---|
-| Claude | +2 | An opt-in profile with visible costs |
+| Claude | 0 *(changed after reveal, was +2)* | Items 2 and 4 yes; trial a pin / keep-awake-while-playing before a fourth profile |
 | Gemini | +1 | Conditional on event-driven hit-testing and measured costs |
 | Codex | −1 | Trial a session pin and the actual WebView host first |
-| **Total** | **+2** | Revision open |
+| **Total** | **0** | Fails as written (< +2); back for revision with the amendments |
 
 #### Vote · Part B *pick one* (resource caps)
 
 | Agent | C0 keep all caps | C1 per-profile caps | C2 raise for every profile |
 |---|---|---|---|
-| Claude | +1 | +2 | −2 |
+| Claude | +2 *(was +1)* | 0 *(was +2)* | −2 |
 | Gemini | +2 | +1 | −2 |
 | Codex | +2 | 0 | −2 |
-| **Total** | **+5** | **+3** | **−6** |
+| **Total** | **+6** | +1 | −6 |
 
 ---
 
@@ -1773,6 +1773,6 @@ A decision passes when all three agents have voted and the rules produce a resul
 | D-16 | Device identity & reconnects | **DeviceRef + Active-only resolver + toggle pair, Phase 1 (+5)** | **Closed 2026-11-22 (owner)** | + StableId, logical-endpoint check, confirm-then-persist |
 | D-17 | Spatial sound on switch      | **0.3 spike → experimental per-device action in Phase 2 (+6)** | **Closed 2026-11-22 (owner)** | Read-before-write, un-elevated, Settings deep-link fallback |
 | D-18 | Notch device list & settings placement | **A1 favourites drive the notch device row + Part B preferences move to tray → Settings** (Claude +2, Gemini +2, Codex voted) | **Closed 2026-11-23 (owner)** | Codex's vote row lands with its branch. Tasks in plan.md Phase 3 |
-| D-19 | Native idle pill | A1 +6 (+2/+2/+2), A2 +3 (+1/+1/+1), A3 −6 (−2/−2/−2), A4 −3 (−1/−1/−1). Part B +4 (+2/+1/+1). | **Revealed · revision open** | Splits in Claude/Gemini/Codex order. Anchored originals, Gemini re-cast before reveal. A3 blocks open for rebuttal. |
-| D-20 | Placement and modules | P2 +5 (+2/+2/+1) leads P1 +4 (+1/+1/+2), P3 −3 (−1/−1/−1). A2 +6 (+2/+2/+2), A2b −1 (+1/−1/−1). R1 +3 (+1/+1/+1), R2 +5 (+2/+2/+1), R3 −3 (−1/−1/−1), R4 −6 (−2/−2/−2). | **Revealed · revision open** | Claude/Gemini/Codex. Anchored originals, Gemini re-cast before reveal. R4 blocks open for rebuttal. |
-| D-21 | User modes and resource caps | Rich +2 (+2/+1/−1). C0 +5 (+1/+2/+2) leads C1 +3 (+2/+1/0), C2 −6 (−2/−2/−2). | **Revealed · revision open** | Claude/Gemini/Codex. Anchored originals, Gemini re-cast before reveal. C2 blocks open for rebuttal. |
+| D-19 | Native idle pill | A1 +6 (+2/+2/+2), A2 +3 (+1/+1/+1), A3 −6 (−2/−2/−2), A4 −3 (−1/−1/−1). Part B +3 (+1/+1/+1; Claude changed after reveal from +2) | **Revision done by Claude · ready for owner** | Claude/Gemini/Codex. A1 + A2 adopted; Part B passes, with an amendment (click-first, GDI-first renderer, all-profile RAM gate). Bug found: idle "MIC OFF" unreachable |
+| D-20 | Placement and modules | **P1 +5 (+2/+1/+2)** leads P2 +4 (+1/+2/+1), P3 −3. A2 +6 (+2/+2/+2). A2b −3 (−1/−1/−1). R1 +3, R2 +5 (+2/+2/+1), R3 −3, R4 −6 (−2/−2/−2) | **Revision done by Claude · ready for owner** | Claude/Gemini/Codex. Claude changed P1/P2 and A2b after reveal (Codex's drag measurement). P1 + "Move notch…" preview first; drag after a spike. A2b fails |
+| D-21 | User modes and resource caps | Part A 0 (0/+1/−1): **fails as written**. **C0 +6 (+2/+2/+2)**, C1 +1 (0/+1/0), C2 −6 | **Revision done by Claude · ready for owner** | Claude/Gemini/Codex. Claude changed A and C0/C1 after reveal. Ship linger-in-config + no permanent poll; trial a session pin / keep-awake-while-playing under C0 instead of a fourth profile |
