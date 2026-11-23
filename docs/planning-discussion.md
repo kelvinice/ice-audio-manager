@@ -1988,6 +1988,63 @@ Sealed until all three agents have voted (§0.4): `docs/votes/D-23/<agent>.md`.
 
 ---
 
+### D-24 · Project licence: stay MIT, or move to GPL-3.0 to allow reusing GPL code *(added 2026-11-23, owner; neutral entry under §0.4)*
+
+**Owner (2026-11-23):** *"I don't mind making this repo public to get GPL-3.0 code into our codebase."* This would change
+Q-02 (the owner left the licence to us; MIT was chosen) and the MIT `LICENSE` added in Phase 0.7. Per code-practices §8, a
+closed decision changes only through a new entry.
+
+**Facts (Claude, checked 2026-11-23):**
+- **Making the repo public isn't what GPL requires.** GPL-3.0 code may only be combined into a program that is itself
+  distributed under GPL-3.0. So the condition is **relicensing the whole app to GPL-3.0**, not publicity. Whoever receives
+  a build must be able to get the complete corresponding source. Private, undistributed use carries no obligations; the
+  first public release (Phase 6) does.
+- **AGPL-3.0** (the GitHub Auralis) adds a network-use clause. It isn't covered by moving to GPL-3.0.
+- **Relicensing is feasible:**
+  - Every commit is authored by the owner (100 commits: `kelvinice` / `Kelvin`), so the owner can relicense the existing
+    code.
+  - All Rust dependencies are permissive or weak-copyleft and GPL-3.0-compatible (`cargo metadata`: MIT, Apache-2.0,
+    BSD-3-Clause, Zlib, ISC, Unicode-3.0, Unlicense, 0BSD, CC0, and MPL-2.0 ×7). The UI's npm dependencies are MIT.
+- **What moving to GPL-3.0 changes:**
+  - Anyone who forks or ships the app must keep it GPL and publish their source.
+  - Once third-party GPL code is in, the project can't go back to MIT (or closed source) unless that code is removed
+    again.
+  - Each release must offer the corresponding source (a tagged GitHub release does this) and carry licence notices
+    (About page, `LICENSE`, third-party notices).
+- **Distribution facts to verify:** GPL-3.0 apps are published in the Microsoft Store (e.g. GIMP; to verify), and SignPath's
+  open-source programme isn't limited to permissive licences (to verify). Both matter for D-09.
+- **What GPL code is on the table** (§1.2):
+  - BitChord and Echo-Music: Kotlin/Android, so reuse means porting. Their notable parts are the InnerTube client and stream
+    extraction (D-22's B3, which conflicts with YouTube's policies whatever the licence), lyrics provider clients, and
+    lyrics UI.
+  - ytm-rs: Rust, a native YouTube Music client (also B3).
+  - boring.notch: GPL-3.0 Swift (motion study, R-04).
+- **A licence doesn't change other rules.** GPL doesn't make an unofficial API acceptable under YouTube's terms (D-22 B3/K3),
+  and it doesn't relax §1 (no telemetry, no silent network).
+- **Facts and protocols aren't copyrightable.** An API's endpoints and parameters (e.g. LRCLIB's `/api/search`, its
+  duration matching) can be implemented from documentation or observation without copying GPL code.
+
+**Options (pick one).**
+- **G0 · Stay MIT.** Learn from GPL code (ideas, protocols, documented APIs) and write our own; never copy or port it.
+- **G1 · Relicense to GPL-3.0-or-later now.** GPL code can then be ported, with its notices kept.
+- **G2 · Stay MIT for now; relicense when a specific GPL component is worth it.** That needs a named component, a reason
+  writing our own is worse, and a check that the component doesn't conflict with D-22 or §1.
+
+#### Positions
+
+Sealed until all three agents have voted (§0.4): `docs/votes/D-24/<agent>.md`.
+
+#### Vote · *pick one* (licence)
+
+| Agent | G0 stay MIT, clean-room only | G1 relicense to GPL-3.0 now | G2 MIT now, relicense per component |
+|---|---|---|---|
+| Claude | *sealed* | *sealed* | *sealed* |
+| Gemini | | | |
+| Codex | | | |
+| **Total** | | | **Open (blind round)** |
+
+---
+
 ## 6. Session S5: Team workflow
 
 ### D-14 · Roles
@@ -2098,3 +2155,4 @@ A decision passes when all three agents have voted and the rules produce a resul
 | D-21.1 | What replaces the Rich profile | L1 +5 (+2/+2/+1), L2 +5 (+2/+1/+2), L3 +3 (+1/+1/+1), L4 +1 (+1/+1/−1), L5 −3 (−1/−1/−1), L6 +3 (+1/+1/+1), in Claude/Gemini/Codex order | **Closed 2026-11-23 (owner)** | Accepted: L1 linger in config, L2 event-driven hit-testing (real-host spike first), L3 session pin (clears on lock/sleep), L6 cost readout (sampled only while the page is open). Rejected: L4, L5 |
 | D-22 | YouTube Music playback, lyrics, network use | — | **Open: blind round (§0.4)** | Owner idea; Claude sealed; waiting for Gemini and Codex |
 | D-23 | Visual direction: art backdrop, translucency, cleanliness | — | **Open: blind round (§0.4)** | Owner reference (Echo-Music, BitChord); Claude sealed; waiting for Gemini and Codex |
+| D-24 | Project licence: MIT or GPL-3.0 | — | **Open: blind round (§0.4)** | Owner open to GPL-3.0 to reuse GPL code; would change Q-02 / Phase 0.7 MIT. Claude sealed; waiting for Gemini and Codex |
