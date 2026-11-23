@@ -80,6 +80,7 @@ function sampleSnapshot(): EngineSnapshot {
       pinnedMonitor: null,
       knobGestures: false,
       showDisconnected: false,
+      appearance: { theme: 'ice', preset: 'smooth', idleStyle: 'mini_pill' },
     },
     media: null,
   };
@@ -245,8 +246,8 @@ test('noticesChanged and settingsChanged sync snapshot state silently without wa
       {
         id: 'main',
         hotkey: 'Ctrl+Alt+F12',
-        primary: { name: 'Headphones (Arctis Nova 7)', flow: 'render', deviceId: 'fake-arctis' },
-        secondary: { name: 'Speakers (Realtek(R) Audio)', flow: 'render', deviceId: 'fake-realtek' },
+        primary: { name: 'Headphones (Arctis Nova 7)', flow: 'render', savedId: 'fake-arctis', deviceId: 'fake-arctis' },
+        secondary: { name: 'Speakers (Realtek(R) Audio)', flow: 'render', savedId: 'fake-realtek', deviceId: 'fake-realtek' },
         roles: 'default',
       },
     ],

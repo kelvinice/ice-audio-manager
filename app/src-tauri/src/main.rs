@@ -18,7 +18,7 @@ use std::time::{Duration, Instant};
 use ice_core::engine::{Command, EngineSnapshot, RoleSet, fake::FakeEngine};
 use ice_win::desktop::InstanceGuard;
 use ice_win::monitors::{MonitorInfo, list_monitors};
-use ice_win::native_dot::{NativeDotHandle, NativePillTheme};
+use ice_win::native_dot::NativeDotHandle;
 use ice_win::overlay_win;
 use ice_win::proc_metrics::{TreeSnapshot, cpu_percent_between, current_pid, sample_pids};
 use ice_win::webview2;
@@ -84,9 +84,10 @@ impl SharedRuntime {
             active_device: String::new(),
             target_device: String::new(),
             spatial_badge: None,
-            preset: SpringPreset::Smooth,
+            preset: initial.settings.appearance.preset,
             system_reduce_motion: reduce_motion,
-            theme: ThemeKind::Ice,
+            theme: initial.settings.appearance.theme,
+            idle_style: initial.settings.appearance.idle_style,
             expanded: false,
             suspended: false,
             hidden_for_bench: false,
@@ -260,10 +261,8 @@ fn media_command(action: ice_core::engine::MediaAction, state: State<'_, Arc<Sha
 
 #[tauri::command]
 fn set_idle_style(style: String, state: State<'_, Arc<SharedRuntime>>) {
-    if let Some(parsed) = ice_win::native_dot::IdleStyle::from_name(&style)
-        && let Some(dot) = state.native_dot.lock().unwrap_or_else(std::sync::PoisonError::into_inner).as_ref()
-    {
-        dot.set_idle_style(parsed);
+    if let Some(style) = ipc::IdleStyle::from_name(&style) {
+        state.engine.send(Command::SetIdleStyle { style });
     }
 }
 
@@ -276,29 +275,13 @@ fn toggle_expand(app: AppHandle, state: State<'_, Arc<SharedRuntime>>) {
 }
 
 #[tauri::command]
-fn set_preset(preset: SpringPreset, app: AppHandle, state: State<'_, Arc<SharedRuntime>>) {
-    state.update_and_emit(&app, |s| {
-        s.preset = preset;
-    });
-}
-
-const fn theme_to_native(theme: ThemeKind) -> NativePillTheme {
-    match theme {
-        ThemeKind::Ice => NativePillTheme::ice(),
-        ThemeKind::Midnight => NativePillTheme::midnight(),
-        ThemeKind::Fluent => NativePillTheme::fluent(),
-        ThemeKind::Minimal => NativePillTheme::minimal(),
-    }
+fn set_preset(preset: SpringPreset, state: State<'_, Arc<SharedRuntime>>) {
+    state.engine.send(Command::SetPreset { preset });
 }
 
 #[tauri::command]
-fn set_theme(theme: ThemeKind, app: AppHandle, state: State<'_, Arc<SharedRuntime>>) {
-    if let Some(dot) = state.native_dot.lock().unwrap_or_else(std::sync::PoisonError::into_inner).as_ref() {
-        dot.set_theme(theme_to_native(theme));
-    }
-    state.update_and_emit(&app, |s| {
-        s.theme = theme;
-    });
+fn set_theme(theme: ThemeKind, state: State<'_, Arc<SharedRuntime>>) {
+    state.engine.send(Command::SetTheme { theme });
 }
 
 #[tauri::command]
@@ -1378,8 +1361,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                     setup_state.monitors.lock().unwrap_or_else(std::sync::PoisonError::into_inner).first().cloned()
                     && let Ok(dot) = NativeDotHandle::spawn(primary)
                 {
-                    dot.set_theme(NativePillTheme::ice());
-                    dot.apply_snapshot(&initial);
+                    engine_bridge::native_dot_snapshot(&dot, &initial);
                     dot.set_standby_only(false);
                     *setup_state.native_dot.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = Some(dot);
                 }

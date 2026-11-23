@@ -310,6 +310,9 @@ impl Engine for FakeEngine {
             | Command::SetPerformanceProfile { .. }
             | Command::SetPinnedMonitor { .. }
             | Command::SetKnobGestures { .. }
+            | Command::SetTheme { .. }
+            | Command::SetPreset { .. }
+            | Command::SetIdleStyle { .. }
             | Command::SetShowDisconnected { .. }
             | Command::SetDefaultRoles { .. } => {
                 let eps = endpoints(&st.snap);

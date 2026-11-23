@@ -1,23 +1,7 @@
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[serde(rename_all = "snake_case")]
-pub enum SpringPreset {
-    Snappy,
-    Smooth,
-    Bouncy,
-    Off,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[serde(rename_all = "snake_case")]
-pub enum ThemeKind {
-    Ice,
-    Midnight,
-    Fluent,
-    Minimal,
-}
+pub use ice_core::appearance::{IdleStyle, SpringPreset, ThemeKind};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case")]
@@ -68,6 +52,7 @@ pub struct NotchSnapshot {
     pub preset: SpringPreset,
     pub system_reduce_motion: bool,
     pub theme: ThemeKind,
+    pub idle_style: IdleStyle,
     pub expanded: bool,
     pub suspended: bool,
     pub hidden_for_bench: bool,
@@ -101,9 +86,8 @@ mod tests {
             "// Auto-generated from Rust IPC types via `cargo test -p ice-audio-manager export_ts_bindings`.",
             "// Do not edit manually.",
             "",
-            &format!("export {}", SpringPreset::decl(&cfg)),
-            "",
-            &format!("export {}", ThemeKind::decl(&cfg)),
+            "import type { IdleStyle, SpringPreset, ThemeKind } from './engine';",
+            "export type { IdleStyle, SpringPreset, ThemeKind } from './engine';",
             "",
             &format!("export {}", ActivityKind::decl(&cfg)),
             "",
@@ -122,6 +106,14 @@ mod tests {
         let engine = [
             "// Auto-generated from the ice-core engine contract.",
             "// Do not edit manually.",
+            "",
+            &format!("export {}", SpringPreset::decl(&cfg)),
+            "",
+            &format!("export {}", ThemeKind::decl(&cfg)),
+            "",
+            &format!("export {}", IdleStyle::decl(&cfg)),
+            "",
+            &format!("export {}", ice_core::appearance::Appearance::decl(&cfg)),
             "",
             &format!("export {}", Flow::decl(&cfg)),
             "",

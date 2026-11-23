@@ -117,7 +117,7 @@ Three agents work at once, each in **its own worktree** branched from the latest
         `Command::SetShowDisconnected`, `settings.showDisconnected`, and `EngineSnapshot.disconnected` / `DevicesChanged.disconnected`.
         Only *Unplugged* endpoints are listed, never ghosts or disabled ones. Hidden devices are skipped. They're never switch
         targets (`SwitchTo` → `NotConnected`). The fake engine lists one unplugged front-panel jack
-  - [ ] Tray (Codex): a "Show disconnected devices" check item, and greyed, non-clickable entries for `snapshot.disconnected`
+  - [x] Tray (Codex, finished by Claude): a "Show disconnected devices" check item, and greyed, non-clickable entries for `snapshot.disconnected`
 - [x] `ice-win::audio`: device change notifications → engine events (sliding, capped debounce)
 - [x] `ice-win::policy`: switch default. `Default` = Console + Multimedia; `Both` = all three roles. Defaults are re-read after
       every switch; partial failures are reported per role
@@ -216,8 +216,11 @@ games on the pinned monitor. Budgets met in every profile.
         once frames stop and the bars have settled
 - [ ] Secondary QA: Chromium/Edge/Firefox media sessions
 - [ ] **D-18 (accepted 2026-11-23): owner-picked notch devices, preferences out of the notch**
-  - [ ] Tray (Codex): a **"Show in notch"** check item per playback device (= favourite, via `SetFavourites`, in order), and the
-        submenus **Theme**, **Animation** and **Idle notch** next to Performance profile / Pinned monitor
+  - [x] Tray (Codex, finished by Claude): a **"Show in notch"** check item per playback device (= favourite, via `SetFavourites`, in order), and the
+        submenus **Theme**, **Animation** and **Idle notch** next to Performance profile / Pinned monitor. These three are now
+        saved (`[appearance]`, config schema v4, `Command::SetTheme/SetPreset/SetIdleStyle`) and survive restarts. The WebView
+        and the native dot follow them, with the theme mapped by the shell so Phase 4 user themes can plug in. Editing
+        favourites keeps a disconnected favourite in its place (`SavedDevice.savedId`)
   - [ ] Notch (Gemini): the device row lists `settings.favouritesPlayback` in order. The current default is shown first if it isn't a
         favourite. With no favourites: current device + the other side of the toggle pair + a "Choose devices…" chip, never
         "all devices". Alias-aware chips wide enough to read, at most 4–5, then "More…". Remove the theme, spring, idle-style and

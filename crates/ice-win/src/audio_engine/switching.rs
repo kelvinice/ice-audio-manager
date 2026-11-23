@@ -76,6 +76,9 @@ impl Worker {
             | Command::SetPerformanceProfile { .. }
             | Command::SetPinnedMonitor { .. }
             | Command::SetKnobGestures { .. }
+            | Command::SetTheme { .. }
+            | Command::SetPreset { .. }
+            | Command::SetIdleStyle { .. }
             | Command::SetShowDisconnected { .. }
             | Command::SetDefaultRoles { .. } => self.edit_settings(&command),
         }

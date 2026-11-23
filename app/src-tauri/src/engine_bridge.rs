@@ -10,6 +10,7 @@ use ice_core::engine::{
 };
 use ice_core::media::{NowPlaying, PlaybackStatus};
 use ice_win::audio_engine::AudioEngine;
+use ice_win::native_dot::{NativeDotHandle, NativePillTheme};
 use tauri::{AppHandle, Emitter, Manager};
 
 use super::{ActivityKind, NotchSnapshot, SharedRuntime, tray};
@@ -27,6 +28,9 @@ pub(super) fn project(snapshot: &EngineSnapshot, view: &mut NotchSnapshot) {
         SpatialMode::DtsHeadphoneX | SpatialMode::DtsXUltra | SpatialMode::DtsXHomeTheater => Some("DTS".into()),
         SpatialMode::Keep | SpatialMode::Off => None,
     });
+    view.theme = snapshot.settings.appearance.theme;
+    view.preset = snapshot.settings.appearance.preset;
+    view.idle_style = snapshot.settings.appearance.idle_style;
     view.volume_percent = snapshot.volume.map_or(0, |volume| volume.percent);
     view.muted = snapshot.volume.is_some_and(|volume| volume.muted);
     view.mic_muted = snapshot.mic_muted.unwrap_or(false);
@@ -229,10 +233,17 @@ pub(super) fn watch(app: AppHandle, state: Arc<SharedRuntime>) -> std::io::Resul
     Ok(())
 }
 
+/// Feeds the native dot a snapshot plus the saved theme. The shell owns the theme mapping, so Phase 4 user
+/// themes (CSS overrides) can replace the built-in palette here.
+pub(super) fn native_dot_snapshot(dot: &NativeDotHandle, snapshot: &EngineSnapshot) {
+    dot.set_theme(NativePillTheme::builtin(snapshot.settings.appearance.theme));
+    dot.apply_snapshot(snapshot);
+}
+
 fn apply_snapshot(app: &AppHandle, state: &Arc<SharedRuntime>, snapshot: &EngineSnapshot) {
     super::placement::settings(app, state, &snapshot.settings);
     if let Some(dot) = state.native_dot.lock().unwrap_or_else(PoisonError::into_inner).as_ref() {
-        dot.apply_snapshot(snapshot);
+        native_dot_snapshot(dot, snapshot);
     }
     state.update_and_emit(app, |view| project(snapshot, view));
     tray::refresh_tooltip(state, snapshot);
@@ -245,6 +256,9 @@ fn apply_event(app: &AppHandle, state: &Arc<SharedRuntime>, delta: Envelope) {
     if !state.bench_mode
         && let Some(dot) = state.native_dot.lock().unwrap_or_else(std::sync::PoisonError::into_inner).as_ref()
     {
+        if let EngineEvent::SettingsChanged { settings } = &delta.event {
+            dot.set_theme(NativePillTheme::builtin(settings.appearance.theme));
+        }
         let _ = dot.apply_envelope(&delta);
     }
 

@@ -1,9 +1,8 @@
 // Auto-generated from Rust IPC types via `cargo test -p ice-audio-manager export_ts_bindings`.
 // Do not edit manually.
 
-export type SpringPreset = "snappy" | "smooth" | "bouncy" | "off";
-
-export type ThemeKind = "ice" | "midnight" | "fluent" | "minimal";
+import type { IdleStyle, SpringPreset, ThemeKind } from './engine';
+export type { IdleStyle, SpringPreset, ThemeKind } from './engine';
 
 export type ActivityKind = "idle" | "volume" | "switch" | "mic_mute" | "track";
 
@@ -11,6 +10,6 @@ export type MonitorSummary = { index: number, id: string, isPrimary: boolean, wi
 
 export type HitRect = { x: number, y: number, width: number, height: number, };
 
-export type NotchSnapshot = { revision: number, eventSeq: number, activity: ActivityKind, volumePercent: number, muted: boolean, micMuted: boolean, activeDevice: string, targetDevice: string, spatialBadge: string | null, preset: SpringPreset, systemReduceMotion: boolean, theme: ThemeKind, expanded: boolean, suspended: boolean, hiddenForBench: boolean, activeMonitor: number, monitors: Array<MonitorSummary>, };
+export type NotchSnapshot = { revision: number, eventSeq: number, activity: ActivityKind, volumePercent: number, muted: boolean, micMuted: boolean, activeDevice: string, targetDevice: string, spatialBadge: string | null, preset: SpringPreset, systemReduceMotion: boolean, theme: ThemeKind, idleStyle: IdleStyle, expanded: boolean, suspended: boolean, hiddenForBench: boolean, activeMonitor: number, monitors: Array<MonitorSummary>, };
 
 export type NotchDelta = { "kind": "state", snapshot: NotchSnapshot, };

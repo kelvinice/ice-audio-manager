@@ -36,7 +36,7 @@
   let benchOverride = $state<ActivityView | null>(null);
   let hoverExpanded = $state(false);
   let pointerInside = $state(false);
-  let idleMode = $state<IdleMode>(DEFAULT_IDLE_MODE);
+  const idleMode = $derived(notchSnapshot?.idleStyle ?? DEFAULT_IDLE_MODE);
   let pillSize = $state({ w: 116, h: 28, r: 14, vol: 40 });
   let frameRate = $state(0);
 
@@ -484,7 +484,6 @@
   }
 
   function setIdleMode(mode: IdleMode) {
-    idleMode = mode;
     scheduler.markInteraction(Date.now());
     syncGeometry(false);
     scheduleNextTick();

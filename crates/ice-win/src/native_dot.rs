@@ -46,27 +46,8 @@ const MIC_H: i32 = 30;
 const DEVICE_W: i32 = 184;
 const DEVICE_H: i32 = 30;
 
-/// Settled Q-10 idle appearance options (`MiniPill` default, `Dot`, or `Hidden`).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum IdleStyle {
-    Dot,
-    #[default]
-    MiniPill,
-    Hidden,
-}
-
-impl IdleStyle {
-    /// Parses `"mini_pill"`, `"dot"`, or `"hidden"` (case-insensitive).
-    #[must_use]
-    pub fn from_name(name: &str) -> Option<Self> {
-        match name.trim().to_ascii_lowercase().as_str() {
-            "mini_pill" | "minipill" | "pill" => Some(Self::MiniPill),
-            "dot" => Some(Self::Dot),
-            "hidden" | "hide" => Some(Self::Hidden),
-            _ => None,
-        }
-    }
-}
+pub use ice_core::appearance::IdleStyle;
+use ice_core::appearance::ThemeKind;
 
 const SWP_KEEP_SIZE: SET_WINDOW_POS_FLAGS =
     SET_WINDOW_POS_FLAGS(SWP_NOACTIVATE.0 | SWP_NOOWNERZORDER.0 | SWP_NOSENDCHANGING.0 | SWP_NOMOVE.0 | SWP_NOSIZE.0);
@@ -132,6 +113,17 @@ impl Default for NativePillTheme {
 }
 
 impl NativePillTheme {
+    /// The palette of a bundled theme (the saved `appearance.theme`).
+    #[must_use]
+    pub const fn builtin(kind: ThemeKind) -> Self {
+        match kind {
+            ThemeKind::Ice => Self::ice(),
+            ThemeKind::Midnight => Self::midnight(),
+            ThemeKind::Fluent => Self::fluent(),
+            ThemeKind::Minimal => Self::minimal(),
+        }
+    }
+
     /// Portfolio-seeded default `Ice` theme.
     #[must_use]
     pub const fn ice() -> Self {
@@ -655,11 +647,18 @@ impl NativeDotHandle {
     pub fn set_idle_style(&self, style: IdleStyle) {
         let signal = {
             let mut rt = self.shared.lock();
+            let previous = rt.pill.idle_style;
+            if previous == style {
+                return;
+            }
             rt.pill.idle_style = style;
             if matches!(rt.pill.mode, PillMode::Idle) {
                 if style == IdleStyle::Hidden {
                     rt.desired_visible = false;
                     Some(ThreadSignal::Hide)
+                } else if previous == IdleStyle::Hidden && !rt.standby_only {
+                    rt.desired_visible = true;
+                    Some(ThreadSignal::Idle)
                 } else if rt.desired_visible {
                     Some(ThreadSignal::Sync { restart_timer: false })
                 } else {
@@ -724,6 +723,9 @@ impl NativeDotHandle {
     pub fn set_theme(&self, theme: NativePillTheme) {
         let should_repaint = {
             let mut rt = self.shared.lock();
+            if rt.base_theme == theme {
+                return;
+            }
             rt.base_theme = theme;
             if rt.pulse_accent_override.is_none() {
                 rt.pill.theme = theme;
@@ -788,7 +790,10 @@ impl NativeDotHandle {
     }
 
     /// Synchronizes state from an [`EngineSnapshot`] without stealing focus or revealing expired activities.
+    /// Applies the saved idle style. The theme stays the caller's choice ([`Self::set_theme`]), so a theme
+    /// built from CSS overrides isn't replaced by the built-in palette on every snapshot.
     pub fn apply_snapshot(&self, snapshot: &EngineSnapshot) {
+        self.set_idle_style(snapshot.settings.appearance.idle_style);
         let repaint_idle = {
             let mut rt = self.shared.lock();
             let prev_mic = rt.pill.mic_muted;
@@ -805,6 +810,9 @@ impl NativeDotHandle {
 
     /// Applies an [`Envelope`] from `ice_core::engine` and reveals/updates the pill on activity events.
     pub fn apply_envelope(&self, envelope: &Envelope) -> EnvelopeOutcome {
+        if let EngineEvent::SettingsChanged { settings } = &envelope.event {
+            self.set_idle_style(settings.appearance.idle_style);
+        }
         let (outcome, reveal) = {
             let mut rt = self.shared.lock();
             rt.pulse_accent_override = None;

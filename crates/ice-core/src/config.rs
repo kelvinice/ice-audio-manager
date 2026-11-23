@@ -1,4 +1,4 @@
-//! User configuration, `config.toml` schema v3 (D-04).
+//! User configuration, `config.toml` schema v4 (D-04, D-18).
 //!
 //! Location: `%APPDATA%\IceAudioManager\config.toml` (chosen by the app). Every field has a default, so a
 //! missing or partial file is valid. Unknown future `schema_version`s are rejected rather than
@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
+use crate::appearance::Appearance;
 use crate::device::{DeviceState, EndpointInfo, Flow};
 use crate::engine::{
     BindingView, Command, DevicePrefsView, PerformanceProfile, RoleSet, SavedDevice, SettingsView, SpatialMode,
@@ -16,13 +17,14 @@ use crate::engine::{
 use crate::hotkey::Chord;
 use crate::resolve::{DeviceRef, MatchMode, resolve};
 
-/// v2: performance profile and pinned monitor. v3: `show_disconnected`.
-pub const SCHEMA_VERSION: u32 = 3;
+/// v2: performance profile and pinned monitor. v3: `show_disconnected`. v4: saved notch appearance.
+pub const SCHEMA_VERSION: u32 = 4;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Config {
     pub schema_version: u32,
+    pub appearance: Appearance,
     pub performance_profile: PerformanceProfile,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pinned_monitor: Option<String>,
@@ -48,6 +50,7 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             schema_version: SCHEMA_VERSION,
+            appearance: Appearance::default(),
             performance_profile: PerformanceProfile::default(),
             pinned_monitor: None,
             default_roles: RoleSet::Default,
@@ -228,11 +231,13 @@ impl Config {
     #[must_use]
     pub fn view(&self, endpoints: &[EndpointInfo]) -> SettingsView {
         let saved = |r: &DeviceRef| SavedDevice {
+            saved_id: r.endpoint_id.clone(),
             name: r.display_name.clone(),
             flow: r.flow,
             device_id: resolve(r, endpoints).target().map(|e| e.id.clone()),
         };
         SettingsView {
+            appearance: self.appearance,
             default_roles: self.default_roles,
             performance_profile: self.performance_profile,
             pinned_monitor: self.pinned_monitor.clone(),
@@ -310,20 +315,11 @@ impl Config {
             }
             Command::RemoveBinding { binding_id } => next.bindings.retain(|b| b.id != *binding_id),
             Command::SetFavourites { flow, device_ids } => {
-                let mut refs: Vec<DeviceRef> = Vec::with_capacity(device_ids.len());
-                for id in device_ids {
-                    let e = live(endpoints, id)?;
-                    if e.flow != *flow {
-                        return Err(format!("{} is not a {flow:?} device", display(e)));
-                    }
-                    if !refs.iter().any(|r| r.endpoint_id == e.id) {
-                        refs.push(DeviceRef::from_endpoint(e, MatchMode::SameModel));
-                    }
-                }
-                match flow {
-                    Flow::Render => next.favourites.playback = refs,
-                    Flow::Capture => next.favourites.recording = refs,
-                }
+                let saved = match flow {
+                    Flow::Render => &mut next.favourites.playback,
+                    Flow::Capture => &mut next.favourites.recording,
+                };
+                *saved = ordered_favourites(*flow, device_ids, saved, endpoints)?;
             }
             Command::SetDevicePrefs { device_id, spatial, alias, hidden } => {
                 let e = live(endpoints, device_id)?;
@@ -365,6 +361,9 @@ impl Config {
                 next.pinned_monitor = Some(display_path.clone());
             }
             Command::SetKnobGestures { enabled } => next.knob.enabled = *enabled,
+            Command::SetTheme { theme } => next.appearance.theme = *theme,
+            Command::SetPreset { preset } => next.appearance.preset = *preset,
+            Command::SetIdleStyle { style } => next.appearance.idle_style = *style,
             Command::SetShowDisconnected { enabled } => next.show_disconnected = *enabled,
             Command::SetDefaultRoles { roles } => next.default_roles = *roles,
             _ => return Ok(false),
@@ -391,6 +390,30 @@ impl Config {
         }
         Ok(())
     }
+}
+
+fn ordered_favourites(
+    flow: Flow,
+    ids: &[String],
+    saved: &[DeviceRef],
+    endpoints: &[EndpointInfo],
+) -> Result<Vec<DeviceRef>, String> {
+    let mut refs = Vec::<DeviceRef>::with_capacity(ids.len());
+    for id in ids {
+        if refs.iter().any(|r| r.endpoint_id.eq_ignore_ascii_case(id)) {
+            continue;
+        }
+        if let Some(existing) = saved.iter().find(|r| r.endpoint_id.eq_ignore_ascii_case(id)) {
+            refs.push(existing.clone());
+        } else {
+            let endpoint = live(endpoints, id)?;
+            if endpoint.flow != flow {
+                return Err(format!("{} is not a {flow:?} device", display(endpoint)));
+            }
+            refs.push(DeviceRef::from_endpoint(endpoint, MatchMode::SameModel));
+        }
+    }
+    Ok(refs)
 }
 
 /// An Active endpoint by ID (settings are created from devices the user can see).
@@ -607,8 +630,52 @@ mod tests {
         assert_eq!(config.apply_setting(&show, &[]), Ok(false), "already on");
         assert!(config.view(&[]).show_disconnected);
         let text = config.to_toml();
-        assert!(text.contains("schema_version = 3") && text.contains("show_disconnected = true"), "{text}");
+        assert!(text.contains("show_disconnected = true"), "{text}");
         assert_eq!(Config::from_toml(&text).unwrap(), config);
+    }
+
+    #[test]
+    fn v3_migrates_with_default_appearance_and_saves_choices() {
+        use crate::appearance::{Appearance, IdleStyle, SpringPreset, ThemeKind};
+        let mut config = Config::from_toml("schema_version = 3\nshow_disconnected = true").unwrap();
+        assert_eq!(config.schema_version, SCHEMA_VERSION);
+        assert!(config.show_disconnected, "v3 settings are kept");
+        assert_eq!(config.view(&[]).appearance, Appearance::default());
+        assert_eq!(Appearance::default().idle_style, IdleStyle::MiniPill, "Q-10 default");
+        for cmd in [
+            Command::SetTheme { theme: ThemeKind::Midnight },
+            Command::SetPreset { preset: SpringPreset::Bouncy },
+            Command::SetIdleStyle { style: IdleStyle::Dot },
+        ] {
+            assert_eq!(config.apply_setting(&cmd, &[]), Ok(true));
+        }
+        let saved = Config::from_toml(&config.to_toml()).unwrap();
+        assert_eq!(
+            saved.view(&[]).appearance,
+            Appearance { theme: ThemeKind::Midnight, preset: SpringPreset::Bouncy, idle_style: IdleStyle::Dot }
+        );
+    }
+
+    #[test]
+    fn editing_favourites_keeps_a_disconnected_one_in_its_place() {
+        let mut cfg = Config::default();
+        let set = |ids: &[&str]| Command::SetFavourites {
+            flow: Flow::Render,
+            device_ids: ids.iter().map(|s| (*s).to_string()).collect(),
+        };
+        assert_eq!(cfg.apply_setting(&set(&["arctis", "realtek"]), &owner_devices()), Ok(true));
+        // The Arctis is switched off. The tray re-sends the saved list (saved IDs) plus a new device.
+        let without_arctis: Vec<EndpointInfo> = owner_devices().into_iter().filter(|e| e.id != "arctis").collect();
+        let mut more = without_arctis.clone();
+        more.push(live_ep("lg", "LG FULL HD (NVIDIA High Definition Audio)", Flow::Render, 9));
+        assert_eq!(cfg.apply_setting(&set(&["arctis", "realtek", "lg"]), &more), Ok(true));
+        let ids: Vec<&str> = cfg.favourites.playback.iter().map(|r| r.endpoint_id.as_str()).collect();
+        assert_eq!(ids, ["arctis", "realtek", "lg"], "the offline Arctis keeps its place");
+        let view = cfg.view(&without_arctis);
+        assert_eq!(view.favourites_playback[0].saved_id, "arctis");
+        assert_eq!(view.favourites_playback[0].device_id, None);
+        // An ID that is neither saved nor connected is still refused.
+        assert!(cfg.apply_setting(&set(&["arctis", "ghost"]), &more).is_err());
     }
 
     #[test]

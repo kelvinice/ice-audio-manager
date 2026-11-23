@@ -1,10 +1,12 @@
+mod preferences;
+
 use std::cell::RefCell;
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use ice_core::device::{DeviceState, Flow};
 use ice_core::engine::{
-    Command, DeviceSummary, EngineSnapshot, Notice, PerformanceProfile, RoleSet, SavedDevice, SettingsView, SpatialMode,
+    Command, DeviceSummary, EngineSnapshot, Notice, RoleSet, SavedDevice, SettingsView, SpatialMode,
 };
 use ice_win::autostart::Autostart;
 use tauri::AppHandle;
@@ -183,37 +185,8 @@ pub(super) fn build(app: &AppHandle, state: Arc<SharedRuntime>) -> tauri::Result
     let context_menu = move |app: &AppHandle, state: &SharedRuntime| {
         let snapshot = state.engine.snapshot();
         let available = state.engine.unavailable().is_none();
-        let profiles = Submenu::new(app, "Performance profile", available)?;
-        for (profile, label) in [
-            (PerformanceProfile::Instant, "Instant"),
-            (PerformanceProfile::Balanced, "Balanced"),
-            (PerformanceProfile::Lite, "Lite"),
-        ] {
-            let id = command_id(&Command::SetPerformanceProfile { profile })?;
-            profiles.append(&CheckMenuItem::with_id(
-                app,
-                id,
-                label,
-                true,
-                snapshot.settings.performance_profile == profile,
-                None::<&str>,
-            )?)?;
-        }
-        let pinned = Submenu::new(app, "Pinned monitor", available)?;
-        let monitors = state.monitors.lock().unwrap_or_else(PoisonError::into_inner);
-        for m in monitors.iter() {
-            let id = command_id(&Command::SetPinnedMonitor { display_path: m.display_path.clone() })?;
-            let selected =
-                snapshot.settings.pinned_monitor.as_ref().is_some_and(|pin| pin.eq_ignore_ascii_case(&m.display_path));
-            pinned.append(&CheckMenuItem::with_id(
-                app,
-                id,
-                menu_text(&m.friendly_name),
-                true,
-                selected,
-                None::<&str>,
-            )?)?;
-        }
+        let (pinned, profiles) = preferences::placement_menus(app, state, &snapshot.settings, available)?;
+        let [theme, animation, idle] = preferences::appearance_menus(app, snapshot.settings.appearance, available)?;
         Menu::with_items(
             app,
             &[
@@ -221,6 +194,9 @@ pub(super) fn build(app: &AppHandle, state: Arc<SharedRuntime>) -> tauri::Result
                 &item(app, "notch", "Show notch preview")?,
                 &pinned,
                 &profiles,
+                &theme,
+                &animation,
+                &idle,
                 &menu_launch,
                 &PredefinedMenuItem::separator(app)?,
                 &item(app, "quit", "Quit Ice Audio Manager")?,
@@ -232,6 +208,12 @@ pub(super) fn build(app: &AppHandle, state: Arc<SharedRuntime>) -> tauri::Result
     app.on_menu_event(move |app, event| {
         let id = event.id.as_ref();
         if handle_prompt_action(&menu_state, id) {
+            return;
+        }
+        if let Some(action) = id.strip_prefix(preferences::FAVOURITE_PREFIX) {
+            if let Some(command) = preferences::edit_favourite(&menu_state.engine.snapshot(), action) {
+                menu_state.engine.send(command);
+            }
             return;
         }
         if let Some(command) = id.strip_prefix(COMMAND_PREFIX) {
@@ -368,11 +350,13 @@ fn quick_menu(
         menu.append(&PredefinedMenuItem::separator(app)?)?;
     }
     append_devices(app, &menu, "playback", "Playback devices", &snapshot.playback, &snapshot.settings)?;
+    preferences::append_disconnected(app, &menu, snapshot, Flow::Render)?;
     if let Some(volume) = snapshot.volume {
         append_status(app, &menu, "playback-volume", &volume_text("Playback volume", volume.percent, volume.muted))?;
     }
     menu.append(&PredefinedMenuItem::separator(app)?)?;
     append_devices(app, &menu, "recording", "Recording devices", &snapshot.recording, &snapshot.settings)?;
+    preferences::append_disconnected(app, &menu, snapshot, Flow::Capture)?;
     if let Some(percent) = snapshot.mic_volume {
         let text = volume_text("Communications microphone", percent, snapshot.mic_muted.unwrap_or(false));
         append_status(app, &menu, "mic-volume", &text)?;
@@ -389,9 +373,15 @@ fn quick_menu(
         }
         menu.append(&pairs)?;
     }
+    let show = snapshot.settings.show_disconnected;
+    menu.append(&checked_command(
+        app,
+        "Show disconnected devices",
+        &Command::SetShowDisconnected { enabled: !show },
+        show,
+    )?)?;
     let enabled = snapshot.settings.knob_gestures;
-    let id = command_id(&Command::SetKnobGestures { enabled: !enabled })?;
-    menu.append(&CheckMenuItem::with_id(app, id, "Knob gestures", true, enabled, None::<&str>)?)?;
+    menu.append(&checked_command(app, "Knob gestures", &Command::SetKnobGestures { enabled: !enabled }, enabled)?)?;
     Ok(menu)
 }
 
@@ -420,6 +410,15 @@ fn persistent_notice_text(notice: &Notice) -> Option<String> {
 
 fn command_id(command: &Command) -> tauri::Result<String> {
     Ok(format!("{COMMAND_PREFIX}{}", serde_json::to_string(command)?))
+}
+
+fn checked_command(
+    app: &AppHandle,
+    label: &str,
+    command: &Command,
+    checked: bool,
+) -> tauri::Result<CheckMenuItem<tauri::Wry>> {
+    CheckMenuItem::with_id(app, command_id(command)?, label, true, checked, None::<&str>)
 }
 
 fn saved_device_text(device: &SavedDevice) -> String {
@@ -459,6 +458,7 @@ fn append_devices(
             device_menu.append(&item(app, &id, "Toggle with the current device…")?)?;
         }
         if device.flow == Flow::Render {
+            device_menu.append(&preferences::favourite_item(app, settings, device)?)?;
             let preference = settings
                 .devices
                 .iter()

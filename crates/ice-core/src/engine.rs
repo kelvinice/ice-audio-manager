@@ -15,6 +15,7 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "ts")]
 use ts_rs::TS;
 
+use crate::appearance::{Appearance, IdleStyle, SpringPreset, ThemeKind};
 use crate::device::{DeviceState, Flow, Role};
 use crate::media::NowPlaying;
 
@@ -220,7 +221,7 @@ pub enum Command {
     RemoveBinding {
         binding_id: String,
     },
-    /// Replaces one flow's favourites, in order (live device IDs).
+    /// Replaces one flow's favourites, in order (live device IDs or IDs already saved for this flow).
     SetFavourites {
         flow: Flow,
         device_ids: Vec<String>,
@@ -231,6 +232,15 @@ pub enum Command {
         spatial: Option<SpatialMode>,
         alias: Option<String>,
         hidden: Option<bool>,
+    },
+    SetTheme {
+        theme: ThemeKind,
+    },
+    SetPreset {
+        preset: SpringPreset,
+    },
+    SetIdleStyle {
+        style: IdleStyle,
     },
     SetPerformanceProfile {
         profile: PerformanceProfile,
@@ -260,6 +270,8 @@ pub struct SavedDevice {
     /// Name it was saved under, e.g. "Headphones (Arctis Nova 7)".
     pub name: String,
     pub flow: Flow,
+    /// Original endpoint ID, including while disconnected. Used to retain ordered favourites.
+    pub saved_id: String,
     /// The live endpoint it resolves to right now (`None` = not connected or needs a choice).
     pub device_id: Option<String>,
 }
@@ -300,6 +312,8 @@ pub struct DevicePrefsView {
 #[cfg_attr(feature = "ts", derive(TS))]
 #[serde(rename_all = "camelCase")]
 pub struct SettingsView {
+    #[serde(default)]
+    pub appearance: Appearance,
     #[serde(default)]
     pub performance_profile: PerformanceProfile,
     #[serde(default)]
