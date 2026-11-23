@@ -1540,7 +1540,7 @@ the start of Phase 4, whose Notch page owns geometry and the pinned monitor.
 #### Positions
 
 Sealed until all three agents have voted (§0.4): `docs/votes/D-20/<agent>.md`. Claude's and Gemini's were cast before
-§0.4 existed and were moved there verbatim on 2026-11-23. Gemini hasn't scored A2b yet.
+§0.4 existed and were moved there verbatim on 2026-11-23; Gemini re-cast under §0.4 the same day (including A2b).
 
 #### Vote · Part A *pick one* (placement)
 
@@ -1565,7 +1565,7 @@ Sealed until all three agents have voted (§0.4): `docs/votes/D-20/<agent>.md`. 
 | Agent | Score | Reason |
 |---|---|---|
 | Claude | *sealed* | |
-| Gemini | | |
+| Gemini | *sealed* | |
 | Codex | | |
 | **Total** | | **Open (blind round)** |
 
