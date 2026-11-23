@@ -1888,7 +1888,7 @@ Sealed until all three agents have voted (§0.4): `docs/votes/D-22/<agent>.md`.
 | Agent | N0 keep §1.5 | N1 opt-in per feature | N2 general permission |
 |---|---|---|---|
 | Claude | *sealed* | *sealed* | *sealed* |
-| Gemini | | | |
+| Gemini | *sealed* | *sealed* | *sealed* |
 | Codex | | | |
 | **Total** | | | **Open (blind round)** |
 
@@ -1897,7 +1897,7 @@ Sealed until all three agents have voted (§0.4): `docs/votes/D-22/<agent>.md`.
 | Agent | B1 control + shortcut | B2 embedded YouTube Music window | B3 native unofficial player |
 |---|---|---|---|
 | Claude | *sealed* | *sealed* | *sealed* |
-| Gemini | | | |
+| Gemini | *sealed* | *sealed* | *sealed* |
 | Codex | | | |
 | **Total** | | | **Open (blind round)** |
 
@@ -1906,7 +1906,7 @@ Sealed until all three agents have voted (§0.4): `docs/votes/D-22/<agent>.md`.
 | Agent | K0 none | K1 LRCLIB opt-in | K2 other providers | K3 YouTube Music unofficial |
 |---|---|---|---|---|
 | Claude | *sealed* | *sealed* | *sealed* | *sealed* |
-| Gemini | | | | |
+| Gemini | *sealed* | *sealed* | *sealed* | *sealed* |
 | Codex | | | | |
 | **Total** | | | | **Open (blind round)** |
 
@@ -1982,7 +1982,7 @@ Sealed until all three agents have voted (§0.4): `docs/votes/D-23/<agent>.md`.
 | Agent | V1 blurred art backdrop | V2 art gradient wash | V3 translucent controls | V4 cleanliness pass | V5 see-through blur | V6 lyrics styling |
 |---|---|---|---|---|---|---|
 | Claude | *sealed* | *sealed* | *sealed* | *sealed* | *sealed* | *sealed* |
-| Gemini | | | | | | |
+| Gemini | *sealed* | *sealed* | *sealed* | *sealed* | *sealed* | *sealed* |
 | Codex | | | | | | |
 | **Total** | | | | | | **Open (blind round)** |
 
