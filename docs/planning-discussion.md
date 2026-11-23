@@ -1909,6 +1909,78 @@ Sealed until all three agents have voted (§0.4): `docs/votes/D-22/<agent>.md`.
 
 ---
 
+### D-23 · Visual direction for the expanded notch: art-driven backdrop, translucency, cleanliness *(added 2026-11-23, owner reference; neutral entry under §0.4)*
+
+**Owner request (2026-11-23):** use the Echo-Music and BitChord screens as a visual reference (*"the blur, transparency,
+cleanliness, etc."*) and discuss it. Reference images:
+- Echo-Music: `docs/reference/Echo-Music/assets/banner.png`, `Screenshots/lyrics.png`;
+- BitChord: `docs/reference/BitChord/Banner.png`.
+
+**What the references do (Claude, from the images):**
+- **The "blur" is the album art, not the desktop.** The player background is the cover art (or its colours) enlarged and
+  heavily blurred, with a dark gradient scrim for text contrast. Nothing behind the app window is visible.
+- **Translucency on top of it:** round icon buttons and chips are a light tint at low opacity over the art wash, not solid
+  surfaces. Examples: the "…" and fullscreen buttons, the "AAC • 161 kbps" chip.
+- **Cleanliness:** one strong hierarchy (art, title, artist, a thin progress bar, three large transport controls), few
+  borders, generous spacing, large type for the title, secondary actions behind "…".
+- **Lyrics (if D-22 adopts them):** the active line is bright and large; other lines fade out with distance.
+- **The light variant** (Echo's library) uses a soft tonal palette derived from the art (pink surfaces for a red cover).
+
+**Facts about our notch (Claude, checked 2026-11-23):**
+- **D-12 decided "tinted, not blurred"** for the notch. CSS `backdrop-filter` can't blur desktop pixels behind a transparent
+  WebView2 window, and DWM Acrylic on a morphing window jitters (`docs/theming.md` "Notch overlay"). That finding is about
+  **see-through** blur only. Blurring an image *inside* the WebView is ordinary CSS.
+- **We already extract one colour from the art:**
+  - `ice_core::media::dominant_bgra`, `readable_accent` (WCAG AA on the Ice surface) and `accent_for_art`;
+  - `--ice-active-glow` tints a radial glow from it.
+  
+  Art arrives as a PNG of at most 128 px (`iceart://`). An enlarged, heavily blurred version hides the low resolution.
+- **The expanded card is 384×178** (`geometry.ts`). It's much smaller than a phone player, so the hierarchy has to fit a
+  landscape strip, not a portrait screen.
+- **The native idle pill is GDI** (D-19) and can't do any of this. These options are for the WebView notch only.
+
+**Options (pick many).**
+- **V1 · Blurred album-art backdrop** in the expanded card (and optionally the now-playing activity): the cover enlarged, CSS
+  `filter: blur()`, a dark scrim, a crossfade on track change (none with reduce motion). Plain theme surface when there's no art.
+  - *Costs and risks:* the blur is static after the crossfade (no animation loop), but its GPU cost is unmeasured; it's
+    checked in the Phase 6 pass. Text contrast must hold on any cover (scrim strength from tokens; WCAG check on light
+    covers).
+- **V2 · Art-derived gradient wash, no blur.** Extend the Rust colour extraction from one accent to a 2–3 colour palette
+  and paint a gradient. It also gives an art-tinted light variant.
+  - *Costs and risks:* a small `ice-core` change (palette instead of one colour). Less "photographic" than V1.
+- **V3 · Translucent controls:** buttons and chips become a light tint at low alpha over the backdrop, via new `--ice-*`
+  tokens; solid themes (Minimal) keep solid controls.
+  - *Costs and risks:* contrast of icons on busy art; needs the scrim from V1 or the wash from V2.
+- **V4 · Cleanliness pass** on the expanded card:
+  - one hierarchy (art, title, artist, thin scrubber, three transport controls);
+  - fewer borders, larger title type, more spacing;
+  - device row and secondary actions visually quieter or behind "…".
+  - *Costs and risks:* D-18's device row must stay reachable. A design pass by Gemini with before/after screenshots.
+- **V5 · True see-through blur behind the notch** (reopens D-12).
+  - *Costs and risks:* the D-12 finding stands: not possible with CSS on a transparent WebView2 window. DWM Acrylic
+    jitters on a morphing window. Undocumented composition APIs would need a §1.6 guard.
+- **V6 · Lyrics styling** (only if D-22 adopts lyrics): active line bright, others fading by distance, spring-scrolled.
+
+**Theme fit:** whichever options pass become theme tokens (e.g. `--ice-art-backdrop`, `--ice-scrim`, `--ice-control-tint`)
+so `Minimal` can switch them off (§5: components use only theme variables; new tokens go in `docs/theming.md`).
+
+**If adopted:** Phase 4 (Appearance page) or earlier as Phase 3 polish. UI by Gemini; palette extraction by Claude.
+
+#### Positions
+
+Sealed until all three agents have voted (§0.4): `docs/votes/D-23/<agent>.md`.
+
+#### Vote · *pick many* (V1–V6)
+
+| Agent | V1 blurred art backdrop | V2 art gradient wash | V3 translucent controls | V4 cleanliness pass | V5 see-through blur | V6 lyrics styling |
+|---|---|---|---|---|---|---|
+| Claude | *sealed* | *sealed* | *sealed* | *sealed* | *sealed* | *sealed* |
+| Gemini | | | | | | |
+| Codex | | | | | | |
+| **Total** | | | | | | **Open (blind round)** |
+
+---
+
 ## 6. Session S5: Team workflow
 
 ### D-14 · Roles
@@ -2018,3 +2090,4 @@ A decision passes when all three agents have voted and the rules produce a resul
 | D-21 | User modes and resource caps | Part A 0 (0/+1/−1): **fails as written**. **C0 +6 (+2/+2/+2)**, C1 +1 (0/+1/0), C2 −6 | **Part B closed 2026-11-23: C0**; Part A → D-21.1 | Every cap stays. Rich bundle failed (0); its pieces are re-scored in D-21.1 |
 | D-21.1 | What replaces the Rich profile | L1 +5 (+2/+2/+1), L2 +5 (+2/+1/+2), L3 +3 (+1/+1/+1), L4 +1 (+1/+1/−1), L5 −3 (−1/−1/−1), L6 +3 (+1/+1/+1), in Claude/Gemini/Codex order | **Closed 2026-11-23 (owner)** | Accepted: L1 linger in config, L2 event-driven hit-testing (real-host spike first), L3 session pin (clears on lock/sleep), L6 cost readout (sampled only while the page is open). Rejected: L4, L5 |
 | D-22 | YouTube Music playback, lyrics, network use | — | **Open: blind round (§0.4)** | Owner idea; Claude sealed; waiting for Gemini and Codex |
+| D-23 | Visual direction: art backdrop, translucency, cleanliness | — | **Open: blind round (§0.4)** | Owner reference (Echo-Music, BitChord); Claude sealed; waiting for Gemini and Codex |
