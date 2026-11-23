@@ -4,7 +4,7 @@
 > [planning-discussion.md](planning-discussion.md)). Stack: **Rust + Tauri 2 + Svelte 5, TOML + CSS** (D-01 to D-04).
 > D-15 (memory policy), D-16 (device identity) and D-17 (spatial sound) were also signed off on 2026-11-22.
 > The owner deferred the first public release to [Phase 6](#phase-6-hardening-and-first-public-release).
-> Coding rules live in [code-practices.md](code-practices.md).
+> Coding rules live in [code-practices.md](code-practices.md). **How each module works: [docs/modules/](modules/README.md)** (read first, update with every PR).
 
 ## Guiding constraints
 

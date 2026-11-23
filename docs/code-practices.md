@@ -172,6 +172,8 @@ These are hard rules. A PR that breaks one is rejected, whatever else it does.
   - A review lists concrete findings (file:line, what's wrong, how it fails), or the specific checks it ran that found
     nothing. "Looks good, agree with X" isn't a review.
   - The author's own summary isn't evidence: reviewers read the diff and run the code or tests themselves.
+- **Module docs (owner request, 2026-11-23):** [docs/modules/](modules/README.md) recaps how each module works so agents don't re-read source.
+  Read the relevant module doc **before** the code, and update it in the same PR as the change (§10). The code wins if they disagree.
 - **Ownership:** follow D-14. Editing another owner's area is fine with a heads-up in the PR. Avoid two agents working on the same files at once.
 - **Decisions:** anything that changes architecture or a closed decision needs a new entry in
   `planning-discussion.md` (or an ADR in `docs/decisions/NNNN-title.md`) **before** the code PR.
@@ -195,6 +197,8 @@ These are hard rules. A PR that breaks one is rejected, whatever else it does.
 - [ ] No third copy of the same logic, no unexplained lint suppression, no dead or commented-out code, no new dependency or
       config knob without a reason (§11)
 - [ ] Docs updated (`plan.md` checkboxes ticked, README if user-facing)
+- [ ] **Module docs updated** ([docs/modules/](modules/README.md)): every module doc for a path you touched is still true, with a
+      one-line *Change log* entry (new/renamed file, public type, command, event, config field, thread, timer or token; changed flow)
 
 ## 11. Code hygiene: duplication, cleanliness, bloat
 
