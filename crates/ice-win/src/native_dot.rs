@@ -14,6 +14,7 @@ use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
 use ice_core::engine::{Engine, EngineEvent, EngineSnapshot, Envelope, VolumeState};
+use ice_core::media::PlaybackStatus;
 use windows::Win32::Foundation::{COLORREF, HWND, LPARAM, LRESULT, POINT, SIZE, WPARAM};
 use windows::Win32::Graphics::Gdi::{
     AC_SRC_ALPHA, AC_SRC_OVER, BI_RGB, BITMAPINFO, BITMAPINFOHEADER, BLENDFUNCTION, CreateCompatibleDC,
@@ -379,6 +380,8 @@ pub struct PillState {
     pub volume: Option<VolumeState>,
     pub mic_volume: Option<u8>,
     pub mic_muted: bool,
+    /// Status of the current media session, `None` when nothing is open. Idle content reads it.
+    pub media_status: Option<PlaybackStatus>,
     pub active_device: Option<String>,
     pub spatial_active: bool,
     pub mode: PillMode,
@@ -401,6 +404,7 @@ impl PillState {
             volume: None,
             mic_volume: None,
             mic_muted: false,
+            media_status: None,
             active_device: None,
             spatial_active: false,
             mode: PillMode::Idle,
@@ -423,6 +427,7 @@ impl PillState {
         self.volume = snapshot.volume.map(|v| VolumeState { percent: v.percent.min(100), muted: v.muted });
         self.mic_volume = snapshot.mic_volume.map(|p| p.min(100));
         self.mic_muted = snapshot.mic_muted.unwrap_or(false);
+        self.media_status = snapshot.media.as_ref().map(|m| m.status);
         let default_playback = snapshot.playback.iter().find(|d| d.is_default).or_else(|| snapshot.playback.first());
         self.active_device = default_playback.map(|d| d.name.clone());
         self.spatial_active =
@@ -483,11 +488,10 @@ impl PillState {
                 self.spatial_active =
                     default_playback.and_then(|d| d.spatial).is_some_and(|s| s != ice_core::engine::SpatialMode::Off);
             }
+            // Media is tracked for the idle content but never wakes the pill (the notch shows track changes).
+            EngineEvent::MediaChanged { media } => self.media_status = media.as_ref().map(|m| m.status),
             // Notices and settings sync silently without waking the pill.
-            EngineEvent::Notice { .. }
-            | EngineEvent::NoticesChanged { .. }
-            | EngineEvent::SettingsChanged { .. }
-            | EngineEvent::MediaChanged { .. } => {}
+            EngineEvent::Notice { .. } | EngineEvent::NoticesChanged { .. } | EngineEvent::SettingsChanged { .. } => {}
         }
         EnvelopeOutcome::Updated
     }
@@ -1262,19 +1266,20 @@ pub(crate) fn rasterize_pill_frame(pixels: &mut [u32], w: i32, h: i32, scale: f3
     match state.mode {
         PillMode::Idle => {
             if state.idle_style == IdleStyle::MiniPill {
-                if let Some(v) = state.volume {
+                // A muted microphone is a privacy state, so it outranks the volume readout.
+                if state.mic_muted {
+                    label_str = "MIC OFF";
+                    label_x = 26.0;
+                    label_w = 56.0;
+                    label_h = 8.0;
+                    label_color = (dng_r, dng_g, dng_b);
+                } else if let Some(v) = state.volume {
                     label_buf = if v.muted { "MUTE".to_string() } else { format!("{}%", v.percent.min(100)) };
                     label_str = &label_buf;
                     label_x = 27.0;
                     label_w = 55.0;
                     label_h = 8.4;
                     label_color = if v.muted { (dng_r, dng_g, dng_b) } else { (fgm_r, fgm_g, fgm_b) };
-                } else if state.mic_muted {
-                    label_str = "MIC OFF";
-                    label_x = 26.0;
-                    label_w = 56.0;
-                    label_h = 8.0;
-                    label_color = (dng_r, dng_g, dng_b);
                 }
             }
         }
@@ -1704,6 +1709,7 @@ fn glyph_unit_sd(ch: char, x: f32, y: f32) -> f32 {
 mod tests {
     use ice_core::engine::Command;
     use ice_core::engine::fake::FakeEngine;
+    use ice_core::media::NowPlaying;
 
     use super::*;
 
@@ -1943,6 +1949,59 @@ mod tests {
 
         drop(engine);
         sub.join();
+    }
+
+    #[test]
+    fn idle_mic_off_label_wins_over_a_known_volume() {
+        let (lw, lh) = logical_dimensions(PillMode::Idle, IdleStyle::MiniPill);
+        let render = |volume: Option<VolumeState>| {
+            let mut st = PillState::new(NativePillTheme::ice());
+            st.mic_muted = true;
+            st.volume = volume;
+            let mut px = vec![0u32; (lw * lh) as usize];
+            rasterize_pill_frame(&mut px, lw, lh, 1.0, &st);
+            px
+        };
+        // Before the fix the known volume drew its `%` label and `MIC OFF` was only reachable without one.
+        let with_volume = render(Some(VolumeState { percent: 40, muted: false }));
+        assert_eq!(with_volume, render(None), "MIC OFF must not depend on whether the volume is known");
+        let mut unmuted = PillState::new(NativePillTheme::ice());
+        unmuted.volume = Some(VolumeState { percent: 40, muted: false });
+        let mut px_unmuted = vec![0u32; (lw * lh) as usize];
+        rasterize_pill_frame(&mut px_unmuted, lw, lh, 1.0, &unmuted);
+        assert_ne!(with_volume, px_unmuted);
+    }
+
+    #[test]
+    fn media_changed_updates_the_pill_without_waking_it() {
+        let media = |status| NowPlaying {
+            app_id: "Spotify.exe".into(),
+            title: "Canopy".into(),
+            artist: "Auralis Sessions".into(),
+            album: String::new(),
+            status,
+            position_ms: None,
+            duration_ms: None,
+            art: None,
+        };
+        let snap = FakeEngine::new().snapshot();
+        let mut pill = PillState::from_snapshot(&snap, NativePillTheme::ice());
+        assert_eq!(pill.media_status, snap.media.as_ref().map(|m| m.status));
+
+        let mut rev = snap.revision + 1;
+        let playing = EngineEvent::MediaChanged { media: Some(media(PlaybackStatus::Playing)) };
+        assert_eq!(pill.apply_envelope(&Envelope { revision: rev, event: playing }), EnvelopeOutcome::Updated);
+        assert_eq!(pill.media_status, Some(PlaybackStatus::Playing));
+        assert_eq!(pill.mode, PillMode::Idle, "a track change must not pop the native pill");
+
+        rev += 1;
+        let paused = EngineEvent::MediaChanged { media: Some(media(PlaybackStatus::Paused)) };
+        pill.apply_envelope(&Envelope { revision: rev, event: paused });
+        assert_eq!(pill.media_status, Some(PlaybackStatus::Paused));
+
+        rev += 1;
+        pill.apply_envelope(&Envelope { revision: rev, event: EngineEvent::MediaChanged { media: None } });
+        assert_eq!(pill.media_status, None);
     }
 
     #[test]
