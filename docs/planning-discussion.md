@@ -1334,6 +1334,224 @@ in the tray until Settings can host them.
 
 ---
 
+### D-19 · Native idle pill: activation and look *(added 2026-11-23, owner report)*
+
+**Owner report (2026-11-23, with a screenshot of the idle pill while muted):** *"This pill kinda bad looking and no way
+to activate it."* The screenshot shows a dark 92×18 px capsule with a small blue dot and "MUTE" in the danger colour.
+
+**What exists today (Claude, from the code):**
+- The pill is the **native idle pill** (`crates/ice-win/src/native_dot.rs`, D-15/D-15.1). It's drawn whenever the notch
+  WebView is suspended or released: Instant and Balanced after the idle linger, Lite always. **In practice it's the
+  notch the owner sees most of the day.**
+- **It ignores the mouse.** The window is created with `WS_EX_TRANSPARENT`, so every click and hover passes through.
+  The shell's cursor poll (`spawn_cursor_poll`) runs only while the WebView notch is *visible* and stops when it hides.
+  So at idle, nothing reacts to hover or click. Only audio events (volume keys, a switch, a new track) or the tray bring
+  the notch back.
+- **It can't look like the WebView pill.** It's GDI with a hand-made stroke font (`glyph_unit_sd`: letters built from line
+  segments as distance fields), at its own fixed size (`IDLE_W`/`IDLE_H` = 92×18). That's why the type looks crude and the
+  proportions differ from the WebView mini pill. It can't draw Segoe UI or Segoe Fluent Icons (§9).
+- **Its idle content was never specified.** Q-10 settled *that* the idle state is a small visible pill, not *what it
+  shows*. Today: volume %, or "MUTE" in the danger colour, or "MIC OFF", plus an accent dot with no defined meaning. The
+  WebView mini pill has its own rules for the same state (two copies of presentation logic, §11 "Twin").
+
+**Is it a concern?** Yes. A visible control that does nothing breaks the product's core promise (the notch *is* the
+UI). And the pill is on screen far more often than the WebView notch. Both issues trace back to D-15.1 treating the
+native pill as a passive placeholder.
+
+**Proposal (Claude).** Two parts, scored separately.
+
+*Part A: activation (pick many; options combine).*
+- **A1 · Make the pill hit-testable.** Drop `WS_EX_TRANSPARENT`. The window is exactly pill-sized, so it only takes clicks
+  that land *on the visible pill*. You can't see under it anyway, so nothing visible becomes unclickable. Keep
+  `WS_EX_NOACTIVATE` and answer `WM_MOUSEACTIVATE` with `MA_NOACTIVATE`, so focus is never stolen. Event-driven, no polling
+  (`WM_MOUSEMOVE` + `TrackMouseEvent` for leave), no hooks (§1, §2).
+  - Hover-intent (delay from config) or left-click → wake the WebView and open the expanded notch. On press, give
+    feedback in the native pill within one frame, so Balanced's cold start (~715 ms p95) doesn't feel dead.
+  - Middle-click = mute, wheel = volume: the same gestures as the notch.
+  - In **Lite** (no notch WebView by design), click opens the tray's quick-switch menu, and the wheel and middle-click
+    work as above.
+  - Hidden idle style or gaming mode: no window, nothing to hit (unchanged).
+- **A2 · "Show notch" hotkey.** `RegisterHotKey`, unbound by default, set from the tray or Settings. Keyboard access, and
+  a fallback for A1.
+- **A3 · Permanent low-rate cursor-proximity poll while the pill is shown.** *(Listed to be scored down: the pill is
+  shown most of the day, so this is polling forever, which §2 forbids.)*
+- **A4 · Invisible hot strip on the top screen edge** (macOS-notch style). It would block clicks on the top pixel row,
+  where maximised browsers put their tabs (Fitts' law). Not recommended.
+
+*Part B: look (proposal).*
+- **B1 · One idle-content rule, in Rust.** A pure `ice_core` function maps state → `IdleContent { glyph, label, tone }`.
+  The native pill renders it, and the shell sends it in the notch snapshot for the WebView mini pill. This replaces the
+  two copies (§11). Gemini (design owner) proposes the rules, as a starting point:
+  - mic muted → mic-off glyph, warning tone (privacy matters);
+  - speaker muted → speaker-off glyph, *muted* tone, not the danger colour;
+  - media playing → art accent or a static equaliser glyph;
+  - otherwise an empty pill. The volume % appears in the volume activity, not at idle.
+- **B2 · Real type and icons in the native pill.** Render text and Segoe Fluent Icons with DirectWrite (via Direct2D on the
+  existing DIB/memory DC; `windows` crate features only, no new crate). Size and radius come from the same theme tokens
+  as the WebView pill, so both look identical at 100%/150%. **Gate:** measure the native pill's RAM before and after
+  (D-15: 2.2 MB today). Balanced idle must stay < 30 MB target / < 40 MB hard (plan.md budgets).
+- **B3 · Visual QA:** side-by-side screenshots of the native and WebView idle pills, every content state, light/dark
+  desktop, 100%/150%, on both monitors. Added to the manual checklist.
+
+**Ownership:** `native_dot.rs` rendering and input → Gemini. The `IdleContent` rule in `ice-core` and the hotkey
+binding → Claude. Shell wiring (wake on pill click, Lite quick-switch menu, IPC) → Codex.
+
+#### Positions
+
+##### Claude
+**Part A: A1 +2, A2 +1, A3 −2, A4 −1.**
+- A1 fixes the actual complaint with no idle cost: the pill gets window messages only when the cursor is on it, which is
+  exactly when we want them. The click-blocking worry doesn't apply to a pill-sized window that's already opaque.
+- A2 is cheap and helps keyboard users, but it isn't discoverable, so it complements A1 rather than replacing it.
+- A3 is a **block**: the pill is the most common idle state, so this means polling for most of the day. That breaks §2
+  ("event-driven, never polling") and the idle-CPU gate.
+- A4 steals clicks from maximised browsers' tabs.
+
+**Part B: +2.** The pill is the most-seen UI, and today it's the only one not built from the theme system. B1 removes a
+§11 twin instead of documenting it. B2 is the only way the native pill can show real type and Fluent icons; the RAM
+gate keeps D-15 honest.
+
+##### Gemini
+*(pending)*
+
+##### Codex
+*(pending)*
+
+#### Vote · Part A *pick many* (activation)
+
+| Agent | A1 hit-testable pill | A2 "Show notch" hotkey | A3 permanent cursor poll | A4 top-edge hot strip |
+|---|---|---|---|---|
+| Claude | +2 | +1 | −2 *(§2: polling for most of the day)* | −1 |
+| Gemini | | | | |
+| Codex | | | | |
+| **Total** | | | | **Open** |
+
+#### Vote · Part B *proposal* (one idle-content rule in Rust + DirectWrite rendering + RAM gate + visual QA)
+
+| Agent | Score | Reason |
+|---|---|---|
+| Claude | +2 | The most-seen UI should come from the theme system; removes a §11 twin; RAM-gated |
+| Gemini | | |
+| Codex | | |
+| **Total** | | **Open** |
+
+---
+
+### D-20 · Movable notch with edge snapping, and ideas from other notch apps *(added 2026-11-23, owner request)*
+
+**Owner request (2026-11-23):** *"Research ideas to drag/move it around so it could snap on another edge … also see other
+references like Droppy (not very related) … for discussion."*
+
+**Today:**
+- One notch window at the **top centre** of the pinned monitor (`overlay_win::move_top_center`). The native pill computes
+  the same spot on its own (`monitor.left + (monitor.width - w) / 2`, `LOGICAL_TOP_OFFSET`): two copies of one rule (§11).
+- The pinned monitor is chosen from the tray (D-05 F13/F14), saved by display path.
+- Windows has no hardware notch, so top centre is a *choice*, and it collides with things:
+  - maximised windows' title bars and browser tab strips, which reach the top edge;
+  - Windows 11's Snap Layouts bar, which drops in at the top centre when you drag a window.
+
+**Research (Claude, 2026-11-23):**
+- I found **no Windows island that can be dragged and docked to another edge**. Notchify (connected notch *or* detached
+  island, revealed at the top edge), Tomte (top edge, hotkey, or dragging a file up) and DynamicWin are all top-fixed.
+  So this would be a distinguishing feature.
+- **Droppy** (macOS) is mainly a file shelf in the notch or on a screen edge, plus a "floating basket" summoned by jiggling
+  the cursor, clipboard history with OCR, media controls, HUD replacement, a Dynamic Island mode for Macs without a notch,
+  and optional modules ("Droplets"). NotchNook, NotchBox, NotchNest and boring.notch follow the same pattern: a file tray,
+  AirDrop, media and HUDs.
+- Win32 makes snapping straightforward: `WM_MOVING` can rewrite the drag rectangle (snap targets from the monitor's work
+  area), and `WM_ENTERSIZEMOVE`/`WM_EXITSIZEMOVE` bracket the drag. **Unknown:** whether the system move loop activates
+  a `WS_EX_NOACTIVATE` layered window (it must never steal focus). That needs a spike.
+
+**Proposal (Claude).**
+
+*Part A: placement (pick one).*
+- **P1 · Fixed anchors, chosen from the tray/Settings.** No dragging.
+- **P2 · Drag to move, snapping to anchors.** A deliberate gesture (long-press ~350 ms on the pill or notch, or a
+  "Move notch…" tray item that enters a move mode) starts the drag. While dragging, the possible anchors show as faint
+  targets. On release, the notch springs to the nearest anchor (reduce motion = instant).
+  - Dropping on another monitor **re-pins** it there, replacing the tray's "Pinned monitor" for mouse users. The tray and
+    Settings keep a list for keyboard users.
+  - Saved as `anchor` + display path.
+- **P3 · Free placement anywhere**, with magnetic edges. Every position needs its own expansion direction and can cover
+  content. Hard to make look right.
+
+*Part A2: which anchors (proposal, applies to P1/P2).* **Top and bottom edges only, in six anchors:** top-left, top-centre
+(default), top-right, bottom-left, bottom-centre, bottom-right.
+- At the bottom, the notch sits above the taskbar (the monitor's work area, so auto-hide and a moved taskbar are handled)
+  and expands **upwards**.
+- Left and right edges would need a vertical layout for every activity. Deferred.
+- One pure function in `ice_core` (`anchor_rect(anchor, work_area, size) → rect`, unit-tested with taskbar positions and
+  DPI) places **both** the WebView notch and the native pill, which removes the current twin.
+
+*Part B: ideas from Droppy and the other notch apps (pick many).*
+- **R1 · "Attached" vs "floating island" style.** Flush with the edge with flat outer corners, like a notch, or a gap
+  with fully rounded corners. Mostly theme tokens; it fits the bottom anchors too.
+- **R2 · Every feature is an optional module, off means not loaded.** Droppy's "Droplets" and boring.notch's shelf toggle.
+  For us: the visualizer, media card and activities each have a switch in Settings → Activities (Phase 4). A disabled one
+  costs no timer, no subscription and no IPC (§2).
+- **R3 · A file shelf / drop zone in the notch.** Droppy's core feature, but unrelated to an audio manager. It costs RAM
+  and scope (D-05), and DynamicWin had one. Not recommended.
+- **R4 · Clipboard history.** **Block:** watching the clipboard is exactly what our §1 "don't look like malware" rules
+  guard against, and it's out of scope.
+
+**Phasing:** a decision now. The move spike (non-activating move loop on both window types, 75/144 Hz, mixed DPI) and
+`anchor_rect` come at the start of Phase 4, whose Notch page already owns geometry and the pinned monitor (plan.md).
+Dragging from the native pill depends on D-19 A1 (a hit-testable pill).
+
+**References:** [Droppy (Product Hunt)](https://www.producthunt.com/products/droppy-4) ·
+[Droppy review](https://addrom.com/droppy-the-native-productivity-layer-macos-has-been-missing/) ·
+[Notchify (Windows Central)](https://www.windowscentral.com/software-apps/notchify-brings-macos-style-dynamic-island-flair-to-windows-11) ·
+[Tomte](https://www.producthunt.com/products/tomte) · [DynamicWin](https://github.com/FlorianButz/DynamicWin) ·
+[boring.notch](https://github.com/TheBoredTeam/boring.notch) · [NotchNook (Setapp)](https://setapp.com/apps/notchnook) ·
+[WM_MOVING](https://learn.microsoft.com/en-us/windows/win32/winmsg/wm-moving) ·
+[WM_EXITSIZEMOVE](https://learn.microsoft.com/en-us/windows/win32/winmsg/wm-exitsizemove) ·
+[Snap Layouts](https://support.microsoft.com/en-US/windows/experience/snap-your-windows)
+
+#### Positions
+
+##### Claude
+**Part A: P1 +1, P2 +2, P3 −1. A2 +2. Part B: R1 +1, R2 +2, R3 −1, R4 −2.**
+- P2 is what the owner asked for, and snapping to six known anchors keeps it testable: each anchor has one expansion
+  direction and one screenshot set. P1 comes for free inside P2 (the Settings list).
+- P3 multiplies the layouts without a clear user benefit.
+- R2 matches our lightweight goal better than any single feature from these apps.
+- R4 is a block for trust reasons, not taste: clipboard watching is a malware signal (§1).
+
+##### Gemini
+*(pending)*
+
+##### Codex
+*(pending)*
+
+#### Vote · Part A *pick one* (placement)
+
+| Agent | P1 fixed anchors | P2 drag + snap to anchors | P3 free placement |
+|---|---|---|---|
+| Claude | +1 | +2 | −1 |
+| Gemini | | | |
+| Codex | | | |
+| **Total** | | | **Open** |
+
+#### Vote · Part A2 *proposal* (top + bottom anchors, six in all; one `anchor_rect` for both windows)
+
+| Agent | Score | Reason |
+|---|---|---|
+| Claude | +2 | Covers the real conflicts (title bars, Snap Layouts) without a vertical layout; removes a §11 twin |
+| Gemini | | |
+| Codex | | |
+| **Total** | | **Open** |
+
+#### Vote · Part B *pick many* (ideas from other notch apps)
+
+| Agent | R1 attached vs floating | R2 optional modules | R3 file shelf | R4 clipboard history |
+|---|---|---|---|---|
+| Claude | +1 | +2 | −1 | −2 *(§1: clipboard watching is a malware signal)* |
+| Gemini | | | | |
+| Codex | | | | |
+| **Total** | | | | **Open** |
+
+---
+
 ## 6. Session S5: Team workflow
 
 ### D-14 · Roles
@@ -1438,3 +1656,5 @@ A decision passes when all three agents have voted and the rules produce a resul
 | D-16 | Device identity & reconnects | **DeviceRef + Active-only resolver + toggle pair, Phase 1 (+5)** | **Closed 2026-11-22 (owner)** | + StableId, logical-endpoint check, confirm-then-persist |
 | D-17 | Spatial sound on switch      | **0.3 spike → experimental per-device action in Phase 2 (+6)** | **Closed 2026-11-22 (owner)** | Read-before-write, un-elevated, Settings deep-link fallback |
 | D-18 | Notch device list & settings placement | **A1 favourites drive the notch device row + Part B preferences move to tray → Settings** (Claude +2, Gemini +2, Codex voted) | **Closed 2026-11-23 (owner)** | Codex's vote row lands with its branch. Tasks in plan.md Phase 3 |
+| D-19 | Native idle pill: activation and look | *A1 hit-testable pill (+ A2 hotkey); B one Rust idle-content rule + DirectWrite rendering, RAM-gated* | **Open (owner report 2026-11-23)** | Waiting for Gemini and Codex votes |
+| D-20 | Movable notch and other notch-app ideas | *P2 drag + snap to six top/bottom anchors; R2 optional modules; no shelf, no clipboard* | **Open (owner request 2026-11-23)** | Waiting for Gemini and Codex votes |
