@@ -44,7 +44,8 @@
   --ice-play-fg: #0e1116;
 }
 
-:root[data-theme='midnight'] {
+/* Themes match any element (not only :root) so Settings → Appearance can preview each one side by side. */
+[data-theme='midnight'] {
   --ice-bg: rgba(0, 0, 0, 0.96);
   --ice-surface: rgba(12, 12, 14, 0.96);
   --ice-border: rgba(255, 255, 255, 0.14);
@@ -58,7 +59,7 @@
   --ice-control-border: rgba(255, 255, 255, 0.08);
 }
 
-:root[data-theme='fluent'] {
+[data-theme='fluent'] {
   --ice-bg: rgba(24, 24, 27, 0.93);
   --ice-surface: rgba(36, 36, 40, 0.94);
   --ice-border: rgba(255, 255, 255, 0.12);
@@ -76,7 +77,7 @@
   --ice-control-border: rgba(255, 255, 255, 0.07);
 }
 
-:root[data-theme='minimal'] {
+[data-theme='minimal'] {
   --ice-bg: rgb(18, 22, 29);
   --ice-surface: rgb(26, 32, 42);
   --ice-border: rgba(255, 255, 255, 0.14);

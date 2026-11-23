@@ -19,7 +19,14 @@ pub enum ActivityKind {
 pub struct MonitorSummary {
     pub index: usize,
     pub id: String,
+    /// Persistent display path; `Command::SetPinnedMonitor` takes this, never `id`.
+    pub display_path: String,
+    /// Monitor's own name (EDID), e.g. "LG FULL HD".
+    pub name: String,
     pub is_primary: bool,
+    /// Desktop position in physical pixels, for drawing the monitor layout.
+    pub left: i32,
+    pub top: i32,
     pub width: i32,
     pub height: i32,
     pub scale_factor: f64,

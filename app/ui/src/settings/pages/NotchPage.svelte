@@ -1,0 +1,75 @@
+<script lang="ts">
+  import type { IdleStyle } from '../../lib/ipc/engine';
+  import type { SettingsClient } from '../../lib/settings/client.svelte';
+  import ChoiceGroup from '../controls/ChoiceGroup.svelte';
+  import InfoBar from '../controls/InfoBar.svelte';
+  import Section from '../controls/Section.svelte';
+  import MonitorMap from '../previews/MonitorMap.svelte';
+  import NotchPreview from '../previews/NotchPreview.svelte';
+
+  interface Props {
+    client: SettingsClient;
+  }
+
+  let { client }: Props = $props();
+
+  const settings = $derived(client.engine?.settings ?? null);
+  const monitors = $derived(client.notch?.monitors ?? []);
+  const pinnedMissing = $derived(
+    Boolean(
+      settings?.pinnedMonitor &&
+        !monitors.some((m) => m.displayPath.toLowerCase() === settings.pinnedMonitor?.toLowerCase()),
+    ),
+  );
+
+  const idleStyles: { value: IdleStyle; label: string; description: string; badge?: string }[] = [
+    { value: 'mini_pill', label: 'Mini pill', badge: 'Default', description: 'The device and volume, small and readable.' },
+    { value: 'dot', label: 'Dot', description: 'Just a dot. It grows when something happens.' },
+    { value: 'hidden', label: 'Hidden', description: 'Nothing until the volume, device or track changes.' },
+  ];
+</script>
+
+{#if settings}
+  <Section title="When nothing is happening" description="What the notch shows between activities.">
+    <ChoiceGroup
+      label="Idle notch"
+      value={settings.appearance.idleStyle}
+      choices={idleStyles}
+      onchange={(style) => client.apply({ type: 'setIdleStyle', style })}
+    >
+      {#snippet preview(choice)}
+        <NotchPreview theme={settings.appearance.theme} mode={choice.value} />
+      {/snippet}
+    </ChoiceGroup>
+  </Section>
+
+  <Section
+    title="Display"
+    description="The notch sits at the top centre of the display you pick. It follows Windows’ scaling on each one."
+  >
+    {#if pinnedMissing}
+      <InfoBar
+        tone="info"
+        title="Your chosen display isn’t connected."
+        text="The notch is on the main display for now and moves back when it returns."
+      />
+    {/if}
+    {#if monitors.length}
+      <div class="map">
+        <MonitorMap
+          {monitors}
+          pinned={settings.pinnedMonitor}
+          onpick={(displayPath) => client.apply({ type: 'setPinnedMonitor', displayPath })}
+        />
+      </div>
+    {/if}
+  </Section>
+{/if}
+
+<style>
+  .map {
+    border-radius: var(--ice-set-radius);
+    border: 1px solid var(--ice-set-card-border);
+    background: var(--ice-set-card);
+  }
+</style>

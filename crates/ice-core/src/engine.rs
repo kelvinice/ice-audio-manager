@@ -262,6 +262,42 @@ pub enum Command {
     },
 }
 
+impl Command {
+    /// Settings commands edit `config.toml` and are answered by `SettingsChanged` or `Notice::SettingRejected`. The
+    /// Settings window may send only these. Exhaustive on purpose: a new variant must be classified here.
+    #[must_use]
+    pub fn is_setting(&self) -> bool {
+        match self {
+            Self::SetTogglePair { .. }
+            | Self::RemoveTogglePair { .. }
+            | Self::SetBinding { .. }
+            | Self::RemoveBinding { .. }
+            | Self::SetFavourites { .. }
+            | Self::SetDevicePrefs { .. }
+            | Self::SetTheme { .. }
+            | Self::SetPreset { .. }
+            | Self::SetIdleStyle { .. }
+            | Self::SetPerformanceProfile { .. }
+            | Self::SetPinnedMonitor { .. }
+            | Self::SetKnobGestures { .. }
+            | Self::SetShowDisconnected { .. }
+            | Self::SetDefaultRoles { .. } => true,
+            Self::SwitchTo { .. }
+            | Self::SwitchBinding { .. }
+            | Self::TogglePair { .. }
+            | Self::CycleFavourites { .. }
+            | Self::SetVolume { .. }
+            | Self::StepVolume { .. }
+            | Self::ToggleMute
+            | Self::ToggleMicMute
+            | Self::Media { .. }
+            | Self::SetSpatial { .. }
+            | Self::ResolveChoice { .. }
+            | Self::Refresh => false,
+        }
+    }
+}
+
 /// A saved device reference as the UI sees it.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "ts", derive(TS))]
@@ -459,6 +495,14 @@ mod tests {
 
     fn next(rx: &std::sync::mpsc::Receiver<Envelope>) -> Envelope {
         rx.try_recv().expect("an event")
+    }
+
+    #[test]
+    fn only_config_edits_count_as_settings() {
+        assert!(Command::SetTheme { theme: crate::appearance::ThemeKind::Midnight }.is_setting());
+        assert!(Command::RemoveBinding { binding_id: "b".into() }.is_setting());
+        assert!(!Command::SwitchTo { device_id: "d".into(), roles: RoleSet::Default }.is_setting());
+        assert!(!Command::SetSpatial { device_id: "d".into(), mode: SpatialMode::Off }.is_setting());
     }
 
     #[test]

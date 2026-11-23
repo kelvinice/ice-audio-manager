@@ -1,0 +1,75 @@
+<script lang="ts">
+  import type { SpringPreset, ThemeKind } from '../../lib/ipc/engine';
+  import type { SettingsClient } from '../../lib/settings/client.svelte';
+  import ChoiceGroup from '../controls/ChoiceGroup.svelte';
+  import InfoBar from '../controls/InfoBar.svelte';
+  import Section from '../controls/Section.svelte';
+  import NotchPreview from '../previews/NotchPreview.svelte';
+  import SpringDemo from '../previews/SpringDemo.svelte';
+
+  interface Props {
+    client: SettingsClient;
+  }
+
+  let { client }: Props = $props();
+
+  const settings = $derived(client.engine?.settings ?? null);
+  const reduceMotion = $derived(client.notch?.systemReduceMotion ?? false);
+
+  const themes: { value: ThemeKind; label: string; description: string; badge?: string }[] = [
+    { value: 'ice', label: 'Ice', badge: 'Default', description: 'Frosted glass with a cool blue glow.' },
+    { value: 'midnight', label: 'Midnight', description: 'True black with a quiet white rim.' },
+    { value: 'fluent', label: 'Fluent', description: 'Windows 11’s neutral greys.' },
+    { value: 'minimal', label: 'Minimal', description: 'A solid surface. No glow.' },
+  ];
+
+  const presets: { value: SpringPreset; label: string; description: string; badge?: string }[] = [
+    { value: 'snappy', label: 'Snappy', description: 'Quick and crisp.' },
+    { value: 'smooth', label: 'Smooth', badge: 'Default', description: 'Gentle, with no bounce.' },
+    { value: 'bouncy', label: 'Bouncy', description: 'A playful overshoot.' },
+    { value: 'off', label: 'Off', description: 'No motion. Changes appear at once.' },
+  ];
+</script>
+
+{#if settings}
+  <Section title="Theme" description="The notch’s colours. Album art still tints it while music plays.">
+    <ChoiceGroup
+      label="Theme"
+      value={settings.appearance.theme}
+      choices={themes}
+      onchange={(theme) => client.apply({ type: 'setTheme', theme })}
+    >
+      {#snippet preview(choice)}
+        <NotchPreview theme={choice.value} mode="volume" />
+      {/snippet}
+    </ChoiceGroup>
+  </Section>
+
+  <Section title="Animation" description="How the notch moves. Point at a choice to see it.">
+    {#if reduceMotion}
+      <InfoBar
+        tone="info"
+        title="Animation effects are off in Windows."
+        text="The notch follows that setting, so it won’t animate until you turn them back on in Settings → Accessibility → Visual effects."
+      />
+    {/if}
+    <ChoiceGroup
+      label="Animation"
+      value={settings.appearance.preset}
+      choices={presets}
+      onchange={(preset) => client.apply({ type: 'setPreset', preset })}
+    >
+      {#snippet preview(choice)}
+        <div class="themed" data-theme={settings.appearance.theme}>
+          <SpringDemo preset={choice.value} {reduceMotion} />
+        </div>
+      {/snippet}
+    </ChoiceGroup>
+  </Section>
+{/if}
+
+<style>
+  .themed {
+    height: 100%;
+  }
+</style>

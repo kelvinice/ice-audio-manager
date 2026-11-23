@@ -7,6 +7,8 @@ mod ipc;
 mod logging;
 mod meter;
 mod placement;
+mod settings;
+mod startup;
 mod tray;
 
 use std::collections::HashMap;
@@ -414,7 +416,7 @@ fn request_preview(app: &AppHandle, state: &Arc<SharedRuntime>, preview: Preview
             Preview::Notch => create_notch_window(&app, &state, generation).map(|_| {
                 spawn_cursor_poll(Arc::clone(&state), false);
             }),
-            Preview::Settings => create_settings_window(&app, &state),
+            Preview::Settings => settings::create_window(&app, &state),
         };
         preview.opening(&state).store(false, Ordering::Release);
         if let Err(error) = result {
@@ -493,37 +495,6 @@ fn create_notch_window(app: &AppHandle, state: &Arc<SharedRuntime>, generation: 
         }
         configured
     })
-}
-
-fn create_settings_window(app: &AppHandle, state: &Arc<SharedRuntime>) -> Result<(), String> {
-    if let Some(existing) = app.get_webview_window("settings") {
-        let _ = existing.show();
-        let _ = existing.set_focus();
-        return Ok(());
-    }
-    const SETTINGS_W: i32 = 560;
-    const SETTINGS_H: i32 = 420;
-    // Built hidden, then moved to the notch's monitor before it shows (owner request: Settings opens where the notch is).
-    let win = WebviewWindowBuilder::new(app, "settings", WebviewUrl::App("settings.html".into()))
-        .title("Ice Audio Manager — Settings")
-        .inner_size(f64::from(SETTINGS_W), f64::from(SETTINGS_H))
-        .resizable(false)
-        .visible(false)
-        .data_directory(state.settings_wv2_data_dir.clone())
-        .build()
-        .map_err(|e| e.to_string())?;
-    if let Some(monitor) = state.active_monitor_info() {
-        let (x, y) = placement::centred_in_work_area(&monitor, SETTINGS_W, SETTINGS_H);
-        let _ = win.set_position(tauri::PhysicalPosition::new(x, y));
-        // Re-apply the logical size after the move, so a DPI change between monitors keeps it centred.
-        let _ = win.set_size(tauri::LogicalSize::new(f64::from(SETTINGS_W), f64::from(SETTINGS_H)));
-    }
-    let _ = win.show();
-    let _ = win.set_focus();
-
-    let hwnd = win.hwnd().map_err(|e| e.to_string())?.0 as isize;
-    let _ = overlay_win::apply_settings_mica(hwnd, true);
-    Ok(())
 }
 
 fn spawn_cursor_poll(state: Arc<SharedRuntime>, benchmark: bool) {
@@ -1333,6 +1304,9 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             toggle_expand,
             request_idle_suspend,
             open_settings,
+            settings::apply_setting,
+            settings::get_launch_at_sign_in,
+            settings::set_launch_at_sign_in,
         ])
         .setup(move |app| {
             let handle = app.handle().clone();
@@ -1368,6 +1342,12 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             if window.label() == "notch" && matches!(event, tauri::WindowEvent::Destroyed) {
                 let state = window.state::<Arc<SharedRuntime>>();
                 placement::notch_destroyed(&state);
+            }
+            if let tauri::WindowEvent::ThemeChanged(theme) = event
+                && window.label() == settings::LABEL
+                && let Ok(hwnd) = window.hwnd()
+            {
+                settings::apply_backdrop(hwnd.0 as isize, *theme);
             }
         })
         .build(tauri::generate_context!())?;

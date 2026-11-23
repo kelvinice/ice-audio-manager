@@ -33,7 +33,11 @@ pub(super) fn summaries(monitors: &[MonitorInfo]) -> Vec<MonitorSummary> {
         .map(|(index, m)| MonitorSummary {
             index,
             id: m.id.clone(),
+            display_path: m.display_path.clone(),
+            name: m.friendly_name.clone(),
             is_primary: m.is_primary,
+            left: m.left,
+            top: m.top,
             width: m.width,
             height: m.height,
             scale_factor: m.scale_factor,

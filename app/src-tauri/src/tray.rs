@@ -2,20 +2,19 @@ mod preferences;
 
 use std::cell::RefCell;
 use std::sync::atomic::Ordering;
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::sync::{Arc, MutexGuard, PoisonError};
 
 use ice_core::device::{DeviceState, Flow};
 use ice_core::engine::{
     Command, DeviceSummary, EngineSnapshot, Notice, RoleSet, SavedDevice, SettingsView, SpatialMode,
 };
-use ice_win::autostart::Autostart;
 use tauri::AppHandle;
 use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconEvent};
 use tauri::window::WindowBuilder;
 use tray_icon::{Icon, TrayIcon, TrayIconBuilder};
 
-use super::{Preview, SharedRuntime, request_preview};
+use super::{Preview, SharedRuntime, request_preview, startup};
 
 const TRAY_ID: &str = "ice-audio-tray";
 const COMMAND_PREFIX: &str = "audio/";
@@ -164,25 +163,19 @@ pub(super) fn build(app: &AppHandle, state: Arc<SharedRuntime>) -> tauri::Result
     let popup_owner =
         WindowBuilder::new(app, "tray-menu-owner").visible(false).skip_taskbar(true).decorations(false).build()?;
     let owner_hwnd = popup_owner.hwnd()?.0 as isize;
-    let startup = Autostart::current().and_then(|mode| Ok(mode.enabled()?.map(|enabled| (mode, enabled))));
-    let startup = match startup {
-        Ok(startup) => startup,
-        Err(error) => {
-            tracing::warn!(%error, "Could not read launch-at-sign-in state");
-            None
-        }
-    };
-    let startup_enabled = Mutex::new(startup.is_some_and(|(_, enabled)| enabled));
+    let launch_state = startup::enabled();
     let launch = CheckMenuItem::with_id(
         app,
         "launch",
         "Launch at sign-in",
-        startup.is_some(),
-        startup.is_some_and(|(_, enabled)| enabled),
+        launch_state.is_some(),
+        launch_state == Some(true),
         None::<&str>,
     )?;
     let menu_launch = launch.clone();
     let context_menu = move |app: &AppHandle, state: &SharedRuntime| {
+        // Settings → General can change it too, so re-read it whenever the menu opens.
+        let _ = menu_launch.set_checked(startup::enabled() == Some(true));
         let snapshot = state.engine.snapshot();
         let available = state.engine.unavailable().is_none();
         let (pinned, profiles) = preferences::placement_menus(app, state, &snapshot.settings, available)?;
@@ -235,27 +228,19 @@ pub(super) fn build(app: &AppHandle, state: Arc<SharedRuntime>) -> tauri::Result
                 request_preview(app, &menu_state, Preview::Notch);
                 Ok(())
             }
-            "launch" => {
-                if let Some((startup, _)) = startup {
-                    let mut enabled = startup_enabled.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-                    let next = !*enabled;
-                    let result = std::env::current_exe()
-                        .map_err(|error| error.to_string())
-                        .and_then(|exe| startup.set_enabled(next, &exe).map_err(|error| error.to_string()));
-                    if result.is_ok() {
-                        *enabled = next;
-                    }
-                    let _ = launch.set_checked(*enabled);
-                    if result.is_err() {
-                        let _ = launch.set_text("Launch at sign-in (change failed)");
+            "launch" => match startup::enabled() {
+                Some(current) => {
+                    let result = startup::set_enabled(!current);
+                    let _ = launch.set_checked(startup::enabled() == Some(true));
+                    let _ = launch.set_text(if result.is_err() {
+                        "Launch at sign-in (change failed)"
                     } else {
-                        let _ = launch.set_text("Launch at sign-in");
-                    }
+                        "Launch at sign-in"
+                    });
                     result
-                } else {
-                    Ok(())
                 }
-            }
+                None => Ok(()),
+            },
             "quit" => {
                 menu_state.allow_exit.store(true, Ordering::Release);
                 app.exit(0);

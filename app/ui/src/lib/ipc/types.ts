@@ -6,7 +6,19 @@ export type { IdleStyle, SpringPreset, ThemeKind } from './engine';
 
 export type ActivityKind = "idle" | "volume" | "switch" | "mic_mute" | "track";
 
-export type MonitorSummary = { index: number, id: string, isPrimary: boolean, width: number, height: number, scaleFactor: number, refreshHz: number, };
+export type MonitorSummary = { index: number, id: string,
+/**
+ * Persistent display path; `Command::SetPinnedMonitor` takes this, never `id`.
+ */
+displayPath: string,
+/**
+ * Monitor's own name (EDID), e.g. "LG FULL HD".
+ */
+name: string, isPrimary: boolean,
+/**
+ * Desktop position in physical pixels, for drawing the monitor layout.
+ */
+left: number, top: number, width: number, height: number, scaleFactor: number, refreshHz: number, };
 
 export type HitRect = { x: number, y: number, width: number, height: number, };
 

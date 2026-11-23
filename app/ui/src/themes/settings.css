@@ -1,0 +1,182 @@
+/*
+ * Settings window tokens (Phase 4, F19), documented in docs/theming.md §2.1.
+ *
+ * The notch tokens in base.css describe the always-dark notch surface. The Settings window instead follows Windows'
+ * light/dark app mode and is drawn over Mica, like Windows' own Settings. Accent = the Ice brand blue, darkened in light
+ * mode so text and focus rings keep WCAG AA (≥ 4.5:1) contrast.
+ */
+:root {
+  color-scheme: dark;
+  --ice-set-solid-bg: #1c2027;
+  --ice-set-layer: rgba(255, 255, 255, 0.035);
+  --ice-set-layer-border: rgba(255, 255, 255, 0.06);
+  --ice-set-card: rgba(255, 255, 255, 0.05);
+  --ice-set-card-hover: rgba(255, 255, 255, 0.075);
+  --ice-set-card-border: rgba(255, 255, 255, 0.065);
+  --ice-set-control: rgba(255, 255, 255, 0.06);
+  --ice-set-control-hover: rgba(255, 255, 255, 0.09);
+  --ice-set-control-border: rgba(255, 255, 255, 0.1);
+  --ice-set-control-strong: rgba(255, 255, 255, 0.6);
+  --ice-set-nav-hover: rgba(255, 255, 255, 0.055);
+  --ice-set-nav-active: rgba(255, 255, 255, 0.085);
+  --ice-set-divider: rgba(255, 255, 255, 0.08);
+  --ice-set-fg: #ffffff;
+  --ice-set-fg-muted: rgba(255, 255, 255, 0.7);
+  --ice-set-fg-subtle: rgba(255, 255, 255, 0.5);
+  --ice-set-accent: #6bc5ff;
+  --ice-set-accent-hover: #8dd3ff;
+  --ice-set-accent-fg: #06121c;
+  --ice-set-accent-soft: rgba(107, 197, 255, 0.14);
+  --ice-set-focus: #ffffff;
+  --ice-set-ok: #6ccb5f;
+  --ice-set-warn: #fce100;
+  --ice-set-danger: #ff99a4;
+  --ice-set-info-bg: rgba(107, 197, 255, 0.1);
+  --ice-set-warn-bg: rgba(252, 225, 0, 0.08);
+  --ice-set-danger-bg: rgba(255, 153, 164, 0.1);
+  --ice-set-keycap: rgba(255, 255, 255, 0.08);
+  --ice-set-keycap-border: rgba(255, 255, 255, 0.16);
+  --ice-set-shadow: 0 2px 10px rgba(0, 0, 0, 0.28);
+  --ice-set-desktop: linear-gradient(135deg, #2c4f73 0%, #18222f 55%, #3b2e4e 100%);
+  --ice-set-radius: 8px;
+  --ice-set-radius-sm: 4px;
+  --ice-set-ease: cubic-bezier(0.2, 0, 0, 1);
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    color-scheme: light;
+    --ice-set-solid-bg: #eef2f6;
+    --ice-set-layer: rgba(255, 255, 255, 0.5);
+    --ice-set-layer-border: rgba(0, 0, 0, 0.06);
+    --ice-set-card: rgba(255, 255, 255, 0.72);
+    --ice-set-card-hover: rgba(250, 250, 250, 0.56);
+    --ice-set-card-border: rgba(0, 0, 0, 0.07);
+    --ice-set-control: rgba(255, 255, 255, 0.75);
+    --ice-set-control-hover: rgba(249, 249, 249, 0.55);
+    --ice-set-control-border: rgba(0, 0, 0, 0.13);
+    --ice-set-control-strong: rgba(0, 0, 0, 0.58);
+    --ice-set-nav-hover: rgba(0, 0, 0, 0.04);
+    --ice-set-nav-active: rgba(0, 0, 0, 0.06);
+    --ice-set-divider: rgba(0, 0, 0, 0.08);
+    --ice-set-fg: #1b1b1b;
+    --ice-set-fg-muted: rgba(0, 0, 0, 0.64);
+    --ice-set-fg-subtle: rgba(0, 0, 0, 0.47);
+    --ice-set-accent: #0a6ead;
+    --ice-set-accent-hover: #1a7fc0;
+    --ice-set-accent-fg: #ffffff;
+    --ice-set-accent-soft: rgba(10, 110, 173, 0.1);
+    --ice-set-focus: #000000;
+    --ice-set-ok: #0f7b0f;
+    --ice-set-warn: #8a5300;
+    --ice-set-danger: #c42b1c;
+    --ice-set-info-bg: rgba(10, 110, 173, 0.08);
+    --ice-set-warn-bg: rgba(255, 196, 0, 0.16);
+    --ice-set-danger-bg: rgba(196, 43, 28, 0.08);
+    --ice-set-keycap: rgba(0, 0, 0, 0.035);
+    --ice-set-keycap-border: rgba(0, 0, 0, 0.16);
+    --ice-set-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    --ice-set-desktop: linear-gradient(135deg, #8ec0ea 0%, #dce7f3 55%, #c6b8e6 100%);
+  }
+}
+
+html,
+body {
+  background: transparent;
+  color: var(--ice-set-fg);
+  font-size: 14px;
+  line-height: 20px;
+}
+
+/* Only where Mica can't show (the dev preview in a browser). The real window is transparent over Mica. */
+:root[data-backdrop='solid'] body {
+  background: var(--ice-set-solid-bg);
+}
+
+/*
+ * Settings controls use short CSS transitions like Windows' own controls; the spring module (code-practices §5) drives
+ * the notch and this window's navigation indicator. Both stop when Windows' animation effects are off.
+ */
+:root[data-reduce-motion='true'] *,
+:root[data-reduce-motion='true'] *::before,
+:root[data-reduce-motion='true'] *::after {
+  transition: none !important;
+  animation: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
+:focus-visible {
+  outline: 2px solid var(--ice-set-focus);
+  outline-offset: 2px;
+  border-radius: var(--ice-set-radius-sm);
+}
+
+button,
+input,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+/* Buttons shared by every Settings page (standard, accent, icon-only). */
+.btn {
+  height: 32px;
+  min-width: 80px;
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: var(--ice-set-radius-sm);
+  border: 1px solid var(--ice-set-control-border);
+  background: var(--ice-set-control);
+  cursor: pointer;
+  transition: background-color 120ms var(--ice-set-ease);
+}
+
+.btn:hover:not(:disabled) {
+  background: var(--ice-set-control-hover);
+}
+
+.btn.accent {
+  border-color: var(--ice-set-accent);
+  background: var(--ice-set-accent);
+  color: var(--ice-set-accent-fg);
+}
+
+.btn.accent:hover:not(:disabled) {
+  background: var(--ice-set-accent-hover);
+}
+
+.btn.danger {
+  color: var(--ice-set-danger);
+}
+
+.icon-btn {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: var(--ice-set-radius-sm);
+  background: none;
+  cursor: pointer;
+}
+
+.icon-btn:hover:not(:disabled) {
+  background: var(--ice-set-control-hover);
+}
+
+.btn:disabled,
+.icon-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}

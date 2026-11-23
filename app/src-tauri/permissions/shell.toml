@@ -21,3 +21,8 @@ commands.allow = ["set_visualizer"]
 identifier = "report-settings-ready"
 description = "Report first paint of the Settings window."
 commands.allow = ["report_settings_ready"]
+
+[[permission]]
+identifier = "settings-controls"
+description = "Read engine state, change settings and launch at sign-in from the Settings window."
+commands.allow = ["get_engine_snapshot", "apply_setting", "get_launch_at_sign_in", "set_launch_at_sign_in"]
