@@ -15,11 +15,27 @@ These are hard rules. A PR that breaks one is rejected, whatever else it does.
 2. **No DLL injection, no code injection, no patching other processes**, including Explorer/ShellExperienceHost.
 3. **No admin.** Manifest is `asInvoker`. Write only to `%APPDATA%`, `%LOCALAPPDATA%`, `HKCU`.
 4. **No packers or obfuscators** (UPX, PyInstaller-style onefile, ConfuserEx, etc.).
-5. **No silent network.** No telemetry. The only network call allowed is the opt-in "check for update" (D-11),
-   which may only *notify*. Never download or execute code.
+5. **No silent network.** No telemetry, no analytics, no crash reporting. Network use is allowed only for **opt-in,
+   per-feature** functions (D-22 N1, owner 2026-11-23): the update check (D-11, notify only) and features accepted by a
+   decision, such as lyrics lookup.
+   - **Each is off by default,** with its own switch. Its destination and the exact data sent are listed in Settings →
+     Privacy, and one switch turns all of them off.
+   - **It sends only what the feature needs,** with no background traffic while it's off. Results are cached locally, and
+     the cache is cleared when the feature is turned off.
+   - **Requests are made from Rust only,** to an allowlisted host. The WebView CSP (§6) never gains a remote origin.
+   - **Never download or execute code.**
 6. **No undocumented API without a guard.** `IPolicyConfig`, `IAudioPolicyConfigFactory`, and shell window hacks must be
    isolated in `ice-win`, feature-detected at runtime, and fail gracefully with a log line, never a crash.
 7. **No secrets in the repo.** `.env` is for local dev only and must not hold credentials. Signing keys live only in CI secrets.
+8. **Reference, never copy (owner decision, 2026-11-23; D-24).** The project is **MIT**.
+   - Other projects (`docs/reference/`, GitHub, any licence) may be read to learn *how* they solve something, including their
+     implementation.
+   - Our code is written by us, in our own structure and names. **Never copy, translate line by line (e.g. Kotlin → Rust) or
+     closely paraphrase another project's code.**
+   - Name the reference that informed a design in the PR description.
+   - **Changing the licence (e.g. to GPL-3.0) happens only when the owner explicitly accepts it** for a named component, with
+     the import record from D-24 (upstream revision, exact licence grant, files, upkeep cost). Until then, no GPL/AGPL code
+     enters the repo.
 
 ## 2. Lightweight rules
 

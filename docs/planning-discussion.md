@@ -1914,6 +1914,21 @@ cache in `ice-core`/`ice-win` by Claude; network permission and window wiring by
 | Codex | 0 | +1 | −1 | −2 |
 | **Total** | −1 | +5 | −2 | −6 |
 
+**Owner ruling · 2026-11-23: accepted, with one change.**
+- **N1** opt-in, per-feature network use: adopted and written into code-practices §1.5.
+- **B1 becomes a "Music services" widget**, enabled by default and switchable per service (Spotify, YouTube Music) in
+  Settings → Activities (an optional module per D-20 R2). It shows quick-launch actions: the Spotify desktop app, and
+  YouTube Music as the installed web app or in the browser. It also appears in the empty "nothing playing" state.
+  Launching an app or URL is not a network call by us.
+- **K1** LRCLIB lyrics, opt-in. All agents' amendments apply:
+  - a one-track lookup first, showing destination and fields, before any automatic lookup;
+  - results bound to the requesting track, late responses dropped;
+  - "no match" rather than mistimed lines;
+  - Rust-only fetch to an allowlisted host, WebView CSP unchanged;
+  - the lyrics timer only while visible and playing;
+  - the cache is cleared when the feature is turned off.
+- **Rejected:** N0, N2, B2, B3, K0, K2, K3.
+
 ---
 
 ### D-23 · Visual direction for the expanded notch: art-driven backdrop, translucency, cleanliness *(added 2026-11-23, owner reference; neutral entry under §0.4)*
@@ -1994,6 +2009,16 @@ so `Minimal` can switch them off (§5: components use only theme variables; new 
 | Codex | +1 | +1 | +1 | +2 | −2 | +1 |
 | **Total** | +3 | **+5** | +4 | **+6** | −5 | +3 |
 
+**Owner ruling · 2026-11-23: accepted.**
+- **V2** art gradient wash is the default backdrop. **V1** blurred art is an opt-in per theme (`--ice-art-backdrop`), with a
+  scrim clamped from the art's luminance so text keeps WCAG AA.
+- **One backdrop treatment per theme** (Codex): Ice the art treatment, Midnight a darker scrim, Fluent a tonal light wash,
+  Minimal a solid surface. Art layer without pointer events; crossfade only on an art-ID change; instant with reduced motion.
+- **V3** translucent controls where contrast allows.
+- **V4** cleanliness pass, keeping D-18's device row visible.
+- **V6** lyrics styling with K1 (D-22), as a sub-view of the expanded card.
+- **Rejected:** V5 (D-12's finding stands).
+
 ---
 
 ### D-24 · Project licence: stay MIT, or move to GPL-3.0 to allow reusing GPL code *(added 2026-11-23, owner; neutral entry under §0.4)*
@@ -2057,6 +2082,13 @@ closed decision changes only through a new entry.
 | Gemini | +2 | −1 | +1 |
 | Codex | +1 | −1 | +2 |
 | **Total** | +4 | −3 | +5 |
+
+**Owner ruling · 2026-11-23: G2, stay MIT.**
+- **The licence changes only when the owner explicitly accepts it,** for a named component, with Codex's import record:
+  upstream revision, exact licence grant, files and upkeep cost.
+- **On references, the owner's rule replaces the stricter clean-room wording.** Other projects may be read to learn how
+  they implement something, but **never copied, translated line by line or closely paraphrased**. Our code is written in
+  our own structure. Written into code-practices §1.8.
 
 ---
 
@@ -2168,6 +2200,6 @@ A decision passes when all three agents have voted and the rules produce a resul
 | D-20 | Placement and modules | **P1 +5 (+2/+1/+2)** leads P2 +4 (+1/+2/+1), P3 −3. A2 +6 (+2/+2/+2). A2b −3 (−1/−1/−1). R1 +3, R2 +5 (+2/+2/+1), R3 −3, R4 −6 (−2/−2/−2) | **Closed 2026-11-23 (owner ruling)** | Owner: build both P1 and P2; Settings → Notch "Drag & snap" (default) or "Fixed position". Drag via own pointer capture, focus/keyboard release gate. A2 adopted, A2b rejected, R1+R2 adopted, R3+R4 rejected |
 | D-21 | User modes and resource caps | Part A 0 (0/+1/−1): **fails as written**. **C0 +6 (+2/+2/+2)**, C1 +1 (0/+1/0), C2 −6 | **Part B closed 2026-11-23: C0**; Part A → D-21.1 | Every cap stays. Rich bundle failed (0); its pieces are re-scored in D-21.1 |
 | D-21.1 | What replaces the Rich profile | L1 +5 (+2/+2/+1), L2 +5 (+2/+1/+2), L3 +3 (+1/+1/+1), L4 +1 (+1/+1/−1), L5 −3 (−1/−1/−1), L6 +3 (+1/+1/+1), in Claude/Gemini/Codex order | **Closed 2026-11-23 (owner)** | Accepted: L1 linger in config, L2 event-driven hit-testing (real-host spike first), L3 session pin (clears on lock/sleep), L6 cost readout (sampled only while the page is open). Rejected: L4, L5 |
-| D-22 | YouTube Music playback, lyrics, network use | N0 +1 (−1/+1/+1), N1 +6 (+2/+2/+2), N2 −5 (−1/−2/−2), B1 +6 (+2/+2/+2), B2 −3 (−1/−1/−1), B3 −6 (−2/−2/−2), K0 −1 (−1/0/0), K1 +5 (+2/+2/+1), K2 −2 (0/−1/−1), K3 −6 (−2/−2/−2) | **Revision done by Claude · ready for owner** | Claude/Gemini/Codex. Passing: N1, B1, K1. Amendments: one-track lookup first, Rust-only fetch (WebView CSP unchanged), lyrics timer only while visible and playing |
-| D-23 | Visual direction: art backdrop, translucency, cleanliness | V1 +3 (+1/+1/+1; Claude changed after reveal), V2 +5 (+2/+2/+1; Claude changed after reveal), V3 +4 (+1/+2/+1), V4 +6 (+2/+2/+2), V5 −5 (−1/−2/−2), V6 +3 (+1/+1/+1) | **Revision done by Claude · ready for owner** | Claude/Gemini/Codex. Passing: V1, V2, V3, V4, V6 (V6 only if lyrics). Amendments: V2 default, V1 opt-in, luminance scrim, one backdrop per theme, D-18 device row stays visible |
-| D-24 | Project licence: MIT or GPL-3.0 | G0 +4 (+1/+2/+1), G1 −3 (−1/−1/−1), G2 +5 (+2/+1/+2) | **Revision done by Claude · ready for owner** | Claude/Gemini/Codex. G2 leads (+5). Amendments: clean-room rule for GPL/AGPL references; import record (revision, licence grant, files, upkeep) |
+| D-22 | YouTube Music playback, lyrics, network use | N0 +1 (−1/+1/+1), N1 +6 (+2/+2/+2), N2 −5 (−1/−2/−2), B1 +6 (+2/+2/+2), B2 −3 (−1/−1/−1), B3 −6 (−2/−2/−2), K0 −1 (−1/0/0), K1 +5 (+2/+2/+1), K2 −2 (0/−1/−1), K3 −6 (−2/−2/−2) | **Closed 2026-11-23 (owner)** | N1 adopted (§1.5 rewritten); B1 as a "Music services" widget (Spotify + YouTube Music), on by default, switchable per service; K1 opt-in with all amendments |
+| D-23 | Visual direction: art backdrop, translucency, cleanliness | V1 +3 (+1/+1/+1; Claude changed after reveal), V2 +5 (+2/+2/+1; Claude changed after reveal), V3 +4 (+1/+2/+1), V4 +6 (+2/+2/+2), V5 −5 (−1/−2/−2), V6 +3 (+1/+1/+1) | **Closed 2026-11-23 (owner)** | V2 default, V1 opt-in per theme with luminance scrim, one backdrop per theme, V3, V4 (D-18 row visible), V6 with lyrics; V5 rejected |
+| D-24 | Project licence: MIT or GPL-3.0 | G0 +4 (+1/+2/+1), G1 −3 (−1/−1/−1), G2 +5 (+2/+1/+2) | **Closed 2026-11-23 (owner)** | G2: stay MIT; licence changes only on the owner's explicit acceptance; references read, never copied (code-practices §1.8) |

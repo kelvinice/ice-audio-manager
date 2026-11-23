@@ -292,6 +292,38 @@ Runs between Phase 3 and Phase 4. Item 1 is a bug fix that comes first. D-21 Par
 
 ---
 
+## Music services, lyrics and look (D-22, D-23; accepted 2026-11-23)
+
+Items marked *(needs Settings)* wait for the Phase 4 Settings window. The rest can start now.
+
+**D-22 · Music services widget (owner: enabled by default):**
+- [ ] "Music services" widget in the expanded notch and the empty "nothing playing" state (Gemini UI).
+  - Quick-launch the Spotify desktop app, and YouTube Music as the installed web app or in the default browser.
+  - Shell side (Codex): find and launch the installed apps; fall back to the URL.
+- [ ] One switch per service in Settings → Activities (Spotify, YouTube Music), both on by default; config fields with defaults
+      (Claude) *(the switches need Settings; the config can land first)*
+
+**D-22 · Lyrics (opt-in, LRCLIB) *(needs Settings)*:**
+- [ ] Settings → Privacy: lists every network feature, its destination and the data sent, with one "all network features
+      off" switch (Codex)
+- [ ] Rust LRCLIB client (Claude), written from LRCLIB's docs (code-practices §1.8):
+  - allowlisted host; title/artist/album/duration only;
+  - a one-track lookup first, then optional automatic lookups;
+  - results bound to the requesting track, late responses dropped;
+  - "no match" preferred over uncertain timing;
+  - local cache, cleared when turned off.
+- [ ] Lyrics sub-view in the expanded card (Gemini): synced lines interpolated from GSMTC position, ticking only while
+      visible and playing; V6 styling (bright current line, fading neighbours)
+
+**D-23 · Look of the expanded notch:**
+- [ ] 2–3 colour art palette and average luminance in `ice_core::media`, next to today's accent (Claude)
+- [ ] Backdrops per theme (Gemini): V2 gradient wash by default; V1 blurred art as an opt-in (`--ice-art-backdrop`) with a
+      luminance-clamped scrim. Ice/Midnight/Fluent/Minimal each get one treatment. New tokens go in `docs/theming.md`
+- [ ] V3 translucent controls and V4 cleanliness pass on the 384×178 card, keeping D-18's device row visible. Before/after
+      screenshots (Gemini)
+
+---
+
 ## Phase 4: Settings & customization
 
 **Features:** F19–F23.
@@ -386,8 +418,9 @@ every feature phase. Phases 1–5 focus on features and UI/UX.
     before any code: opt-in per service, OAuth tokens in Windows Credential Manager, no background traffic, a documented
     privacy note. YouTube Music has no official public API. Unofficial ones risk breaking its terms, so Level 2 may be
     Spotify-only.
-  - **D-22 (open, blind round)** decides the network rule for music features, YouTube Music playback inside the app, and
-    lyrics (LRCLIB and others).
+  - **D-22 (closed 2026-11-23):** Level 1 + a "Music services" widget and opt-in LRCLIB lyrics are planned (section "Music
+    services, lyrics and look"). YouTube Music playback inside the app was rejected. Spotify "Level 2" (like, queue,
+    playlists) still needs its own decision under the new §1.5.
 - **Ideas from BitChord / Echo-Music** (owner references, 2026-11-23; undecided, each needs an F-ID or decision before code):
   - *Sleep timer:* pause the current media session after N minutes or at the end of the track (GSMTC; no network).
   - *Output format readout:* the default device's sample rate and bit depth in the expanded notch (the endpoint's mix
