@@ -1611,7 +1611,7 @@ event-driven hit-testing) comes before the UI.
 
 ##### Claude
 **Part A +2. Part B: C0 +1, C1 +2, C2 −2.**
-- A gives the owner the trade-off he described while keeping the default light. It reuses the profile system rather than
+- A gives the owner the trade-off they described while keeping the default light. It reuses the profile system rather than
   adding a second "mode" concept next to it. Showing live measured cost turns "trust us, it's light" into something the
   user can check.
 - C1 because the opt-in mode should have an honest, separate budget. Squeezing it under the default caps (C0) would
