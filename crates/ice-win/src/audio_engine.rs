@@ -257,8 +257,7 @@ impl Worker {
         };
         let config_replaced = match loaded {
             Loaded::Replaced { backup, error, .. } => Some(Notice::ConfigReplaced {
-                backup: backup
-                    .map_or_else(|| "(could not be moved; left in place)".into(), |b| b.display().to_string()),
+                backup: backup.map_or_else(|| "(left in place, unchanged)".into(), |b| b.display().to_string()),
                 error,
             }),
             _ => None,

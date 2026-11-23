@@ -164,6 +164,17 @@ impl Config {
     /// # Errors
     /// Invalid TOML, unknown fields, bad hotkeys, or a schema newer than [`SCHEMA_VERSION`].
     pub fn from_toml(text: &str) -> Result<Self, ConfigError> {
+        /// Read first and leniently: a newer file's new fields must report `TooNew`, not an unknown-field error.
+        #[derive(Deserialize)]
+        struct Version {
+            #[serde(default)]
+            schema_version: u32,
+        }
+        if let Ok(Version { schema_version }) = toml::from_str::<Version>(text)
+            && schema_version > SCHEMA_VERSION
+        {
+            return Err(ConfigError::TooNew(schema_version));
+        }
         let cfg: Self = toml::from_str(text).map_err(|e| ConfigError::Parse(e.to_string()))?;
         match cfg.schema_version {
             v if v > SCHEMA_VERSION => Err(ConfigError::TooNew(v)),
@@ -443,6 +454,9 @@ impl ConfigStore {
     }
 
     /// Never fails: a broken file is backed up and replaced by defaults (the app keeps running).
+    /// A file from a *newer* build isn't broken: it stays in place untouched (`backup: None`) and this run uses
+    /// defaults. Saves then refuse to overwrite it, because it doesn't parse here. That keeps the owner's
+    /// settings safe when an older build (e.g. an agent's un-rebased branch) starts after a schema bump.
     #[must_use]
     pub fn load(&self) -> Loaded {
         let text = match std::fs::read_to_string(&self.path) {
@@ -452,6 +466,9 @@ impl ConfigStore {
         };
         match Config::from_toml(&text) {
             Ok(c) => Loaded::Ok(c),
+            Err(e @ ConfigError::TooNew(_)) => {
+                Loaded::Replaced { config: Config::default(), backup: None, error: e.to_string() }
+            }
             Err(e) => self.replace_broken(&e.to_string()),
         }
     }
@@ -632,6 +649,26 @@ mod tests {
             }
             other => panic!("expected Replaced, got {other:?}"),
         }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_file_from_a_newer_build_is_left_in_place() {
+        let dir = std::env::temp_dir().join(format!("ice-cfg-newer-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let store = ConfigStore::new(dir.join("config.toml"));
+        std::fs::create_dir_all(&dir).unwrap();
+        let newer = format!("schema_version = {}\nsome_future_field = true\n", SCHEMA_VERSION + 1);
+        std::fs::write(store.path(), &newer).unwrap();
+        match store.load() {
+            Loaded::Replaced { config, backup: None, error } => {
+                assert_eq!(config, Config::default());
+                assert!(error.contains("newer"), "{error}");
+            }
+            other => panic!("expected Replaced without a backup, got {other:?}"),
+        }
+        assert_eq!(std::fs::read_to_string(store.path()).unwrap(), newer, "untouched");
+        assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 1, "no backup file");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
