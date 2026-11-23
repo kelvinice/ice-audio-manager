@@ -169,6 +169,8 @@ mod tests {
             "",
             &format!("export {}", Envelope::decl(&cfg)),
             "",
+            &format!("export {}", ice_core::meter::MeterFrame::decl(&cfg)),
+            "",
         ]
         .join("\n");
 

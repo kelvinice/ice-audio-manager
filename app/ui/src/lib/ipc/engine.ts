@@ -139,3 +139,14 @@ relinked: boolean,
 spatialApplied: SpatialMode | null, } | { "type": "deviceArrived", device: DeviceSummary, } | { "type": "deviceLeft", device: DeviceSummary, } | { "type": "notice", notice: Notice, } | { "type": "noticesChanged", notices: Array<Notice>, } | { "type": "settingsChanged", settings: SettingsView, };
 
 export type Envelope = { revision: number, event: EngineEvent, };
+
+export type MeterFrame = {
+/**
+ * Highest peak across channels, 0.0–1.0 linear amplitude, as Windows reports it.
+ */
+peak: number,
+/**
+ * Per-channel peaks (0.0–1.0) in the endpoint's channel order (front left, front right, …).
+ * Empty when Windows doesn't report channels.
+ */
+channels: Array<number>, };

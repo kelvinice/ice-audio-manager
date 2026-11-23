@@ -1,7 +1,7 @@
 //! An in-memory engine with the owner's devices, for UI/shell work and tests. No Windows calls.
 
-use std::sync::Mutex;
 use std::sync::mpsc::{Receiver, Sender, channel};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use super::MediaAction;
 use super::{
@@ -10,6 +10,7 @@ use super::{
 use crate::config::Config;
 use crate::device::EndpointInfo;
 use crate::media::{ArtInfo, NowPlaying, PlaybackStatus, Rgb};
+use crate::meter::{METER_INTERVAL, MeterFrame, MeterSubscription};
 
 /// A 16×16 Ice-blue gradient, so UI work has a real image to style.
 const FAKE_ART_PNG: &[u8] = include_bytes!("fake_art.png");
@@ -45,7 +46,21 @@ struct State {
 }
 
 pub struct FakeEngine {
-    state: Mutex<State>,
+    /// Shared with the fake meter threads, which follow the play state.
+    state: Arc<Mutex<State>>,
+}
+
+fn lock(state: &Mutex<State>) -> MutexGuard<'_, State> {
+    state.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
+/// Made-up stereo levels for tick `t`: two beating sines, so the visualizer has movement to style.
+fn fake_levels(t: u32) -> MeterFrame {
+    #[expect(clippy::cast_precision_loss, reason = "the tick wraps at 2^16, exact in f32")]
+    let x = (t % 65_536) as f32;
+    let left = 0.45 + 0.35 * (x * 0.37).sin() * (x * 0.05).sin().abs();
+    let right = 0.40 + 0.35 * (x * 0.29 + 1.0).sin() * (x * 0.07).sin().abs();
+    MeterFrame::new(left.max(right), vec![left, right])
 }
 
 fn device(id: &str, name: &str, flow: Flow, form_factor: u32, spatial: Option<SpatialMode>) -> DeviceSummary {
@@ -124,7 +139,7 @@ impl FakeEngine {
         }
         let mut snap = snap;
         snap.settings = config.view(&eps);
-        Self { state: Mutex::new(State { snap, track: 0, config, subscribers: Vec::new() }) }
+        Self { state: Arc::new(Mutex::new(State { snap, track: 0, config, subscribers: Vec::new() })) }
     }
 
     /// Simulates a device dropping out (e.g. headset powered off).
@@ -141,8 +156,8 @@ impl FakeEngine {
         refresh_settings(&mut st);
     }
 
-    fn lock(&self) -> std::sync::MutexGuard<'_, State> {
-        self.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+    fn lock(&self) -> MutexGuard<'_, State> {
+        lock(&self.state)
     }
 }
 
@@ -311,5 +326,32 @@ impl Engine for FakeEngine {
 
     fn art(&self, id: &str) -> Option<Vec<u8>> {
         (0..FAKE_TRACKS.len()).any(|i| id == format!("fake-art-{i}")).then(|| FAKE_ART_PNG.to_vec())
+    }
+
+    /// Moving levels while the fake track plays and isn't muted, silence otherwise. One thread per
+    /// subscription, which ends when the subscription is dropped.
+    fn meter(&self) -> Option<MeterSubscription> {
+        let (mut sink, subscription) = crate::meter::channel();
+        let state = Arc::clone(&self.state);
+        std::thread::Builder::new()
+            .name("fake-meter".into())
+            .spawn(move || {
+                let mut tick = 0_u32;
+                loop {
+                    let audible = {
+                        let st = lock(&state);
+                        st.snap.media.as_ref().is_some_and(|m| m.status == PlaybackStatus::Playing)
+                            && !st.snap.volume.is_some_and(|v| v.muted)
+                    };
+                    let frame = if audible { fake_levels(tick) } else { MeterFrame::default() };
+                    if !sink.offer(&frame) {
+                        return;
+                    }
+                    tick = tick.wrapping_add(1);
+                    std::thread::sleep(METER_INTERVAL);
+                }
+            })
+            .ok()?;
+        Some(subscription)
     }
 }

@@ -414,6 +414,13 @@ pub trait Engine: Send + Sync {
         let _ = id;
         None
     }
+    /// Peak levels of the default playback device for the visualizer, sent at most every
+    /// [`crate::meter::METER_INTERVAL`] and only when they change. Windows is read only while a subscription
+    /// is alive: hold it while the visualizer is visible, and drop it when the notch hides, suspends or is
+    /// released (code-practices §2). `None` = no meter available.
+    fn meter(&self) -> Option<crate::meter::MeterSubscription> {
+        None
+    }
 }
 
 pub mod fake;
@@ -584,5 +591,20 @@ mod tests {
         let cfg = Config::default();
         assert!(crate::media::NowPlaying::decl(&cfg).contains("positionMs"));
         assert!(MediaAction::decl(&cfg).contains("\"playPause\""));
+        assert!(crate::meter::MeterFrame::decl(&cfg).contains("channels: Array<number>"));
+    }
+
+    #[test]
+    fn fake_meter_moves_only_while_playing() {
+        use std::time::Duration;
+        let eng = FakeEngine::new();
+        let meter = eng.meter().expect("the fake always has a meter");
+        let first = meter.recv_timeout(Duration::from_secs(2)).unwrap();
+        assert!(first.is_silent(), "the fake track starts paused");
+        assert!(meter.recv_timeout(Duration::from_millis(150)).is_err(), "silence is sent once");
+        eng.send(Command::Media { action: MediaAction::Play });
+        let playing = meter.recv_timeout(Duration::from_secs(2)).unwrap();
+        assert!(!playing.is_silent() && playing.channels.len() == 2);
+        assert_ne!(meter.recv_timeout(Duration::from_secs(2)).unwrap(), playing, "levels keep moving");
     }
 }
