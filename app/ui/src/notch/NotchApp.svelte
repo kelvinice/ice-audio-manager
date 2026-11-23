@@ -54,6 +54,7 @@
     (notchSnapshot?.systemReduceMotion ?? false) || (notchSnapshot?.preset ?? 'smooth') === 'off',
   );
   const isSuspended = $derived(notchSnapshot?.suspended ?? false);
+  const isNotchVisible = $derived(!(notchSnapshot?.hiddenForBench ?? false) && !isSuspended);
   const activeView = $derived<ActivityView>(benchOverride ?? engineState.activity);
 
   const effectiveMicMuted = $derived(engineState.micMuted ?? notchSnapshot?.micMuted ?? false);
@@ -568,6 +569,9 @@
               micMuted={effectiveMicMuted}
               media={engineState.media}
               {idleMode}
+              preset={notchSnapshot.preset}
+              instant={isInstant}
+              notchVisible={isNotchVisible}
             />
           {/if}
         {:else if notchSnapshot && isExpanded}
@@ -582,6 +586,7 @@
             media={engineState.media}
             instant={isInstant}
             {idleMode}
+            notchVisible={isNotchVisible}
             activeMonitor={notchSnapshot.activeMonitor}
             monitors={notchSnapshot.monitors}
             preset={notchSnapshot.preset}

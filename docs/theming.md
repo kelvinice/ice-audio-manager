@@ -41,6 +41,8 @@ All `--ice-*` variables are defined with their `Ice` defaults in CSS `:root`. An
 | `--ice-accent-strong` | Accent & Status | `#9ad6ff` | No | Hover/pressed emphasis and high-contrast accent highlights |
 | `--ice-accent-soft` | Accent & Status | `#13283c` | No | Subtle tinted chip / badge fill |
 | `--ice-accent-glow` | Accent & Status | `rgba(107, 197, 255, 0.28)` | No | Soft radial ambient glow behind active notch states |
+| `--ice-active-accent` | Dynamic Runtime | `var(--ice-accent)` *(album-art accent while media is active)* | No | Contrast-safe active media accent for visualizer bars, scrubber fill, and active transport border |
+| `--ice-active-glow` | Dynamic Runtime | `var(--ice-accent-glow)` *(album-art glow while media is active)* | No | Dynamic radial ambient glow tinted from the active track's album art |
 | `--ice-ok` | Accent & Status | `#4ade80` | Yes | Positive status (device plugged in, mic live) |
 | `--ice-warn` | Accent & Status | `#f59e0b` | No | Non-destructive warning state (device unplugged / disconnected) |
 | `--ice-danger` | Accent & Status | `#f07148` | Yes | Muted/destructive status (speaker mute, mic mute) |

@@ -212,7 +212,7 @@ games on the pinned monitor. Budgets met in every profile.
   - [ ] Shell (Codex): hold a subscription only while the notch is visible *and* the visualizer is shown. **Drop it on hide,
         `TrySuspend`, WebView release and gaming mode**, without relying on the UI to ask. Forward frames off the main thread
         to the notch as `audio://meter/v1`, and add a Tauri command for the UI to turn it on/off
-  - [ ] Notch (Gemini): 4–6 bars from `channels` (fall back to `peak`), fast-attack/slow-decay springs, no animation loop
+  - [x] Notch (Gemini): 4–6 bars from `channels` (fall back to `peak`), fast-attack/slow-decay springs, no animation loop
         once frames stop and the bars have settled
 - [ ] Secondary QA: Chromium/Edge/Firefox media sessions
 - [ ] **D-18 (accepted 2026-11-23): owner-picked notch devices, preferences out of the notch**

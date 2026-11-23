@@ -1,8 +1,10 @@
 <script lang="ts">
   import type { NowPlaying } from '../../lib/ipc/engine';
+  import type { SpringPreset } from '../../lib/ipc/types';
   import { DEFAULT_IDLE_MODE, isMediaActive, type IdleMode } from '../../lib/notch/scheduler';
   import AlbumArtTile from './AlbumArtTile.svelte';
   import DeviceIcon from './DeviceIcon.svelte';
+  import VisualizerBars from './VisualizerBars.svelte';
 
   interface Props {
     deviceLabel: string;
@@ -11,6 +13,9 @@
     micMuted: boolean;
     media?: NowPlaying | null;
     idleMode?: IdleMode;
+    preset?: SpringPreset;
+    instant?: boolean;
+    notchVisible?: boolean;
   }
 
   let {
@@ -20,6 +25,9 @@
     micMuted,
     media = null,
     idleMode = DEFAULT_IDLE_MODE,
+    preset = 'smooth',
+    instant = false,
+    notchVisible = true,
   }: Props = $props();
 
   const activeMedia = $derived(isMediaActive(media) ? media : null);
@@ -63,14 +71,13 @@
         <span class="media-artist">{activeMedia.artist}</span>
       {/if}
     </div>
-    <span
-      class="status-glyph"
-      class:playing={isPlaying}
-      title={isPlaying ? 'Playing' : 'Paused'}
-      aria-label={isPlaying ? 'Playing' : 'Paused'}
-    >
-      <DeviceIcon kind={isPlaying ? 'play' : 'pause'} size={10} />
-    </span>
+    {#if isPlaying}
+      <VisualizerBars active={isPlaying && notchVisible} {preset} {instant} variant="compact" />
+    {:else}
+      <span class="status-glyph" title="Paused" aria-label="Paused">
+        <DeviceIcon kind="pause" size={10} />
+      </span>
+    {/if}
   </div>
 {:else}
   <div class="idle-row">

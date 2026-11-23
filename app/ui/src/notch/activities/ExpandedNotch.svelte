@@ -11,6 +11,7 @@
   } from '../../lib/notch/scheduler';
   import AlbumArtTile from './AlbumArtTile.svelte';
   import DeviceIcon from './DeviceIcon.svelte';
+  import VisualizerBars from './VisualizerBars.svelte';
 
   interface Props {
     playback: DeviceSummary[];
@@ -23,6 +24,7 @@
     media?: NowPlaying | null;
     instant?: boolean;
     idleMode?: IdleMode;
+    notchVisible?: boolean;
     activeMonitor: number;
     monitors: MonitorSummary[];
     preset: SpringPreset;
@@ -53,6 +55,7 @@
     media = null,
     instant = false,
     idleMode = DEFAULT_IDLE_MODE,
+    notchVisible = true,
     activeMonitor,
     monitors,
     preset,
@@ -95,6 +98,9 @@
             {/if}
           </span>
         </div>
+        {#if isPlaying}
+          <VisualizerBars active={isPlaying && notchVisible} {preset} {instant} variant="expanded" />
+        {/if}
         <div class="media-controls" role="group" aria-label="Media transport">
           <button
             class="chip icon-chip"
