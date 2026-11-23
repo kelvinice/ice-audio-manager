@@ -1881,7 +1881,7 @@ cache in `ice-core`/`ice-win` by Claude; network permission and window wiring by
 
 #### Positions
 
-**Revealed 2026-11-23. One revision round is open (§0.4).** Mark each revision “changed after reveal” and record the reason.
+**Revealed 2026-11-23. One revision round is open (§0.4).** Mark each revision “changed after reveal” and record the reason. **Post-reveal (Claude):** no score changes. Claude backs both amendments: a one-track lookup first that shows destination and fields, results bound to the track, late responses dropped, cache cleared on disable, no-match over mistimed lines (Codex); Rust-only fetch with the WebView CSP unchanged, and the lyrics timer only while visible and playing (Gemini).
 
 - Claude favors the external player shortcut and on-demand LRCLIB once Settings can disclose the lookup. [Claude's ballot](votes/D-22/claude.md)
 - Gemini favors per-feature consent, a native provider allowlist and lyric interpolation only while visible and playing. [Gemini's ballot](votes/D-22/gemini.md)
@@ -1979,7 +1979,7 @@ so `Minimal` can switch them off (§5: components use only theme variables; new 
 
 #### Positions
 
-**Revealed 2026-11-23. One revision round is open (§0.4).** Mark each revision “changed after reveal” and record the reason.
+**Revealed 2026-11-23. One revision round is open (§0.4).** Mark each revision “changed after reveal” and record the reason. **Post-reveal (Claude):** V1 +2 → +1 and V2 +1 → +2. Gemini's 384×178 mocks show blurred light/white covers washing into pale slate, while the 2-colour wash keeps contrast on any cover. Claude backs both amendments: V2 as the default backdrop with V1 as a theme opt-in and a luminance-adaptive scrim (Gemini), one backdrop treatment per theme (Codex), and D-18's device row stays visible.
 
 - Claude prefers subtle cover blur with a gradient fallback and a directly reachable device row. [Claude's ballot](votes/D-23/claude.md)
 - Gemini prefers the gradient and translucent controls at notch scale, with optional cover blur and solid Minimal controls. [Gemini's ballot](votes/D-23/gemini.md)
@@ -1989,10 +1989,10 @@ so `Minimal` can switch them off (§5: components use only theme variables; new 
 
 | Agent | V1 blurred art backdrop | V2 art gradient wash | V3 translucent controls | V4 cleanliness pass | V5 see-through blur | V6 lyrics styling |
 |---|---|---|---|---|---|---|
-| Claude | +2 | +1 | +1 | +2 | −1 | +1 |
+| Claude | +1 *(changed after reveal, was +2)* | +2 *(changed after reveal, was +1)* | +1 | +2 | −1 | +1 |
 | Gemini | +1 | +2 | +2 | +2 | −2 | +1 |
 | Codex | +1 | +1 | +1 | +2 | −2 | +1 |
-| **Total** | +4 | +4 | +4 | +6 | −5 | +3 |
+| **Total** | +3 | **+5** | +4 | **+6** | −5 | +3 |
 
 ---
 
@@ -2043,7 +2043,7 @@ closed decision changes only through a new entry.
 
 #### Positions
 
-**Revealed 2026-11-23. One revision round is open (§0.4).** Mark each revision “changed after reveal” and record the reason.
+**Revealed 2026-11-23. One revision round is open (§0.4).** Mark each revision “changed after reveal” and record the reason. **Post-reveal (Claude):** no score changes. Claude backs both amendments: the clean-room rule, where GPL/AGPL references are read only for screenshots and public protocol facts, never internal helper algorithms before writing an MIT equivalent (Gemini; Claude notes it read `LrcLib.kt`'s matching tolerances itself); and a G2 import decision that records upstream revision, exact licence grant, files and maintenance cost (Codex).
 
 - Claude favors revisiting MIT for a named component that meets the project’s trust rules. [Claude's ballot](votes/D-24/claude.md)
 - Gemini prefers MIT and found no specific Android or macOS UI component worth porting. [Gemini's ballot](votes/D-24/gemini.md)
@@ -2168,6 +2168,6 @@ A decision passes when all three agents have voted and the rules produce a resul
 | D-20 | Placement and modules | **P1 +5 (+2/+1/+2)** leads P2 +4 (+1/+2/+1), P3 −3. A2 +6 (+2/+2/+2). A2b −3 (−1/−1/−1). R1 +3, R2 +5 (+2/+2/+1), R3 −3, R4 −6 (−2/−2/−2) | **Closed 2026-11-23 (owner ruling)** | Owner: build both P1 and P2; Settings → Notch "Drag & snap" (default) or "Fixed position". Drag via own pointer capture, focus/keyboard release gate. A2 adopted, A2b rejected, R1+R2 adopted, R3+R4 rejected |
 | D-21 | User modes and resource caps | Part A 0 (0/+1/−1): **fails as written**. **C0 +6 (+2/+2/+2)**, C1 +1 (0/+1/0), C2 −6 | **Part B closed 2026-11-23: C0**; Part A → D-21.1 | Every cap stays. Rich bundle failed (0); its pieces are re-scored in D-21.1 |
 | D-21.1 | What replaces the Rich profile | L1 +5 (+2/+2/+1), L2 +5 (+2/+1/+2), L3 +3 (+1/+1/+1), L4 +1 (+1/+1/−1), L5 −3 (−1/−1/−1), L6 +3 (+1/+1/+1), in Claude/Gemini/Codex order | **Closed 2026-11-23 (owner)** | Accepted: L1 linger in config, L2 event-driven hit-testing (real-host spike first), L3 session pin (clears on lock/sleep), L6 cost readout (sampled only while the page is open). Rejected: L4, L5 |
-| D-22 | YouTube Music playback, lyrics, network use | N0 +1 (−1/+1/+1), N1 +6 (+2/+2/+2), N2 −5 (−1/−2/−2), B1 +6 (+2/+2/+2), B2 −3 (−1/−1/−1), B3 −6 (−2/−2/−2), K0 −1 (−1/0/0), K1 +5 (+2/+2/+1), K2 −2 (0/−1/−1), K3 −6 (−2/−2/−2) | **Open for one revision round (§0.4)** | Splits in Claude/Gemini/Codex order |
-| D-23 | Visual direction: art backdrop, translucency, cleanliness | V1 +4 (+2/+1/+1), V2 +4 (+1/+2/+1), V3 +4 (+1/+2/+1), V4 +6 (+2/+2/+2), V5 −5 (−1/−2/−2), V6 +3 (+1/+1/+1) | **Open for one revision round (§0.4)** | Splits in Claude/Gemini/Codex order |
-| D-24 | Project licence: MIT or GPL-3.0 | G0 +4 (+1/+2/+1), G1 −3 (−1/−1/−1), G2 +5 (+2/+1/+2) | **Open for one revision round (§0.4)** | Splits in Claude/Gemini/Codex order |
+| D-22 | YouTube Music playback, lyrics, network use | N0 +1 (−1/+1/+1), N1 +6 (+2/+2/+2), N2 −5 (−1/−2/−2), B1 +6 (+2/+2/+2), B2 −3 (−1/−1/−1), B3 −6 (−2/−2/−2), K0 −1 (−1/0/0), K1 +5 (+2/+2/+1), K2 −2 (0/−1/−1), K3 −6 (−2/−2/−2) | **Revision done by Claude · ready for owner** | Claude/Gemini/Codex. Passing: N1, B1, K1. Amendments: one-track lookup first, Rust-only fetch (WebView CSP unchanged), lyrics timer only while visible and playing |
+| D-23 | Visual direction: art backdrop, translucency, cleanliness | V1 +3 (+1/+1/+1; Claude changed after reveal), V2 +5 (+2/+2/+1; Claude changed after reveal), V3 +4 (+1/+2/+1), V4 +6 (+2/+2/+2), V5 −5 (−1/−2/−2), V6 +3 (+1/+1/+1) | **Revision done by Claude · ready for owner** | Claude/Gemini/Codex. Passing: V1, V2, V3, V4, V6 (V6 only if lyrics). Amendments: V2 default, V1 opt-in, luminance scrim, one backdrop per theme, D-18 device row stays visible |
+| D-24 | Project licence: MIT or GPL-3.0 | G0 +4 (+1/+2/+1), G1 −3 (−1/−1/−1), G2 +5 (+2/+1/+2) | **Revision done by Claude · ready for owner** | Claude/Gemini/Codex. G2 leads (+5). Amendments: clean-room rule for GPL/AGPL references; import record (revision, licence grant, files, upkeep) |

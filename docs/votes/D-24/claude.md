@@ -39,3 +39,13 @@ Until then, agents may *read* GPL references and must not copy or port them.
 
 The owner's offer is valuable and should stay open, but relicensing buys nothing until there's a specific GPL component we
 can't reasonably write ourselves *and* that passes D-22/§1. G2 keeps both doors open.
+
+## Revision round (after reveal, 2026-11-23)
+
+No score changes. I back both amendments:
+- Gemini's clean-room rule. GPL/AGPL references are used only for screenshots and public protocol facts, never for internal
+  helper algorithms before writing an MIT equivalent. I note I read `LrcLib.kt`'s duration tolerances myself (D-22 facts).
+  The tolerances are behaviour facts, but its title-cleaning regexes must be written independently from LRCLIB docs and our
+  own test cases.
+- Codex's import record for G2: upstream revision, exact licence grant (GPL-3.0-only vs -or-later), files, and the ongoing
+  cost of keeping a port current.

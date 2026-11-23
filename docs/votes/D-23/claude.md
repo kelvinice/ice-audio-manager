@@ -44,3 +44,15 @@ pass" that hides the device row behind "…" would undo D-18, which put picked d
 
 Adopt V1 (expanded card only, subtle by default, auto-scrim), V2 as its fallback and light-variant base, V4 with D-18 intact,
 V3 where contrast allows. V6 waits for D-22. Leave D-12's no-see-through-blur decision as it is.
+
+## Revision round (after reveal, 2026-11-23)
+
+| Option | Score | Reason |
+|---|---|---|
+| V1 · Blurred art backdrop | **+1 (was +2, changed after reveal)** | Gemini's 384×178 mocks: light and white covers blur into pale slate unless the scrim nearly hides the image. That's the risk I raised myself; now it's shown |
+| V2 · Art gradient wash | **+2 (was +1, changed after reveal)** | Keeps WCAG AA on bright and dark covers, needs no CSS blur over `clip-path`, and gives Fluent light its tonal variant |
+| V3, V4, V5, V6 | unchanged (+1, +2, −1, +1) | |
+
+Adopt Gemini's amendment (V2 default, V1 opt-in via `--ice-art-backdrop`, scrim clamped from the art's luminance) and Codex's
+(one backdrop treatment per theme; art layer has no pointer events; crossfade only on art-ID change; immediate swap with reduced
+motion). V4 keeps D-18's device row visible (both reviewers raised this).

@@ -48,3 +48,11 @@ product.
 
 Ship B1 now: it's a UI change with no new risk. Adopt N1 as the rule for any future network feature. Build K1 on demand after
 Phase 4, when Settings can host the switch and the privacy listing. Don't build B2 or B3.
+
+## Revision round (after reveal, 2026-11-23)
+
+No score changes. I back both amendments, which tighten my own "on demand" idea:
+- Codex: a one-track lookup first, showing the destination and fields; results bound to the original track; late responses
+  dropped after a switch; the cache cleared when the feature is turned off; no match rather than a mistimed line.
+- Gemini: the fetch lives in Rust with an `lrclib.net` allowlist, so the WebView CSP (`tauri.conf.json`) stays unchanged; the
+  lyrics timer ticks only while visible and `Playing`; B1 quick-launch links in the empty state.
