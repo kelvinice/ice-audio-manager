@@ -25,6 +25,7 @@ contract types, and `cargo test -p ice-core --all-features` exports them to `app
 ## The contract (what other modules use)
 - **`Engine` trait:** `snapshot()`, `send(Command)` (fire-and-forget; results arrive as events), `subscribe()` → `Receiver<Envelope>`
   (subscribe **before** reading the snapshot), `art(id)` → PNG bytes of the last 8 tracks, `meter()` → `MeterSubscription`.
+- **`Command::is_setting()`:** true for the commands that edit `config.toml` (exhaustive match, so a new variant must be classified). The Settings window may only send these.
 - **`Command`:** actions (`SwitchTo`, `SwitchBinding`, `TogglePair`, `CycleFavourites`, `SetVolume`, `StepVolume`, `ToggleMute`,
   `ToggleMicMute`, `Media`, `SetSpatial`, `ResolveChoice`, `Refresh`) and settings (`SetTogglePair`/`Remove…`, `SetBinding`/`Remove…`,
   `SetFavourites`, `SetDevicePrefs`, `SetTheme`, `SetPreset`, `SetIdleStyle`, `SetPerformanceProfile`, `SetPinnedMonitor`,
@@ -62,3 +63,4 @@ Inline `#[cfg(test)]` in each file. `resolve.rs` is built from the owner's real 
 
 ## Change log
 - 2026-11-23 Claude: initial recap.
+- 2026-11-23 Claude: `Command::is_setting()`.

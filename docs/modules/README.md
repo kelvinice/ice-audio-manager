@@ -36,7 +36,8 @@ Part of the Definition of Done ([code-practices §10](../code-practices.md#10-de
 | [ice-win-native-pill](ice-win-native-pill.md) | The native idle pill (no WebView): window, drawing, input | `crates/ice-win/src/native_dot*` | Gemini |
 | [app-shell](app-shell.md) | Tauri host: runtime state, windows, commands, engine bridge, placement, meter, `iceart://`, capabilities | `app/src-tauri/**` (except tray) | Codex |
 | [app-tray](app-tray.md) | Tray menus, prompts and notices | `app/src-tauri/src/tray*` | Codex |
-| [app-ui-notch](app-ui-notch.md) | Notch WebView: controller, scheduler, springs, geometry, activities, themes | `app/ui/**` | Gemini |
+| [app-ui-notch](app-ui-notch.md) | Notch WebView: controller, scheduler, springs, geometry, activities, themes | `app/ui/**` (except Settings) | Gemini |
+| [app-ui-settings](app-ui-settings.md) | Settings window: pages, controls, previews, settings client, `--ice-set-*` tokens | `app/ui/src/settings/**`, `app/ui/src/lib/settings/**` | Gemini |
 | [data-flows](data-flows.md) | End-to-end traces: hotkey switch, volume key, media, wake/suspend, settings change | cross-layer | all |
 
 ## Layers at a glance

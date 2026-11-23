@@ -11,7 +11,7 @@ any time (D-15). Heavy work (image decode, colour extraction, device sorting) ha
 | File | What it does |
 |---|---|
 | `index.html` → `src/notch/main.ts` → `notch/NotchApp.svelte` | The notch: a 420×190 transparent canvas holding one clipped pill |
-| `settings.html` → `src/settings/main.ts` → `settings/SettingsApp.svelte` | Settings window. **Placeholder today** (reads `notch://delta/v1`, reports `report_settings_ready`); the real pages are Phase 4 |
+| `settings.html` → `src/settings/main.ts` | Settings window: see [app-ui-settings](app-ui-settings.md) |
 | `src/themes/base.css` | All `--ice-*` tokens (documented in [theming.md](../theming.md): every new token must be added there) |
 
 ## `src/lib/` (logic, no markup)
@@ -56,3 +56,4 @@ any time (D-15). Heavy work (image decode, colour extraction, device sorting) ha
 ## Change log
 - 2026-11-23 Claude: initial recap.
 - 2026-11-23 Claude: `NotchDeviceRowModel.pickerLabel` is `'More…' | null`; the "Choose devices…" button is gone (no favourites = current device + toggle partner only).
+- 2026-11-23 Claude: theme blocks in `base.css` use `[data-theme='…']` (any element) so Settings can preview themes; Settings moved to its own doc.

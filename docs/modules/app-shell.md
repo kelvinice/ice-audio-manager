@@ -10,9 +10,11 @@ state to the UI, and exposes a small set of Tauri commands. Thin by rule: valida
 ## Files
 | File | What it does |
 |---|---|
-| `main.rs` | **1386 lines (over limit, split planned).** `SharedRuntime` (all shared state), `#[tauri::command]` handlers, `create_notch_window`, `create_settings_window`, idle suspend/resume, cursor poll, **`--bench` benchmark harness**, `run()`/`main()` |
+| `main.rs` | **1386 lines (over limit, split planned).** `SharedRuntime` (all shared state), `#[tauri::command]` handlers, `create_notch_window`, idle suspend/resume, cursor poll, **`--bench` benchmark harness**, `run()`/`main()` |
 | `engine_bridge.rs` | `EngineSlot` (engine or "starting" error), `start_audio` (config at `%APPDATA%\IceAudioManager\config.toml`), `retry_start` (1 s → 30 s backoff), `follow` (subscribe → snapshot → deltas, re-snapshot on gap), `project` (engine snapshot → `NotchSnapshot`), `TrackKey`, `watch` |
-| `ipc.rs` | `NotchSnapshot`, `NotchDelta`, `ActivityKind`, `MonitorSummary`, `HitRect` (TS bindings generated into `app/ui/src/lib/ipc/types.ts`) and the `open_music_service` command (notch window only; runs `ice_win::music_service::open` on a blocking task) |
+| `settings.rs` | Settings window (920×640, min 720×480, transparent over Mica, title bar follows light/dark via `WindowEvent::ThemeChanged`) and its commands: `apply_setting` (only `Command::is_setting`), `get_launch_at_sign_in`, `set_launch_at_sign_in` |
+| `startup.rs` | Launch at sign-in, shared by the tray and Settings; reads the registry each time (no cached copy) |
+| `ipc.rs` | `NotchSnapshot`, `NotchDelta`, `ActivityKind`, `MonitorSummary` (index, id, `display_path`, `name`, position, size, scale, Hz), `HitRect` (TS bindings generated into `app/ui/src/lib/ipc/types.ts`) and the `open_music_service` command (notch window only; runs `ice_win::music_service::open` on a blocking task) |
 | `placement.rs` | `Placement` (profile, pinned monitor, coverage, `gaming`, `generation`), `watch` (fullscreen + display changes), `reconcile` (apply profile/monitor/gaming to windows and the native pill) |
 | `meter.rs` | `Visualizer`: the shell owns the `audio://meter/v1` subscription; the WebView only *requests* frames |
 | `art.rs` | `iceart://<id>` handler: engine PNGs only, no paths/queries/other methods |
@@ -25,7 +27,7 @@ state to the UI, and exposes a small set of Tauri commands. Thin by rule: valida
   `audio://meter/v1` (`MeterFrame`). Sent with `emit_to("notch"|"settings", …)`.
 - **Commands (UI → shell):** `get_notch_snapshot`, `get_engine_snapshot`, `report_hit_rect`, `report_first_paint`, `report_settings_ready`, `report_event_rendered`,
   `adjust_volume`, `toggle_mute`, `toggle_mic_mute`, `trigger_switch`, `switch_to_device`, `set_notch_devices`, `media_command`, `toggle_expand`,
-  `request_idle_suspend`, `open_settings`, `set_visualizer`, `open_music_service`. A new command also needs a
+  `request_idle_suspend`, `open_settings`, `set_visualizer`, `apply_setting`, `get_launch_at_sign_in`, `set_launch_at_sign_in` (Settings window only, permission `settings-controls`), `open_music_service`. A new command also needs a
   permission in `permissions/shell.toml` and a capability entry.
 - **Flags:** `--fake-engine` (FakeEngine), `--start-minimized`, `--show-notch`, `--verbose`, `--bench` (+ `--sample-secs`, `--out`).
 
@@ -52,3 +54,4 @@ Unit tests in `art.rs`, `engine_bridge.rs`, `ipc.rs`, `meter.rs`, `placement.rs`
 
 ## Change log
 - 2026-11-23 Claude: initial recap.
+- 2026-11-23 Claude: Settings window moved to `settings.rs` (resizable, Mica, live theme) with `apply_setting` + launch-at-sign-in commands; `startup.rs`; `MonitorSummary` gains display path, name and position.

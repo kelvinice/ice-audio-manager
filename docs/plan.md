@@ -230,7 +230,7 @@ games on the pinned monitor. Budgets met in every profile.
         favourite. With no favourites: current device + the other side of the toggle pair and no picker button (owner, 2026-11-23: favourites are set from the tray's "Show in notch"), never
         "all devices". Alias-aware chips wide enough to read, at most 4–5, then "More…". Remove the theme, spring, idle-style and
         monitor pickers from the expanded card
-  - [ ] Settings → Devices: reorderable list (Phase 4)
+  - [x] Settings → Devices: reorderable list (Phase 4; Claude, `phase-4/settings-window`)
 
 **Exit criteria:** track changes animate within 300 ms of the event. Visualizer costs < 1% CPU while visible and 0% while hidden.
 
@@ -329,15 +329,21 @@ Items marked *(needs Settings)* wait for the Phase 4 Settings window. The rest c
 
 **Features:** F19–F23.
 
-- [ ] Settings window: created on demand, destroyed on close; Mica backdrop; light/dark
+- [x] Settings window: created on demand, destroyed on close; Mica backdrop; light/dark (Claude, `phase-4/settings-window`;
+      [module doc](modules/app-ui-settings.md))
 - [ ] Pages: General (incl. **Performance profile**) · Devices (aliases, hide, favourites, icons) · Hotkeys (recorder via `RegisterHotKey` test-bind) ·
       Notch (geometry, idle mode, pinned monitor) · Activities (toggles, durations, priorities) · Appearance (theme, accent, springs) · About (version)
+  - [x] General (launch at sign-in, performance profile, default roles, show disconnected) · Devices (notch order, star, alias,
+        spatial, hide/show) · Shortcuts (toggle pairs, device shortcuts, recorder, knob gestures) · Notch (idle style, display map) ·
+        Appearance (theme and animation with live previews) · About (version, trust promises)
+  - [ ] Activities page (needs config for module switches, D-20 R2 / D-22), notch anchor (D-20), favourites cycle hotkey
+        (config has `cycle_hotkey` but no command yet), live cost readout (D-21.1 L6)
 - [ ] Theme system: bundled `Ice` (default, portfolio palette), `Midnight`, `Fluent`, `Minimal`. User themes = CSS files in
       `%APPDATA%\IceAudioManager\themes\` overriding documented `--ice-*` tokens, **validated before applying**, with **live preview**
 - [ ] Strict CSP: a theme with remote `url()`/`@import` produces zero network requests (verified)
 - [x] Documented theme API (`docs/theming.md`): every token, its default, an example theme
 - [ ] Import/export config + theme bundle (`.zip`)
-- [ ] Every setting applies live without restart
+- [ ] Every setting applies live without restart (true for every setting the window has today)
 
 **Exit criteria:** a user can build a theme without reading source code. Closing Settings returns memory to the idle budget
 (verified after 10× open/close, in the Phase 6 testing pass).

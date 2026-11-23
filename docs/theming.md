@@ -59,6 +59,33 @@ All `--ice-*` variables are defined with their `Ice` defaults in CSS `:root`. An
 | `--ice-scale` | Geometry | `1` | No | User scale multiplier for notch geometry |
 | `--ice-bar-height` | Geometry | `5px` | No | Thickness of the volume progress bar track/fill |
 
+### 2.1 Settings window tokens (`--ice-set-*`)
+
+The Settings window (`app/ui/src/themes/settings.css`) is a normal Windows 11 window over Mica, so it follows Windows'
+**light/dark app mode** instead of the notch theme. Its tokens are separate from the notch's, which describe the always-dark
+notch surface. Light-mode values are redefined under `@media (prefers-color-scheme: light)`. Previews inside Settings
+(theme and idle-style cards) still draw the notch with the `--ice-*` tokens above.
+
+| Token | Dark | Light | Purpose |
+| --- | --- | --- | --- |
+| `--ice-set-solid-bg` | `#1c2027` | `#eef2f6` | Page background only where Mica can't show (dev preview); also native `<option>` lists |
+| `--ice-set-layer` / `-border` | `rgba(255,255,255,0.035)` / `0.06` | `rgba(255,255,255,0.5)` / `rgba(0,0,0,0.06)` | Content panel to the right of the navigation |
+| `--ice-set-card` / `-hover` / `-border` | `rgba(255,255,255,0.05)` / `0.075` / `0.065` | `rgba(255,255,255,0.72)` / `rgba(250,250,250,0.56)` / `rgba(0,0,0,0.07)` | Setting cards, choice cards, lists |
+| `--ice-set-control` / `-hover` / `-border` | `rgba(255,255,255,0.06)` / `0.09` / `0.1` | `rgba(255,255,255,0.75)` / `rgba(249,249,249,0.55)` / `rgba(0,0,0,0.13)` | Buttons, selects, text fields |
+| `--ice-set-control-strong` | `rgba(255,255,255,0.6)` | `rgba(0,0,0,0.58)` | Toggle and radio outlines when off |
+| `--ice-set-nav-hover` / `-active` | `rgba(255,255,255,0.055)` / `0.085` | `rgba(0,0,0,0.04)` / `0.06` | Navigation item fills |
+| `--ice-set-divider` | `rgba(255,255,255,0.08)` | `rgba(0,0,0,0.08)` | Rows inside an expanded card |
+| `--ice-set-fg` / `-muted` / `-subtle` | `#fff` / `0.7` / `0.5` alpha | `#1b1b1b` / `0.64` / `0.47` alpha | Text: titles, descriptions, placeholders |
+| `--ice-set-accent` / `-hover` / `-fg` / `-soft` | `#6bc5ff` / `#8dd3ff` / `#06121c` / 14 % | `#0a6ead` / `#1a7fc0` / `#fff` / 10 % | Selection, toggles on, links, badges. Light mode is darker for ≥ 4.5:1 on white |
+| `--ice-set-focus` | `#fff` | `#000` | Keyboard focus ring |
+| `--ice-set-ok` / `-warn` / `-danger` | `#6ccb5f` / `#fce100` / `#ff99a4` | `#0f7b0f` / `#8a5300` / `#c42b1c` | "Saved", warnings, errors |
+| `--ice-set-info-bg` / `-warn-bg` / `-danger-bg` | tinted 8–10 % | tinted 8–16 % | Info bar fills |
+| `--ice-set-keycap` / `-border` | `rgba(255,255,255,0.08)` / `0.16` | `rgba(0,0,0,0.035)` / `0.16` | Shortcut key caps |
+| `--ice-set-shadow` | `0 2px 10px rgba(0,0,0,0.28)` | `0 2px 8px rgba(0,0,0,0.08)` | Raised elements |
+| `--ice-set-desktop` | dusk gradient | daylight gradient | Wallpaper behind notch previews |
+| `--ice-set-radius` / `-radius-sm` | `8px` / `4px` | same | Cards / controls |
+| `--ice-set-ease` | `cubic-bezier(0.2, 0, 0, 1)` | same | Short control transitions (off with Windows' animation effects) |
+
 ### Supported Colour Formats (Native Pill Parser)
 
 Tokens marked **Synced to Native Pill** are parsed directly by `ice_win::native_dot::NativePillTheme` in addition to the WebView CSS engine. Use any of these CSS colour notations so both renderers match:
@@ -95,7 +122,7 @@ The default `Ice` theme derives directly from the owner's personal brand identit
 
 ## 4. Bundled Themes (`data-theme`)
 
-Four built-in themes ship out of the box (selected via config / Settings `Appearance` and applied via `:root[data-theme='<id>']`). Unlisted tokens inherit from `Ice` (`:root`).
+Four built-in themes ship out of the box (selected via config / Settings `Appearance` and applied via `[data-theme='<id>']`). The selector matches any element, not only `:root`, so Settings → Appearance can preview every theme side by side. Unlisted tokens inherit from `Ice` (`:root`).
 
 | Theme ID | Character | Override Deltas vs. `Ice` |
 | --- | --- | --- |

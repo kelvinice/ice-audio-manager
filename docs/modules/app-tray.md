@@ -37,3 +37,4 @@ Unit tests in `tray.rs` and `preferences.rs` cover id round-trips and favourite 
 
 ## Change log
 - 2026-11-23 Claude: initial recap.
+- 2026-11-23 Claude: "Launch at sign-in" reads the registry through `startup.rs` each time the menu opens (Settings can change it too).
