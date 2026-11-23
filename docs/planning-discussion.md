@@ -1759,16 +1759,20 @@ This round scores the pieces separately.
 
 #### Positions
 
-Sealed until all three agents have voted (§0.4): `docs/votes/D-21.1/<agent>.md`.
+**Revealed 2026-11-23. The §0.4 revision round is open.** Preserve the original scores and give a reason for each revision, marking it “changed after reveal” in the table.
+
+- Claude supports configurable linger, visible cost, a session pin and opt-in awake playback. Claude would gate L2 on a real-host spike and clear the pin on lock or sleep. [Claude's ballot](votes/D-21.1/claude.md)
+- Gemini favors config-first linger, the existing pin, opt-in awake playback and a page-scoped cost readout. Gemini proposes resizing the region at morph start and settle, with a visual check of the shadow. [Gemini's ballot](votes/D-21.1/gemini.md)
+- Codex favors L2, linger, explicit pinning and the cost readout. The stationary WebView2 region test passed. Codex wants moving-edge and mixed-DPI checks and weighs long background playback against L4. [Codex's ballot](votes/D-21.1/codex.md)
 
 #### Vote · *pick many* (L1–L6)
 
 | Agent | L1 linger in config | L2 event-driven hit-testing | L3 session pin | L4 awake while playing | L5 `Rich` profile | L6 live cost readout |
 |---|---|---|---|---|---|---|
-| Claude | *sealed* | *sealed* | *sealed* | *sealed* | *sealed* | *sealed* |
-| Gemini | | | | | | |
-| Codex | | | | | | |
-| **Total** | | | | | | **Open (blind round)** |
+| Claude | +2 | +2 | +1 | +1 | −1 | +1 |
+| Gemini | +2 | +1 | +1 | +1 | −1 | +1 |
+| Codex | +1 | +2 | +1 | −1 | −1 | +1 |
+| **Total** | **+5** | **+5** | **+3** | **+1** | **−3** | **+3** |
 
 ---
 
@@ -1879,4 +1883,4 @@ A decision passes when all three agents have voted and the rules produce a resul
 | D-19 | Native idle pill | A1 +6 (+2/+2/+2), A2 +3 (+1/+1/+1), A3 −6 (−2/−2/−2), A4 −3 (−1/−1/−1). Part B +3 (+1/+1/+1; Claude changed after reveal from +2) | **Closed 2026-11-23 (owner)** | Accepted with the amendments: A1 click-first (+ drag per D-20), A2 hotkey, B1 `IdleContent`, B2 renderer passing the RAM gate in every idle profile (GDI first), B3 QA. Fix the "MIC OFF" bug now |
 | D-20 | Placement and modules | **P1 +5 (+2/+1/+2)** leads P2 +4 (+1/+2/+1), P3 −3. A2 +6 (+2/+2/+2). A2b −3 (−1/−1/−1). R1 +3, R2 +5 (+2/+2/+1), R3 −3, R4 −6 (−2/−2/−2) | **Closed 2026-11-23 (owner ruling)** | Owner: build both P1 and P2; Settings → Notch "Drag & snap" (default) or "Fixed position". Drag via own pointer capture, focus/keyboard release gate. A2 adopted, A2b rejected, R1+R2 adopted, R3+R4 rejected |
 | D-21 | User modes and resource caps | Part A 0 (0/+1/−1): **fails as written**. **C0 +6 (+2/+2/+2)**, C1 +1 (0/+1/0), C2 −6 | **Part B closed 2026-11-23: C0**; Part A → D-21.1 | Every cap stays. Rich bundle failed (0); its pieces are re-scored in D-21.1 |
-| D-21.1 | What replaces the Rich profile | — | **Open: blind round (§0.4)** | L1–L6 pick many; Claude sealed; waiting for Gemini and Codex |
+| D-21.1 | What replaces the Rich profile | L1 +5 (+2/+2/+1), L2 +5 (+2/+1/+2), L3 +3 (+1/+1/+1), L4 +1 (+1/+1/−1), L5 −3 (−1/−1/−1), L6 +3 (+1/+1/+1), in Claude/Gemini/Codex order | **Open for one revision round (§0.4)** | All three ballots revealed 2026-11-23 |
