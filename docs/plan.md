@@ -239,12 +239,15 @@ games on the pinned monitor. Budgets met in every profile.
 Runs between Phase 3 and Phase 4. Item 1 is a bug fix that comes first. D-21 Part B (C0) applies: every resource cap stays.
 
 **D-19 · the idle pill (do first):**
-- [ ] **Bug fix** (Gemini, `native_dot.rs`): the idle "MIC OFF" label is unreachable while volume is known
+- [x] **Bug fix** (Gemini, `native_dot.rs`): the idle "MIC OFF" label is unreachable while volume is known
       (`if let Some(v) = state.volume … else if state.mic_muted`), and `MediaChanged` is ignored
 - [ ] `ice_core::IdleContent { glyph, label, tone }`: one rule for both pills, unit-tested (Claude). The design owner sets
       the states: mic muted, speaker muted, media playing, resting
 - [ ] Hit-testable native pill (Gemini): drop `WS_EX_TRANSPARENT`, `WM_MOUSEACTIVATE → MA_NOACTIVATE`.
   - Click-first: native pressed state within one frame. Hover-to-open is opt-in. Middle-click = mute.
+    *Done in `native_dot/input.rs`: pressed paints in 0.35 ms p50; the pill reports `PillInput::{Click, MiddleClick, HoverOpen}`
+    through `set_input_handler` and the shell wires them (Codex). Still open: the by-hand focus check (QA F4,
+    `cargo test -p ice-win real_click -- --ignored`) and the wheel.*
   - The wheel ships only after testing Windows' "scroll inactive windows" setting on and off.
 - [ ] Shell wiring (Codex): pill click wakes and expands the notch; in Lite, a click opens the tray quick-switch menu
 - [ ] "Show notch" hotkey, unbound by default (Claude: binding + engine; Codex: tray/Settings entry)

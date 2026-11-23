@@ -202,3 +202,13 @@ Compared `MiniPill` (`mini_pill` / `IdleStyle::MiniPill`), `Dot` (`dot` / `IdleS
 ### Run · 2026-11-23 · F17 shell meter
 
 With the real Windows engine, `--verbose`, and a temporary notch-side IPC probe, the engine logged `meter stopped: no subscribers` 31 ms after hide/TrySuspend, 32 ms after the fullscreen fixture triggered gaming mode on the notch monitor, and 63 ms after switching to Lite. Windows thread descriptions showed `ice-meter` and `ice-notch-meter` while visible and neither after each transition.
+
+### Run: 2026-11-23 · `feat/native-pill-input` · Gemini
+
+| ID / Check | Result | Notes |
+|---|---|---|
+| **Pressed state within one frame** (`pressed_state_is_painted_within_one_frame`) | ✅ | The press is painted inside `WM_LBUTTONDOWN`: p50 0.35 ms, p95 0.63 ms over 30 presses (one frame at 144 Hz is 6.9 ms). |
+| **Click / cancel / middle click** (`window_press_is_painted_before_the_click_arrives`, pure `step` tests) | ✅ | Press then release inside = `Click`; releasing outside, or losing capture, cancels; middle click inside = `MiddleClick`; hover-to-open sends nothing unless a delay is set. |
+| **Real click leaves the foreground window alone (QA F4)** (`real_click_reaches_the_pill_without_taking_focus`, `--ignored`) | ⚠️ Not run | This session denies `SetCursorPos` (`Access is denied`, RDP/locked desktop). Run by hand on the interactive desktop: `cargo test -p ice-win real_click -- --ignored`. It moves the cursor and clicks the pill. |
+| **Wheel over the pill** | Pending | Not handled on purpose: test Windows' "Scroll inactive windows" on and off first (plan.md, D-19). The wheel over the 92×18 pill no longer reaches the window beneath it. |
+| **Click-through of the pill's transparent corners** | Pending hands-on | Per-pixel alpha should let the corner pixels through; check on a maximised browser's tab strip at 100 % and 150 %. |

@@ -26,7 +26,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
     PostMessageW, PostQuitMessage, RegisterClassExW, SET_WINDOW_POS_FLAGS, SW_HIDE, SW_SHOWNOACTIVATE, SWP_NOACTIVATE,
     SWP_NOMOVE, SWP_NOOWNERZORDER, SWP_NOSENDCHANGING, SWP_NOSIZE, SetTimer, SetWindowPos, ShowWindow,
     TranslateMessage, ULW_ALPHA, UpdateLayeredWindow, WM_APP, WM_CLOSE, WM_DESTROY, WM_TIMER, WNDCLASSEXW,
-    WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_EX_TRANSPARENT, WS_POPUP,
+    WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP,
 };
 use windows::core::{Result, w};
 
@@ -49,6 +49,17 @@ const DEVICE_H: i32 = 30;
 
 pub use ice_core::appearance::IdleStyle;
 use ice_core::appearance::ThemeKind;
+
+mod input;
+
+pub use input::{InputHandler, PillInput, PillInteraction};
+
+/// How much brighter the rim gets under the cursor, so the pill reads as clickable (D-19 A1).
+const HOVER_RIM_BOOST: f32 = 0.30;
+/// Rim strength, background tint and floor alpha of the pressed state.
+const PRESSED_RIM_STRENGTH: f32 = 0.95;
+const PRESSED_TINT_ALPHA: f32 = 0.14;
+const PRESSED_MIN_ALPHA: f32 = 0.94;
 
 const SWP_KEEP_SIZE: SET_WINDOW_POS_FLAGS =
     SET_WINDOW_POS_FLAGS(SWP_NOACTIVATE.0 | SWP_NOOWNERZORDER.0 | SWP_NOSENDCHANGING.0 | SWP_NOMOVE.0 | SWP_NOSIZE.0);
@@ -387,6 +398,8 @@ pub struct PillState {
     pub mode: PillMode,
     pub idle_style: IdleStyle,
     pub theme: NativePillTheme,
+    /// Pointer state. Owned by the window thread; `show_state` keeps the live value.
+    pub interaction: PillInteraction,
 }
 
 impl Default for PillState {
@@ -410,6 +423,7 @@ impl PillState {
             mode: PillMode::Idle,
             idle_style: IdleStyle::default(),
             theme,
+            interaction: PillInteraction::None,
         }
     }
 
@@ -514,6 +528,7 @@ struct RuntimeState {
     activity_timeout_ms: Option<u32>,
     pulse_accent_override: Option<Rgba>,
     signals: VecDeque<ThreadSignal>,
+    input: input::InputState,
 }
 
 struct SharedState {
@@ -521,6 +536,7 @@ struct SharedState {
     visible: AtomicBool,
     closing: AtomicBool,
     runtime: Mutex<RuntimeState>,
+    input_handler: Mutex<Option<InputHandler>>,
 }
 
 impl SharedState {
@@ -602,7 +618,9 @@ impl NativeDotHandle {
                 activity_timeout_ms: None,
                 pulse_accent_override: None,
                 signals: VecDeque::new(),
+                input: input::InputState::default(),
             }),
+            input_handler: Mutex::new(None),
         });
         let shared_thread = Arc::clone(&shared);
         let (tx, rx) = mpsc::sync_channel::<Result<isize>>(1);
@@ -705,6 +723,16 @@ impl NativeDotHandle {
         self.shared.post_signal(ThreadSignal::MoveMonitor);
     }
 
+    /// Sets who hears clicks on the pill (D-19 A1). The handler runs on the pill's window thread, so it must not block.
+    pub fn set_input_handler(&self, handler: InputHandler) {
+        *self.shared.input_handler.lock().unwrap_or_else(PoisonError::into_inner) = Some(handler);
+    }
+
+    /// Turns hover-to-open on with a dwell from config, or off (`None`, the default: click-first).
+    pub fn set_hover_open(&self, delay: Option<Duration>) {
+        self.shared.lock().input.set_hover_open(delay);
+    }
+
     /// Returns whether the native pill window is currently visible.
     #[must_use]
     pub fn is_visible(&self) -> bool {
@@ -775,7 +803,9 @@ impl NativeDotHandle {
             let mut rt = self.shared.lock();
             rt.pulse_accent_override = None;
             rt.base_theme = state.theme;
+            let interaction = rt.pill.interaction;
             rt.pill = state.clone();
+            rt.pill.interaction = interaction;
             rt.desired_visible = true;
         }
         self.shared.post_signal(ThreadSignal::Sync { restart_timer });
@@ -944,7 +974,8 @@ fn dot_thread_main(monitor: MonitorInfo, shared: Arc<SharedState>, ready_tx: mps
     // SAFETY: registering an immutable static window class name; duplicate registration is harmless.
     unsafe { RegisterClassExW(&raw const wc) };
 
-    let ex_style = WS_EX_LAYERED | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW | WS_EX_TOPMOST | WS_EX_TRANSPARENT;
+    // Not WS_EX_TRANSPARENT: the pill takes clicks (D-19 A1). Per-pixel alpha still lets the transparent corners through.
+    let ex_style = WS_EX_LAYERED | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW | WS_EX_TOPMOST;
     let phys_w = monitor.logical_to_physical(IDLE_W);
     let phys_h = monitor.logical_to_physical(IDLE_H);
     let x = monitor.left + (monitor.width - phys_w) / 2;
@@ -974,6 +1005,7 @@ fn dot_thread_main(monitor: MonitorInfo, shared: Arc<SharedState>, ready_tx: mps
         }
     };
 
+    input::attach(hwnd, &shared);
     let initial_state = PillState::new(NativePillTheme::default());
     let _ = paint_pill(hwnd, &monitor, &initial_state);
     let _ = ready_tx.send(Ok(hwnd.0 as isize));
@@ -1052,6 +1084,7 @@ fn dot_thread_main(monitor: MonitorInfo, shared: Arc<SharedState>, ready_tx: mps
                 let _ = unsafe { KillTimer(Some(hwnd), ACTIVITY_TIMER_ID) };
             }
             if need_hide || !desired_visible {
+                input::reset(hwnd, &shared);
                 // SAFETY: hides layered window without changing activation.
                 let _ = unsafe { ShowWindow(hwnd, SW_HIDE) };
                 shared.visible.store(false, Ordering::Release);
@@ -1089,6 +1122,9 @@ fn reveal_topmost_noactivate(hwnd: HWND) {
 }
 
 unsafe extern "system" fn dot_wnd_proc(hwnd: HWND, umsg: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
+    if let Some(result) = input::dispatch(hwnd, umsg, wparam, lparam) {
+        return result;
+    }
     match umsg {
         WM_CLOSE => {
             // SAFETY: destroys timer and window on its owning thread.
@@ -1099,6 +1135,7 @@ unsafe extern "system" fn dot_wnd_proc(hwnd: HWND, umsg: u32, wparam: WPARAM, lp
             LRESULT(0)
         }
         WM_DESTROY => {
+            input::detach(hwnd);
             // SAFETY: exits this thread's message loop cleanly.
             unsafe { PostQuitMessage(0) };
             LRESULT(0)
@@ -1254,6 +1291,11 @@ pub(crate) fn rasterize_pill_frame(pixels: &mut [u32], w: i32, h: i32, scale: f3
         | PillMode::DeviceEvent { is_removal: false, .. } => (state.theme.rim, 0.70),
     };
     let (rim_r, rim_g, rim_b, rim_a) = rim_color.as_f32_rgba();
+    let rim_strength = match state.interaction {
+        PillInteraction::None => rim_strength,
+        PillInteraction::Hover => (rim_strength + HOVER_RIM_BOOST).min(1.0),
+        PillInteraction::Pressed => PRESSED_RIM_STRENGTH,
+    };
 
     let label_buf: String;
     let mut label_str = "";
@@ -1341,6 +1383,11 @@ pub(crate) fn rasterize_pill_frame(pixels: &mut [u32], w: i32, h: i32, scale: f3
                 cg = cg * (1.0 - rim_t) + rim_g * rim_t;
                 cb = cb * (1.0 - rim_t) + rim_b * rim_t;
                 alpha = alpha.max(rim_t * coverage);
+            }
+
+            if state.interaction == PillInteraction::Pressed {
+                blend_over(&mut cr, &mut cg, &mut cb, fg_r, fg_g, fg_b, PRESSED_TINT_ALPHA);
+                alpha = alpha.max(PRESSED_MIN_ALPHA * coverage);
             }
 
             match state.mode {
@@ -2002,6 +2049,27 @@ mod tests {
         rev += 1;
         pill.apply_envelope(&Envelope { revision: rev, event: EngineEvent::MediaChanged { media: None } });
         assert_eq!(pill.media_status, None);
+    }
+
+    #[test]
+    fn hover_and_pressed_states_are_drawn_distinctly() {
+        let (lw, lh) = logical_dimensions(PillMode::Idle, IdleStyle::MiniPill);
+        let render = |interaction| {
+            let mut st = PillState::new(NativePillTheme::ice());
+            st.interaction = interaction;
+            let mut px = vec![0u32; (lw * lh) as usize];
+            rasterize_pill_frame(&mut px, lw, lh, 1.0, &st);
+            px
+        };
+        let (none, hover, pressed) =
+            (render(PillInteraction::None), render(PillInteraction::Hover), render(PillInteraction::Pressed));
+        assert_ne!(none, hover);
+        assert_ne!(hover, pressed);
+        assert_ne!(none, pressed);
+        // The pressed centre is lighter than the resting one: that is what a press looks like on a dark pill.
+        let centre = ((lh / 2) * lw + lw / 2) as usize;
+        let luma = |p: u32| ((p >> 16) & 0xff) + ((p >> 8) & 0xff) + (p & 0xff);
+        assert!(luma(pressed[centre]) > luma(none[centre]));
     }
 
     #[test]
