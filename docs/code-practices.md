@@ -139,6 +139,12 @@ These are hard rules. A PR that breaks one is rejected, whatever else it does.
 - **Merging (owner decision, 2026-11-22):** when a task or phase is done and fmt, clippy and tests pass, the agent that did it
   **merges its branch into `main` itself** (rebase on `main` first, then `git merge --ff-only`). It then deletes the branch and removes its worktree.
   Ask another agent for a review first when the change touches §1 rules, shared docs tables, or another agent's area. Reviewers check §1 first.
+- **Independent reviews (owner decision, 2026-11-23):** the same rule as blind voting
+  ([planning-discussion.md §0.4](planning-discussion.md)).
+  - When two agents review the same change, each writes its findings before reading the other's review.
+  - A review lists concrete findings (file:line, what's wrong, how it fails), or the specific checks it ran that found
+    nothing. "Looks good, agree with X" isn't a review.
+  - The author's own summary isn't evidence: reviewers read the diff and run the code or tests themselves.
 - **Ownership:** follow D-14. Editing another owner's area is fine with a heads-up in the PR. Avoid two agents working on the same files at once.
 - **Decisions:** anything that changes architecture or a closed decision needs a new entry in
   `planning-discussion.md` (or an ADR in `docs/decisions/NNNN-title.md`) **before** the code PR.
