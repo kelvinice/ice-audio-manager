@@ -1328,6 +1328,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             switch_to_device,
             set_notch_devices,
             media_command,
+            ipc::open_music_service,
             meter::set_visualizer,
             toggle_expand,
             request_idle_suspend,

@@ -18,6 +18,7 @@ pub mod media;
 pub mod media_service;
 pub mod meter;
 pub mod monitors;
+pub mod music_service;
 pub mod native_dot;
 pub mod notify;
 pub mod overlay_win;

@@ -1,7 +1,7 @@
-import type { ArtInfo, NowPlaying, Rgb, SettingsView } from '../ipc/engine.ts';
+import type { ArtInfo, MusicServiceId, NowPlaying, Rgb, SettingsView } from '../ipc/engine.ts';
 import { formatRgbGlowCss, isMediaActive } from './scheduler.ts';
 
-export type MusicServiceId = 'spotify' | 'youtube_music';
+export type { MusicServiceId } from '../ipc/engine.ts';
 
 export interface MusicServiceItem {
   id: MusicServiceId;

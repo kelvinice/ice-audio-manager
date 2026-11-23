@@ -55,6 +55,8 @@ export type VolumeState = {
  */
 percent: number, muted: boolean, };
 
+export type MusicServiceId = "spotify" | "youtube_music";
+
 export type MediaAction = "playPause" | "play" | "pause" | "next" | "previous";
 
 export type PlaybackStatus = "playing" | "paused" | "stopped" | "changing" | "opened" | "closed";

@@ -66,6 +66,23 @@ pub enum NotchDelta {
     State { snapshot: NotchSnapshot },
 }
 
+#[tauri::command]
+pub(super) async fn open_music_service(
+    window: tauri::WebviewWindow,
+    service: ice_core::media::MusicServiceId,
+) -> Result<(), String> {
+    if window.label() != "notch" {
+        return Err("Only the notch can launch music services".into());
+    }
+    tauri::async_runtime::spawn_blocking(move || ice_win::music_service::open(service))
+        .await
+        .map_err(|e| e.to_string())?
+        .map_err(|e| {
+            tracing::warn!(%e, "Could not launch music service");
+            e.to_string()
+        })
+}
+
 #[cfg(test)]
 mod tests {
     use std::path::Path;
@@ -128,6 +145,8 @@ mod tests {
             &format!("export {}", DeviceSummary::decl(&cfg)),
             "",
             &format!("export {}", VolumeState::decl(&cfg)),
+            "",
+            &format!("export {}", ice_core::media::MusicServiceId::decl(&cfg)),
             "",
             &format!("export {}", MediaAction::decl(&cfg)),
             "",

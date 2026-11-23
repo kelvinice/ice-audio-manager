@@ -299,7 +299,7 @@ Items marked *(needs Settings)* wait for the Phase 4 Settings window. The rest c
 **D-22 · Music services widget (owner: enabled by default):**
 - [x] "Music services" widget in the expanded notch and the empty "nothing playing" state (Gemini UI).
   - Quick-launch buttons (`MusicServicesWidget.svelte`, `backdrop.ts#resolveMusicServices`) for Spotify and YouTube Music in the expanded footer and empty state (`open_music_service` invoke wired gracefully).
-- [ ] Shell side (Codex): find and launch the installed Spotify / YouTube Music web apps; fall back to the URL.
+- [x] Shell side (Codex): find and launch the installed Spotify / YouTube Music web apps; fall back to the URL.
 - [ ] One switch per service in Settings → Activities (Spotify, YouTube Music), both on by default; config fields with defaults
       (Claude) *(the switches need Settings; the config can land first)*
 
