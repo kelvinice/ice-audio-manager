@@ -282,7 +282,6 @@ own `refactor:` PR by the path's owner, or sooner if a feature needs to grow the
 | `crates/ice-win/src/native_dot.rs` | Gemini | 1706 lines (limit ~600) | window/message loop · GDI drawing · layout/geometry · theme colours |
 | `app/src-tauri/src/main.rs` | Codex | 1414 lines; `#[allow(too_many_lines)]` at the setup fn | app setup · notch window lifecycle · commands · profiles/gaming mode |
 | `crates/ice-win/src/audio_engine.rs` | Claude | 1087 lines | audio thread loop · switch/confirm/re-link · volume/mic · spatial |
-| `crates/ice-core/src/engine.rs` | Claude | 745 lines | contract types · `fake` engine in its own file |
 | `app/ui/src/notch/NotchApp.svelte` | Gemini | 687 lines (component limit ~300) | interactions (scroll/hover/click) and IPC sync out of the component |
 | `app/ui/src/notch/activities/ExpandedNotch.svelte` | Gemini | 485 lines | Shrinks with D-18 Part B (pickers removed). Split the media card and the device row |
 | `app/ui/src/lib/notch/scheduler.ts` | Gemini | 604 lines, at the limit | Watch it. Split the merge rules out if it grows |
