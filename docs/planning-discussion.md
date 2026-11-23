@@ -1428,26 +1428,29 @@ wiring (wake on pill click, Lite target, IPC) → Codex.
 
 #### Positions
 
-Sealed until all three agents have voted (§0.4): `docs/votes/D-19/<agent>.md`. Claude's and Gemini's were cast before
-§0.4 existed and were moved there verbatim on 2026-11-23.
+**Reveal · 2026-11-23. One revision round is open (§0.4).** The original Claude and Gemini votes predate blind voting and are anchored. Gemini re-cast before reveal. Codex voted sealed. Gemini lowered Part B from +2 to +1 before reveal. No post-reveal changes are recorded.
+
+- Claude favours native click delivery and a keyboard shortcut; the most common idle state justifies shared content and native type. [Claude's ballot](votes/D-19/claude.md)
+- Gemini wants click feedback before hover activation and would try GDI glyphs before accepting DirectWrite's idle memory cost. [Gemini's ballot](votes/D-19/gemini.md)
+- Codex measured complete client clicks with foreground preserved, and wants Lite clicks to open quick switch. Wheel routing and cold-wake feedback still need tests. [Codex's ballot](votes/D-19/codex.md)
 
 #### Vote · Part A *pick many* (activation)
 
 | Agent | A1 hit-testable pill | A2 "Show notch" hotkey | A3 cursor poll while shown | A4 top-edge hot strip |
 |---|---|---|---|---|
-| Claude | *sealed* | *sealed* | *sealed* | *sealed* |
-| Gemini | *sealed* | *sealed* | *sealed* | *sealed* |
-| Codex | | | | |
-| **Total** | | | | **Open (blind round)** |
+| Claude | +2 | +1 | −2 | −1 |
+| Gemini | +2 | +1 | −2 | −1 |
+| Codex | +2 | +1 | −2 | −1 |
+| **Total** | **+6** | **+3** | **−6** | **−3** |
 
 #### Vote · Part B *proposal* (B1 one idle-content rule in Rust + B2 DirectWrite rendering, RAM-gated + B3 visual QA)
 
 | Agent | Score | Reason |
 |---|---|---|
-| Claude | *sealed* | |
-| Gemini | *sealed* | |
-| Codex | | |
-| **Total** | | **Open (blind round)** |
+| Claude | +2 | Shared content and native type, with a RAM gate |
+| Gemini | +1 | Benchmark lighter glyph rendering and suspended RAM |
+| Codex | +1 | Shared content and visual QA, with the renderer RAM-gated |
+| **Total** | **+4** | Revision open |
 
 ---
 
@@ -1539,44 +1542,47 @@ the start of Phase 4, whose Notch page owns geometry and the pinned monitor.
 
 #### Positions
 
-Sealed until all three agents have voted (§0.4): `docs/votes/D-20/<agent>.md`. Claude's and Gemini's were cast before
-§0.4 existed and were moved there verbatim on 2026-11-23; Gemini re-cast under §0.4 the same day (including A2b).
+**Reveal · 2026-11-23. One revision round is open (§0.4).** The original Claude and Gemini votes predate blind voting and are anchored. Gemini re-cast before reveal. Codex voted sealed. All three ballots include late option A2b. No post-reveal changes are recorded.
+
+- Claude prefers drag-to-snap plus a keyboard picker and would add portrait anchors after the six horizontal layouts ship. [Claude's ballot](votes/D-20/claude.md)
+- Gemini also prefers drag-to-snap, with a picker first and a mixed-DPI focus test before enabling drag. Gemini would defer portrait layouts. [Gemini's ballot](votes/D-20/gemini.md)
+- Codex prefers shipping the fixed picker. The native drag activated the test popup at message level while the foreground HWND stayed unchanged; keyboard continuity and WebView2 remain open. [Codex's ballot](votes/D-20/codex.md)
 
 #### Vote · Part A *pick one* (placement)
 
 | Agent | P1 fixed anchors | P2 drag + snap to anchors | P3 free placement |
 |---|---|---|---|
-| Claude | *sealed* | *sealed* | *sealed* |
-| Gemini | *sealed* | *sealed* | *sealed* |
-| Codex | | | |
-| **Total** | | | **Open (blind round)** |
+| Claude | +1 | +2 | −1 |
+| Gemini | +1 | +2 | −1 |
+| Codex | +2 | +1 | −1 |
+| **Total** | **+4** | **+5** | **−3** |
 
 #### Vote · Part A2 *proposal* (six top/bottom anchors; one `anchor_rect` for both windows)
 
 | Agent | Score | Reason |
 |---|---|---|
-| Claude | *sealed* | |
-| Gemini | *sealed* | |
-| Codex | | |
-| **Total** | | **Open (blind round)** |
+| Claude | +2 | One placement rule without a vertical layout |
+| Gemini | +2 | Six reusable horizontal layouts avoid side snapping |
+| Codex | +2 | One work-area calculation for both hosts |
+| **Total** | **+6** | Revision open |
 
 #### Vote · Late option A2b *proposal* (add left/right edges with a vertical layout)
 
 | Agent | Score | Reason |
 |---|---|---|
-| Claude | *sealed* | |
-| Gemini | *sealed* | |
-| Codex | | |
-| **Total** | | **Open (blind round)** |
+| Claude | +1 | Follow-up for wide monitors after A2 |
+| Gemini | −1 | Portrait layouts and shared monitor edges expand QA |
+| Codex | −1 | A second visual layout for every activity |
+| **Total** | **−1** | Revision open |
 
 #### Vote · Part B *pick many* (ideas from other notch apps)
 
 | Agent | R1 attached vs floating | R2 optional modules | R3 file shelf | R4 clipboard history |
 |---|---|---|---|---|
-| Claude | *sealed* | *sealed* | *sealed* | *sealed* |
-| Gemini | *sealed* | *sealed* | *sealed* | *sealed* |
-| Codex | | | | |
-| **Total** | | | | **Open (blind round)** |
+| Claude | +1 | +2 | −1 | −2 |
+| Gemini | +1 | +2 | −1 | −2 |
+| Codex | +1 | +1 | −1 | −2 |
+| **Total** | **+3** | **+5** | **−3** | **−6** |
 
 ---
 
@@ -1637,26 +1643,29 @@ longer, event-driven hit-testing) before the UI.
 
 #### Positions
 
-Sealed until all three agents have voted (§0.4): `docs/votes/D-21/<agent>.md`. Claude's and Gemini's were cast before
-§0.4 existed and were moved there verbatim on 2026-11-23.
+**Reveal · 2026-11-23. One revision round is open (§0.4).** The original Claude and Gemini votes predate blind voting and are anchored. Gemini re-cast before reveal. Codex voted sealed. Before reveal, Gemini lowered Part A from +2 to +1 and changed C0/C1 from +1/+2 to +2/+1. No post-reveal changes are recorded.
+
+- Claude wants an opt-in Rich profile with its own budget and measured costs visible in Settings. [Claude's ballot](votes/D-21/claude.md)
+- Gemini supports Rich with static art and optional playback bars, prefers today's caps, and wants a long soak before granting extra memory. [Gemini's ballot](votes/D-21/gemini.md)
+- Codex prefers a session pin and a real WebView2 hit-test trial first. The native-child region worked, but clipping shadows and collapsing springs remain open. [Codex's ballot](votes/D-21/codex.md)
 
 #### Vote · Part A *proposal* (opt-in `Rich` profile, items 1–4)
 
 | Agent | Score | Reason |
 |---|---|---|
-| Claude | *sealed* | |
-| Gemini | *sealed* | |
-| Codex | | |
-| **Total** | | **Open (blind round)** |
+| Claude | +2 | An opt-in profile with visible costs |
+| Gemini | +1 | Conditional on event-driven hit-testing and measured costs |
+| Codex | −1 | Trial a session pin and the actual WebView host first |
+| **Total** | **+2** | Revision open |
 
 #### Vote · Part B *pick one* (resource caps)
 
 | Agent | C0 keep all caps | C1 per-profile caps | C2 raise for every profile |
 |---|---|---|---|
-| Claude | *sealed* | *sealed* | *sealed* |
-| Gemini | *sealed* | *sealed* | *sealed* |
-| Codex | | | |
-| **Total** | | | **Open (blind round)** |
+| Claude | +1 | +2 | −2 |
+| Gemini | +2 | +1 | −2 |
+| Codex | +2 | 0 | −2 |
+| **Total** | **+5** | **+3** | **−6** |
 
 ---
 
@@ -1764,6 +1773,6 @@ A decision passes when all three agents have voted and the rules produce a resul
 | D-16 | Device identity & reconnects | **DeviceRef + Active-only resolver + toggle pair, Phase 1 (+5)** | **Closed 2026-11-22 (owner)** | + StableId, logical-endpoint check, confirm-then-persist |
 | D-17 | Spatial sound on switch      | **0.3 spike → experimental per-device action in Phase 2 (+6)** | **Closed 2026-11-22 (owner)** | Read-before-write, un-elevated, Settings deep-link fallback |
 | D-18 | Notch device list & settings placement | **A1 favourites drive the notch device row + Part B preferences move to tray → Settings** (Claude +2, Gemini +2, Codex voted) | **Closed 2026-11-23 (owner)** | Codex's vote row lands with its branch. Tasks in plan.md Phase 3 |
-| D-19 | Native idle pill: activation and look | — | **Open: blind round (§0.4)** | Claude and Gemini sealed (anchored, cast before §0.4); waiting for Codex |
-| D-20 | Movable notch and other notch-app ideas | — | **Open: blind round (§0.4)** | Claude and Gemini sealed (anchored); Gemini owes late option A2b; waiting for Codex |
-| D-21 | User modes and resource caps | — | **Open: blind round (§0.4)** | Claude and Gemini sealed (anchored); waiting for Codex |
+| D-19 | Native idle pill | A1 +6 (+2/+2/+2), A2 +3 (+1/+1/+1), A3 −6 (−2/−2/−2), A4 −3 (−1/−1/−1). Part B +4 (+2/+1/+1). | **Revealed · revision open** | Splits in Claude/Gemini/Codex order. Anchored originals, Gemini re-cast before reveal. A3 blocks open for rebuttal. |
+| D-20 | Placement and modules | P2 +5 (+2/+2/+1) leads P1 +4 (+1/+1/+2), P3 −3 (−1/−1/−1). A2 +6 (+2/+2/+2), A2b −1 (+1/−1/−1). R1 +3 (+1/+1/+1), R2 +5 (+2/+2/+1), R3 −3 (−1/−1/−1), R4 −6 (−2/−2/−2). | **Revealed · revision open** | Claude/Gemini/Codex. Anchored originals, Gemini re-cast before reveal. R4 blocks open for rebuttal. |
+| D-21 | User modes and resource caps | Rich +2 (+2/+1/−1). C0 +5 (+1/+2/+2) leads C1 +3 (+2/+1/0), C2 −6 (−2/−2/−2). | **Revealed · revision open** | Claude/Gemini/Codex. Anchored originals, Gemini re-cast before reveal. C2 blocks open for rebuttal. |
