@@ -251,9 +251,11 @@ Runs between Phase 3 and Phase 4. Item 1 is a bug fix that comes first. D-21 Par
   - The wheel ships only after testing Windows' "scroll inactive windows" setting on and off.
 - [ ] Shell wiring (Codex): pill click wakes and expands the notch; in Lite, a click opens the tray quick-switch menu
 - [ ] "Show notch" hotkey, unbound by default (Claude: binding + engine; Codex: tray/Settings entry)
-- [ ] Native pill renderer (Gemini): spike GDI glyphs into the existing DIB first, then Direct2D/DirectWrite only if needed.
+- [x] Native pill renderer (Gemini): spike GDI glyphs into the existing DIB first, then Direct2D/DirectWrite only if needed.
       **Gate:** the RAM budget of every idle profile (Instant suspended ≤ 15 MB WS, Lite, Balanced < 30/40 MB). Size and
-      radius come from the same tokens as the WebView pill
+      radius come from the same tokens as the WebView pill. *GDI (`native_dot/glyphs.rs`, zero D2D/DWrite DLLs) passed
+      every 60 s idle gate: Lite `1.69 MB` WS, Balanced `3.82 MB` WS, Instant suspended `8.58 MB` WS; matched `116×28`
+      (`r=14`) and `36×18` (`r=9`) tokens. Wiring `IdleContent` follows Claude's merge.*
 - [ ] Side-by-side visual QA of the native and WebView idle pills (all states, light/dark, 100 %/150 %, both monitors)
 
 **D-20 · placement (owner ruling: both methods, drag & snap by default):**

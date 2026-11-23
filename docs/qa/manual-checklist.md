@@ -212,3 +212,12 @@ With the real Windows engine, `--verbose`, and a temporary notch-side IPC probe,
 | **Real click leaves the foreground window alone (QA F4)** (`real_click_reaches_the_pill_without_taking_focus`, `--ignored`) | ⚠️ Not run | This session denies `SetCursorPos` (`Access is denied`, RDP/locked desktop). Run by hand on the interactive desktop: `cargo test -p ice-win real_click -- --ignored`. It moves the cursor and clicks the pill. |
 | **Wheel over the pill** | Pending | Not handled on purpose: test Windows' "Scroll inactive windows" on and off first (plan.md, D-19). The wheel over the 92×18 pill no longer reaches the window beneath it. |
 | **Click-through of the pill's transparent corners** | Pending hands-on | Per-pixel alpha should let the corner pixels through; check on a maximised browser's tab strip at 100 % and 150 %. |
+
+### Run: 2026-11-23 · `spike/native-pill-gdi-text` · Gemini
+
+| ID / Check | Result | Notes |
+|---|---|---|
+| **GDI glyph DIB renderer (`native_dot/glyphs.rs`)** | ✅ | Replaced the 7-segment SDF stroke font with GDI `CreateFontW` (`Segoe UI Variable Text`, `Segoe Fluent Icons`) + `ExtTextOutW` (`CLEARTYPE_NATURAL_QUALITY` luminance mask) into the 32-bpp DIB. Verified crisp anti-aliased glyphs at `1.0×` and `1.5×` over dark (`#0E1116`) and light (`#F6F7F9`); Direct2D/DirectWrite not needed (`dumpbin /imports` confirms zero `d2d1.dll`/`dwrite.dll`). |
+| **Idle dimensions match WebView tokens (`geometry.ts`)** | ✅ | `IDLE_W`/`IDLE_H` = `116×28` (capsule `r = 14`), `IDLE_DOT_W`/`IDLE_DOT_H` = `36×18` (`r = 9`); `pressed_state_is_painted_within_one_frame`: `p50 0.85 ms, p95 1.64 ms`. |
+| **60 s RAM & CPU gate across idle profiles** (`--bench --sample-secs 60`) | ✅ | `Lite` (`2_native_dot_only`): **`1.69 MB` Private WS** (`2.27 MB` PB, `+0.08 MB` WS over host), **`0.007%` CPU** (budget `< 25/40 MB`). `Balanced` (`6_notch_destroyed_native_dot`): **`3.82 MB` Private WS** (`5.46 MB` PB), **`0.007%` CPU** (`< 30/40 MB`). `Instant` suspended (`5_notch_try_suspended`): **`8.58 MB` Private WS** (`150.52 MB` PB), **`0.037%` CPU** (`≤ 15 MB` WS). |
+| **Side-by-side native vs WebView QA (`144/75 Hz`, `100/150%`, all `IdleContent` states)** | Pending | Waits for `ice_core::IdleContent` to merge so all 4 idle states match end-to-end. |

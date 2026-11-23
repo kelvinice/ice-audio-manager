@@ -36,10 +36,11 @@ const WM_DOT_CMD: u32 = WM_APP + 1;
 const ACTIVITY_TIMER_ID: usize = 0x4943_4531;
 const LOGICAL_TOP_OFFSET: i32 = 6;
 
-const IDLE_W: i32 = 92;
-const IDLE_H: i32 = 18;
-const IDLE_DOT_W: i32 = 38;
-const IDLE_DOT_H: i32 = 16;
+// Twin: `app/ui/src/lib/notch/geometry.ts` (size & radius tokens for the idle pill).
+const IDLE_W: i32 = 116;
+const IDLE_H: i32 = 28;
+const IDLE_DOT_W: i32 = 36;
+const IDLE_DOT_H: i32 = 18;
 const VOLUME_W: i32 = 192;
 const VOLUME_H: i32 = 30;
 const MIC_W: i32 = 156;
@@ -50,8 +51,10 @@ const DEVICE_H: i32 = 30;
 pub use ice_core::appearance::IdleStyle;
 use ice_core::appearance::ThemeKind;
 
+mod glyphs;
 mod input;
 
+use glyphs::{Align, FontFace, GlyphMask};
 pub use input::{InputHandler, PillInput, PillInteraction};
 
 /// How much brighter the rim gets under the cursor, so the pill reads as clickable (D-19 A1).
@@ -1301,7 +1304,8 @@ pub(crate) fn rasterize_pill_frame(pixels: &mut [u32], w: i32, h: i32, scale: f3
     let mut label_str = "";
     let mut label_x = 0.0f32;
     let mut label_w = 0.0f32;
-    let mut label_h = 10.5f32;
+    let mut label_h = 11.5f32;
+    let mut label_align = Align::Center;
     let mut label_color = (fg_r, fg_g, fg_b);
     let mut bar_bounds: Option<(f32, f32, f32, bool)> = None;
 
@@ -1311,16 +1315,17 @@ pub(crate) fn rasterize_pill_frame(pixels: &mut [u32], w: i32, h: i32, scale: f3
                 // A muted microphone is a privacy state, so it outranks the volume readout.
                 if state.mic_muted {
                     label_str = "MIC OFF";
-                    label_x = 26.0;
-                    label_w = 56.0;
-                    label_h = 8.0;
+                    label_x = 28.0;
+                    label_w = 76.0;
+                    label_h = 11.5;
                     label_color = (dng_r, dng_g, dng_b);
                 } else if let Some(v) = state.volume {
                     label_buf = if v.muted { "MUTE".to_string() } else { format!("{}%", v.percent.min(100)) };
                     label_str = &label_buf;
-                    label_x = 27.0;
-                    label_w = 55.0;
-                    label_h = 8.4;
+                    label_x = 28.0;
+                    label_w = 76.0;
+                    label_h = 11.5;
+                    label_align = Align::Right;
                     label_color = if v.muted { (dng_r, dng_g, dng_b) } else { (fgm_r, fgm_g, fgm_b) };
                 }
             }
@@ -1359,6 +1364,14 @@ pub(crate) fn rasterize_pill_frame(pixels: &mut [u32], w: i32, h: i32, scale: f3
         }
     }
 
+    let glyph_mask = if !label_str.is_empty() {
+        let mut mask = GlyphMask::new(w, h, scale);
+        mask.draw_run(label_str, FontFace::Ui, (label_x, label_w, cy, label_h), label_align);
+        Some(mask)
+    } else {
+        None
+    };
+
     for py in 0..h {
         let ly = (py as f32 + 0.5) / scale;
         for px in 0..w {
@@ -1392,11 +1405,12 @@ pub(crate) fn rasterize_pill_frame(pixels: &mut [u32], w: i32, h: i32, scale: f3
 
             match state.mode {
                 PillMode::Idle => {
+                    // `IdlePill.svelte` uses `padding: 0 12px` and a `7 px` status dot (`r = 3.5`).
                     let icon_cx =
-                        if state.idle_style == IdleStyle::MiniPill && !label_str.is_empty() { 15.0 } else { cx };
+                        if state.idle_style == IdleStyle::MiniPill && !label_str.is_empty() { 17.0 } else { cx };
                     if state.mic_muted {
                         // D-12 accessibility: render a distinct slashed-mic glyph shape in addition to danger colour.
-                        let inv_scale = 1.42f32;
+                        let inv_scale = 1.25f32;
                         let sx = icon_cx + (lx - icon_cx) * inv_scale;
                         let sy = cy + (ly - cy) * inv_scale;
                         let (icon_cov, is_slash) = mic_icon_cov(sx, sy, icon_cx, cy, true, aa * inv_scale);
@@ -1405,7 +1419,7 @@ pub(crate) fn rasterize_pill_frame(pixels: &mut [u32], w: i32, h: i32, scale: f3
                             blend_over(&mut cr, &mut cg, &mut cb, ir, ig, ib, icon_cov);
                         }
                     } else {
-                        let dot_d = sd_circle(lx, ly, icon_cx, cy, 2.4);
+                        let dot_d = sd_circle(lx, ly, icon_cx, cy, 3.5);
                         let dot_cov = smooth_cov(dot_d, aa);
                         if dot_cov > 0.0 {
                             blend_over(&mut cr, &mut cg, &mut cb, acc_r, acc_g, acc_b, dot_cov * 0.92);
@@ -1479,8 +1493,8 @@ pub(crate) fn rasterize_pill_frame(pixels: &mut [u32], w: i32, h: i32, scale: f3
                 }
             }
 
-            if !label_str.is_empty() && lx >= label_x - 2.0 && lx <= label_x + label_w + 2.0 {
-                let cov = text_cov_sdf(label_str, lx, ly, (label_x, label_w, cy, label_h), aa);
+            if let Some(mask) = &glyph_mask {
+                let cov = mask.coverage_at(px, py);
                 if cov > 0.0 {
                     blend_over(&mut cr, &mut cg, &mut cb, label_color.0, label_color.1, label_color.2, cov);
                 }
@@ -1607,149 +1621,6 @@ fn headphones_icon_cov(lx: f32, ly: f32, cx: f32, cy: f32, is_removal: bool, aa:
         return (smooth_cov(hp_sd, aa), true);
     }
     (smooth_cov(hp_sd, aa), false)
-}
-
-fn text_cov_sdf(text: &str, lx: f32, ly: f32, (box_x, box_w, cy, box_h): (f32, f32, f32, f32), aa: f32) -> f32 {
-    let char_count = text.chars().count();
-    if char_count == 0 {
-        return 0.0;
-    }
-    let glyph_h = box_h;
-    let glyph_w = 6.2f32;
-    let gap = 2.0f32;
-    let total_w = glyph_w * char_count as f32 + gap * char_count.saturating_sub(1) as f32;
-    let start_x = box_x + (box_w - total_w).max(0.0) * 0.5;
-    let top_y = cy - glyph_h * 0.5;
-    if ly < top_y - 1.5 || ly > top_y + glyph_h + 1.5 || lx < start_x - 1.5 || lx > start_x + total_w + 1.5 {
-        return 0.0;
-    }
-
-    let stride = glyph_w + gap;
-    let stroke = 0.75f32;
-    let mut best_sd = 100.0f32;
-
-    for (idx, ch) in text.chars().enumerate() {
-        let gx0 = start_x + idx as f32 * stride;
-        if lx < gx0 - 1.5 || lx > gx0 + glyph_w + 1.5 {
-            continue;
-        }
-        if ch == ' ' {
-            continue;
-        }
-        let nx = (lx - gx0) / glyph_w;
-        let ny = (ly - top_y) / glyph_h;
-        let norm_sd = glyph_unit_sd(ch, nx, ny);
-        // Scale normalized distance back to logical px using glyph_w (~0.6 ratio) so strokes look even.
-        let px_sd = norm_sd * glyph_w - stroke;
-        best_sd = best_sd.min(px_sd);
-    }
-    smooth_cov(best_sd, aa)
-}
-
-fn glyph_unit_sd(ch: char, x: f32, y: f32) -> f32 {
-    let segs: &[(f32, f32, f32, f32)] = match ch {
-        '0' | 'O' => return sd_round_box(x, y, 0.5, 0.5, 0.42, 0.48, 0.34).abs(),
-        '1' => &[(0.24, 0.22, 0.56, 0.02), (0.56, 0.02, 0.56, 0.98), (0.20, 0.98, 0.88, 0.98)],
-        '2' => &[
-            (0.10, 0.22, 0.30, 0.02),
-            (0.30, 0.02, 0.76, 0.02),
-            (0.76, 0.02, 0.92, 0.22),
-            (0.92, 0.22, 0.86, 0.44),
-            (0.86, 0.44, 0.08, 0.98),
-            (0.08, 0.98, 0.94, 0.98),
-        ],
-        '3' => &[
-            (0.10, 0.14, 0.28, 0.02),
-            (0.28, 0.02, 0.76, 0.02),
-            (0.76, 0.02, 0.92, 0.22),
-            (0.92, 0.22, 0.72, 0.48),
-            (0.42, 0.48, 0.78, 0.48),
-            (0.78, 0.48, 0.94, 0.72),
-            (0.94, 0.72, 0.76, 0.98),
-            (0.76, 0.98, 0.24, 0.98),
-            (0.24, 0.98, 0.08, 0.84),
-        ],
-        '4' => &[(0.74, 0.98, 0.74, 0.02), (0.74, 0.02, 0.06, 0.68), (0.06, 0.68, 0.96, 0.68)],
-        '5' => &[
-            (0.88, 0.02, 0.14, 0.02),
-            (0.14, 0.02, 0.10, 0.46),
-            (0.10, 0.46, 0.74, 0.46),
-            (0.74, 0.46, 0.92, 0.64),
-            (0.92, 0.64, 0.92, 0.80),
-            (0.92, 0.80, 0.74, 0.98),
-            (0.74, 0.98, 0.16, 0.98),
-            (0.16, 0.98, 0.08, 0.86),
-        ],
-        '6' => &[
-            (0.84, 0.10, 0.66, 0.02),
-            (0.66, 0.02, 0.28, 0.02),
-            (0.28, 0.02, 0.08, 0.24),
-            (0.08, 0.24, 0.08, 0.80),
-            (0.08, 0.80, 0.26, 0.98),
-            (0.26, 0.98, 0.76, 0.98),
-            (0.76, 0.98, 0.92, 0.80),
-            (0.92, 0.80, 0.92, 0.62),
-            (0.92, 0.62, 0.74, 0.46),
-            (0.74, 0.46, 0.10, 0.46),
-        ],
-        '7' => &[(0.08, 0.02, 0.94, 0.02), (0.94, 0.02, 0.34, 0.98)],
-        '8' => {
-            let top = sd_round_box(x, y, 0.5, 0.25, 0.38, 0.23, 0.18).abs();
-            let bot = sd_round_box(x, y, 0.5, 0.74, 0.42, 0.24, 0.20).abs();
-            return top.min(bot);
-        }
-        '9' => &[
-            (0.16, 0.90, 0.34, 0.98),
-            (0.34, 0.98, 0.72, 0.98),
-            (0.72, 0.98, 0.92, 0.76),
-            (0.92, 0.76, 0.92, 0.20),
-            (0.92, 0.20, 0.74, 0.02),
-            (0.74, 0.02, 0.24, 0.02),
-            (0.24, 0.02, 0.08, 0.20),
-            (0.08, 0.20, 0.08, 0.38),
-            (0.08, 0.38, 0.26, 0.54),
-            (0.26, 0.54, 0.90, 0.54),
-        ],
-        '%' => {
-            let slash = sd_segment(x, y, 0.86, 0.04, 0.14, 0.96);
-            let top_ring = sd_circle(x, y, 0.24, 0.20, 0.14).abs();
-            let bot_ring = sd_circle(x, y, 0.76, 0.80, 0.14).abs();
-            return slash.min(top_ring).min(bot_ring);
-        }
-        'M' => {
-            &[(0.08, 0.98, 0.08, 0.02), (0.08, 0.02, 0.50, 0.62), (0.50, 0.62, 0.92, 0.02), (0.92, 0.02, 0.92, 0.98)]
-        }
-        'U' => &[
-            (0.08, 0.02, 0.08, 0.78),
-            (0.08, 0.78, 0.26, 0.98),
-            (0.26, 0.98, 0.74, 0.98),
-            (0.74, 0.98, 0.92, 0.78),
-            (0.92, 0.78, 0.92, 0.02),
-        ],
-        'T' => &[(0.06, 0.02, 0.94, 0.02), (0.50, 0.02, 0.50, 0.98)],
-        'E' => {
-            &[(0.88, 0.02, 0.14, 0.02), (0.14, 0.02, 0.14, 0.98), (0.14, 0.98, 0.88, 0.98), (0.14, 0.48, 0.74, 0.48)]
-        }
-        'I' => &[(0.22, 0.02, 0.78, 0.02), (0.50, 0.02, 0.50, 0.98), (0.22, 0.98, 0.78, 0.98)],
-        'C' => &[
-            (0.90, 0.18, 0.74, 0.02),
-            (0.74, 0.02, 0.28, 0.02),
-            (0.28, 0.02, 0.10, 0.22),
-            (0.10, 0.22, 0.10, 0.78),
-            (0.10, 0.78, 0.28, 0.98),
-            (0.28, 0.98, 0.74, 0.98),
-            (0.74, 0.98, 0.90, 0.82),
-        ],
-        'N' => &[(0.12, 0.98, 0.12, 0.02), (0.12, 0.02, 0.88, 0.98), (0.88, 0.98, 0.88, 0.02)],
-        'F' => &[(0.88, 0.02, 0.14, 0.02), (0.14, 0.02, 0.14, 0.98), (0.14, 0.48, 0.74, 0.48)],
-        _ => return 100.0,
-    };
-
-    let mut min_d = 100.0f32;
-    for &(ax, ay, bx, by) in segs {
-        min_d = min_d.min(sd_segment(x, y, ax, ay, bx, by));
-    }
-    min_d
 }
 
 #[cfg(test)]
@@ -2049,6 +1920,13 @@ mod tests {
         rev += 1;
         pill.apply_envelope(&Envelope { revision: rev, event: EngineEvent::MediaChanged { media: None } });
         assert_eq!(pill.media_status, None);
+    }
+
+    #[test]
+    fn idle_dimensions_match_webview_tokens() {
+        // Twin: `app/ui/src/lib/notch/geometry.ts` (`MiniPill` resting = 116x28, `Dot` resting = 36x18).
+        assert_eq!(logical_dimensions(PillMode::Idle, IdleStyle::MiniPill), (116, 28));
+        assert_eq!(logical_dimensions(PillMode::Idle, IdleStyle::Dot), (36, 18));
     }
 
     #[test]
