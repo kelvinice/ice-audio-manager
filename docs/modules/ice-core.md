@@ -69,3 +69,4 @@ Inline `#[cfg(test)]` in each file. `resolve.rs` is built from the owner's real 
 - 2026-11-24 Claude: schema v7, `[music_services]` (`media::MusicServices`, `Command::SetMusicService`) and `show_notch_hotkey` (`Command::SetShowNotchHotkey`, `EngineEvent::ShowNotch`).
 - 2026-11-24 Gemini: schema v8 (`Appearance.moving_backdrop` default `true`, `Command::SetMovingBackdrop`), `ThemeKind::IceLight`, and `SpringPreset::Bouncy` default.
 - 2026-11-24 Gemini: `MediaAction::Seek { position_ms }` for timeline seeking.
+- 2026-11-24 Gemini: `NowPlaying.position_updated_ms` (optional Unix ms timestamp from GSMTC `LastUpdatedTime`) for accurate live playback interpolation.

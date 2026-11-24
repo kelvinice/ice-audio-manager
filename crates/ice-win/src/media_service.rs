@@ -260,6 +260,7 @@ mod tests {
             status: PlaybackStatus::Playing,
             position_ms: Some(0),
             duration_ms,
+            position_updated_ms: None,
             art: None,
         }
     }

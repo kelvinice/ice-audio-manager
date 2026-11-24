@@ -31,7 +31,7 @@ any time (D-15). Heavy work (image decode, colour extraction, device sorting) ha
 | `notch/beat.ts` | `BeatShaper`: meter frame → 14 bar targets from beats, not raw loudness (per-channel dB body level + recent peak; a new pattern per beat; centre swings, edges flick; silence = rest) plus smoothed `tempoRate` (~0.58–1.65×). `pickBars` for the 5-bar variants |
 | `notch/activities/NotchBackdrop.svelte` | V2 default 9-orb orbital lava-lamp `.art-wash` (`wash-base` + `screen` blending on dark themes, `normal` on `ice_light`, scaled smoothly by `subscribeTempo` and paused via `animation-play-state`) + opt-in V1 blurred cover & `.art-scrim` gated by `--ice-art-backdrop` |
 | `notch/activities/AlbumArtTile.svelte` | Album art / placeholder tile with crossfade and optional `radius` prop (defaults to `--ice-radius-md` / `--ice-radius-sm`; track pill passes `size={34}` `radius="16px"`) |
-| `notch/scrubber.ts` | Pure media-scrubber maths: `clampSeekPositionMs`, `pointerSeekMs`, `stepSeekMs`, and `nextSecondTickDelayMs` (aligned 1 Hz timer delay for the expanded card) |
+| `notch/scrubber.ts` | Pure media-scrubber maths: `clampSeekPositionMs`, `liveMediaPositionMs` (extrapolates from `positionUpdatedMs`), `pointerSeekMs`, `stepSeekMs`, and `nextSecondTickDelayMs` (aligned 1 Hz timer delay for the expanded card) |
 
 ## `src/notch/activities/` (one component per job)
 `IdlePill`, `VolumeActivity`, `SwitchActivity`, `PlugActivity`, `MicActivity`, `TrackActivity`, `ExpandedNotch` (container), `ExpandedMediaCard`,
@@ -78,3 +78,4 @@ updating the constants.
 - 2026-11-24 Claude: `beat.ts` `BeatShaper` replaces `BarShaper` (beat-driven, 14 independent bars, quick fall, lower rest); `spreadLevels` → `withRestShape`.
 - 2026-11-24 Gemini: D-25 9-orb lava-lamp `.art-wash` (`NotchBackdrop.svelte`, `backdrop.ts`, `--ice-ambient-period: 9s`/`13s`), sibling `.pill-shadow` in `NotchApp.svelte`, `subscribeTempo` / `BeatShaper.tempoRate`, `ice_light` theme (`adaptAccentForSurface`), `292×46` music pill (`34×34` `16px` art), and `'bouncy'` default fallback.
 - 2026-11-24 Gemini: interactive progress seeking on `ExpandedMediaCard` (`scrubber.ts`, `MediaAction` `seek`, 1 Hz playback interpolation while expanded and visible).
+- 2026-11-24 Gemini: smooth 1 Hz playback timecode ticking using GSMTC `positionUpdatedMs` (`liveMediaPositionMs`) in `ExpandedMediaCard` and `TrackActivity`.

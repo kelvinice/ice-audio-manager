@@ -2,6 +2,7 @@
   import type { SpringPreset } from '../../lib/ipc/types';
   import type { ActivityView } from '../../lib/notch/scheduler';
   import { toMsNumber } from '../../lib/notch/scheduler';
+  import { liveMediaPositionMs } from '../../lib/notch/scrubber';
   import { WIDE_BAR_COUNT } from '../../lib/notch/visualizer';
   import AlbumArtTile from './AlbumArtTile.svelte';
   import VisualizerBars from './VisualizerBars.svelte';
@@ -25,17 +26,19 @@
   // No transport buttons here: hovering expands the notch before they can be reached (owner, 2026-11-24).
   // Instead a waveform scrubber: live bars, lit in the accent up to the played position.
   const durationMs = $derived(toMsNumber(activity.media.durationMs));
-  // GSMTC sends the position only now and then; interpolate from the last report while playing.
-  let anchor = $state({ posMs: 0, atMs: 0 });
-  let nowMs = $state(0);
+  // GSMTC sends the position with LastUpdatedTime; extrapolate from it while playing.
+  let fallbackAnchorMs = $state(Date.now());
+  let nowEpochMs = $state(Date.now());
   $effect(() => {
-    const posMs = toMsNumber(activity.media.positionMs) ?? 0;
+    void activity.media.positionMs;
     void activity.media.status;
-    const at = performance.now();
-    anchor = { posMs, atMs: at };
-    nowMs = at;
+    const at = Date.now();
+    if (toMsNumber(activity.media.positionUpdatedMs) === null) {
+      fallbackAnchorMs = at;
+    }
+    nowEpochMs = at;
   });
-  const elapsedMs = $derived(anchor.posMs + (isPlaying ? Math.max(0, nowMs - anchor.atMs) : 0));
+  const elapsedMs = $derived(liveMediaPositionMs(activity.media, nowEpochMs, fallbackAnchorMs));
   const progress = $derived(durationMs ? Math.max(0, Math.min(1, elapsedMs / durationMs)) : null);
 
   // Re-render only when the next bar lights up (every duration / 14, ~17 s for a 4-minute song), not every second.
@@ -45,7 +48,7 @@
     const nextBoundary = (Math.floor(elapsedMs / step) + 1) * step;
     const delay = Math.max(250, Math.min(60_000, nextBoundary - elapsedMs + 30));
     const id = window.setTimeout(() => {
-      nowMs = performance.now();
+      nowEpochMs = Date.now();
     }, delay);
     return () => window.clearTimeout(id);
   });

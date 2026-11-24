@@ -85,7 +85,12 @@ export type NowPlaying = {
 /**
  * Source app, e.g. `Spotify.exe`.
  */
-appId: string, title: string, artist: string, album: string, status: PlaybackStatus, positionMs: bigint | null, durationMs: bigint | null, art: ArtInfo | null, };
+appId: string, title: string, artist: string, album: string, status: PlaybackStatus, positionMs: bigint | null, durationMs: bigint | null,
+/**
+ * Unix epoch timestamp (ms) when `position_ms` was measured (`LastUpdatedTime`), used to interpolate
+ * smooth live playback time without polling GSMTC.
+ */
+positionUpdatedMs?: number | null, art: ArtInfo | null, };
 
 export type SavedDevice = {
 /**

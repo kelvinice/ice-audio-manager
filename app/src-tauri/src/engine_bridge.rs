@@ -355,6 +355,7 @@ mod tests {
             status,
             position_ms: Some(0),
             duration_ms: Some(1000),
+            position_updated_ms: None,
             art: None,
         };
         let mut last = None;

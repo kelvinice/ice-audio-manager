@@ -110,6 +110,11 @@ pub struct NowPlaying {
     pub status: PlaybackStatus,
     pub position_ms: Option<u64>,
     pub duration_ms: Option<u64>,
+    /// Unix epoch timestamp (ms) when `position_ms` was measured (`LastUpdatedTime`), used to interpolate
+    /// smooth live playback time without polling GSMTC.
+    #[serde(default)]
+    #[cfg_attr(feature = "ts", ts(optional, type = "number | null"))]
+    pub position_updated_ms: Option<u64>,
     pub art: Option<ArtInfo>,
 }
 

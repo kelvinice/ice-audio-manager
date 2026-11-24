@@ -206,6 +206,7 @@ pub fn read_within(s: &Session, art_px: Option<u32>, art_budget: Duration) -> Re
         status: PlaybackStatus::Closed,
         position_ms: None,
         duration_ms: None,
+        position_updated_ms: None,
         art: None,
     };
     refresh_playback(s, &mut now)?;
@@ -219,11 +220,67 @@ pub fn read_within(s: &Session, art_px: Option<u32>, art_budget: Duration) -> Re
     Ok((now, art))
 }
 
+/// Windows `FILETIME` / WinRT `DateTime` 100 ns ticks between 1601-01-01 and Unix epoch 1970-01-01.
+const WINDOWS_TO_UNIX_EPOCH_TICKS: i64 = 116_444_736_000_000_000;
+
+fn now_unix_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .ok()
+        .and_then(|d| u64::try_from(d.as_millis()).ok())
+        .unwrap_or(0)
+}
+
+/// Converts a WinRT `DateTime.UniversalTime` (100 ns since 1601-01-01 UTC) to Unix epoch milliseconds.
+fn last_updated_unix_ms(universal_time: i64, now_ms: u64) -> Option<u64> {
+    if universal_time <= WINDOWS_TO_UNIX_EPOCH_TICKS {
+        return None;
+    }
+    let unix_ms = u64::try_from((universal_time - WINDOWS_TO_UNIX_EPOCH_TICKS) / 10_000).ok()?;
+    Some(if unix_ms > now_ms.saturating_add(5_000) { now_ms } else { unix_ms })
+}
+
+#[expect(clippy::too_many_arguments, reason = "pure timeline timestamp helper keeps refresh_playback testable")]
+fn resolve_position_updated_ms(
+    prev_status: PlaybackStatus,
+    prev_pos: Option<u64>,
+    prev_updated: Option<u64>,
+    status: PlaybackStatus,
+    pos: Option<u64>,
+    dur: Option<u64>,
+    last_updated_ticks: i64,
+    now_ms: u64,
+) -> Option<u64> {
+    let pos_ms = pos?;
+    if let Some(ts) = last_updated_unix_ms(last_updated_ticks, now_ms) {
+        if status == PlaybackStatus::Playing {
+            let elapsed = now_ms.saturating_sub(ts);
+            let stale_resume = prev_status != PlaybackStatus::Playing && elapsed > 5_000;
+            let stale_overshoot = dur.is_some_and(|d| pos_ms.saturating_add(elapsed) > d.saturating_add(15_000));
+            if stale_resume || stale_overshoot {
+                return Some(now_ms);
+            }
+        }
+        return Some(ts);
+    }
+    if status == PlaybackStatus::Playing
+        && prev_status == PlaybackStatus::Playing
+        && prev_pos == pos
+        && prev_updated.is_some()
+    {
+        return prev_updated;
+    }
+    Some(now_ms)
+}
+
 /// Updates only the playback status and timeline (local reads; no request to the media app).
 ///
 /// # Errors
 /// Fails if the playback state can't be read.
 pub fn refresh_playback(s: &Session, now: &mut NowPlaying) -> Result<()> {
+    let prev_status = now.status;
+    let prev_pos = now.position_ms;
+    let prev_updated = now.position_updated_ms;
     now.status = match s.GetPlaybackInfo()?.PlaybackStatus()? {
         st if st == Status::Playing => PlaybackStatus::Playing,
         st if st == Status::Paused => PlaybackStatus::Paused,
@@ -232,10 +289,24 @@ pub fn refresh_playback(s: &Session, now: &mut NowPlaying) -> Result<()> {
         st if st == Status::Opened => PlaybackStatus::Opened,
         _ => PlaybackStatus::Closed,
     };
-    (now.position_ms, now.duration_ms) = s.GetTimelineProperties().ok().map_or((None, None), |t: Timeline| {
+    let (pos, dur, last_updated_ticks) = s.GetTimelineProperties().ok().map_or((None, None, 0), |t: Timeline| {
         let tick = |r: Result<windows::Foundation::TimeSpan>| r.map_or(0, |t| t.Duration);
-        timeline_ms(tick(t.StartTime()), tick(t.EndTime()), tick(t.Position()))
+        let (p, d) = timeline_ms(tick(t.StartTime()), tick(t.EndTime()), tick(t.Position()));
+        let updated = t.LastUpdatedTime().map_or(0, |dt| dt.UniversalTime);
+        (p, d, updated)
     });
+    now.position_ms = pos;
+    now.duration_ms = dur;
+    now.position_updated_ms = resolve_position_updated_ms(
+        prev_status,
+        prev_pos,
+        prev_updated,
+        now.status,
+        pos,
+        dur,
+        last_updated_ticks,
+        now_unix_ms(),
+    );
     Ok(())
 }
 
@@ -489,6 +560,42 @@ mod tests {
         assert_eq!(clamp_seek_ticks(10_000_000, 210_000_000, 5_000), 60_000_000);
         assert_eq!(clamp_seek_ticks(0, 200_000_000, 90_000), 200_000_000);
         assert_eq!(clamp_seek_ticks(0, 0, 12_345), 123_450_000);
+    }
+
+    #[test]
+    fn last_updated_converts_winrt_ticks_and_guards_stale_resumes() {
+        let now = 1_700_000_050_000_u64;
+        let ten_secs_ago_ticks = WINDOWS_TO_UNIX_EPOCH_TICKS + ((now - 10_000) as i64) * 10_000;
+        assert_eq!(last_updated_unix_ms(0, now), None);
+        assert_eq!(last_updated_unix_ms(ten_secs_ago_ticks, now), Some(now - 10_000));
+        // Playing with valid recent LastUpdatedTime keeps OS-stamped timestamp.
+        assert_eq!(
+            resolve_position_updated_ms(
+                PlaybackStatus::Playing,
+                Some(20_000),
+                None,
+                PlaybackStatus::Playing,
+                Some(20_000),
+                Some(200_000),
+                ten_secs_ago_ticks,
+                now,
+            ),
+            Some(now - 10_000),
+        );
+        // Resuming from Paused with a stale LastUpdatedTime anchors cleanly to now instead of jumping ahead.
+        assert_eq!(
+            resolve_position_updated_ms(
+                PlaybackStatus::Paused,
+                Some(20_000),
+                None,
+                PlaybackStatus::Playing,
+                Some(20_000),
+                Some(200_000),
+                ten_secs_ago_ticks,
+                now,
+            ),
+            Some(now),
+        );
     }
 
     #[test]

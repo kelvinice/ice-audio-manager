@@ -1931,6 +1931,7 @@ mod tests {
             status,
             position_ms: None,
             duration_ms: None,
+            position_updated_ms: None,
             art: None,
         };
         let snap = FakeEngine::new().snapshot();

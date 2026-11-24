@@ -21,6 +21,14 @@ const FAKE_TRACKS: [(&str, &str, &str, u64, Rgb); 3] = [
     ("Daft Punk", "Instant Crush", "Random Access Memories", 337, Rgb::new(0xf2, 0xb8, 0x4b)),
 ];
 
+fn now_unix_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .ok()
+        .and_then(|d| u64::try_from(d.as_millis()).ok())
+        .unwrap_or(0)
+}
+
 fn fake_track(i: usize, status: PlaybackStatus) -> NowPlaying {
     let (artist, title, album, secs, accent) = FAKE_TRACKS[i % FAKE_TRACKS.len()];
     NowPlaying {
@@ -31,6 +39,7 @@ fn fake_track(i: usize, status: PlaybackStatus) -> NowPlaying {
         status,
         position_ms: Some(52_000),
         duration_ms: Some(secs * 1000),
+        position_updated_ms: Some(now_unix_ms()),
         art: Some(ArtInfo { id: format!("fake-art-{}", i % FAKE_TRACKS.len()), width: 16, height: 16, accent }),
     }
 }

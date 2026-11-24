@@ -43,3 +43,4 @@ Unit tests for colour maths live in `ice-core`; this module is covered by the ma
 - 2026-11-23 Claude: initial recap.
 - 2026-11-24 Claude: confirm reads, duration-jump detection and a short first-read art budget (fixes a ~5 s stale title on song change).
 - 2026-11-24 Gemini: added `MediaAction::Seek { position_ms }` via `TryChangePlaybackPositionAsync` (`seek_ticks` / `clamp_seek_ticks`).
+- 2026-11-24 Gemini: `refresh_playback` now populates `NowPlaying.position_updated_ms` from GSMTC `TimelineProperties.LastUpdatedTime` (with stale-resume guard).

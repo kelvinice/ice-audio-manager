@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   clampSeekPositionMs,
+  liveMediaPositionMs,
   nextSecondTickDelayMs,
   pointerSeekMs,
   stepSeekMs,
@@ -13,6 +14,42 @@ test('clampSeekPositionMs clamps seek targets within valid track bounds', () => 
   assert.equal(clampSeekPositionMs(220_000, 180_000), 180_000);
   assert.equal(clampSeekPositionMs(10_000, null), 0);
   assert.equal(clampSeekPositionMs(10_000, 0), 0);
+});
+
+test('liveMediaPositionMs extrapolates smoothly from positionUpdatedMs while playing and freezes when paused', () => {
+  const t0 = 1_700_000_000_000;
+  assert.equal(
+    liveMediaPositionMs(
+      { status: 'playing', positionMs: 12_000n, durationMs: 180_000n, positionUpdatedMs: t0 },
+      t0 + 15_400,
+      t0 + 10_000,
+    ),
+    27_400,
+  );
+  assert.equal(
+    liveMediaPositionMs(
+      { status: 'paused', positionMs: 12_000n, durationMs: 180_000n, positionUpdatedMs: t0 },
+      t0 + 15_400,
+      t0,
+    ),
+    12_000,
+  );
+  assert.equal(
+    liveMediaPositionMs(
+      { status: 'playing', positionMs: 170_000n, durationMs: 180_000n, positionUpdatedMs: t0 },
+      t0 + 30_000,
+      t0,
+    ),
+    180_000,
+  );
+  assert.equal(
+    liveMediaPositionMs(
+      { status: 'playing', positionMs: 5_000n, durationMs: 180_000n, positionUpdatedMs: null },
+      t0 + 4_000,
+      t0 + 1_000,
+    ),
+    8_000,
+  );
 });
 
 test('pointerSeekMs maps pointer X across track width cleanly', () => {

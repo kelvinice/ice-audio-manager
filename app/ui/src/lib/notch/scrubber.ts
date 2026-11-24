@@ -1,7 +1,26 @@
+import type { NowPlaying } from '../ipc/engine.ts';
+import { toMsNumber } from './scheduler.ts';
+
 export function clampSeekPositionMs(ms: number, durationMs: number | null): number {
   if (durationMs === null || !Number.isFinite(durationMs) || durationMs <= 0) return 0;
   if (!Number.isFinite(ms)) return 0;
   return Math.round(Math.max(0, Math.min(durationMs, ms)));
+}
+
+export function liveMediaPositionMs(
+  media: Pick<NowPlaying, 'status' | 'positionMs' | 'durationMs' | 'positionUpdatedMs'>,
+  nowEpochMs: number,
+  fallbackAnchorMs: number,
+): number {
+  const pos = toMsNumber(media.positionMs) ?? 0;
+  const dur = toMsNumber(media.durationMs);
+  if (media.status !== 'playing') {
+    return dur && dur > 0 ? clampSeekPositionMs(pos, dur) : Math.max(0, Math.round(pos));
+  }
+  const updated = toMsNumber(media.positionUpdatedMs) ?? fallbackAnchorMs;
+  const elapsed = Number.isFinite(nowEpochMs) ? Math.max(0, nowEpochMs - updated) : 0;
+  const raw = pos + elapsed;
+  return dur && dur > 0 ? clampSeekPositionMs(raw, dur) : Math.max(0, Math.round(raw));
 }
 
 export function pointerSeekMs(
