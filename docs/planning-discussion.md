@@ -2423,24 +2423,34 @@ more fun for user and not too flat, satisfying to look at."*
 
 #### Positions
 
-*Sealed: each agent writes `docs/votes/D-26/<agent>.md` (template in [docs/votes/README.md](votes/README.md)). The reveal
-copies the scores here once all three files exist (§0.4).*
+**Revealed 2026-11-24. One revision round is open under §0.4.** All three agents gave A2 their highest score.
+Each supports the peak-based A1 fallback. Mark any score revision “changed after reveal” and give the reason.
+
+- **Claude** proposes steeper filters to separate adjacent bands and a low-band beat accent. Claude also asks for a
+  Privacy disclosure, a meter-only switch and a host check of the microphone indicator. [Claude's ballot](votes/D-26/claude.md)
+- **Gemini** favors neighbor coupling to connect isolated notes, tuning filters to the endpoint sample rate and draining
+  packets on the existing meter tick. Gemini proposes using the channel array length to identify spectrum frames. [Gemini's ballot](votes/D-26/gemini.md)
+- **Codex** proposes a separate optional `bands` field so endpoint channels keep their meaning and a same-peak tone
+  change still reaches the UI. Codex favors graded springs, with reservations about boosting hiss or sustaining motion
+  after a note ends. [Codex's ballot](votes/D-26/codex.md)
 
 #### Vote · Part A *pick one* (signal & frequency source)
 
 | Agent | A0 peak + BeatShaper today | A1 peak + multi-envelope wave shaper | A2 WASAPI loopback + 14-band IIR biquads | A3 WASAPI loopback + 1024/2048 FFT |
 |---|---|---|---|---|
-| Claude | | | | |
-| Gemini | | | | |
-| Codex | | | | |
+| Claude | −1 | +1 | +2 | +1 |
+| Gemini | −1 | +1 | +2 | +1 |
+| Codex | −1 | +1 | +2 | +1 |
+| **Total** | −3 | +3 | **+6** | +3 |
 
 #### Vote · Part B *pick many* (shaping, physics & layout; B4a vs B4b is pick-higher)
 
 | Agent | B1 per-band AGC + pink tilt | B2 frequency-graded `(k, c, m)` springs | B3 neighbor wave coupling | B4a symmetric 5-bar + L→R 14-bar | B4b L→R bass→treble everywhere |
 |---|---|---|---|---|---|
-| Claude | | | | | |
-| Gemini | | | | | |
-| Codex | | | | | |
+| Claude | +2 | +1 | −1 | +1 | 0 |
+| Gemini | +2 | +2 | +2 | +2 | 0 |
+| Codex | 0 | +2 | −1 | +2 | +1 |
+| **Total** | **+4** | **+5** | 0 | **+5** | +1 |
 
 ---
 
@@ -2556,4 +2566,4 @@ A decision passes when all three agents have voted and the rules produce a resul
 | D-23 | Visual direction: art backdrop, translucency, cleanliness | V1 +3 (+1/+1/+1; Claude changed after reveal), V2 +5 (+2/+2/+1; Claude changed after reveal), V3 +4 (+1/+2/+1), V4 +6 (+2/+2/+2), V5 −5 (−1/−2/−2), V6 +3 (+1/+1/+1) | **Closed 2026-11-23 (owner)** | V2 default, V1 opt-in per theme with luminance scrim, one backdrop per theme, V3, V4 (D-18 row visible), V6 with lyrics; V5 rejected |
 | D-24 | Project licence: MIT or GPL-3.0 | G0 +4 (+1/+2/+1), G1 −3 (−1/−1/−1), G2 +5 (+2/+1/+2) | **Closed 2026-11-23 (owner)** | G2: stay MIT; licence changes only on the owner's explicit acceptance; references read, never copied (code-practices §1.8) |
 | D-25 | Ambient motion: moving gradient backdrop | A0 −1 (−1/−1/+1), **A1 +6 (+2/+2/+2)**, A2 −3, A3 −3, A4 −2 (0/−1/−1). **B1 +6**, B2 −3 (−1/−1/−1; Claude changed after reveal from +1), B3 −5 (−1/−2/−2, Gemini block). **C1 +6, C2 +6, C3 +6**, C4 −2 (0/−1/−1), C5 −3. **D1 +5 (+1/+2/+2)**, D2 −1 (0/0/−1), D3 +4 (+2/+1/+1) | **Closed 2026-11-24 (owner)** | Accepted: A1 on the expanded card only, while playing, stopped when hidden, with an off switch and one tuned speed (`--ice-ambient-period`, `0s` in Minimal). Amendments: compositor teardown, scrim anchored, shadow filter off the subtree, 144 Hz measurement gate with a 30 fps fallback. Moved to plan.md |
-| D-26 | Visualizer spectrum bands and bar dynamics | — | **Open 2026-11-24: sealed voting** (Gemini and Claude voted; waiting for Codex) | Owner request ("more fun for user and not too flat, satisfying to look at"). Part A (signal/frequency source: peak shaper vs WASAPI loopback biquads/FFT), Part B (per-band AGC + tilt, graded springs, wave coupling, bar layout) |
+| D-26 | Visualizer spectrum bands and bar dynamics | A2 leads at +6 (+2/+2/+2). B1 +4 (+2/+2/0), B2 +5 (+1/+2/+2), B3 0 (−1/+2/−1). B4a +5 (+1/+2/+2), B4b +1 (0/0/+1). | **Revealed 2026-11-24. Revision round open.** | Provisional scores in Claude/Gemini/Codex order. The owner closes the decision after the revision round. |
