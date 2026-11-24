@@ -510,6 +510,7 @@ fn create_notch_window(app: &AppHandle, state: &Arc<SharedRuntime>, generation: 
             let hwnd = win.hwnd().map_err(|e| e.to_string())?.0 as isize;
             meter::watch_renderer(&win, &state).map_err(|e| e.to_string())?;
             overlay_win::apply_overlay_styles(hwnd).map_err(|e| e.to_string())?;
+            engine_bridge::apply_capture_privacy(app, &state.engine.snapshot().settings.appearance);
             overlay_win::move_top_center(hwnd, &monitor, NOTCH_CANVAS_W, NOTCH_CANVAS_H, NOTCH_TOP_OFFSET)
                 .map_err(|e| e.to_string())?;
             win.show().map_err(|e| e.to_string())?;
@@ -590,7 +591,8 @@ fn spawn_cursor_poll(state: Arc<SharedRuntime>, benchmark: bool) {
             let pr = wl + ((hr.x + hr.width + pad) * scale).ceil() as i32;
             let pb = wt + ((hr.y + hr.height + pad) * scale).ceil() as i32;
 
-            let inside = cx >= pl && cx <= pr && cy >= pt && cy <= pb;
+            // An empty rect (D-27 hibernate: the plain notch takes no input) keeps the whole window click-through.
+            let inside = hr.width > 0.0 && hr.height > 0.0 && cx >= pl && cx <= pr && cy >= pt && cy <= pb;
             let _ = overlay_win::set_click_through(hwnd, !inside);
             std::thread::sleep(Duration::from_millis(if benchmark { 16 } else { 34 }));
         }

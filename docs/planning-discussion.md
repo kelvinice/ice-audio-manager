@@ -2532,6 +2532,14 @@ that has a way to wake up again."* The owner asked for this to be **opened for l
 
 **Votes:** not opened yet. Opened when the owner schedules it (after the Edge Nook track is stable).
 
+**Update (owner, 2026-11-25): built now with Claude's recommendations** ("add it in Settings with your recommendations;
+users can still wake it from the tray icon menu"). Shipped: **A2** (plain black silhouette + red mic-muted dot), **B1**
+(no activities, no hover-expand; the plain notch is fully click-through), **C1** (out of screen captures while
+hibernating, its own switch, on by default), **D1** without the hotkey (Settings → Notch → Hibernate, tray "Hibernate
+notch"), **E1** (saved, survives restarts). Not built: a hotkey, timed hibernate (E2), presentation-mode auto-entry (D3),
+per-app rules (D4), releasing the WebView while hibernating. The owner can still revise any part; a vote is only needed
+for the open ones.
+
 ## 6. Session S5: Team workflow
 
 ### D-14 · Roles
@@ -2645,4 +2653,4 @@ A decision passes when all three agents have voted and the rules produce a resul
 | D-24 | Project licence: MIT or GPL-3.0 | G0 +4 (+1/+2/+1), G1 −3 (−1/−1/−1), G2 +5 (+2/+1/+2) | **Closed 2026-11-23 (owner)** | G2: stay MIT; licence changes only on the owner's explicit acceptance; references read, never copied (code-practices §1.8) |
 | D-25 | Ambient motion: moving gradient backdrop | A0 −1 (−1/−1/+1), **A1 +6 (+2/+2/+2)**, A2 −3, A3 −3, A4 −2 (0/−1/−1). **B1 +6**, B2 −3 (−1/−1/−1; Claude changed after reveal from +1), B3 −5 (−1/−2/−2, Gemini block). **C1 +6, C2 +6, C3 +6**, C4 −2 (0/−1/−1), C5 −3. **D1 +5 (+1/+2/+2)**, D2 −1 (0/0/−1), D3 +4 (+2/+1/+1) | **Closed 2026-11-24 (owner)** | Accepted: A1 on the expanded card only, while playing, stopped when hidden, with an off switch and one tuned speed (`--ice-ambient-period`, `0s` in Minimal). Amendments: compositor teardown, scrim anchored, shadow filter off the subtree, 144 Hz measurement gate with a 30 fps fallback. Moved to plan.md |
 | D-26 | Visualizer spectrum bands and bar dynamics | **A2 +6 (+2/+2/+2)** with **A1 +3** fallback; **B1 +4 (+2/+2/0)**, **B2 +5 (+1/+2/+2)**, **B4a +5 (+1/+2/+2)**; B3 −3 (−1/−1/−1; Gemini changed after reveal from +2); B4b +1 (0/0/+1) | **Closed 2026-11-24 (owner)** | Accepted with all amendments: 4th-order `f32` IIR bands on existing 30 Hz `ice-meter` tick, separate `MeterFrame.bands` in `differs`, rebind reset, low-band beat accent, `B1` audible-energy gate, §1 audio-stream rule, Settings → Privacy disclosure + meter-only switch, Win11 mic-indicator & CPU QA gates. Moved to plan.md |
-| D-27 | Hibernate mode: plain notch for meetings / screen sharing | Not voted | **Open (owner, 2026-11-25), for later** | Options A1–A3 look, B1–B2 suppression, C1–C3 capture exclusion (`WDA_EXCLUDEFROMCAPTURE`), D1–D4 entry/wake, E1–E3 exit; 3 owner questions |
+| D-27 | Hibernate mode: plain notch for meetings / screen sharing | Not voted; owner asked for Claude's recommendations | **Built 2026-11-25 (owner request); hotkey, timer, auto-entry open** | Options A1–A3 look, B1–B2 suppression, C1–C3 capture exclusion (`WDA_EXCLUDEFROMCAPTURE`), D1–D4 entry/wake, E1–E3 exit; 3 owner questions |

@@ -26,7 +26,8 @@ use crate::resolve::{DeviceRef, MatchMode, resolve};
 /// v9: `[lyrics]` (D-22 opt-in LRCLIB, local `.lrc`, Romaji subtitles, and `cache_max_mb`).
 /// v10: `visualizer_spectrum` (D-26 local WASAPI loopback spectrum bars, default `true`; off = peak-meter-only).
 /// v11: `appearance.notchStyle` (`"nook"` default flush screen-edge docked style vs `"floating"` pill).
-pub const SCHEMA_VERSION: u32 = 11;
+/// v12: `appearance.hibernate` + `appearance.hibernateHideFromCapture` (D-27 plain notch for meetings; off / on).
+pub const SCHEMA_VERSION: u32 = 12;
 
 /// Default seconds the notch WebView stays awake at idle before `Balanced` hands over to the native pill
 /// (`Instant` never does; `Lite` has no WebView).
@@ -231,7 +232,8 @@ impl Config {
             // `show_disconnected = false`, v0–v4 gain `appearance.nowPlaying = "while_playing"`, and v0–v5 gain
             // `idle_linger_secs = 15`, v0–v6 gain both music services on, v0–v7 gain
             // `appearance.movingBackdrop = true`, v0–v8 gain `[lyrics]` (off by default, 50 MB cap),
-            // v0–v9 gain `visualizer_spectrum = true`, and v0–v10 gain `appearance.notchStyle = "nook"`,
+            // v0–v9 gain `visualizer_spectrum = true`, v0–v10 gain `appearance.notchStyle = "nook"`, and v0–v11 gain
+            // `appearance.hibernate = false` with `hibernateHideFromCapture = true`,
             // all via serde defaults.
             _ => Ok(Self { schema_version: SCHEMA_VERSION, ..cfg }),
         }
@@ -422,6 +424,8 @@ impl Config {
             Command::SetNotchStyle { style } => next.appearance.notch_style = *style,
             Command::SetNowPlayingPill { mode } => next.appearance.now_playing = *mode,
             Command::SetMovingBackdrop { enabled } => next.appearance.moving_backdrop = *enabled,
+            Command::SetHibernate { enabled } => next.appearance.hibernate = *enabled,
+            Command::SetHibernateHideFromCapture { enabled } => next.appearance.hibernate_hide_from_capture = *enabled,
             Command::SetShowDisconnected { enabled } => next.show_disconnected = *enabled,
             Command::SetIdleLinger { secs } => {
                 if !IDLE_LINGER_SECS.contains(secs) {
@@ -896,6 +900,28 @@ mod tests {
         assert_eq!(config.apply_setting(&set, &[]), Ok(false), "already floating");
         let saved = Config::from_toml(&config.to_toml()).unwrap();
         assert_eq!(saved.view(&[]).appearance.notch_style, NotchStyle::Floating);
+    }
+
+    #[test]
+    fn v11_migrates_awake_with_capture_hiding_on_and_saves_hibernate() {
+        let v11 = "schema_version = 11\n[appearance]\nnotchStyle = 'nook'";
+        let mut config = Config::from_toml(v11).unwrap();
+        assert_eq!(config.schema_version, SCHEMA_VERSION);
+        let appearance = config.view(&[]).appearance;
+        assert!(!appearance.hibernate, "D-27: off by default");
+        assert!(appearance.hibernate_hide_from_capture, "D-27: hide from capture is on by default");
+        assert!(!appearance.exclude_from_capture(), "only while hibernating");
+
+        let set = Command::SetHibernate { enabled: true };
+        assert_eq!(config.apply_setting(&set, &[]), Ok(true));
+        assert_eq!(config.apply_setting(&set, &[]), Ok(false), "already hibernating");
+        let saved = Config::from_toml(&config.to_toml()).unwrap();
+        assert!(saved.view(&[]).appearance.hibernate, "survives a restart");
+        assert!(saved.view(&[]).appearance.exclude_from_capture());
+
+        let show = Command::SetHibernateHideFromCapture { enabled: false };
+        assert_eq!(config.apply_setting(&show, &[]), Ok(true));
+        assert!(!config.view(&[]).appearance.exclude_from_capture());
     }
 
     #[test]

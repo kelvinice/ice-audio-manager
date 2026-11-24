@@ -208,6 +208,26 @@ export const nookStyleStrategy: NotchStyleStrategy = Object.freeze({
   },
 });
 
+/** D-27 hibernate reports this: the plain notch takes no input, so the shell keeps the window click-through. */
+export const NO_HIT_RECT: HitRect = Object.freeze({ x: 0, y: 0, width: 0, height: 0 });
+
+/**
+ * D-27 hibernate: the plain notch is always the idle shape, the same size whatever plays, whether the mic is muted or a
+ * pop-up would show (twin: `rasterize_plain_frame` in `crates/ice-win/src/native_dot.rs`, which uses the idle metrics).
+ */
+export function plainGeometryContext(ctx: GeometryContext): GeometryContext {
+  return {
+    ...ctx,
+    view: { kind: 'idle' },
+    expanded: false,
+    micMuted: false,
+    hasMedia: false,
+    pillLyricsExtraH: 0,
+    cardLyricsExtraH: 0,
+    showCardLyrics: false,
+  };
+}
+
 const STRATEGIES: Record<NotchStyle, NotchStyleStrategy> = {
   floating: floatingStyleStrategy,
   nook: nookStyleStrategy,

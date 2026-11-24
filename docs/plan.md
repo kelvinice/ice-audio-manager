@@ -465,6 +465,13 @@ criteria below pass on both monitors. Items come from Claude's review of the Edg
 - [ ] D-19 `IdleContent` (Claude) lands for both pills, checked on the nook silhouette first
 
 **Open discussion, for later (owner, 2026-11-25):**
+- [x] **D-27 · Hibernate mode, first cut** (Claude, 2026-11-25, owner asked for it with Claude's recommendations): plain
+      black notch + red mic-muted dot, no pop-ups, click-through, hidden from screen captures while on (switchable),
+      saved; Settings → Notch → Hibernate and the tray's "Hibernate notch"
+- [ ] By hand: hibernate in Instant / Balanced / Lite; screen-share test in Teams, Zoom, Meet (Chrome/Edge) and OBS with
+      "Hide from screen sharing" on and off; mic mute shows the dot; tray uncheck wakes the notch
+- [ ] D-27 still open: a hibernate hotkey, timed hibernate (30 min / 1 h), auto-enter on presentation mode, releasing the
+      WebView while hibernating (Lite-level RAM)
 - [ ] **D-27 · Hibernate mode** ([entry](planning-discussion.md#d-27--hibernate-mode-a-plain-notch-for-meetings-and-screen-sharing-added-2026-11-25-owner-request-neutral-entry-under-04-open-for-later)):
       for meetings and screen sharing the notch turns into a plain notch (no track, art, lyrics or pop-ups), with a
       deliberate way to wake it. Options include leaving the notch out of screen captures (`WDA_EXCLUDEFROMCAPTURE`).

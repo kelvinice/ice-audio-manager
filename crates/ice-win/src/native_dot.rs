@@ -422,6 +422,8 @@ pub struct PillState {
     pub theme: NativePillTheme,
     /// Pointer state. Owned by the window thread; `show_state` keeps the live value.
     pub interaction: PillInteraction,
+    /// D-27 hibernate: a plain silhouette (red dot while the mic is muted), no activities, click-through.
+    pub plain: bool,
 }
 
 impl Default for PillState {
@@ -447,6 +449,7 @@ impl PillState {
             notch_style: NotchStyle::default(),
             theme,
             interaction: PillInteraction::None,
+            plain: false,
         }
     }
 
@@ -470,6 +473,15 @@ impl PillState {
         self.active_device = default_playback.map(|d| d.name.clone());
         self.spatial_active =
             default_playback.and_then(|d| d.spatial).is_some_and(|s| s != ice_core::engine::SpatialMode::Off);
+        self.set_plain(snapshot.settings.appearance.hibernate);
+    }
+
+    /// D-27: enters or leaves the plain (hibernate) look. Plain always shows the idle shape: no activity pops up.
+    pub fn set_plain(&mut self, plain: bool) {
+        self.plain = plain;
+        if plain {
+            self.mode = PillMode::Idle;
+        }
     }
 
     /// Applies a single delta [`Envelope`], enforcing monotonic revisions and returning whether
@@ -528,11 +540,18 @@ impl PillState {
             }
             // Media and settings sync silently without waking the pill.
             EngineEvent::MediaChanged { media } => self.media_status = media.as_ref().map(|m| m.status),
-            EngineEvent::SettingsChanged { settings } => self.notch_style = settings.appearance.notch_style,
+            EngineEvent::SettingsChanged { settings } => {
+                self.notch_style = settings.appearance.notch_style;
+                self.plain = settings.appearance.hibernate;
+            }
             EngineEvent::Notice { .. }
             | EngineEvent::NoticesChanged { .. }
             | EngineEvent::LyricsChanged { .. }
             | EngineEvent::ShowNotch => {}
+        }
+        if self.plain {
+            // Hibernating: values stay current (the mic dot reads them), but nothing pops up.
+            self.mode = PillMode::Idle;
         }
         EnvelopeOutcome::Updated
     }
@@ -540,10 +559,14 @@ impl PillState {
 
 #[derive(Debug, Clone, Copy)]
 enum ThreadSignal {
-    Sync { restart_timer: bool },
+    Sync {
+        restart_timer: bool,
+    },
     Hide,
     Idle,
     MoveMonitor,
+    /// D-27: leave the pill out of screen captures (`true`) or not, applied on the window's own thread.
+    CaptureExcluded(bool),
 }
 
 struct RuntimeState {
@@ -725,6 +748,26 @@ impl NativeDotHandle {
         }
     }
 
+    /// D-27 hibernate: draws the plain silhouette (no content, click-through) or the normal pill again.
+    pub fn set_plain(&self, plain: bool) {
+        let signal = {
+            let mut rt = self.shared.lock();
+            if rt.pill.plain == plain {
+                return;
+            }
+            rt.pill.set_plain(plain);
+            rt.desired_visible.then_some(ThreadSignal::Sync { restart_timer: false })
+        };
+        if let Some(sig) = signal {
+            self.shared.post_signal(sig);
+        }
+    }
+
+    /// D-27: leaves the pill window out of screen captures, or puts it back. Applied on the pill's own thread.
+    pub fn set_capture_excluded(&self, exclude: bool) {
+        self.shared.post_signal(ThreadSignal::CaptureExcluded(exclude));
+    }
+
     /// Updates the native dot into an immediate activity pill (with optional volume progress `0.0..=1.0`).
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     pub fn pulse_activity(&self, progress: Option<f32>, accent_rgb: u32) {
@@ -891,7 +934,7 @@ impl NativeDotHandle {
                     | EngineEvent::DeviceArrived { .. }
                     | EngineEvent::DeviceLeft { .. }
             );
-            let reveal = outcome == EnvelopeOutcome::Updated && is_activity && !rt.standby_only;
+            let reveal = outcome == EnvelopeOutcome::Updated && is_activity && !rt.standby_only && !rt.pill.plain;
             if reveal {
                 rt.desired_visible = true;
             }
@@ -952,7 +995,10 @@ impl NativeDotHandle {
                                     | EngineEvent::DeviceArrived { .. }
                                     | EngineEvent::DeviceLeft { .. }
                             );
-                            let reveal = outcome == EnvelopeOutcome::Updated && is_activity && !rt.standby_only;
+                            let reveal = outcome == EnvelopeOutcome::Updated
+                                && is_activity
+                                && !rt.standby_only
+                                && !rt.pill.plain;
                             if reveal {
                                 rt.desired_visible = true;
                             }
@@ -1122,6 +1168,11 @@ fn dot_thread_main(monitor: MonitorInfo, shared: Arc<SharedState>, ready_tx: mps
                     ThreadSignal::MoveMonitor => {
                         need_paint = true;
                     }
+                    ThreadSignal::CaptureExcluded(exclude) => {
+                        if let Err(error) = crate::overlay_win::set_capture_excluded(hwnd.0 as isize, exclude) {
+                            tracing::debug!(%error, exclude, "Native pill capture affinity not applied");
+                        }
+                    }
                 }
             }
 
@@ -1263,6 +1314,8 @@ const fn frame_metrics(mode: PillMode, idle_style: IdleStyle, notch_style: Notch
 }
 
 fn paint_pill(hwnd: HWND, monitor: &MonitorInfo, state: &PillState) -> Result<()> {
+    // D-27: the plain (hibernate) pill takes no input at all, like a hardware notch. A no-op when unchanged.
+    let _ = crate::overlay_win::set_click_through(hwnd.0 as isize, state.plain);
     let metrics = frame_metrics(state.mode, state.idle_style, state.notch_style);
     let w = monitor.logical_to_physical(metrics.total_w()).max(16);
     let h = monitor.logical_to_physical(metrics.body_h).max(8);
@@ -1336,6 +1389,10 @@ pub(crate) fn rasterize_pill_frame(pixels: &mut [u32], w: i32, h: i32, scale: f3
     let lh = h as f32 / scale;
     let aa = 0.75 / scale;
 
+    if state.plain {
+        rasterize_plain_frame(pixels, w, h, scale, state);
+        return;
+    }
     let metrics = frame_metrics(state.mode, state.idle_style, state.notch_style);
     let is_nook = state.notch_style == NotchStyle::Nook;
     let ear = if is_nook { metrics.ear as f32 } else { 0.0 };
@@ -1588,6 +1645,56 @@ pub(crate) fn rasterize_pill_frame(pixels: &mut [u32], w: i32, h: i32, scale: f3
             let pr = (cr * alpha).round().clamp(0.0, 255.0) as u32;
             let pg = (cg * alpha).round().clamp(0.0, 255.0) as u32;
             let pb = (cb * alpha).round().clamp(0.0, 255.0) as u32;
+            pixels[(py * w + px) as usize] = (pa << 24) | (pr << 16) | (pg << 8) | pb;
+        }
+    }
+}
+
+/// D-27 hibernate: the idle silhouette in opaque black (a hardware-notch look, same on every theme) with no rim, text
+/// or glyphs; only a small red dot at the right end while the microphone is muted.
+/// Twin: `.pill-surface.plain` / `PlainNotch.svelte` (`--ice-hibernate-*` tokens in `themes/base.css`).
+#[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss, reason = "pixel loops over a bounded DIB")]
+fn rasterize_plain_frame(pixels: &mut [u32], w: i32, h: i32, scale: f32, state: &PillState) {
+    let scale = scale.max(1.0);
+    let lw = w as f32 / scale;
+    let lh = h as f32 / scale;
+    let aa = 0.75 / scale;
+    let metrics = frame_metrics(PillMode::Idle, state.idle_style, state.notch_style);
+    let is_nook = state.notch_style == NotchStyle::Nook;
+    let ear = if is_nook { metrics.ear as f32 } else { 0.0 };
+    let body_w = (lw - 2.0 * ear).max(12.0);
+    let cx = lw * 0.5;
+    let cy = lh * 0.5 + if is_nook { 1.0 } else { 0.0 };
+    let radius = if is_nook { (lh * 0.44).min(13.0) } else { (lh - 2.0) * 0.5 };
+    let half_w = (body_w - 2.0) * 0.5;
+    let half_h = (lh - 2.0) * 0.5;
+    // The dot sits at the right end of a mini pill, or in the middle of a small dot-style pill.
+    let dot_x = if body_w >= 60.0 { ear + body_w - 12.0 } else { cx };
+    let (dng_r, dng_g, dng_b, _) = state.theme.danger.as_f32_rgba();
+
+    for py in 0..h {
+        let ly = (py as f32 + 0.5) / scale;
+        for px in 0..w {
+            let lx = (px as f32 + 0.5) / scale;
+            let sdf = if is_nook {
+                sd_nook_notch(lx, ly, cx, half_w, lh, radius, ear)
+            } else {
+                sd_round_box(lx, ly, cx, lh * 0.5, half_w, half_h, radius)
+            };
+            let coverage = ((aa * 0.5 - sdf) / aa).clamp(0.0, 1.0);
+            if coverage <= 0.0 {
+                pixels[(py * w + px) as usize] = 0;
+                continue;
+            }
+            let (mut cr, mut cg, mut cb) = (0.0f32, 0.0f32, 0.0f32);
+            if state.mic_muted {
+                let dot_cov = smooth_cov(sd_circle(lx, ly, dot_x, cy, 2.5), aa);
+                blend_over(&mut cr, &mut cg, &mut cb, dng_r, dng_g, dng_b, dot_cov);
+            }
+            let pa = (coverage * 255.0).round().clamp(0.0, 255.0) as u32;
+            let pr = (cr * coverage).round().clamp(0.0, 255.0) as u32;
+            let pg = (cg * coverage).round().clamp(0.0, 255.0) as u32;
+            let pb = (cb * coverage).round().clamp(0.0, 255.0) as u32;
             pixels[(py * w + px) as usize] = (pa << 24) | (pr << 16) | (pg << 8) | pb;
         }
     }
@@ -2134,6 +2241,35 @@ mod tests {
             assert!(std::time::Instant::now() < deadline, "timed out waiting for MicVolumeChanged reveal");
             thread::sleep(Duration::from_millis(5));
         }
+    }
+
+    #[test]
+    fn plain_hibernate_pill_is_a_black_silhouette_with_only_a_mic_dot_and_never_pops_up() {
+        let m = frame_metrics(PillMode::Idle, IdleStyle::MiniPill, NotchStyle::Nook);
+        let (w, h) = (m.total_w(), m.body_h);
+        let mut st = PillState::new(NativePillTheme::ice());
+        st.notch_style = NotchStyle::Nook;
+        st.volume = Some(VolumeState { percent: 55, muted: false });
+        st.set_plain(true);
+
+        let mut px = vec![0u32; (w * h) as usize];
+        rasterize_pill_frame(&mut px, w, h, 1.0, &st);
+        let centre = px[((h / 2) * w + w / 2) as usize];
+        assert!((centre >> 24) & 0xff >= 250, "opaque fill");
+        assert_eq!(centre & 0x00ff_ffff, 0, "black, no label or glyph at the centre");
+        assert!(px.iter().all(|p| p & 0x00ff_ffff == 0), "no colour anywhere without a muted mic");
+
+        st.mic_muted = true;
+        rasterize_pill_frame(&mut px, w, h, 1.0, &st);
+        assert!(px.iter().any(|p| (p >> 16) & 0xff > 150), "a red mic dot while muted");
+
+        // Activities update values but keep the idle shape while plain.
+        let mut fresh = PillState::new(NativePillTheme::ice());
+        fresh.set_plain(true);
+        let env = Envelope { revision: 1, event: EngineEvent::MicMuteChanged { muted: true } };
+        assert_eq!(fresh.apply_envelope(&env), EnvelopeOutcome::Updated);
+        assert!(fresh.mic_muted);
+        assert_eq!(fresh.mode, PillMode::Idle);
     }
 
     #[test]

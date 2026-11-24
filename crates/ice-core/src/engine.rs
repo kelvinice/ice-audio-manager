@@ -261,6 +261,14 @@ pub enum Command {
     SetMovingBackdrop {
         enabled: bool,
     },
+    /// D-27: turn the notch into a plain, click-through silhouette (meetings, screen sharing), or back.
+    SetHibernate {
+        enabled: bool,
+    },
+    /// D-27: while hibernating, leave the notch out of screen captures.
+    SetHibernateHideFromCapture {
+        enabled: bool,
+    },
     SetPerformanceProfile {
         profile: PerformanceProfile,
     },
@@ -337,6 +345,8 @@ impl Command {
             | Self::SetNotchStyle { .. }
             | Self::SetNowPlayingPill { .. }
             | Self::SetMovingBackdrop { .. }
+            | Self::SetHibernate { .. }
+            | Self::SetHibernateHideFromCapture { .. }
             | Self::SetPerformanceProfile { .. }
             | Self::SetPinnedMonitor { .. }
             | Self::SetKnobGestures { .. }

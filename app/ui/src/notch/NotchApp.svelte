@@ -8,6 +8,7 @@
   import MicActivity from './activities/MicActivity.svelte';
   import NookExpandedNotch from './activities/NookExpandedNotch.svelte';
   import NotchBackdrop from './activities/NotchBackdrop.svelte';
+  import PlainNotch from './activities/PlainNotch.svelte';
   import PlugActivity from './activities/PlugActivity.svelte';
   import SwitchActivity from './activities/SwitchActivity.svelte';
   import TrackActivity from './activities/TrackActivity.svelte';
@@ -23,6 +24,7 @@
   class:hidden={(ctrl.notchSnapshot?.hiddenForBench ?? false) || ctrl.isSuspended}
   class:idle-hidden={ctrl.isIdleHidden}
   class:instant={ctrl.isInstant}
+  class:plain={ctrl.isHibernating}
   style:width={`${CANVAS_W}px`}
   style:height={`${CANVAS_H}px`}
 >
@@ -46,6 +48,7 @@
   >
     <div
       class="pill-surface"
+      class:plain={ctrl.isHibernating}
       style:--ice-active-accent={ctrl.activeAccentCss}
       style:--ice-active-glow={ctrl.activeGlowCss}
       style:--ice-active-wash-base={ctrl.artBackdrop.washBaseCss}
@@ -57,6 +60,7 @@
       style:--ice-active-scrim-top={ctrl.artBackdrop.scrimTopCss}
       style:--ice-active-scrim-bottom={ctrl.artBackdrop.scrimBottomCss}
     >
+      {#if !ctrl.isHibernating}
       <NotchBackdrop
         art={ctrl.displayedMedia?.art}
         hasArt={ctrl.hasBackdropArt}
@@ -67,6 +71,7 @@
         boxH={ctrl.targetBox.h}
         topPad={ctrl.surfaceShape.topPad}
       />
+      {/if}
       <div
         class="pill-slot"
         class:nook={ctrl.notchStyle === 'nook'}
@@ -75,7 +80,9 @@
         style:width={`${ctrl.targetBox.w}px`}
         style:height={`${ctrl.targetBox.h}px`}
       >
-        {#if ctrl.notchSnapshot && !ctrl.isExpanded}
+        {#if ctrl.isHibernating}
+          <PlainNotch micMuted={ctrl.effectiveMicMuted} centred={ctrl.idleMode === 'dot'} />
+        {:else if ctrl.notchSnapshot && !ctrl.isExpanded}
           {#if ctrl.activeView.kind === 'volume'}
             <VolumeActivity activity={ctrl.activeView} barPercent={ctrl.pillSize.vol} instant={ctrl.isInstant} />
           {:else if ctrl.activeView.kind === 'switch'}
@@ -244,6 +251,16 @@
     flex-shrink: 0;
     display: flex;
     align-items: center;
+  }
+
+  /* D-27 hibernate: a plain notch has no shadow or rim and a fixed black fill (`--ice-hibernate-bg`). */
+  .stage.plain .pill-shadow,
+  .stage.plain .rim-svg {
+    opacity: 0;
+  }
+
+  .pill-surface.plain {
+    background: var(--ice-hibernate-bg);
   }
 
   .stage.idle-hidden .pill-shadow,

@@ -13,7 +13,7 @@ contract types, and `cargo test -p ice-core --all-features` exports them to `app
 |---|---|
 | `engine.rs` | The contract: `Engine` trait, `Command`, `EngineEvent`, `Envelope`, `EngineSnapshot`, `Notice`, `SettingsView`, `RoleSet`, `PerformanceProfile`, `SpatialMode`, `MediaAction` |
 | `engine/fake.rs` | `FakeEngine`: in-memory engine with the owner's devices, three fake Spotify tracks and stereo meter levels. Used by `--fake-engine`, UI work and tests |
-| `config.rs` | `config.toml` schema (v11: `appearance.nowPlaying` v5, `idle_linger_secs` v6, `[music_services]` + `show_notch_hotkey` v7, `appearance.movingBackdrop` v8, `[lyrics]` + `cache_max_mb` v9, `visualizer_spectrum` v10, `appearance.notchStyle` v11), `Config`, `ConfigStore` (load/save/read), `Config::apply_setting` (every settings command), `Config::view` → `SettingsView` |
+| `config.rs` | `config.toml` schema (v12: `appearance.nowPlaying` v5, `idle_linger_secs` v6, `[music_services]` + `show_notch_hotkey` v7, `appearance.movingBackdrop` v8, `[lyrics]` + `cache_max_mb` v9, `visualizer_spectrum` v10, `appearance.notchStyle` v11, `appearance.hibernate` + `hibernateHideFromCapture` v12), `Config`, `ConfigStore` (load/save/read), `Config::apply_setting` (every settings command), `Config::view` → `SettingsView` |
 | `lyrics.rs` | Pure synced lyrics contract (`LyricsConfig`, `LyricsDocument`, `LyricsState`, `LyricsStorageStats`, `LyricsProvider` trait), LRC/Enhanced-LRC/dual-subtitle `parse_lrc`, weighted word cadence estimator, and pure Kana → Modified Hepburn `kana_to_romaji` |
 | `resolve.rs` | D-16 device identity: `DeviceRef`, `MatchMode`, `resolve`, `candidates`, `toggle`, `normalize_name` |
 | `device.rs` | `EndpointInfo`, `Flow` (render/capture), `Role`, `DeviceState`, `hardware_key_from_devnode` |
@@ -77,3 +77,4 @@ Inline `#[cfg(test)]` in each file. `resolve.rs` is built from the owner's real 
 - 2026-11-24 Gemini: D-26 schema v10 (`visualizer_spectrum`, default `true`, `Command::SetVisualizerSpectrum`), optional `MeterFrame.bands` participating in `differs`, and pure 4th-order 14-band `spectrum.rs` (`SpectrumAnalyzer`).
 - 2026-11-24 Gemini: schema v11 (`NotchStyle`: `Floating` default, `Nook`; `Appearance.notch_style`, `Command::SetNotchStyle`).
 - 2026-11-24 Gemini: updated defaults to `NotchStyle::Nook` and `NowPlayingPill::WhilePlaying`.
+- 2026-11-25 Claude: schema v12, D-27 hibernate: `Appearance.hibernate` (off) + `hibernate_hide_from_capture` (on), `Appearance::exclude_from_capture()`, `Command::SetHibernate` / `SetHibernateHideFromCapture`.

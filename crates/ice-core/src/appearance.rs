@@ -75,6 +75,19 @@ pub struct Appearance {
     pub now_playing: NowPlayingPill,
     /// D-25: slow ambient drift of the art wash on the expanded card while playing.
     pub moving_backdrop: bool,
+    /// D-27 hibernate: the notch is a plain silhouette (no track, art, lyrics or pop-ups; a red dot while the mic is
+    /// muted), click-through, for meetings and screen sharing. Saved, so a restart doesn't reveal anything.
+    pub hibernate: bool,
+    /// D-27: while hibernating, leave the notch windows out of screen captures (`WDA_EXCLUDEFROMCAPTURE`).
+    pub hibernate_hide_from_capture: bool,
+}
+
+impl Appearance {
+    /// Whether the notch windows should be left out of screen captures right now (D-27).
+    #[must_use]
+    pub const fn exclude_from_capture(&self) -> bool {
+        self.hibernate && self.hibernate_hide_from_capture
+    }
 }
 
 impl Default for Appearance {
@@ -86,6 +99,8 @@ impl Default for Appearance {
             notch_style: NotchStyle::default(),
             now_playing: NowPlayingPill::default(),
             moving_backdrop: true,
+            hibernate: false,
+            hibernate_hide_from_capture: true,
         }
     }
 }

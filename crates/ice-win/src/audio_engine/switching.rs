@@ -82,6 +82,8 @@ impl Worker {
             | Command::SetNotchStyle { .. }
             | Command::SetNowPlayingPill { .. }
             | Command::SetMovingBackdrop { .. }
+            | Command::SetHibernate { .. }
+            | Command::SetHibernateHideFromCapture { .. }
             | Command::SetShowDisconnected { .. }
             | Command::SetIdleLinger { .. }
             | Command::SetMusicService { .. }

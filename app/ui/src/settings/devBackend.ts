@@ -40,7 +40,7 @@ function initialSnapshot(): EngineSnapshot {
     media: null,
     lyrics: { status: 'disabled', trackKey: null, document: null },
     settings: {
-      appearance: { theme: 'ice', preset: 'bouncy', idleStyle: 'mini_pill', notchStyle: 'nook', nowPlaying: 'while_playing', movingBackdrop: true },
+      appearance: { theme: 'ice', preset: 'bouncy', idleStyle: 'mini_pill', notchStyle: 'nook', nowPlaying: 'while_playing', movingBackdrop: true, hibernate: false, hibernateHideFromCapture: true },
       performanceProfile: 'instant',
       pinnedMonitor: 'DISPLAY-PATH-1',
       defaultRoles: 'default',
@@ -112,6 +112,8 @@ function applyCommand(s: EngineSnapshot, c: Command): void {
     case 'setNotchStyle': st.appearance.notchStyle = c.style; break;
     case 'setNowPlayingPill': st.appearance.nowPlaying = c.mode; break;
     case 'setMovingBackdrop': st.appearance.movingBackdrop = c.enabled; break;
+    case 'setHibernate': st.appearance.hibernate = c.enabled; break;
+    case 'setHibernateHideFromCapture': st.appearance.hibernateHideFromCapture = c.enabled; break;
     case 'setPerformanceProfile': st.performanceProfile = c.profile; break;
     case 'setPinnedMonitor': st.pinnedMonitor = c.displayPath; break;
     case 'setKnobGestures': st.knobGestures = c.enabled; break;

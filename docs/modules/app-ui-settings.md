@@ -67,3 +67,4 @@ created when opened and destroyed when closed (shell: `app/src-tauri/src/setting
 - 2026-11-24 Gemini: D-26 `PrivacyPage` "Local audio analysis" section with loopback spectrum disclosure and meter-only fallback switch (`SetVisualizerSpectrum`).
 - 2026-11-24 Gemini: added "Notch style" (`Floating` / `Edge Nook`) choice group on `NotchPage` and flush concave-ear silhouette support in `NotchPreview`.
 - 2026-11-24 Gemini: made `Edge Nook` and `While playing` default on `NotchPage` and renamed "When the song changes" to "Now playing".
+- 2026-11-25 Claude: Notch page: "Hibernate" section (Hibernate notch, Hide from screen sharing toggles); `devBackend` handles both commands.

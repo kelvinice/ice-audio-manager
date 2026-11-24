@@ -183,11 +183,16 @@ pub(super) fn build(app: &AppHandle, state: Arc<SharedRuntime>) -> tauri::Result
         let (pinned, profiles) = preferences::placement_menus(app, state, &snapshot.settings, available)?;
         let [theme, notch_style, animation, idle, now_playing] =
             preferences::appearance_menus(app, snapshot.settings.appearance, available)?;
+        // D-27: a plain, click-through notch for meetings and screen sharing; unchecking it wakes the notch.
+        let hibernating = snapshot.settings.appearance.hibernate;
+        let hibernate =
+            checked_command(app, "Hibernate notch", &Command::SetHibernate { enabled: !hibernating }, hibernating)?;
         Menu::with_items(
             app,
             &[
                 &item(app, "settings", "Settings")?,
                 &item(app, "notch", "Show notch preview")?,
+                &hibernate,
                 &pinned,
                 &profiles,
                 &theme,

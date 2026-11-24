@@ -9,6 +9,7 @@ import {
   NOOK_EXPANDED_W_SINGLE,
   NOOK_EXPANDED_W_SPLIT,
   nookStyleStrategy,
+  plainGeometryContext,
 } from './notchStyle.ts';
 
 test('strategy registry returns nook by default and floating when selected', () => {
@@ -71,4 +72,24 @@ test('hit rects stay top-aligned and expand for concave ears in Edge Nook mode',
   assert.equal(nookHit.y, 0);
   assert.equal(nookHit.width, 116 + 16);
   assert.equal(nookHit.x, (CANVAS_W - nookHit.width) / 2);
+});
+
+test('hibernate keeps the plain idle shape whatever plays, pops up or is muted', () => {
+  const busy = {
+    view: { kind: 'track', media: null } as never,
+    expanded: true,
+    micMuted: true,
+    idleMode: 'mini_pill' as const,
+    hasMedia: true,
+    fallbackVolume: 42,
+    pillLyricsExtraH: 30,
+    cardLyricsExtraH: 82,
+    showCardLyrics: true,
+  };
+  const quiet = { ...busy, view: { kind: 'idle' } as const, expanded: false, micMuted: false, hasMedia: false };
+  for (const strategy of [nookStyleStrategy, floatingStyleStrategy]) {
+    const plain = strategy.targetGeometry(plainGeometryContext(busy));
+    const idle = strategy.targetGeometry({ ...quiet, pillLyricsExtraH: 0, cardLyricsExtraH: 0, showCardLyrics: false });
+    assert.deepEqual(plain, idle, strategy.id);
+  }
 });

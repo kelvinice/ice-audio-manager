@@ -26,7 +26,7 @@ function saved(name: string, savedId: string, deviceId: string | null = savedId)
 
 function baseSettings(overrides: Partial<SettingsView> = {}): SettingsView {
   return {
-    appearance: { theme: 'ice', preset: 'smooth', idleStyle: 'mini_pill', notchStyle: 'floating', nowPlaying: 'brief', movingBackdrop: true },
+    appearance: { theme: 'ice', preset: 'smooth', idleStyle: 'mini_pill', notchStyle: 'floating', nowPlaying: 'brief', movingBackdrop: true, hibernate: false, hibernateHideFromCapture: true },
     performanceProfile: 'instant',
     pinnedMonitor: null,
     defaultRoles: 'default',

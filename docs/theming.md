@@ -59,6 +59,8 @@ All `--ice-*` variables are defined with their `Ice` defaults in CSS `:root`. An
 | `--ice-lyric-muted` | Lyrics Extension (D-22/V6) | `rgba(237, 241, 247, 0.48)` (`rgba(17, 22, 31, 0.46)` in `ice_light`) | No | Upcoming words and dimmed previous/next lyric context lines |
 | `--ice-lyric-sub` | Lyrics Extension (D-22/V6) | `rgba(237, 241, 247, 0.68)` (`rgba(17, 22, 31, 0.68)` in `ice_light`) | No | Romaji or dual-timestamp paired subtitle line beneath active lyric |
 | `--ice-lyric-glow` | Lyrics Extension (D-22/V6) | `color-mix(in srgb, var(--ice-active-accent, var(--ice-accent)) 42%, transparent)` (`transparent` in `minimal`) | No | Soft accent text-shadow halo behind the active lyric word |
+| `--ice-hibernate-bg` | Plain notch (D-27 hibernate) | `#000` | No | Fill of the hibernating notch on every theme (a hardware-notch look). Twin: `rasterize_plain_frame` in `native_dot.rs` |
+| `--ice-hibernate-dot` | Plain notch (D-27 hibernate) | `var(--ice-danger)` | No | The small dot shown while the microphone is muted |
 | `--ice-ok` | Accent & Status | `#4ade80` | Yes | Positive status (device plugged in, mic live) |
 | `--ice-warn` | Accent & Status | `#f59e0b` | No | Non-destructive warning state (device unplugged / disconnected) |
 | `--ice-danger` | Accent & Status | `#f07148` | Yes | Muted/destructive status (speaker mute, mic mute) |

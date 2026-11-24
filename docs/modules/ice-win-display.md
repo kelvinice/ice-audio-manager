@@ -41,3 +41,4 @@ and `examples/fullscreen_spike.rs`.
 
 ## Change log
 - 2026-11-23 Claude: initial recap.
+- 2026-11-25 Claude: `overlay_win::set_capture_excluded` (`SetWindowDisplayAffinity`, `WDA_EXCLUDEFROMCAPTURE` / `WDA_NONE`) for D-27 hibernate.

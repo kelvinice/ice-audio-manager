@@ -3,7 +3,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
-use ice_core::appearance::NowPlayingPill;
+use ice_core::appearance::{Appearance, NowPlayingPill};
 use ice_core::config::ConfigStore;
 use ice_core::device::Flow;
 use ice_core::engine::{
@@ -78,7 +78,7 @@ pub(super) struct EngineSlot(Mutex<Result<EngineRef, String>>);
 
 impl EngineSlot {
     pub(super) fn new(engine: Option<EngineRef>) -> Self {
-        Self(Mutex::new(engine.ok_or_else(|| "Starting Windows audio…".into())))
+        Self(Mutex::new(engine.ok_or_else(|| "Starting Windows audioâ€¦".into())))
     }
 
     pub(super) fn current(&self) -> Option<EngineRef> {
@@ -238,13 +238,32 @@ pub(super) fn watch(app: AppHandle, state: Arc<SharedRuntime>) -> std::io::Resul
 /// Feeds the native dot a snapshot plus the saved theme. The shell owns the theme mapping, so Phase 4 user
 /// themes (CSS overrides) can replace the built-in palette here.
 pub(super) fn native_dot_snapshot(dot: &NativeDotHandle, snapshot: &EngineSnapshot) {
-    dot.set_theme(NativePillTheme::builtin(snapshot.settings.appearance.theme));
-    dot.set_notch_style(snapshot.settings.appearance.notch_style);
+    native_dot_appearance(dot, &snapshot.settings.appearance);
     dot.apply_snapshot(snapshot);
+}
+
+fn native_dot_appearance(dot: &NativeDotHandle, appearance: &Appearance) {
+    dot.set_theme(NativePillTheme::builtin(appearance.theme));
+    dot.set_notch_style(appearance.notch_style);
+    dot.set_plain(appearance.hibernate);
+    dot.set_capture_excluded(appearance.exclude_from_capture());
+}
+
+/// D-27: leaves the WebView notch out of screen captures while hibernating (if chosen). Runs on the main thread, which
+/// owns the window; the native pill applies its own on its thread (`native_dot_appearance`).
+pub(super) fn apply_capture_privacy(app: &AppHandle, appearance: &Appearance) {
+    if let Some(win) = app.get_webview_window("notch")
+        && let Ok(hwnd) = win.hwnd()
+        && let Err(error) =
+            ice_win::overlay_win::set_capture_excluded(hwnd.0 as isize, appearance.exclude_from_capture())
+    {
+        tracing::debug!(%error, "Notch capture affinity not applied");
+    }
 }
 
 fn apply_snapshot(app: &AppHandle, state: &Arc<SharedRuntime>, snapshot: &EngineSnapshot) {
     super::placement::settings(app, state, &snapshot.settings);
+    apply_capture_privacy(app, &snapshot.settings.appearance);
     if let Some(dot) = state.native_dot.lock().unwrap_or_else(PoisonError::into_inner).as_ref() {
         native_dot_snapshot(dot, snapshot);
     }
@@ -260,8 +279,7 @@ fn apply_event(app: &AppHandle, state: &Arc<SharedRuntime>, delta: Envelope) {
         && let Some(dot) = state.native_dot.lock().unwrap_or_else(std::sync::PoisonError::into_inner).as_ref()
     {
         if let EngineEvent::SettingsChanged { settings } = &delta.event {
-            dot.set_theme(NativePillTheme::builtin(settings.appearance.theme));
-            dot.set_notch_style(settings.appearance.notch_style);
+            native_dot_appearance(dot, &settings.appearance);
         }
         let _ = dot.apply_envelope(&delta);
     }
@@ -290,6 +308,7 @@ fn apply_event(app: &AppHandle, state: &Arc<SharedRuntime>, delta: Envelope) {
     let snapshot = state.engine.snapshot();
     if matches!(delta.event, EngineEvent::SettingsChanged { .. }) {
         super::placement::settings(app, state, &snapshot.settings);
+        apply_capture_privacy(app, &snapshot.settings.appearance);
     }
     let activity = match &delta.event {
         EngineEvent::VolumeChanged { .. } | EngineEvent::MicVolumeChanged { .. } => Some(ActivityKind::Volume),
@@ -316,6 +335,8 @@ fn apply_event(app: &AppHandle, state: &Arc<SharedRuntime>, delta: Envelope) {
         | EngineEvent::SettingsChanged { .. }
         | EngineEvent::LyricsChanged { .. } => None,
     };
+    // D-27 hibernate: nothing pops up and nothing wakes the WebView; the plain notch just stays as it is.
+    let activity = activity.filter(|_| !snapshot.settings.appearance.hibernate);
 
     let needs_webview = activity.is_some() && !state.bench_mode && state.placement().allows_webview();
     let waking = needs_webview

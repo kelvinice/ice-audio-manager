@@ -142,6 +142,9 @@
   --ice-play-bg: var(--ice-accent-soft);
   --ice-play-fg: var(--ice-accent-strong);
   --ice-lyric-glow: transparent;
+  /* D-27 hibernate: a plain notch looks like hardware on every theme. Twin: `rasterize_plain_frame` (native_dot.rs). */
+  --ice-hibernate-bg: #000;
+  --ice-hibernate-dot: var(--ice-danger);
 }
 
 *,

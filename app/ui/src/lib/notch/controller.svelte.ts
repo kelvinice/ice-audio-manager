@@ -18,7 +18,7 @@ import {
   PILL_LYRICS_SUB_H,
   resolveRimStroke,
 } from './geometry';
-import { getNotchStyleStrategy } from './notchStyle';
+import { getNotchStyleStrategy, NO_HIT_RECT, plainGeometryContext, type GeometryContext } from './notchStyle';
 import { hasSubtitleLines, shouldShowCardLyrics, shouldShowPillLyrics } from './lyrics';
 import {
   DEFAULT_IDLE_MODE,
@@ -41,6 +41,9 @@ import {
   type OptimisticSeek,
 } from './scrubber';
 import { resolveDisplayedView } from './nowPlaying';
+
+/** D-27 hibernate shows only the idle shape. */
+const IDLE_VIEW: ActivityView = Object.freeze({ kind: 'idle' });
 
 export class NotchController {
   private readonly scheduler = new NotchActivityScheduler(Date.now());
@@ -68,7 +71,11 @@ export class NotchController {
     this.notchSnapshot?.notchStyle ?? this.engineState.settings?.appearance.notchStyle ?? 'nook',
   );
   readonly styleStrategy = $derived(getNotchStyleStrategy(this.notchStyle));
-  readonly isExpanded = $derived((this.notchSnapshot?.expanded ?? false) || this.hoverExpanded);
+  /** D-27 hibernate: a plain, click-through silhouette; no activities, no expansion, no media. */
+  readonly isHibernating = $derived(this.engineState.settings?.appearance.hibernate ?? false);
+  readonly isExpanded = $derived(
+    !this.isHibernating && ((this.notchSnapshot?.expanded ?? false) || this.hoverExpanded),
+  );
   readonly isInstant = $derived(
     (this.notchSnapshot?.systemReduceMotion ?? false) || (this.notchSnapshot?.preset ?? 'bouncy') === 'off',
   );
@@ -79,17 +86,20 @@ export class NotchController {
   }
   readonly isNotchVisible = $derived(!(this.notchSnapshot?.hiddenForBench ?? false) && !this.isSuspended);
   readonly activeView = $derived<ActivityView>(
-    this.benchOverride ??
+    this.isHibernating
+      ? IDLE_VIEW
+      : (this.benchOverride ??
       resolveDisplayedView(
         this.engineState.activity,
         this.engineState.media,
         nowPlayingMode(this.engineState.settings),
         this.scheduler.lastTrackSeq,
-      ),
+      )),
   );
 
   /** The engine's activity as shown, i.e. with the `appearance.nowPlaying` setting applied (non-reactive read). */
   private displayedEngineView(): ActivityView {
+    if (this.engineState.settings?.appearance.hibernate) return IDLE_VIEW;
     return resolveDisplayedView(
       this.engineState.activity,
       this.engineState.media,
@@ -201,7 +211,7 @@ export class NotchController {
   }
   readonly targetBox = $derived.by(() => {
     const hasMedia = isMediaActive(this.engineState.media);
-    return this.styleStrategy.targetGeometry({
+    const ctx: GeometryContext = {
       view: this.activeView,
       expanded: this.isExpanded,
       micMuted: this.effectiveMicMuted,
@@ -211,7 +221,8 @@ export class NotchController {
       pillLyricsExtraH: this.computePillLyricsExtraH(this.activeView),
       cardLyricsExtraH: this.computeCardLyricsExtraH(hasMedia),
       showCardLyrics: this.showCardLyrics,
-    });
+    };
+    return this.styleStrategy.targetGeometry(this.isHibernating ? plainGeometryContext(ctx) : ctx);
   });
   readonly rimStroke = $derived(resolveRimStroke(this.activeView, this.isExpanded, this.effectiveMicMuted));
 
@@ -265,8 +276,15 @@ export class NotchController {
     this.springs.setPaused(paused);
     this.springs.setPreset(preset);
 
-    const view = this.benchOverride ?? this.displayedEngineView();
-    const expandedNow = (snap?.expanded ?? false) || this.hoverExpanded;
+    const hibernating = this.engineState.settings?.appearance.hibernate ?? false;
+    if (hibernating) {
+      // The plain notch is click-through, so a pointer that was over it never reports leaving: forget the hover.
+      this.clearTimers();
+      this.hoverExpanded = false;
+      this.pointerInside = false;
+    }
+    const view = hibernating ? IDLE_VIEW : (this.benchOverride ?? this.displayedEngineView());
+    const expandedNow = !hibernating && ((snap?.expanded ?? false) || this.hoverExpanded);
     const micMutedNow = this.engineState.micMuted ?? snap?.micMuted ?? false;
     const fallbackVol = this.engineState.volume?.percent ?? snap?.volumePercent ?? 40;
     const hasMedia = isMediaActive(this.engineState.media);
@@ -274,7 +292,7 @@ export class NotchController {
     const showLyrics = expandedNow
       ? shouldShowCardLyrics(this.engineState.settings?.lyrics, this.engineState.lyrics, hasMedia, this.lyricsCardOpen)
       : false;
-    const target = strategy.targetGeometry({
+    const ctx: GeometryContext = {
       view,
       expanded: expandedNow,
       micMuted: micMutedNow,
@@ -284,14 +302,15 @@ export class NotchController {
       pillLyricsExtraH: this.computePillLyricsExtraH(view),
       cardLyricsExtraH: this.computeCardLyricsExtraH(hasMedia),
       showCardLyrics: showLyrics,
-    });
+    };
+    const target = strategy.targetGeometry(hibernating ? plainGeometryContext(ctx) : ctx);
 
     if (instantMove || preset === 'off' || paused) {
       this.springs.snapAll(target);
     } else {
       this.springs.setTargets(target);
     }
-    const nextRect = strategy.computeHitRect(target);
+    const nextRect = hibernating ? NO_HIT_RECT : strategy.computeHitRect(target);
     if (
       !this.lastHitRect ||
       this.lastHitRect.x !== nextRect.x ||
@@ -536,6 +555,7 @@ export class NotchController {
   }
 
   onPointerEnter = (): void => {
+    if (this.isHibernating) return;
     this.clearTimers();
     this.pointerInside = true;
     this.scheduler.markInteraction(Date.now());
@@ -565,6 +585,7 @@ export class NotchController {
 
   onWheel = (e: WheelEvent): void => {
     e.preventDefault();
+    if (this.isHibernating) return;
     this.scheduler.markInteraction(Date.now());
     if (e.shiftKey) {
       void invoke('trigger_switch');
@@ -575,7 +596,7 @@ export class NotchController {
   };
 
   onAuxClick = (e: MouseEvent): void => {
-    if (e.button === 1) {
+    if (e.button === 1 && !this.isHibernating) {
       e.preventDefault();
       this.scheduler.markInteraction(Date.now());
       void invoke('toggle_mute');

@@ -12,9 +12,9 @@ use windows::Win32::UI::Shell::{DefSubclassProc, RemoveWindowSubclass, SetWindow
 use windows::Win32::UI::WindowsAndMessaging::{
     GWL_EXSTYLE, GetCursorPos, GetForegroundWindow, GetWindowLongPtrW, GetWindowRect, HWND_TOPMOST, MA_NOACTIVATE,
     SPI_GETCLIENTAREAANIMATION, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOOWNERZORDER, SWP_NOSENDCHANGING,
-    SWP_NOSIZE, SWP_NOZORDER, SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS, SetWindowLongPtrW, SetWindowPos,
-    SystemParametersInfoW, WM_MOUSEACTIVATE, WM_NCDESTROY, WS_EX_APPWINDOW, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW,
-    WS_EX_TOPMOST, WS_EX_TRANSPARENT,
+    SWP_NOSIZE, SWP_NOZORDER, SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS, SetWindowDisplayAffinity, SetWindowLongPtrW,
+    SetWindowPos, SystemParametersInfoW, WDA_EXCLUDEFROMCAPTURE, WDA_NONE, WM_MOUSEACTIVATE, WM_NCDESTROY,
+    WS_EX_APPWINDOW, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_EX_TRANSPARENT,
 };
 use windows::core::{BOOL, Result};
 
@@ -104,6 +104,19 @@ pub fn set_click_through(hwnd: isize, ignore: bool) -> Result<()> {
         unsafe { SetWindowLongPtrW(hwnd, GWL_EXSTYLE, desired) };
     }
     Ok(())
+}
+
+/// Leaves the window out of screen captures (desktop duplication, Windows.Graphics.Capture, `BitBlt`) while it stays
+/// visible on the user's own screen (D-27 hibernate), or puts it back with `exclude = false`. Documented
+/// `SetWindowDisplayAffinity` (`WDA_EXCLUDEFROMCAPTURE`, Windows 10 2004+); call it on the window's own thread.
+///
+/// # Errors
+/// Fails if `hwnd` is null or Windows refuses the affinity (e.g. no DWM composition).
+pub fn set_capture_excluded(hwnd: isize, exclude: bool) -> Result<()> {
+    let hwnd = to_hwnd(hwnd)?;
+    let affinity = if exclude { WDA_EXCLUDEFROMCAPTURE } else { WDA_NONE };
+    // SAFETY: `hwnd` is a live top-level window owned by this process; only its capture affinity changes.
+    unsafe { SetWindowDisplayAffinity(hwnd, affinity) }
 }
 
 /// Positions and sizes the overlay window centered along the top edge of `monitor` using logical coordinates.

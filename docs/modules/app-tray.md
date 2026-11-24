@@ -43,3 +43,4 @@ Unit tests in `tray.rs` and `preferences.rs` cover id round-trips and favourite 
 - 2026-11-24 Gemini: `tray/preferences.rs` adds `Ice Light` to the `Theme` submenu and puts `Bouncy` first in `Animation`.
 - 2026-11-24 Gemini: added `Notch style` (`Floating (default)` / `Edge Nook`) submenu to `appearance_menus`.
 - 2026-11-24 Gemini: updated tray default labels and ordering to `Edge Nook (default)` and `While playing (default)`.
+- 2026-11-25 Claude: "Hibernate notch" check item in the right-click menu (`Command::SetHibernate`), under "Show notch preview"; unchecking it wakes the notch.
