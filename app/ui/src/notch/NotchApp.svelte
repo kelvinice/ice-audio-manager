@@ -97,9 +97,8 @@
             expanded={ctrl.notchSnapshot.expanded}
             onToggleExpand={ctrl.toggleExpand}
             onToggleMute={ctrl.toggleMute}
-            onAdjustVolume={ctrl.adjustVolume}
+            onSetVolume={ctrl.setVolume}
             onSwitchDevice={ctrl.switchDevice}
-            onSetNotchDevices={ctrl.setNotchDevices}
             onToggleMicMute={ctrl.toggleMicMute}
             onMediaAction={(action) => ctrl.sendMediaAction(action)}
             onOpenMusicService={ctrl.openMusicService}

@@ -12,21 +12,10 @@
     instant: boolean;
     notchVisible: boolean;
     preset: SpringPreset;
-    expanded: boolean;
     onMediaAction: (action: MediaAction) => void;
-    onToggleExpand: () => void;
   }
 
-  let {
-    media,
-    spatialBadge,
-    instant,
-    notchVisible,
-    preset,
-    expanded,
-    onMediaAction,
-    onToggleExpand,
-  }: Props = $props();
+  let { media, spatialBadge, instant, notchVisible, preset, onMediaAction }: Props = $props();
 
   const isPlaying = $derived(media.status === 'playing');
   const scrubberScale = $derived(Math.max(0, Math.min(1, mediaProgressPercent(media) / 100)));
@@ -35,50 +24,38 @@
 </script>
 
 <div class="media-card">
-  <div class="media-top">
-    <AlbumArtTile art={media.art} size={34} {instant} />
+  <div class="media-head">
+    <AlbumArtTile art={media.art} size={58} {instant} />
     <div class="media-info">
-      <span class="media-title">{media.title || 'Unknown track'}</span>
+      <div class="title-row">
+        <span class="media-title">{media.title || 'Unknown track'}</span>
+        {#if isPlaying}
+          <VisualizerBars active={isPlaying && notchVisible} {preset} {instant} variant="expanded" />
+        {/if}
+      </div>
       <span class="media-sub">
         {media.artist || 'Unknown artist'}
         {#if spatialBadge}
           <span class="spatial-inline">· {spatialBadge}</span>
         {/if}
       </span>
+      <div class="transport" role="group" aria-label="Media transport">
+        <button class="t-btn" type="button" aria-label="Previous track" onclick={() => onMediaAction('previous')}>
+          <DeviceIcon kind="prev" size={12} />
+        </button>
+        <button
+          class="t-btn t-play"
+          type="button"
+          aria-label={isPlaying ? 'Pause' : 'Play'}
+          onclick={() => onMediaAction('playPause')}
+        >
+          <DeviceIcon kind={isPlaying ? 'pause' : 'play'} size={12} />
+        </button>
+        <button class="t-btn" type="button" aria-label="Next track" onclick={() => onMediaAction('next')}>
+          <DeviceIcon kind="next" size={12} />
+        </button>
+      </div>
     </div>
-    {#if isPlaying}
-      <VisualizerBars active={isPlaying && notchVisible} {preset} {instant} variant="expanded" />
-    {/if}
-    <div class="media-controls" role="group" aria-label="Media transport">
-      <button
-        class="chip icon-chip"
-        type="button"
-        aria-label="Previous track"
-        onclick={() => onMediaAction('previous')}
-      >
-        <DeviceIcon kind="prev" size={11} />
-      </button>
-      <button
-        class="chip icon-chip media-play"
-        type="button"
-        aria-label={isPlaying ? 'Pause' : 'Play'}
-        onclick={() => onMediaAction('playPause')}
-      >
-        <DeviceIcon kind={isPlaying ? 'pause' : 'play'} size={12} />
-      </button>
-      <button
-        class="chip icon-chip"
-        type="button"
-        aria-label="Next track"
-        onclick={() => onMediaAction('next')}
-      >
-        <DeviceIcon kind="next" size={11} />
-      </button>
-    </div>
-    <button class="chip pin-chip" class:primary={expanded} type="button" onclick={onToggleExpand}>
-      <DeviceIcon kind="pin" size={10} />
-      <span>{expanded ? 'Pinned' : 'Pin'}</span>
-    </button>
   </div>
 
   <div class="scrubber-row" aria-label="Track progress">
@@ -86,7 +63,7 @@
     <div class="scrubber-track">
       <div class="scrubber-fill" style:transform={`scaleX(${scrubberScale.toFixed(4)})`}></div>
     </div>
-    <span class="timecode">{durationLabel}</span>
+    <span class="timecode end">{durationLabel}</span>
   </div>
 </div>
 
@@ -94,19 +71,14 @@
   .media-card {
     display: flex;
     flex-direction: column;
-    gap: 5px;
+    gap: 8px;
   }
 
-  .media-top,
-  .scrubber-row,
-  .media-controls {
+  .media-head {
     display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-
-  .media-controls {
-    gap: 3px;
+    align-items: stretch;
+    gap: 12px;
+    height: 58px;
   }
 
   .media-info {
@@ -114,25 +86,33 @@
     min-width: 0;
     display: flex;
     flex-direction: column;
-    justify-content: center;
-    gap: 1px;
     white-space: nowrap;
   }
 
+  .title-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 16px;
+  }
+
   .media-title {
-    font-size: 12.5px;
+    flex: 1;
+    min-width: 0;
+    font-size: 13px;
     font-weight: 600;
     letter-spacing: -0.01em;
-    line-height: 1.2;
+    line-height: 16px;
     color: var(--ice-fg);
     overflow: hidden;
     text-overflow: ellipsis;
   }
 
   .media-sub {
-    font-size: 10.5px;
+    margin-top: 1px;
+    font-size: 11px;
     font-weight: 500;
-    line-height: 1.2;
+    line-height: 14px;
     color: var(--ice-fg-muted);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -142,9 +122,60 @@
     color: var(--ice-accent-strong);
   }
 
+  .transport {
+    margin-top: auto;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: -4px;
+  }
+
+  .t-btn {
+    appearance: none;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-radius: var(--ice-radius-pill);
+    background: transparent;
+    color: var(--ice-fg);
+    cursor: pointer;
+    transition: background-color 120ms ease, transform 120ms ease;
+  }
+
+  .t-btn:hover {
+    background: var(--ice-control-bg-hover);
+  }
+
+  .t-btn:active {
+    transform: scale(0.92);
+  }
+
+  .t-play {
+    width: 26px;
+    height: 26px;
+    background: var(--ice-play-bg);
+    color: var(--ice-play-fg);
+  }
+
+  .t-play:hover {
+    background: var(--ice-play-bg);
+    filter: brightness(1.08);
+  }
+
+  .scrubber-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 12px;
+  }
+
   .scrubber-track {
     flex: 1;
-    height: 3.5px;
+    height: 3px;
     border-radius: var(--ice-radius-pill);
     background: var(--ice-track);
     overflow: hidden;
@@ -166,59 +197,7 @@
     flex-shrink: 0;
   }
 
-  .timecode:last-child {
+  .timecode.end {
     text-align: right;
-  }
-
-  .chip {
-    appearance: none;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 4px;
-    border: 1px solid var(--ice-control-border);
-    background: var(--ice-control-bg);
-    color: var(--ice-fg);
-    border-radius: var(--ice-radius-pill);
-    padding: 3px 8px;
-    font-size: 10px;
-    font-weight: 500;
-    font-family: inherit;
-    cursor: pointer;
-    white-space: nowrap;
-  }
-
-  .chip:hover {
-    background: var(--ice-control-bg-hover);
-  }
-
-  .icon-chip {
-    width: 22px;
-    height: 22px;
-    padding: 0;
-  }
-
-  .media-play {
-    width: 25px;
-    height: 25px;
-    border-color: transparent;
-    background: var(--ice-play-bg);
-    color: var(--ice-play-fg);
-  }
-
-  .media-play:hover {
-    background: var(--ice-play-bg);
-    filter: brightness(1.06);
-  }
-
-  .pin-chip {
-    gap: 3px;
-    padding: 3px 6px;
-  }
-
-  .chip.primary {
-    border-color: var(--ice-accent);
-    background: var(--ice-control-bg-active);
-    color: var(--ice-fg);
   }
 </style>

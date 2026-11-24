@@ -29,8 +29,10 @@ use tauri::{AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder
 
 use crate::ipc::{ActivityKind, HitRect, MonitorSummary, NotchDelta, NotchSnapshot};
 
-const NOTCH_CANVAS_W: i32 = 420;
-const NOTCH_CANVAS_H: i32 = 190;
+// Twin: `CANVAS_W`/`CANVAS_H` in app/ui/src/lib/notch/geometry.ts. The margin around the expanded pill leaves room
+// for its drop shadow; a tighter canvas clips the shadow at the window edge.
+const NOTCH_CANVAS_W: i32 = 440;
+const NOTCH_CANVAS_H: i32 = 210;
 const NOTCH_TOP_OFFSET: i32 = 0;
 
 struct SharedRuntime {
@@ -234,6 +236,11 @@ fn adjust_volume(delta: i8, state: State<'_, Arc<SharedRuntime>>) {
 }
 
 #[tauri::command]
+fn set_volume(percent: u8, state: State<'_, Arc<SharedRuntime>>) {
+    state.engine.send(Command::SetVolume { percent: percent.min(100) });
+}
+
+#[tauri::command]
 fn toggle_mute(state: State<'_, Arc<SharedRuntime>>) {
     state.engine.send(Command::ToggleMute);
 }
@@ -262,11 +269,6 @@ fn media_command(action: ice_core::engine::MediaAction, state: State<'_, Arc<Sha
 }
 
 #[tauri::command]
-fn set_notch_devices(device_ids: Vec<String>, state: State<'_, Arc<SharedRuntime>>) {
-    state.engine.send(Command::SetFavourites { flow: ice_core::device::Flow::Render, device_ids });
-}
-
-#[tauri::command]
 fn toggle_expand(app: AppHandle, state: State<'_, Arc<SharedRuntime>>) {
     state.update_and_emit(&app, |s| {
         s.expanded = !s.expanded;
@@ -276,7 +278,7 @@ fn toggle_expand(app: AppHandle, state: State<'_, Arc<SharedRuntime>>) {
 
 #[tauri::command]
 fn request_idle_suspend(app: AppHandle, state: State<'_, Arc<SharedRuntime>>) {
-    if state.bench_mode || !state.placement().allows_webview() {
+    if state.bench_mode || !state.placement().suspends_on_idle() {
         return;
     }
     if state.snapshot_clone().expanded
@@ -1293,11 +1295,11 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             report_settings_ready,
             report_event_rendered,
             adjust_volume,
+            set_volume,
             toggle_mute,
             toggle_mic_mute,
             trigger_switch,
             switch_to_device,
-            set_notch_devices,
             media_command,
             ipc::open_music_service,
             meter::set_visualizer,

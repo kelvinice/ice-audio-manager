@@ -63,6 +63,7 @@
   style:height={`${size}px`}
   style:--tile-accent={accentCss}
   style:--prev-tile-accent={prevAccentCss}
+  style:--art-radius={size >= 48 ? 'var(--ice-radius-md)' : 'var(--ice-radius-sm)'}
   aria-hidden="true"
 >
   {#key instant ? 0 : crossfadeKey}
@@ -97,7 +98,7 @@
   .art-slot {
     position: relative;
     flex-shrink: 0;
-    border-radius: var(--ice-radius-sm);
+    border-radius: var(--art-radius, var(--ice-radius-sm));
     overflow: hidden;
   }
 
@@ -107,7 +108,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: var(--ice-radius-sm);
+    border-radius: var(--art-radius, var(--ice-radius-sm));
     background: var(--tile-accent, var(--ice-accent));
     border: 1px solid var(--ice-border);
     color: var(--ice-bg);

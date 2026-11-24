@@ -21,6 +21,12 @@ impl Placement {
         !self.gaming && matches!(self.profile, Some(PerformanceProfile::Instant | PerformanceProfile::Balanced))
     }
 
+    /// Whether the notch WebView hands over to the native pill after the idle linger. `Instant` keeps the WebView
+    /// awake so the notch never falls back to the static pill (owner request, 2026-11-24); `Balanced` stays light.
+    pub(super) fn suspends_on_idle(&self) -> bool {
+        self.allows_webview() && self.profile == Some(PerformanceProfile::Balanced)
+    }
+
     pub(super) fn can_reveal(&self, generation: u64) -> bool {
         self.allows_webview() && self.generation == generation
     }
@@ -209,10 +215,13 @@ fn reconcile(app: &AppHandle, state: &Arc<SharedRuntime>, settings: Option<&Sett
     }
     let preview = state.preview_on_attach.swap(false, Ordering::AcqRel);
     let minimized = state.start_minimized.swap(false, Ordering::AcqRel);
-    if allowed
-        && (preview || (changed && profile == PerformanceProfile::Instant && !minimized))
-        && app.get_webview_window("notch").is_none()
-    {
+    let has_window = app.get_webview_window("notch").is_some();
+    // Switching to Instant also wakes a notch that Balanced had suspended, so the native pill doesn't linger.
+    let wake_instant = changed
+        && profile == PerformanceProfile::Instant
+        && !minimized
+        && (!has_window || !state.notch_visible.load(Ordering::Acquire));
+    if allowed && ((preview && !has_window) || wake_instant) {
         request_preview(app, state, Preview::Notch);
     }
     tracing::debug!(?profile, gaming, "Applied notch placement");

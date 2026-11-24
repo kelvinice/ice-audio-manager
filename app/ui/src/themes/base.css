@@ -6,8 +6,10 @@
   --ice-border: rgba(107, 197, 255, 0.22);
   --ice-rim: rgba(154, 214, 255, 0.45);
   --ice-shadow: 0 10px 28px rgba(0, 0, 0, 0.48), 0 2px 8px rgba(0, 0, 0, 0.32);
-  --ice-drop-shadow: 0 8px 18px rgba(0, 0, 0, 0.45);
+  /* Must fit inside the notch canvas margin (geometry.ts: ≥ 24 px each side of the expanded pill). */
+  --ice-drop-shadow: 0 6px 16px rgba(0, 0, 0, 0.42);
   --ice-radius: 22px;
+  --ice-radius-md: 12px;
   --ice-radius-sm: 8px;
   --ice-radius-pill: 999px;
 
