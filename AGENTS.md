@@ -1,4 +1,4 @@
-# AGENT.md — Working Guide for Ice Audio Manager
+# AGENTS.md — Working Guide for Ice Audio Manager
 
 > Read this and the relevant doc in [`docs/modules/`](docs/modules/README.md) **before opening source files**. Full project engineering rules live in [`docs/code-practices.md`](docs/code-practices.md); if prose and code ever disagree, the **code wins** (and the PR updates the doc).
 
