@@ -29,7 +29,7 @@ All `--ice-*` variables are defined with their `Ice` defaults in CSS `:root`. An
 | `--ice-border` | Surface | `rgba(107, 197, 255, 0.22)` | No | Inner hairline border around pill and cards |
 | `--ice-rim` | Surface | `rgba(154, 214, 255, 0.45)` | Yes | 1 px specular rim highlight around the notch capsule |
 | `--ice-shadow` | Surface | `0 10px 28px rgba(0, 0, 0, 0.48), 0 2px 8px rgba(0, 0, 0, 0.32)` | No | Box shadow beneath Settings / card elements |
-| `--ice-drop-shadow` | Surface | `0 6px 16px rgba(0, 0, 0, 0.42)` | No | Composited `drop-shadow(...)` filter under the floating notch stage. Offset + blur must stay inside the canvas margin (≥ 24 px around the expanded pill, `geometry.ts`) or the window edge clips it |
+| `--ice-drop-shadow` | Surface | `0 6px 16px rgba(0, 0, 0, 0.42)` | No | Box shadow beneath the floating `.pill-shadow` sibling element (off the animated pill subtree so D-25 drift does not re-filter it). Offset + blur must stay inside the canvas margin (≥ 24 px around the expanded pill, `geometry.ts`) or the window edge clips it |
 | `--ice-radius` | Surface | `22px` | No | Expanded card corner radius (compact pills compute capsule radii dynamically) |
 | `--ice-radius-md` | Surface | `12px` | No | Large tiles: expanded album art and the empty-state music tile |
 | `--ice-radius-sm` | Surface | `8px` | No | Small control, chip, and mini button corner radius |
@@ -47,6 +47,7 @@ All `--ice-*` variables are defined with their `Ice` defaults in CSS `:root`. An
 | `--ice-art-backdrop` | Art Backdrop (D-23) | `0` *(set e.g. `0.85` to enable blurred art image)* | No | Opacity of enlarged blurred album-art backdrop (`V1` opt-in; `V2` gradient wash stays default) |
 | `--ice-art-blur` | Art Backdrop (D-23) | `28px` | No | Gaussian blur radius applied to `.art-blur-img` when `--ice-art-backdrop > 0` |
 | `--ice-art-wash` | Art Backdrop (D-23) | `1` | No | Opacity multiplier for the 2-stop art-derived radial gradient wash (`V2` default) |
+| `--ice-ambient-period` | Art Backdrop (D-25) | `22s` | No | Primary cycle period for the expanded card's ambient wash drift (secondary/tertiary layers run at coprime `1.41×`/`1.73×` periods); `0s` disables motion (`minimal`) |
 | `--ice-scrim` | Art Backdrop (D-23) | `linear-gradient(160deg, var(--ice-active-scrim-top, rgba(12, 15, 20, 0.56)) 0%, var(--ice-active-scrim-bottom, rgba(10, 13, 18, 0.84)) 100%)` | No | Luminance-clamped protective gradient scrim holding `--ice-fg` / `--ice-fg-muted` contrast at `≥ 4.5:1` WCAG AA over bright covers |
 | `--ice-control-bg` | Translucent Controls (D-23) | `rgba(255, 255, 255, 0.09)` | No | Low-alpha button and chip fill over expanded-card backdrops (`var(--ice-surface)` in `minimal`) |
 | `--ice-control-bg-hover` | Translucent Controls (D-23) | `rgba(255, 255, 255, 0.15)` | No | Hover fill for translucent controls |
@@ -127,10 +128,10 @@ Four built-in themes ship out of the box (selected via config / Settings `Appear
 
 | Theme ID | Character | Override Deltas vs. `Ice` |
 | --- | --- | --- |
-| **`ice`** *(default)* | Translucent obsidian-ice pill with 2-stop art wash (`V2`) and translucent controls (`V3`) | Base defaults in §2 (`--ice-art-backdrop: 0`, `--ice-art-wash: 1`) |
-| **`midnight`** | Near-pure-black OLED look with darker scrim preserving deep black backdrop | `--ice-bg: rgba(0, 0, 0, 0.96)` · `--ice-surface: rgba(12, 12, 14, 0.96)` · `--ice-rim: rgba(255, 255, 255, 0.24)` · `--ice-art-wash: 0.55` · `--ice-scrim: linear-gradient(160deg, rgba(0, 0, 0, 0.76) 0%, rgba(0, 0, 0, 0.94) 100%)` |
-| **`fluent`** | Neutral Windows 11 Dark-grey chrome with softer tonal wash (`V2`) | `--ice-bg: rgba(24, 24, 27, 0.93)` · `--ice-surface: rgba(36, 36, 40, 0.94)` · `--ice-rim: rgba(107, 197, 255, 0.35)` · `--ice-art-wash: 0.78` · tonal zinc `--ice-scrim` |
-| **`minimal`** | Solid opaque slate with zero art backdrop, zero glow, and bordered solid controls | `--ice-bg: rgb(18, 22, 29)` · `--ice-surface: rgb(26, 32, 42)` · `--ice-rim: transparent` · `--ice-art-backdrop: 0` · `--ice-art-wash: 0` · `--ice-scrim: none` · `--ice-control-bg: var(--ice-surface)` · `--ice-control-border: var(--ice-border)` |
+| **`ice`** *(default)* | Translucent obsidian-ice pill with 2-stop art wash (`V2`) and translucent controls (`V3`) | Base defaults in §2 (`--ice-art-backdrop: 0`, `--ice-art-wash: 1`, `--ice-ambient-period: 22s`) |
+| **`midnight`** | Near-pure-black OLED look with darker scrim preserving deep black backdrop | `--ice-bg: rgba(0, 0, 0, 0.96)` · `--ice-surface: rgba(12, 12, 14, 0.96)` · `--ice-rim: rgba(255, 255, 255, 0.24)` · `--ice-art-wash: 0.55` · `--ice-ambient-period: 28s` · `--ice-scrim: linear-gradient(160deg, rgba(0, 0, 0, 0.76) 0%, rgba(0, 0, 0, 0.94) 100%)` |
+| **`fluent`** | Neutral Windows 11 Dark-grey chrome with softer tonal wash (`V2`) | `--ice-bg: rgba(24, 24, 27, 0.93)` · `--ice-surface: rgba(36, 36, 40, 0.94)` · `--ice-rim: rgba(107, 197, 255, 0.35)` · `--ice-art-wash: 0.78` · `--ice-ambient-period: 22s` · tonal zinc `--ice-scrim` |
+| **`minimal`** | Solid opaque slate with zero art backdrop, zero glow, and bordered solid controls | `--ice-bg: rgb(18, 22, 29)` · `--ice-surface: rgb(26, 32, 42)` · `--ice-rim: transparent` · `--ice-art-backdrop: 0` · `--ice-art-wash: 0` · `--ice-ambient-period: 0s` · `--ice-scrim: none` · `--ice-control-bg: var(--ice-surface)` · `--ice-control-border: var(--ice-border)` |
 
 ---
 

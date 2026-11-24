@@ -4,7 +4,7 @@ import type { EngineSnapshot, Envelope, SettingsView } from '../ipc/engine.ts';
 import { applyEnvelope, moveItem, nextId, recordKeys } from './model.ts';
 
 const settings: SettingsView = {
-  appearance: { theme: 'ice', preset: 'smooth', idleStyle: 'mini_pill', nowPlaying: 'brief' },
+  appearance: { theme: 'ice', preset: 'smooth', idleStyle: 'mini_pill', nowPlaying: 'brief', movingBackdrop: true },
   performanceProfile: 'instant',
   pinnedMonitor: null,
   defaultRoles: 'default',

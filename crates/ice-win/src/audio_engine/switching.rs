@@ -80,6 +80,7 @@ impl Worker {
             | Command::SetPreset { .. }
             | Command::SetIdleStyle { .. }
             | Command::SetNowPlayingPill { .. }
+            | Command::SetMovingBackdrop { .. }
             | Command::SetShowDisconnected { .. }
             | Command::SetIdleLinger { .. }
             | Command::SetMusicService { .. }

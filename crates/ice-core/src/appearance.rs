@@ -51,7 +51,7 @@ pub enum NowPlayingPill {
     Off,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "ts", derive(TS))]
 #[serde(default, deny_unknown_fields, rename_all = "camelCase")]
 pub struct Appearance {
@@ -59,4 +59,18 @@ pub struct Appearance {
     pub preset: SpringPreset,
     pub idle_style: IdleStyle,
     pub now_playing: NowPlayingPill,
+    /// D-25: slow ambient drift of the art wash on the expanded card while playing.
+    pub moving_backdrop: bool,
+}
+
+impl Default for Appearance {
+    fn default() -> Self {
+        Self {
+            theme: ThemeKind::default(),
+            preset: SpringPreset::default(),
+            idle_style: IdleStyle::default(),
+            now_playing: NowPlayingPill::default(),
+            moving_backdrop: true,
+        }
+    }
 }

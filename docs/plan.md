@@ -358,18 +358,18 @@ Items marked *(needs Settings)* wait for the Phase 4 Settings window. The rest c
       2026-11-24 relayout below*
 
 **D-25 · Ambient motion on the expanded card (accepted 2026-11-24):**
-- [ ] Move `.stage`'s `filter: drop-shadow(...)` (`NotchApp.svelte:135`) off the animated subtree so drifting layers and
-      springs don't re-filter the stage every frame (Gemini)
-- [ ] **A1 + B1:** Split `.art-wash` (`NotchBackdrop.svelte`) into 2–3 oversized soft radial-gradient layers (no `filter`,
+- [x] Move `.stage`'s `filter: drop-shadow(...)` (`NotchApp.svelte`) off the animated subtree onto a static sibling `.pill-shadow`
+      element so drifting layers and springs don't re-filter the stage every frame (Gemini)
+- [x] **A1 + B1:** Split `.art-wash` (`NotchBackdrop.svelte`) into 2–3 oversized soft radial-gradient layers (no `filter`,
       sized to the `392×164` expanded card) drifting on compositor-only CSS `transform` (`translate3d` / `scale`) with
-      coprime periods (e.g. `22 s` and `31 s`), keeping the contrast scrim anchored still and the animation phase unkeyed
+      coprime periods (`22 s` / `1.41×` / `1.73×`), keeping the contrast scrim anchored still and the animation phase unkeyed
       from `art.id` so track changes, pins, and resumes never snap the colours (Gemini)
-- [ ] **C1 + C2 lifecycle:** animate only on the expanded card while visible and media is playing (`animation-play-state:
-      paused` when paused so colours freeze in place; `animation: none` when collapsed, hidden, suspended, under reduce
-      motion / preset `Off`, or when `--ice-ambient-period: 0s`) (Gemini)
-- [ ] **D1 + D3 + C3 setting and token:** add `--ice-ambient-period` to `base.css` and `docs/theming.md` (`0s` in `Minimal`,
-      prototype-tuned speed in `Ice`/`Midnight`/`Fluent`), plus a `"Moving background"` switch in Settings → Appearance
-      (default on; config field + command by Claude/Codex, UI by Gemini)
+- [x] **C1 + C2 lifecycle:** animate only on the expanded card while visible and media is playing (`resolveAmbientMotionState`:
+      `animation-play-state: paused` when paused so colours freeze in place; `animation: none` when collapsed, hidden,
+      suspended, under reduce motion / preset `Off`, or in `Minimal` / `--ice-ambient-period: 0s`) (Gemini)
+- [x] **D1 + D3 + C3 setting and token:** add `--ice-ambient-period` to `base.css` and `docs/theming.md` (`0s` in `Minimal`,
+      `28s` in `Midnight`, `22s` in `Ice`/`Fluent`), `appearance.movingBackdrop` (schema v8, default `true`),
+      `Command::SetMovingBackdrop`, and the `"Moving background"` switch in Settings → Appearance (Gemini)
 - [ ] **144 Hz measurement gate before shipping:** 60 s on the 144 Hz monitor (process-tree CPU, GPU engine use, private
       working set vs. static backdrop). If process-tree CPU rises by `> +0.1 %` over static, fall back to a ~30 fps
       JavaScript `transform` driver (`C4`)

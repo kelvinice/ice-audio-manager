@@ -245,6 +245,10 @@ pub enum Command {
     SetNowPlayingPill {
         mode: NowPlayingPill,
     },
+    /// D-25: slowly drift the expanded card's art wash while music plays.
+    SetMovingBackdrop {
+        enabled: bool,
+    },
     SetPerformanceProfile {
         profile: PerformanceProfile,
     },
@@ -294,6 +298,7 @@ impl Command {
             | Self::SetPreset { .. }
             | Self::SetIdleStyle { .. }
             | Self::SetNowPlayingPill { .. }
+            | Self::SetMovingBackdrop { .. }
             | Self::SetPerformanceProfile { .. }
             | Self::SetPinnedMonitor { .. }
             | Self::SetKnobGestures { .. }

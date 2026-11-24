@@ -21,7 +21,8 @@ use crate::resolve::{DeviceRef, MatchMode, resolve};
 /// v2: performance profile and pinned monitor. v3: `show_disconnected`. v4: saved notch appearance.
 /// v5: `appearance.nowPlaying` (how the now-playing pill behaves). v6: `idle_linger_secs` (D-21.1 L1).
 /// v7: `[music_services]` (D-22 switches) and `show_notch_hotkey` (D-19).
-pub const SCHEMA_VERSION: u32 = 7;
+/// v8: `appearance.movingBackdrop` (D-25 ambient motion on the expanded card).
+pub const SCHEMA_VERSION: u32 = 8;
 
 /// Default seconds the notch WebView stays awake at idle before `Balanced` hands over to the native pill
 /// (`Instant` never does; `Lite` has no WebView).
@@ -210,7 +211,8 @@ impl Config {
             v if v > SCHEMA_VERSION => Err(ConfigError::TooNew(v)),
             // v0/v1 gain the default profile and an initially unassigned monitor pin, v0–v2 gain
             // `show_disconnected = false`, v0–v4 gain `appearance.nowPlaying = "brief"`, and v0–v5 gain
-            // `idle_linger_secs = 15`, and v0–v6 gain both music services on, all via serde defaults.
+            // `idle_linger_secs = 15`, v0–v6 gain both music services on, and v0–v7 gain
+            // `appearance.movingBackdrop = true`, all via serde defaults.
             _ => Ok(Self { schema_version: SCHEMA_VERSION, ..cfg }),
         }
     }
@@ -396,6 +398,7 @@ impl Config {
             Command::SetPreset { preset } => next.appearance.preset = *preset,
             Command::SetIdleStyle { style } => next.appearance.idle_style = *style,
             Command::SetNowPlayingPill { mode } => next.appearance.now_playing = *mode,
+            Command::SetMovingBackdrop { enabled } => next.appearance.moving_backdrop = *enabled,
             Command::SetShowDisconnected { enabled } => next.show_disconnected = *enabled,
             Command::SetIdleLinger { secs } => {
                 if !IDLE_LINGER_SECS.contains(secs) {
@@ -773,6 +776,22 @@ mod tests {
         assert_eq!(config.apply_setting(&set, &[]), Ok(false), "already set");
         let saved = Config::from_toml(&config.to_toml()).unwrap();
         assert_eq!(saved.view(&[]).appearance.now_playing, NowPlayingPill::WhilePlaying);
+    }
+
+    #[test]
+    fn v7_migrates_with_moving_backdrop_on_and_saves_the_choice() {
+        use crate::appearance::ThemeKind;
+        let v7 = "schema_version = 7\n[appearance]\ntheme = 'midnight'";
+        let mut config = Config::from_toml(v7).unwrap();
+        assert_eq!(config.schema_version, SCHEMA_VERSION);
+        assert_eq!(config.view(&[]).appearance.theme, ThemeKind::Midnight);
+        assert!(config.view(&[]).appearance.moving_backdrop, "D-25 default is on");
+
+        let set = Command::SetMovingBackdrop { enabled: false };
+        assert_eq!(config.apply_setting(&set, &[]), Ok(true));
+        assert_eq!(config.apply_setting(&set, &[]), Ok(false), "already off");
+        let saved = Config::from_toml(&config.to_toml()).unwrap();
+        assert!(!saved.view(&[]).appearance.moving_backdrop);
     }
 
     #[test]

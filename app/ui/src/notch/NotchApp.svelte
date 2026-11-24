@@ -25,6 +25,14 @@
   style:height={`${CANVAS_H}px`}
 >
   <div
+    class="pill-shadow"
+    style:top={`${TOP_PAD}px`}
+    style:width={`${ctrl.pillSize.w}px`}
+    style:height={`${ctrl.pillSize.h}px`}
+    style:border-radius={`${ctrl.pillSize.r}px`}
+    aria-hidden="true"
+  ></div>
+  <div
     class="pill-clip"
     style:clip-path={ctrl.clipPath}
     onpointerenter={ctrl.onPointerEnter}
@@ -40,10 +48,20 @@
       style:--ice-active-glow={ctrl.activeGlowCss}
       style:--ice-active-wash-primary={ctrl.artBackdrop.washPrimaryCss}
       style:--ice-active-wash-secondary={ctrl.artBackdrop.washSecondaryCss}
+      style:--ice-active-wash-tertiary={ctrl.artBackdrop.washTertiaryCss ?? 'transparent'}
       style:--ice-active-scrim-top={ctrl.artBackdrop.scrimTopCss}
       style:--ice-active-scrim-bottom={ctrl.artBackdrop.scrimBottomCss}
     >
-      <NotchBackdrop art={ctrl.displayedMedia?.art} hasArt={ctrl.hasBackdropArt} instant={ctrl.isInstant} />
+      <NotchBackdrop
+        art={ctrl.displayedMedia?.art}
+        hasArt={ctrl.hasBackdropArt}
+        instant={ctrl.isInstant}
+        ambientState={ctrl.ambientMotionState}
+        hasTertiary={Boolean(ctrl.artBackdrop.washTertiaryCss)}
+        boxW={ctrl.targetBox.w}
+        boxH={ctrl.targetBox.h}
+        topPad={TOP_PAD}
+      />
       <div
         class="pill-slot"
         style:top={`${TOP_PAD}px`}
@@ -132,7 +150,6 @@
     position: relative;
     margin: 0 auto;
     background: transparent;
-    filter: drop-shadow(var(--ice-drop-shadow));
   }
 
   .stage.hidden {
@@ -140,9 +157,19 @@
     pointer-events: none;
   }
 
+  .stage.idle-hidden .pill-shadow,
   .stage.idle-hidden .pill-surface,
   .stage.idle-hidden .rim-svg {
     opacity: 0;
+  }
+
+  .pill-shadow {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    background: transparent;
+    box-shadow: var(--ice-drop-shadow);
+    pointer-events: none;
   }
 
   .pill-clip {

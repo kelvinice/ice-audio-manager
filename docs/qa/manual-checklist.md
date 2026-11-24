@@ -233,3 +233,11 @@ With the real Windows engine, `--verbose`, and a temporary notch-side IPC probe,
 ### Run · 2026-11-23 · Music services shell
 
 The real notch WebView accepted the two widget service IDs and rejected an arbitrary URL. Spotify opened as the installed Windows app. With no YouTube Music PWA registered on this machine, the fallback opened a YouTube Music browser window. Both footer buttons passed centre-point hit tests at emulated 100% and 150% in light and dark system preferences. An installed YouTube Music PWA and physical dual-monitor interaction remain unverified. The focused Windows unit test covers Chromium app identities and a non-default profile.
+
+### Run: 2026-11-24 · `phase-4/d25-ambient-motion` · Gemini
+
+| ID / Check | Result | Notes |
+|---|---|---|
+| **Schema v8, IPC bindings & Rust crates** (`cargo test -p ice-core`, `export_ts_bindings`, `ice-win --no-run`) | ✅ | `ice_core` **67/67** passing (incl. `v7_migrates_with_moving_backdrop_on_and_saves_the_choice`), `export_ts_bindings` updated `engine.ts` (`movingBackdrop`, `setMovingBackdrop`), and `ice-win` compiled cleanly. |
+| **UI typecheck, unit tests & production bundle** (`npm run check`, `npm test`, `npm run build`) | ✅ | `tsc --noEmit` 0 errors; `node --test` **38/38** passing (incl. `resolveAmbientMotionState` B1/C1/C2/C3 lifecycle test); `vite build` green in 2.14s; all notch `.svelte` components `<= 266` lines (§11). |
+| **Sibling `.pill-shadow`, ambient wash & 4 themes** (`100%` / `150%`, light/dark desktops) | ✅ | Before (`main` `eac5450`) vs After headless Chromium captures verified unclipped `.pill-shadow` around `392×164` and `392×144` cards inside the `440×210` canvas, soft unblurred wash blobs behind stationary `--ice-scrim`, WCAG contrast on bright covers (`V1` opt-in blur), and static `Minimal`. Hardware 60 s `144 Hz` CPU/GPU gate stays open for physical monitor measurement. |

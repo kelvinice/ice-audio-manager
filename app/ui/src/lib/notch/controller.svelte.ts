@@ -5,6 +5,7 @@ import type { NotchDelta, NotchSnapshot } from '../ipc/types';
 import { SpringGroup } from '../motion/spring.svelte';
 import {
   computeArtBackdrop,
+  resolveAmbientMotionState,
   resolveMusicServices,
   type MusicServiceId,
 } from './backdrop';
@@ -117,6 +118,19 @@ export class NotchController {
   );
   readonly artBackdrop = $derived(
     computeArtBackdrop(this.hasBackdropArt ? this.displayedMedia?.art : null),
+  );
+  readonly movingBackdropEnabled = $derived(
+    this.engineState.settings?.appearance.movingBackdrop ?? true,
+  );
+  readonly ambientMotionState = $derived(
+    resolveAmbientMotionState({
+      hasArt: this.hasBackdropArt,
+      isExpanded: this.isExpanded,
+      isVisible: this.isNotchVisible,
+      isInstant: this.isInstant,
+      isPlaying: this.displayedMedia?.status === 'playing',
+      movingBackdrop: this.movingBackdropEnabled,
+    }),
   );
   readonly musicServices = $derived(
     resolveMusicServices(this.engineState.settings, this.engineState.media),

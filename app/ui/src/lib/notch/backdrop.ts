@@ -25,9 +25,34 @@ export interface ArtBackdropStyle {
   artId: string | null;
   washPrimaryCss: string;
   washSecondaryCss: string;
+  washTertiaryCss: string | null;
   scrimTopCss: string;
   scrimBottomCss: string;
   coverLuminance: number;
+}
+
+export type AmbientMotionState = 'running' | 'paused' | 'stopped';
+
+export interface AmbientMotionInput {
+  hasArt: boolean;
+  isExpanded: boolean;
+  isVisible: boolean;
+  isInstant: boolean;
+  isPlaying: boolean;
+  movingBackdrop: boolean;
+}
+
+/**
+ * Resolves the D-25 ambient backdrop animation lifecycle:
+ * - `'stopped'` when collapsed (`B1`), hidden/suspended (`C2`), reduce motion/`Off` (`D-13`), no art, or user disabled (`C3`);
+ * - `'paused'` when visible & expanded with playback paused (`C1` freezes phase in place);
+ * - `'running'` only while visible, expanded, and playing.
+ */
+export function resolveAmbientMotionState(input: AmbientMotionInput): AmbientMotionState {
+  if (!input.hasArt || !input.isExpanded || !input.isVisible || input.isInstant || !input.movingBackdrop) {
+    return 'stopped';
+  }
+  return input.isPlaying ? 'running' : 'paused';
 }
 
 const DEFAULT_RGB: Rgb = { r: 107, g: 197, b: 255 };
@@ -149,6 +174,7 @@ export function computeArtBackdrop(art: ArtInfoWithPalette | null | undefined): 
       artId: null,
       washPrimaryCss: formatRgbGlowCss(DEFAULT_RGB, 0.28) ?? 'rgba(107, 197, 255, 0.28)',
       washSecondaryCss: formatRgbGlowCss(DEFAULT_SECONDARY_RGB, 0.2) ?? 'rgba(58, 132, 199, 0.2)',
+      washTertiaryCss: null,
       scrimTopCss: 'rgba(12, 15, 20, 0.56)',
       scrimBottomCss: 'rgba(10, 13, 18, 0.84)',
       coverLuminance: 0.1,
@@ -157,6 +183,7 @@ export function computeArtBackdrop(art: ArtInfoWithPalette | null | undefined): 
 
   const primary = art.palette?.[0] ?? art.accent ?? DEFAULT_RGB;
   const secondary = art.palette?.[1] ?? art.secondary ?? deriveSecondaryStop(primary);
+  const tertiary = art.palette?.[2] ?? null;
   const coverLuminance = clamp(
     typeof art.luminance === 'number' && Number.isFinite(art.luminance)
       ? art.luminance
@@ -171,6 +198,7 @@ export function computeArtBackdrop(art: ArtInfoWithPalette | null | undefined): 
     artId: art.id,
     washPrimaryCss: formatRgbGlowCss(primary, 0.42) ?? 'rgba(107, 197, 255, 0.42)',
     washSecondaryCss: formatRgbGlowCss(secondary, 0.3) ?? 'rgba(58, 132, 199, 0.3)',
+    washTertiaryCss: tertiary ? formatRgbGlowCss(tertiary, 0.26) : null,
     scrimTopCss: `rgba(12, 15, 20, ${top.toFixed(3)})`,
     scrimBottomCss: `rgba(10, 13, 18, ${bottom.toFixed(3)})`,
     coverLuminance,

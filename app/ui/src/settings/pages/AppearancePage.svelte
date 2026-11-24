@@ -4,6 +4,8 @@
   import ChoiceGroup from '../controls/ChoiceGroup.svelte';
   import InfoBar from '../controls/InfoBar.svelte';
   import Section from '../controls/Section.svelte';
+  import SettingCard from '../controls/SettingCard.svelte';
+  import Toggle from '../controls/Toggle.svelte';
   import NotchPreview from '../previews/NotchPreview.svelte';
   import SpringDemo from '../previews/SpringDemo.svelte';
 
@@ -65,6 +67,23 @@
         </div>
       {/snippet}
     </ChoiceGroup>
+  </Section>
+
+  <Section title="Background" description="Ambient motion behind the controls on the expanded card.">
+    <SettingCard
+      icon="color"
+      title="Moving background"
+      description="Slowly drift the album-art wash on the expanded card while music plays. Pauses automatically when playback stops or animation effects are off."
+    >
+      {#snippet control()}
+        <Toggle
+          label="Moving background"
+          checked={settings.appearance.movingBackdrop}
+          disabled={reduceMotion || settings.appearance.preset === 'off' || settings.appearance.theme === 'minimal'}
+          onchange={(enabled) => client.apply({ type: 'setMovingBackdrop', enabled })}
+        />
+      {/snippet}
+    </SettingCard>
   </Section>
 {/if}
 

@@ -5,6 +5,7 @@ import {
   compositeOver,
   computeArtBackdrop,
   contrastRatio,
+  resolveAmbientMotionState,
   resolveMusicServices,
   type ArtInfoWithPalette,
 } from './backdrop.ts';
@@ -19,7 +20,7 @@ function parseRgba(css: string): { rgb: Rgb; alpha: number } {
 }
 
 const baseSettings: SettingsView = {
-  appearance: { theme: 'ice', preset: 'smooth', idleStyle: 'mini_pill', nowPlaying: 'brief' },
+  appearance: { theme: 'ice', preset: 'smooth', idleStyle: 'mini_pill', nowPlaying: 'brief', movingBackdrop: true },
   performanceProfile: 'instant',
   pinnedMonitor: null,
   defaultRoles: 'both',
@@ -111,4 +112,22 @@ test('resolveMusicServices enables Spotify and YouTube Music by default and trac
     withYtmDisabled.map((s) => s.id),
     ['spotify'],
   );
+});
+
+test('resolveAmbientMotionState enforces B1, C1, C2, and C3 lifecycle gates', () => {
+  const base = {
+    hasArt: true,
+    isExpanded: true,
+    isVisible: true,
+    isInstant: false,
+    isPlaying: true,
+    movingBackdrop: true,
+  };
+  assert.equal(resolveAmbientMotionState(base), 'running');
+  assert.equal(resolveAmbientMotionState({ ...base, isPlaying: false }), 'paused');
+  assert.equal(resolveAmbientMotionState({ ...base, isExpanded: false }), 'stopped');
+  assert.equal(resolveAmbientMotionState({ ...base, isVisible: false }), 'stopped');
+  assert.equal(resolveAmbientMotionState({ ...base, hasArt: false }), 'stopped');
+  assert.equal(resolveAmbientMotionState({ ...base, isInstant: true }), 'stopped');
+  assert.equal(resolveAmbientMotionState({ ...base, movingBackdrop: false }), 'stopped');
 });

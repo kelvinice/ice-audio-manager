@@ -33,6 +33,7 @@
   --ice-art-backdrop: 0;
   --ice-art-blur: 28px;
   --ice-art-wash: 1;
+  --ice-ambient-period: 22s;
   --ice-scrim: linear-gradient(
     160deg,
     var(--ice-active-scrim-top, rgba(12, 15, 20, 0.56)) 0%,
@@ -54,6 +55,7 @@
   --ice-rim: rgba(255, 255, 255, 0.24);
   --ice-accent-glow: rgba(255, 255, 255, 0.12);
   --ice-art-wash: 0.55;
+  --ice-ambient-period: 28s;
   --ice-scrim: linear-gradient(160deg, rgba(0, 0, 0, 0.76) 0%, rgba(0, 0, 0, 0.94) 100%);
   --ice-control-bg: rgba(255, 255, 255, 0.08);
   --ice-control-bg-hover: rgba(255, 255, 255, 0.14);
@@ -68,6 +70,7 @@
   --ice-rim: rgba(107, 197, 255, 0.35);
   --ice-accent-glow: rgba(107, 197, 255, 0.2);
   --ice-art-wash: 0.78;
+  --ice-ambient-period: 22s;
   --ice-scrim: linear-gradient(
     160deg,
     var(--ice-active-scrim-top, rgba(24, 24, 27, 0.62)) 0%,
@@ -90,6 +93,7 @@
   --ice-art-backdrop: 0;
   --ice-art-blur: 0px;
   --ice-art-wash: 0;
+  --ice-ambient-period: 0s;
   --ice-scrim: none;
   --ice-control-bg: var(--ice-surface);
   --ice-control-bg-hover: var(--ice-accent-soft);

@@ -39,7 +39,7 @@ function initialSnapshot(): EngineSnapshot {
     notices: [],
     media: null,
     settings: {
-      appearance: { theme: 'ice', preset: 'smooth', idleStyle: 'mini_pill', nowPlaying: 'brief' },
+      appearance: { theme: 'ice', preset: 'smooth', idleStyle: 'mini_pill', nowPlaying: 'brief', movingBackdrop: true },
       performanceProfile: 'instant',
       pinnedMonitor: 'DISPLAY-PATH-1',
       defaultRoles: 'default',
@@ -98,6 +98,7 @@ function applyCommand(s: EngineSnapshot, c: Command): void {
     case 'setPreset': st.appearance.preset = c.preset; break;
     case 'setIdleStyle': st.appearance.idleStyle = c.style; break;
     case 'setNowPlayingPill': st.appearance.nowPlaying = c.mode; break;
+    case 'setMovingBackdrop': st.appearance.movingBackdrop = c.enabled; break;
     case 'setPerformanceProfile': st.performanceProfile = c.profile; break;
     case 'setPinnedMonitor': st.pinnedMonitor = c.displayPath; break;
     case 'setKnobGestures': st.knobGestures = c.enabled; break;

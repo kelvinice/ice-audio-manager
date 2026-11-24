@@ -83,7 +83,7 @@ function sampleSnapshot(): EngineSnapshot {
       idleLingerSecs: 15,
       musicServices: { spotify: true, youtubeMusic: true },
       showNotchHotkey: null,
-      appearance: { theme: 'ice', preset: 'smooth', idleStyle: 'mini_pill', nowPlaying: 'brief' },
+      appearance: { theme: 'ice', preset: 'smooth', idleStyle: 'mini_pill', nowPlaying: 'brief', movingBackdrop: true },
     },
     media: null,
   };

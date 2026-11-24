@@ -1,14 +1,29 @@
 <script lang="ts">
   import { convertFileSrc } from '@tauri-apps/api/core';
   import type { ArtInfo } from '../../lib/ipc/engine';
+  import type { AmbientMotionState } from '../../lib/notch/backdrop';
 
   interface Props {
     art: ArtInfo | null | undefined;
     hasArt: boolean;
     instant: boolean;
+    ambientState?: AmbientMotionState;
+    hasTertiary?: boolean;
+    boxW?: number;
+    boxH?: number;
+    topPad?: number;
   }
 
-  let { art, hasArt, instant }: Props = $props();
+  let {
+    art,
+    hasArt,
+    instant,
+    ambientState = 'stopped',
+    hasTertiary = false,
+    boxW = 392,
+    boxH = 164,
+    topPad = 6,
+  }: Props = $props();
 
   let loadedId = $state<string | null>(null);
   let fallbackAttemptedId = $state<string | null>(null);
@@ -57,27 +72,37 @@
             onerror={() => handleError(artId)}
           />
         {/if}
-        <div class="art-wash"></div>
-        <div class="art-scrim"></div>
       </div>
     {/key}
+    <!-- Unkeyed wash & scrim keep drift phase smooth across track changes and pin/pause transitions. -->
+    <div
+      class="art-wash"
+      class:ambient-active={ambientState !== 'stopped'}
+      class:ambient-paused={ambientState === 'paused'}
+      style:top={`${topPad}px`}
+      style:width={`${boxW}px`}
+      style:height={`${boxH}px`}
+    >
+      <div class="wash-blob wash-blob-a"></div>
+      <div class="wash-blob wash-blob-b"></div>
+      {#if hasTertiary}
+        <div class="wash-blob wash-blob-c"></div>
+      {/if}
+    </div>
+    <div class="art-scrim"></div>
   {:else}
     <div class="accent-glow" class:instant></div>
   {/if}
 </div>
 
 <style>
-  .notch-backdrop {
+  .notch-backdrop,
+  .backdrop-layer,
+  .art-scrim {
     position: absolute;
     inset: 0;
     pointer-events: none;
     overflow: hidden;
-  }
-
-  .backdrop-layer {
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
   }
 
   .backdrop-layer.animate-in {
@@ -105,28 +130,85 @@
     transition: none;
   }
 
-  /* Two-stop art-derived gradient wash (`V2` default; `0` in `Minimal`). */
+  /* Two/three-stop art-derived gradient wash (`V2` default; `0` in `Minimal`), sized to the active card. */
   .art-wash {
     position: absolute;
-    inset: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    pointer-events: none;
+    overflow: hidden;
     opacity: var(--ice-art-wash, 1);
-    background:
-      radial-gradient(
-        76% 92% at 18% 18%,
-        var(--ice-active-wash-primary, var(--ice-accent-glow)),
-        transparent 68%
-      ),
-      radial-gradient(
-        68% 84% at 88% 84%,
-        var(--ice-active-wash-secondary, transparent),
-        transparent 72%
-      );
+  }
+
+  .wash-blob {
+    position: absolute;
+    pointer-events: none;
+    animation: none;
+  }
+
+  .wash-blob-a {
+    left: -18%;
+    top: -32%;
+    width: 94%;
+    height: 124%;
+    background: radial-gradient(
+      closest-side,
+      var(--ice-active-wash-primary, var(--ice-accent-glow)) 0%,
+      transparent 78%
+    );
+  }
+
+  .wash-blob-b {
+    right: -16%;
+    bottom: -30%;
+    width: 88%;
+    height: 118%;
+    background: radial-gradient(
+      closest-side,
+      var(--ice-active-wash-secondary, transparent) 0%,
+      transparent 80%
+    );
+  }
+
+  .wash-blob-c {
+    left: 16%;
+    bottom: -24%;
+    width: 78%;
+    height: 106%;
+    background: radial-gradient(
+      closest-side,
+      var(--ice-active-wash-tertiary, transparent) 0%,
+      transparent 80%
+    );
+  }
+
+  .art-wash.ambient-active .wash-blob {
+    will-change: transform;
+  }
+
+  .art-wash.ambient-active .wash-blob-a {
+    animation: wash-drift-a var(--ice-ambient-period, 22s) ease-in-out infinite alternate;
+  }
+
+  .art-wash.ambient-active .wash-blob-b {
+    animation: wash-drift-b calc(var(--ice-ambient-period, 22s) * 1.41) ease-in-out infinite alternate;
+  }
+
+  .art-wash.ambient-active .wash-blob-c {
+    animation: wash-drift-c calc(var(--ice-ambient-period, 22s) * 1.73) ease-in-out infinite alternate;
+  }
+
+  .art-wash.ambient-paused .wash-blob {
+    animation-play-state: paused;
+  }
+
+  :global([data-theme='minimal']) .art-wash.ambient-active .wash-blob {
+    animation: none;
+    will-change: auto;
   }
 
   /* Luminance-clamped dark scrim protecting `--ice-fg` and `--ice-fg-muted` contrast. */
   .art-scrim {
-    position: absolute;
-    inset: 0;
     background: var(--ice-scrim, none);
   }
 
@@ -152,6 +234,33 @@
     }
     to {
       opacity: 1;
+    }
+  }
+
+  @keyframes wash-drift-a {
+    0% {
+      transform: translate3d(-12px, -8px, 0) scale(0.96);
+    }
+    100% {
+      transform: translate3d(24px, 14px, 0) scale(1.06);
+    }
+  }
+
+  @keyframes wash-drift-b {
+    0% {
+      transform: translate3d(14px, 10px, 0) scale(1.05);
+    }
+    100% {
+      transform: translate3d(-22px, -14px, 0) scale(0.95);
+    }
+  }
+
+  @keyframes wash-drift-c {
+    0% {
+      transform: translate3d(-10px, 8px, 0) scale(0.97);
+    }
+    100% {
+      transform: translate3d(16px, -12px, 0) scale(1.07);
     }
   }
 </style>
