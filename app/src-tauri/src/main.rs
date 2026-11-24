@@ -32,8 +32,8 @@ use tauri::{AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder
 use crate::ipc::{ActivityKind, HitRect, MonitorSummary, NotchDelta, NotchSnapshot};
 
 // Twin: `CANVAS_W`/`CANVAS_H` in app/ui/src/lib/notch/geometry.ts. The margin around the expanded pill leaves room
-// for its drop shadow; a tighter canvas clips the shadow at the window edge.
-const NOTCH_CANVAS_W: i32 = 440;
+// for its drop shadow and Edge Nook concave ears; a tighter canvas clips the shadow at the window edge.
+const NOTCH_CANVAS_W: i32 = 648;
 const NOTCH_CANVAS_H: i32 = 292;
 const NOTCH_TOP_OFFSET: i32 = 0;
 
@@ -94,6 +94,7 @@ impl SharedRuntime {
             system_reduce_motion: reduce_motion,
             theme: initial.settings.appearance.theme,
             idle_style: initial.settings.appearance.idle_style,
+            notch_style: initial.settings.appearance.notch_style,
             expanded: false,
             suspended: false,
             hidden_for_bench: false,
@@ -119,7 +120,12 @@ impl SharedRuntime {
             placement: Mutex::default(),
             preview_on_attach: AtomicBool::default(),
             start_minimized: AtomicBool::default(),
-            hit_rect: Mutex::new(HitRect { x: 154.0, y: 6.0, width: 112.0, height: 28.0 }),
+            hit_rect: Mutex::new(HitRect {
+                x: (f64::from(NOTCH_CANVAS_W) - 116.0) / 2.0,
+                y: 6.0,
+                width: 116.0,
+                height: 28.0,
+            }),
             notch_hwnd: AtomicIsize::new(0),
             notch_visible: AtomicBool::new(false),
             allow_exit: AtomicBool::new(false),

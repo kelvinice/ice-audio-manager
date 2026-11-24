@@ -1,6 +1,6 @@
 use std::sync::PoisonError;
 
-use ice_core::appearance::{Appearance, IdleStyle, NowPlayingPill, SpringPreset, ThemeKind};
+use ice_core::appearance::{Appearance, IdleStyle, NotchStyle, NowPlayingPill, SpringPreset, ThemeKind};
 use ice_core::device::Flow;
 use ice_core::engine::{Command, DeviceSummary, EngineSnapshot, PerformanceProfile, SavedDevice, SettingsView};
 use tauri::AppHandle;
@@ -74,8 +74,8 @@ pub(super) fn appearance_menus(
     app: &AppHandle,
     current: Appearance,
     available: bool,
-) -> tauri::Result<[Submenu<tauri::Wry>; 4]> {
-    use Command::{SetIdleStyle, SetNowPlayingPill, SetPreset, SetTheme};
+) -> tauri::Result<[Submenu<tauri::Wry>; 5]> {
+    use Command::{SetIdleStyle, SetNotchStyle, SetNowPlayingPill, SetPreset, SetTheme};
     Ok([
         choices(
             app,
@@ -88,6 +88,16 @@ pub(super) fn appearance_menus(
                 ("Midnight", SetTheme { theme: ThemeKind::Midnight }),
                 ("Fluent", SetTheme { theme: ThemeKind::Fluent }),
                 ("Minimal", SetTheme { theme: ThemeKind::Minimal }),
+            ],
+        )?,
+        choices(
+            app,
+            "Notch style",
+            available,
+            SetNotchStyle { style: current.notch_style },
+            &[
+                ("Floating (default)", SetNotchStyle { style: NotchStyle::Floating }),
+                ("Edge Nook", SetNotchStyle { style: NotchStyle::Nook }),
             ],
         )?,
         choices(

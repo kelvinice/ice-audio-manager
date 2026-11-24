@@ -32,6 +32,7 @@ pub(super) fn project(snapshot: &EngineSnapshot, view: &mut NotchSnapshot) {
     view.theme = snapshot.settings.appearance.theme;
     view.preset = snapshot.settings.appearance.preset;
     view.idle_style = snapshot.settings.appearance.idle_style;
+    view.notch_style = snapshot.settings.appearance.notch_style;
     view.volume_percent = snapshot.volume.map_or(0, |volume| volume.percent);
     view.muted = snapshot.volume.is_some_and(|volume| volume.muted);
     view.mic_muted = snapshot.mic_muted.unwrap_or(false);
@@ -238,6 +239,7 @@ pub(super) fn watch(app: AppHandle, state: Arc<SharedRuntime>) -> std::io::Resul
 /// themes (CSS overrides) can replace the built-in palette here.
 pub(super) fn native_dot_snapshot(dot: &NativeDotHandle, snapshot: &EngineSnapshot) {
     dot.set_theme(NativePillTheme::builtin(snapshot.settings.appearance.theme));
+    dot.set_notch_style(snapshot.settings.appearance.notch_style);
     dot.apply_snapshot(snapshot);
 }
 
@@ -259,6 +261,7 @@ fn apply_event(app: &AppHandle, state: &Arc<SharedRuntime>, delta: Envelope) {
     {
         if let EngineEvent::SettingsChanged { settings } = &delta.event {
             dot.set_theme(NativePillTheme::builtin(settings.appearance.theme));
+            dot.set_notch_style(settings.appearance.notch_style);
         }
         let _ = dot.apply_envelope(&delta);
     }

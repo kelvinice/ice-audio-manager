@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-pub use ice_core::appearance::{IdleStyle, SpringPreset, ThemeKind};
+pub use ice_core::appearance::{IdleStyle, NotchStyle, SpringPreset, ThemeKind};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case")]
@@ -60,6 +60,7 @@ pub struct NotchSnapshot {
     pub system_reduce_motion: bool,
     pub theme: ThemeKind,
     pub idle_style: IdleStyle,
+    pub notch_style: NotchStyle,
     pub expanded: bool,
     pub suspended: bool,
     pub hidden_for_bench: bool,
@@ -110,8 +111,8 @@ mod tests {
             "// Auto-generated from Rust IPC types via `cargo test -p ice-audio-manager export_ts_bindings`.",
             "// Do not edit manually.",
             "",
-            "import type { IdleStyle, SpringPreset, ThemeKind } from './engine';",
-            "export type { IdleStyle, SpringPreset, ThemeKind } from './engine';",
+            "import type { IdleStyle, NotchStyle, SpringPreset, ThemeKind } from './engine';",
+            "export type { IdleStyle, NotchStyle, SpringPreset, ThemeKind } from './engine';",
             "",
             &format!("export {}", ActivityKind::decl(&cfg)),
             "",
@@ -136,6 +137,8 @@ mod tests {
             &format!("export {}", ThemeKind::decl(&cfg)),
             "",
             &format!("export {}", IdleStyle::decl(&cfg)),
+            "",
+            &format!("export {}", NotchStyle::decl(&cfg)),
             "",
             &format!("export {}", ice_core::appearance::NowPlayingPill::decl(&cfg)),
             "",
