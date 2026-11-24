@@ -13,8 +13,10 @@ export const EXPANDED_H_MEDIA = 164;
 export const EXPANDED_H_EMPTY = 144;
 export const EXPANDED_R = 24;
 /** Attached bottom lyrics extension heights for compact music pill and expanded card (`docs/lyrics.md`). */
-export const PILL_LYRICS_H = 34;
-export const PILL_LYRICS_SUB_H = 48;
+// Pill: two rows by default, the current line (16 px) and the next line (15 px + 1), plus 9 px padding (owner, 2026-11-24).
+// With a Romaji/subtitle row (13 px + 1) under the current line.
+export const PILL_LYRICS_H = 42;
+export const PILL_LYRICS_SUB_H = 56;
 export const CARD_LYRICS_H = 82;
 
 export interface PillBox {

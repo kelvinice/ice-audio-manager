@@ -82,3 +82,4 @@ updating the constants.
 - 2026-11-24 Gemini: interactive progress seeking on `ExpandedMediaCard` (`scrubber.ts`, `MediaAction` `seek`, 1 Hz playback interpolation while expanded and visible).
 - 2026-11-24 Gemini: smooth 1 Hz playback timecode ticking using GSMTC `positionUpdatedMs` (`liveMediaPositionMs`) in `ExpandedMediaCard` and `TrackActivity`.
 - 2026-11-24 Gemini: bottom lyrics extension (`LyricsExtension.svelte`, `lyrics.ts`, `--ice-lyric-*` tokens, `CANVAS_H = 292`) for both compact music pill and expanded card with active-word emphasis, Romaji/paired subtitles, and side-rail toggle.
+- 2026-11-24 Claude: lyrics toggle moved from `NotchSideRail` to the `ExpandedMediaCard` transport row (the rail holds five buttons; a sixth cut off Settings); music-pill lyrics show two rows (current + next, `LyricFrame.followingLine`), `PILL_LYRICS_H` 42 / `PILL_LYRICS_SUB_H` 56.

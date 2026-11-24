@@ -38,6 +38,8 @@ test('resolveLyricFrame tracks intro, active line/word, neighbours, and next bou
   const intro = resolveLyricFrame(sampleDoc, 2_000, true);
   assert.equal(intro.activeIndex, -1);
   assert.equal(intro.nextLine?.text, 'Hello world today');
+  // The pill's first row previews line 1 during the intro, so its second row shows line 2.
+  assert.equal(intro.followingLine?.text, '無敵の笑顔');
   assert.equal(intro.nextWakeDelayMs, 2_000);
 
   const midFirst = resolveLyricFrame(sampleDoc, 6_500, true);
@@ -45,6 +47,7 @@ test('resolveLyricFrame tracks intro, active line/word, neighbours, and next bou
   assert.equal(midFirst.activeWordIndex, 1);
   assert.equal(midFirst.prevLine, null);
   assert.equal(midFirst.nextLine?.text, '無敵の笑顔');
+  assert.equal(midFirst.followingLine, null, 'nothing after the last line');
   assert.equal(midFirst.nextWakeDelayMs, 1_015);
 
   const second = resolveLyricFrame(sampleDoc, 11_200, true);

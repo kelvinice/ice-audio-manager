@@ -19,10 +19,26 @@
     instant: boolean;
     notchVisible: boolean;
     preset: SpringPreset;
+    /** Lyrics drawer toggle (shown when lyrics are enabled for the card). */
+    showLyricsToggle?: boolean;
+    lyricsOpen?: boolean;
+    lyricsAvailable?: boolean;
+    onToggleLyrics?: () => void;
     onMediaAction: (action: MediaAction) => void;
   }
 
-  let { media, spatialBadge, instant, notchVisible, preset, onMediaAction }: Props = $props();
+  let {
+    media,
+    spatialBadge,
+    instant,
+    notchVisible,
+    preset,
+    showLyricsToggle = false,
+    lyricsOpen = false,
+    lyricsAvailable = false,
+    onToggleLyrics = () => {},
+    onMediaAction,
+  }: Props = $props();
 
   const SEEK_STEP_MS = 5_000;
   const SEEK_PAGE_MS = 15_000;
@@ -210,6 +226,21 @@
         <button class="t-btn" type="button" aria-label="Next track" onclick={() => onMediaAction('next')}>
           <DeviceIcon kind="next" size={12} />
         </button>
+        <!-- Lyrics belong to the song, so the toggle sits with its controls (the side rail only fits five buttons). -->
+        {#if showLyricsToggle}
+          <button
+            class="t-btn t-lyrics"
+            class:on={lyricsOpen && lyricsAvailable}
+            type="button"
+            title={lyricsAvailable ? (lyricsOpen ? 'Hide lyrics' : 'Show lyrics') : 'No lyrics for this song'}
+            aria-label={lyricsOpen ? 'Hide lyrics' : 'Show lyrics'}
+            aria-pressed={lyricsOpen && lyricsAvailable}
+            disabled={!lyricsAvailable}
+            onclick={onToggleLyrics}
+          >
+            <DeviceIcon kind="lyrics" size={13} />
+          </button>
+        {/if}
       </div>
     </div>
   </div>
@@ -343,6 +374,26 @@
   .t-play:hover {
     background: var(--ice-play-bg);
     filter: brightness(1.08);
+  }
+
+  /* Pushed to the right end of the row, away from prev/play/next. */
+  .t-lyrics {
+    margin-left: auto;
+    color: var(--ice-fg-muted);
+  }
+
+  .t-lyrics.on {
+    color: var(--ice-accent-strong);
+    background: var(--ice-control-bg-active);
+  }
+
+  .t-lyrics:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+
+  .t-lyrics:disabled:hover {
+    background: transparent;
   }
 
   .scrubber-row {

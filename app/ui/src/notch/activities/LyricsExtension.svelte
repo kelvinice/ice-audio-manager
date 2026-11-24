@@ -72,6 +72,8 @@
   });
 
   const activeLine = $derived(frame.activeLine ?? (mode === 'pill' ? frame.nextLine : null));
+  // Pill second row: the next line; while the first row already previews it (intro or a gap), the one after.
+  const pillNextLine = $derived(frame.activeLine ? frame.nextLine : frame.followingLine);
   const activeSubtitle = $derived(showRomaji ? (activeLine?.subtitle ?? null) : null);
   const highlightActiveWords = $derived(
     wordHighlight && !instant && frame.activeLine !== null && frame.activeLine.words.length > 0,
@@ -106,6 +108,10 @@
             {#if activeSubtitle}
               <div class="subtitle-line">{activeSubtitle}</div>
             {/if}
+            <!-- Second row (owner, 2026-11-24): the line that comes next, dimmed. It slides up into the first row. -->
+            <div class="next-line" aria-label={pillNextLine ? `Next: ${pillNextLine.text}` : undefined}>
+              {pillNextLine?.text ?? ''}
+            </div>
           </div>
         {/key}
       </div>
@@ -182,14 +188,15 @@
 
   .pill-inner {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 7px;
     min-width: 0;
   }
 
+  /* Aligned with the first (current) row, not centred between the two. */
   .note-dot {
     font-size: 11px;
-    line-height: 1;
+    line-height: 16px;
     color: var(--ice-active-accent, var(--ice-accent));
     opacity: 0.72;
     flex-shrink: 0;
@@ -210,6 +217,19 @@
     flex-direction: column;
     gap: 1px;
     min-width: 0;
+  }
+
+  /* Fixed height even when there's no next line, so the pill never jumps (PILL_LYRICS_H in geometry.ts). */
+  .next-line {
+    height: 15px;
+    margin-top: 1px;
+    font-size: 10.5px;
+    font-weight: 500;
+    line-height: 15px;
+    color: var(--ice-lyric-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .lyrics-ext.card {

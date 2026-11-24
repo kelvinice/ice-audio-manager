@@ -10,12 +10,8 @@
     /** Services sit here only while media plays; the empty card shows them as labelled chips instead. */
     services: MusicServiceItem[];
     showServices: boolean;
-    showLyricsToggle?: boolean;
-    lyricsOpen?: boolean;
-    lyricsAvailable?: boolean;
     onTogglePin: () => void;
     onToggleMicMute: () => void;
-    onToggleLyrics?: () => void;
     onOpenService: (service: MusicServiceId) => void;
     onOpenSettings: () => void;
   }
@@ -25,12 +21,8 @@
     micMuted,
     services,
     showServices,
-    showLyricsToggle = false,
-    lyricsOpen = false,
-    lyricsAvailable = false,
     onTogglePin,
     onToggleMicMute,
-    onToggleLyrics = () => {},
     onOpenService,
     onOpenSettings,
   }: Props = $props();
@@ -66,26 +58,11 @@
     <MusicServicesWidget {services} variant="rail" {onOpenService} />
   {/if}
 
-  <div class="group">
-    {#if showLyricsToggle}
-      <button
-        class="rail-btn"
-        class:on={lyricsOpen && lyricsAvailable}
-        class:dim={!lyricsAvailable}
-        type="button"
-        title={lyricsAvailable ? (lyricsOpen ? 'Hide lyrics' : 'Show lyrics') : 'No lyrics available'}
-        aria-label={lyricsOpen ? 'Hide lyrics' : 'Show lyrics'}
-        aria-pressed={lyricsOpen && lyricsAvailable}
-        disabled={!lyricsAvailable}
-        onclick={onToggleLyrics}
-      >
-        <DeviceIcon kind="lyrics" size={13} />
-      </button>
-    {/if}
-    <button class="rail-btn" type="button" title="Settings" aria-label="Open Settings" onclick={onOpenSettings}>
-      <DeviceIcon kind="settings" size={13} />
-    </button>
-  </div>
+  <!-- Five buttons at most (pin, mic, 2 services, settings): 5 × 24 px fits the 140 px rail. The lyrics toggle lives
+       in the media card's transport row (2026-11-24: a sixth button pushed Settings off the bottom). -->
+  <button class="rail-btn" type="button" title="Settings" aria-label="Open Settings" onclick={onOpenSettings}>
+    <DeviceIcon kind="settings" size={13} />
+  </button>
 </nav>
 
 <style>
@@ -136,10 +113,5 @@
   .rail-btn.danger {
     background: color-mix(in srgb, var(--ice-danger) 16%, transparent);
     color: var(--ice-danger);
-  }
-
-  .rail-btn.dim {
-    opacity: 0.4;
-    cursor: default;
   }
 </style>

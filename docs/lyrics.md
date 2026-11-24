@@ -35,7 +35,10 @@ Instead of a detached floating window or cramped overlay, lyrics appear as a **s
 ╰───────────────────────────────────────────────────────────╯
 ```
 
-- **Geometry:** Extends cleanly downward from `292×46` (`r = 23`) to `292×84` (single line) or `292×98` (line + Romaji/subtitle) while synced lyrics are available and `show_on_pill` is enabled. Collapses seamlessly back to `292×46` during instrumental intros/outros or when no synced lyrics match.
+- **Two rows by default (owner, 2026-11-24):** the current line, and under it the next line, dimmed. During the intro or a
+  gap, the first row previews the upcoming line and the second row shows the one after it (`LyricFrame.followingLine`).
+  A Romaji/subtitle row sits between them when present.
+- **Geometry:** Extends cleanly downward from `292×46` (`r = 23`) to `292×88` (two rows, `PILL_LYRICS_H` 42) or `292×102` (with Romaji/subtitle, `PILL_LYRICS_SUB_H` 56) while synced lyrics are available and `show_on_pill` is enabled. Collapses seamlessly back to `292×46` during instrumental intros/outros or when no synced lyrics match.
 - **Line transition:** Outgoing line glides upward (`translateY(-6px)`, `opacity: 0`) while incoming line settles in (`translateY(6px) → 0`), using compositor-only `transform`/`opacity` (instant swap when `systemReduceMotion` or preset `off`).
 
 ### 2.2 Expanded Card + Bottom Extension (`expanded` mode)
@@ -44,9 +47,9 @@ Instead of a detached floating window or cramped overlay, lyrics appear as a **s
 ╭─────────────────────────────────────────────────────────────────────╮
 │  [58×58]  Idol                                       |||||   │  📌  │
 │   Art     YOASOBI · Atmos                                    │  🎙  │
-│           ⏮  ⏯  ⏭                                            │  🎵  │
+│           ⏮  ⏯  ⏭                                  💬        │  🎵  │ ← Lyrics toggle
 │  1:12 ━━━━━━━━━━●──────────────────── 3:33                   │  ▶   │
-│  🔊   ━━━━━━━━━━━━━━●────────────────  42%                   │  💬  │ ← Lyrics toggle
+│  🔊   ━━━━━━━━━━━━━━●────────────────  42%                   │      │
 │  [🎧 Arctis Nova 7]  [🔈 Speakers]                           │  ⚙   │
 ├─────────────────────────────────────────────────────────────────────┤
 │           誰かを愛することなんて                              │  ← dimmed previous line
@@ -57,7 +60,9 @@ Instead of a detached floating window or cramped overlay, lyrics appear as a **s
 ```
 
 - **Controls stay reachable:** Media controls, interactive progress scrubber, volume bar, and D-18 favourite devices remain completely untouched in the upper `164 px` block.
-- **Lyrics toggle in `NotchSideRail`:** A dedicated lyrics icon button toggles the bottom extension on/off (hidden or muted with tooltip `"No lyrics found"` when unavailable; shows a subtle loading shimmer during an in-flight lookup).
+- **Lyrics toggle at the right end of the transport row** (`ExpandedMediaCard`, moved from `NotchSideRail` on 2026-11-24:
+  a sixth rail button overflowed the 140 px rail and pushed Settings off the bottom). It toggles the bottom extension
+  on/off and is dimmed with the tooltip "No lyrics for this song" when unavailable.
 - **3-line focus band (D-23 V6):** Shows previous line (muted/dimmed), active line (bright, slightly scaled/weighted, plus Romaji/subtitle underneath), and next line (muted/dimmed).
 - **Click any synced line to seek:** Clicking any visible lyric line sends `MediaAction::Seek { position_ms: line.start_ms }` directly through our GSMTC seek pipeline.
 - **Plain lyrics fallback:** When only `plainLyrics` (unsynced) are available, the expanded extension displays a gentle scrollable plain-text pane (the compact music pill stays unextended so it never shows static wrong lines).

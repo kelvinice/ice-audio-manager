@@ -80,7 +80,18 @@
   <div class="expanded-card">
     <div class="main">
       {#if activeMedia}
-        <ExpandedMediaCard media={activeMedia} {spatialBadge} {instant} {notchVisible} {preset} {onMediaAction} />
+        <ExpandedMediaCard
+          media={activeMedia}
+          {spatialBadge}
+          {instant}
+          {notchVisible}
+          {preset}
+          showLyricsToggle={Boolean(lyricsConfig?.enabled && lyricsConfig?.showOnCard)}
+          lyricsOpen={lyricsDrawerOpen}
+          {lyricsAvailable}
+          {onToggleLyrics}
+          {onMediaAction}
+        />
       {:else}
         <ExpandedEmptyCard
           services={musicServices}
@@ -101,12 +112,8 @@
       {micMuted}
       services={musicServices}
       showServices={activeMedia !== null}
-      showLyricsToggle={activeMedia !== null && Boolean(lyricsConfig?.enabled && lyricsConfig?.showOnCard)}
-      lyricsOpen={lyricsDrawerOpen}
-      {lyricsAvailable}
       onTogglePin={onToggleExpand}
       {onToggleMicMute}
-      {onToggleLyrics}
       onOpenService={onOpenMusicService}
       {onOpenSettings}
     />

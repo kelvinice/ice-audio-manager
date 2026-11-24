@@ -5,6 +5,9 @@ export interface LyricFrame {
   prevLine: LyricLine | null;
   activeLine: LyricLine | null;
   nextLine: LyricLine | null;
+  /** The text line after `nextLine`: the music pill's second row while `activeLine` is null (before the first line or
+   *  in a gap), when the first row is already previewing `nextLine`. */
+  followingLine: LyricLine | null;
   activeWordIndex: number;
   nextWakeDelayMs: number | null;
 }
@@ -62,6 +65,7 @@ export function resolveLyricFrame(
     prevLine: null,
     activeLine: null,
     nextLine: null,
+    followingLine: null,
     activeWordIndex: -1,
     nextWakeDelayMs: null,
   };
@@ -81,13 +85,15 @@ export function resolveLyricFrame(
 
   // Before the first lyric starts: preview first line as upcoming and schedule wake right at its start.
   if (activeIndex < 0) {
-    const first = lines.find((l) => l.text.trim().length > 0) ?? null;
+    const firstIndex = nextTextIndex(lines, -1);
+    const first = firstIndex >= 0 ? lines[firstIndex] : null;
     const delay = first ? clampWakeDelay(first.startMs - elapsedMs) : null;
     return {
       activeIndex: -1,
       prevLine: null,
       activeLine: null,
       nextLine: first,
+      followingLine: firstIndex >= 0 ? textLineAt(lines, nextTextIndex(lines, firstIndex)) : null,
       activeWordIndex: -1,
       nextWakeDelayMs: delay,
     };
@@ -97,7 +103,9 @@ export function resolveLyricFrame(
   const isGap = rawActive.text.trim().length === 0;
   const activeLine = isGap ? null : rawActive;
   const prevLine = findPrevTextLine(lines, activeIndex);
-  const nextLine = findNextTextLine(lines, activeIndex);
+  const nextIndex = nextTextIndex(lines, activeIndex);
+  const nextLine = textLineAt(lines, nextIndex);
+  const followingLine = nextIndex >= 0 ? textLineAt(lines, nextTextIndex(lines, nextIndex)) : null;
 
   let activeWordIndex = -1;
   let nextWordAt: number | null = null;
@@ -130,6 +138,7 @@ export function resolveLyricFrame(
     prevLine,
     activeLine,
     nextLine,
+    followingLine,
     activeWordIndex,
     nextWakeDelayMs: nextBoundary !== null ? clampWakeDelay(nextBoundary - elapsedMs) : null,
   };
@@ -142,11 +151,16 @@ function findPrevTextLine(lines: LyricLine[], from: number): LyricLine | null {
   return null;
 }
 
-function findNextTextLine(lines: LyricLine[], from: number): LyricLine | null {
+/** Index of the first non-empty line after `from`, or -1. */
+function nextTextIndex(lines: LyricLine[], from: number): number {
   for (let i = from + 1; i < lines.length; i += 1) {
-    if (lines[i].text.trim().length > 0) return lines[i];
+    if (lines[i].text.trim().length > 0) return i;
   }
-  return null;
+  return -1;
+}
+
+function textLineAt(lines: LyricLine[], index: number): LyricLine | null {
+  return index >= 0 ? lines[index] : null;
 }
 
 function clampWakeDelay(deltaMs: number): number {
