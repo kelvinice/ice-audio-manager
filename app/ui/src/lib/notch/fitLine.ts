@@ -11,6 +11,9 @@
 export const FIT_MIN_SCALE = 0.82;
 /** Room kept free at the edge for the active word's lift and glow. */
 export const FIT_EDGE_PX = 4;
+/** Horizontal padding of the fitted row (cancelled by an equal negative margin), so its clip/mask box reaches past
+ * the text and the first word's lift isn't cut. Twin: `.rung-text.fitted` in `LyricsExtension.svelte`. */
+export const FIT_BLEED_X_PX = 4;
 /** Where the active word's end is kept while sliding, as a share of the visible width. */
 const FOLLOW_AT = 0.7;
 
@@ -32,7 +35,7 @@ export function fitLineLayout(avail: number, need: number, activeEnd: number | n
   const scale = Math.max(FIT_MIN_SCALE, room / need);
   const width = need * scale;
   if (width <= room) {
-    return { scale, x: center ? (room - width) / 2 : 0, fadeLeft: false, fadeRight: false };
+    return { scale, x: center ? (avail - width) / 2 : 0, fadeLeft: false, fadeRight: false };
   }
   const overflow = width - room;
   const target = activeEnd === null ? 0 : activeEnd * scale - room * FOLLOW_AT;
@@ -93,7 +96,8 @@ export function fitLine(node: HTMLElement, initial: FitParams) {
     cache = {
       key: params.key,
       enabled: params.enabled,
-      avail: node.clientWidth,
+      // `clientWidth` includes the bleed padding on both sides; the text itself gets the width between them.
+      avail: Math.max(0, node.clientWidth - 2 * FIT_BLEED_X_PX),
       need: inner.offsetWidth,
       wordEnds,
     };

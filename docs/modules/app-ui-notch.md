@@ -33,7 +33,7 @@ any time (D-15). Heavy work (image decode, colour extraction, device sorting) ha
 | `notch/activities/NotchBackdrop.svelte` | V2 default 9-orb orbital lava-lamp `.art-wash` (`wash-base` + `screen` blending on dark themes, `normal` on `ice_light`, scaled smoothly by `subscribeTempo` and paused via `animation-play-state`) + opt-in V1 blurred cover & `.art-scrim` gated by `--ice-art-backdrop` |
 | `notch/activities/AlbumArtTile.svelte` | Album art / placeholder tile with crossfade and optional `radius` prop (defaults to `--ice-radius-md` / `--ice-radius-sm`; track pill passes `size={34}` `radius="16px"`) |
 | `notch/scrubber.ts` | Pure media-scrubber maths: `clampSeekPositionMs`, `liveMediaPositionMs` (extrapolates from `positionUpdatedMs`), `pointerSeekMs`, `stepSeekMs`, `nextSecondTickDelayMs`, and unified optimistic seek overlay (`applyOptimisticSeek`, `shouldClearOptimisticSeek`) |
-| `notch/lyrics.ts` | Pure lyrics frame resolver (`resolveLyricFrame`, `shouldShowPillLyrics`, `shouldShowCardLyrics`): active line, neighbour lines, active word index, and next boundary wake delay (plus `fitLine.ts` cached per-line word measurements for zero-reflow word highlighting) |
+| `notch/lyrics.ts` | Pure lyrics frame resolver (`resolveLyricFrame`, `shouldShowPillLyrics`, `shouldShowCardLyrics`): active line, neighbour lines, active word index, and next boundary wake delay (plus `fitLine.ts` cached per-line word measurements for zero-reflow word highlighting); `nookLadderY` places Edge Nook rows around the wrapped current line's measured height |
 | `notch/activities/LyricsExtension.svelte` | Seamless bottom extension under the compact music pill (1 active line + Romaji/subtitle) and expanded card (3-line focus band, click-to-seek, active-word lift/glow via `--ice-lyric-*` tokens, plain fallback) |
 
 ## `src/notch/activities/` (one component per job)
@@ -65,6 +65,8 @@ updating the constants.
 - `isMediaActive` / `isSameTrack` mirror Rust (`engine_bridge::media_active`, `TrackKey`); change both together.
 - Durations in `scheduler.ts` (`VOLUME_DURATION_MS` …) are the only copy; if one becomes a setting, move it to `ice-core::config`.
 - `npm test` lists test files explicitly in `package.json`; a new `*.test.ts` must be added there.
+- Classes added from script (`classList` in an action, e.g. `fitLine`'s `fitting`/`fade-l`/`fade-r`) are invisible to Svelte's
+  scoped CSS: write their rules as `.x:global(.cls)` or Svelte drops them (the build warns `css_unused_selector`).
 
 ## Tests
 `spring.test.ts`, `scheduler.test.ts`, `scrubber.test.ts`, `visualizer.test.ts`, `devices.test.ts`, `backdrop.test.ts` (node `--test`). Visual QA: 100%/150% scaling, light/dark, both monitors ([manual-checklist](../qa/manual-checklist.md)).
@@ -90,3 +92,4 @@ updating the constants.
 - 2026-11-24 Gemini: unified optimistic seek overlay (`NotchController.effectiveMedia` + `scrubber.ts`), `visualizer.ts` rAF-coalesced writes & 400 ms visible stop-grace, `fitLine.ts` cached per-line word measurements, and `report_hit_rect` dedup.
 - 2026-11-24 Gemini: added `Edge Nook` (`NotchStyle::Nook`) strategy layer (`notchStyle.ts`), extracted `MediaScrubber.svelte`, `NookExpandedNotch.svelte` 2-column media/lyrics split + concave-ear SVG clip/rim, and `CANVAS_W = 648`.
 - 2026-11-24 Gemini: fixed `NookExpandedNotch.svelte` `onOpenMusicService` prop forwarding, adjusted Edge Nook expanded heights (`206`/`166`, `LADDER.nook.inner = 152`), and switched notch fallbacks to `nook` and `while_playing`.
+- 2026-11-25 Claude: lyrics `fitLine` rules made `:global` (Svelte had dropped them: no fades, long centred card/nook lines lost their first characters); fitted row bleeds 4 px / 3 px (`FIT_BLEED_X_PX`) so the active word's lift isn't clipped, ladder clip margin 4 px; card main row stretches (short lines no longer shrink 2 %). Edge Nook current line wraps (balanced, ≤ 3 rows, `LADDER.nook.mainMax`) and rows are placed by `nookLadderY` from a `ResizeObserver` on the current row.

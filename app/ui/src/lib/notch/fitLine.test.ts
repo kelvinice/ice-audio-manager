@@ -37,7 +37,8 @@ test('a very long line slides to keep the sung word in view and reaches its end'
 test('the card centres a shrunk line', () => {
   const l = fitLineLayout(200, 210, 0, true);
   const width = 210 * l.scale;
-  assert.ok(Math.abs(l.x - (200 - FIT_EDGE_PX - width) / 2) < 1e-9);
+  assert.ok(Math.abs(l.x - (200 - width) / 2) < 1e-9, 'centred in the row, not in the row minus the edge room');
+  assert.ok(l.x + width <= 200 - FIT_EDGE_PX / 2 + 1e-9, 'the lift still has room on the right');
 });
 
 test('fitLayoutsEqual detects unchanged layouts to avoid redundant DOM writes', () => {

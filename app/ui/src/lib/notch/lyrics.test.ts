@@ -3,9 +3,11 @@ import test from 'node:test';
 import type { LyricsConfig, LyricsDocument, LyricsState } from '../ipc/engine.ts';
 import {
   hasSubtitleLines,
+  LADDER,
   ladderY,
   lineSubtitle,
   lyricRows,
+  nookLadderY,
   resolveLyricFrame,
   romajiLitCount,
   shouldShowCardLyrics,
@@ -137,4 +139,19 @@ test('ladderY stacks slots top to bottom and reserves the subtitle row', () => {
   assert.equal(ladderY('pill', 1, true) - ladderY('pill', 1, false), 14, 'room for the subtitle under the main row');
   assert.ok(ladderY('card', 1, true) + 15 <= 68, 'the card fits its drawer with a subtitle');
   assert.ok(ladderY('nook', 1, true) + 22 <= 152, 'the Edge Nook column fits with a subtitle');
+});
+
+test('nookLadderY centres a wrapped current line and keeps its neighbours in the column', () => {
+  const { inner, ctx, gap, mainMax } = LADDER.nook;
+  for (const mainH of [24, 40, 44, 60, 66, mainMax]) {
+    const ys = [-1, 0, 1].map((s) => nookLadderY(s, mainH));
+    assert.ok(ys[0] >= 0, `${mainH}: the previous line starts inside the column (${ys})`);
+    assert.ok(ys[2] + ctx <= inner, `${mainH}: the next line ends inside the column (${ys})`);
+    assert.equal(ys[1] - ys[0], ctx + gap, 'previous line sits one step above');
+    assert.equal(ys[2] - ys[1], mainH + gap, 'next line sits right under the whole current block');
+    assert.ok(Math.abs(ys[1] + mainH / 2 - inner / 2) <= 0.5, 'current line centred');
+  }
+  // Taller than 3 rows + subtitle is clamped, so the next line never leaves the column.
+  assert.equal(nookLadderY(1, 400), nookLadderY(1, mainMax));
+  assert.equal(nookLadderY(0, 0), nookLadderY(0, LADDER.nook.cur), 'unmeasured = one row');
 });

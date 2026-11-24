@@ -332,9 +332,25 @@ spoken, and the Romaji sweep (above).
   is fully visible by the time it's sung. Soft 16 px fades mark the cut edges.
 - It re-measures only when the line or the sung word changes (no loop), plus once when fonts finish loading.
   `transform` only; instant with reduced motion.
-- The ladder uses `overflow: clip` with a 2 px clip margin, so the lift and glow aren't shaved vertically.
+- The ladder uses `overflow: clip` with a clip margin (now 4 px), so the lift and glow aren't shaved at its edges.
 - Other rows (next, previous) are plain text and keep their ellipsis.
 - Tested in `fitLine.test.ts`: fits, shrinks, slides to the very end, centres in the card.
+
+**Follow-up (2026-11-25, owner: "subtitles clipped on the first characters or word on long text, and the highlighted
+word"):** the fix above never fully shipped. `fitLine` toggles `fitting`, `fade-l` and `fade-r` from script, so Svelte's
+scoped CSS treated those rules as unused and **dropped them** (the `css_unused_selector` build warnings). Without
+`.fitting { text-align: left }` a centred card/nook line wider than its row overflowed on both sides and lost its first
+characters; the fades never showed either. Now:
+- The rules are `:global(...)` and reach the build.
+- The fitted row **bleeds** 4 px left/right and 3 px top/bottom (negative margin + equal padding, `FIT_BLEED_X_PX`), so
+  its clip and fade-mask box reaches past the text: the first word's 1.07 lift and the glow aren't cut. The ladder's
+  clip margin is 4 px to match.
+- The card's main row stretches to the full width, so a short line is measured against the row, not its own width
+  (it used to shrink ~2 % for nothing).
+- **Edge Nook:** the side column is tall (152 px), so the current line **wraps** into balanced rows (≤ 3, +
+  subtitle = `LADDER.nook.mainMax`) instead of shrinking or sliding. The other rows are placed around its measured
+  height (`nookLadderY`, a `ResizeObserver` on the current row only), so the block stays centred and glides when a
+  line's height changes. Tested in `lyrics.test.ts`.
 
 ---
 

@@ -6,6 +6,7 @@
     LADDER,
     lineSubtitle,
     lyricRows,
+    nookLadderY,
     resolveLyricFrame,
     romajiLitCount,
     type LyricRow,
@@ -105,6 +106,40 @@
     return mode === 'pill' ? slot < 0 : slot < -1;
   }
 
+  // Edge Nook: the tall column wraps the current line (balanced, ≤ 3 rows) instead of shrinking or sliding it, and the
+  // other rows are placed around its measured height (`nookLadderY`). Only the current row is observed.
+  const wrapMain = $derived(mode === 'nook');
+  let nookMainH = $state<number | null>(null);
+
+  function rowY(slot: number): number {
+    if (mode === 'pill') return ladderY('pill', slot, hasSub);
+    if (mode === 'nook' && nookMainH !== null) return nookLadderY(slot, nookMainH);
+    return ladderY(mode, slot, hasSub);
+  }
+
+  /** Reports the current row's height while `enabled`; event-driven (fires only when the size changes). */
+  function trackMainHeight(node: HTMLElement, enabled: boolean) {
+    let observer: ResizeObserver | null = null;
+    const start = () => {
+      observer = new ResizeObserver(() => {
+        nookMainH = node.offsetHeight;
+      });
+      observer.observe(node);
+    };
+    const stop = () => {
+      observer?.disconnect();
+      observer = null;
+    };
+    if (enabled) start();
+    return {
+      update(next: boolean) {
+        if (next && !observer) start();
+        else if (!next && observer) stop();
+      },
+      destroy: stop,
+    };
+  }
+
   function romajiWords(text: string): string[] {
     return text.split(/\s+/).filter(Boolean);
   }
@@ -159,7 +194,7 @@
             class:main={row.slot === 0}
             class:upcoming={row.role === 'upcoming'}
             class:hidden={hiddenSlot(row.slot)}
-            style:transform={`translateY(${ladderY('pill', row.slot, hasSub)}px)`}
+            style:transform={`translateY(${rowY(row.slot)}px)`}
           >
             <div class="rung-enter">
               <span
@@ -188,14 +223,21 @@
           type="button"
           tabindex={hiddenSlot(row.slot) ? -1 : 0}
           disabled={!row.line}
-          style:transform={`translateY(${ladderY(mode === 'nook' ? 'nook' : 'card', row.slot, hasSub)}px)`}
+          style:transform={`translateY(${rowY(row.slot)}px)`}
+          use:trackMainHeight={wrapMain && row.slot === 0}
           onclick={() => seekTo(row)}
         >
           <span class="rung-enter">
             <span
               class="rung-text"
-              class:fitted={row.slot === 0}
-              use:fitLine={{ enabled: row.slot === 0, word: row.slot === 0 ? frame.activeWordIndex : -1, key: row.key, center: true }}
+              class:fitted={row.slot === 0 && !wrapMain}
+              class:wrapped={row.slot === 0 && wrapMain}
+              use:fitLine={{
+                enabled: row.slot === 0 && !wrapMain,
+                word: row.slot === 0 ? frame.activeWordIndex : -1,
+                key: row.key,
+                center: true,
+              }}
             ><span class="fit">{@render lineText(row)}</span></span>
             {@render subtitle(row.line, row.slot === 0, row.role === 'current')}
           </span>
@@ -265,14 +307,23 @@
     transform: scale(0.84);
   }
 
+  /* Edge Nook current line: wraps into balanced rows (heights twin `LADDER.nook.mainMax`) instead of being cut. */
+  .rung-text.wrapped {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    text-wrap: balance;
+  }
+
   /* ---- Ladder: rows in absolute slots (heights twin `LADDER` in lyrics.ts). ---- */
   .ladder {
     position: relative;
     flex: 1;
     min-width: 0;
-    /* `clip` + a small margin: the active word's 1 px lift and glow aren't shaved off at the ladder's edges. */
+    /* `clip` + a margin as wide as the main row's bleed (`.rung-text.fitted`): the active word's lift and glow aren't
+       shaved off at the ladder's edges. */
     overflow: clip;
-    overflow-clip-margin: 2px;
+    overflow-clip-margin: 4px;
   }
 
   .rung {
@@ -316,11 +367,17 @@
   }
 
   /* Main row: no ellipsis (it can't apply to the inline-block karaoke words, which were cut mid-character); the line
-     shrinks to fit or slides with the singing instead (`fitLine`). Vertical overflow stays visible for the lift. */
+     shrinks to fit or slides with the singing instead (`fitLine`).
+     Bleed: the clip and fade-mask box reaches past the text on every side (negative margin + equal padding, so the
+     text doesn't move), so the active word's lift and glow aren't shaved off at the first or last character.
+     Twin: `FIT_BLEED_X_PX` in lib/notch/fitLine.ts. */
   .rung-text.fitted {
     overflow-x: clip;
     overflow-y: visible;
     text-overflow: clip;
+    margin: -3px -4px;
+    padding: 3px 4px;
+    max-width: calc(100% + 8px);
   }
 
   .fit {
@@ -335,21 +392,30 @@
     transition: transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
   }
 
+  /* `fade-l`, `fade-r` and `fitting` are toggled by the `fitLine` action, so they must be `:global`: Svelte can't see
+     them in the markup and would drop the rules (which cut the first characters of long centred lines and hid the fades). */
+
   /* Soft edges where a long line is cut while sliding. */
-  .rung-text.fade-r {
+  .rung-text:global(.fade-r) {
     mask-image: linear-gradient(90deg, #000 calc(100% - 16px), transparent);
   }
 
-  .rung-text.fade-l {
+  .rung-text:global(.fade-l) {
     mask-image: linear-gradient(90deg, transparent, #000 16px);
   }
 
-  .rung-text.fade-l.fade-r {
+  .rung-text:global(.fade-l.fade-r) {
     mask-image: linear-gradient(90deg, transparent, #000 16px, #000 calc(100% - 16px), transparent);
   }
 
-  /* A fitted card line is laid out from the left; `fitLine` centres it with the transform. */
-  .card-ladder .rung-text.fitting {
+  /* The card's main row spans the full width so `fitLine` measures the row, not the line's own shrink-to-fit width. */
+  .card-ladder .rung-text.fitted {
+    align-self: stretch;
+  }
+
+  /* A fitted card line is laid out from the left (a centred line wider than its row overflows on both sides and loses
+     its first characters); `fitLine` centres it with the transform. */
+  .card-ladder .rung-text.fitted:global(.fitting) {
     text-align: left;
   }
 

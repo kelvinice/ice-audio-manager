@@ -112,9 +112,24 @@ export const LADDER = {
   pill: { row: 16, sub: 14 },
   /** Card: 68 px inside the 82 px drawer; context rows 15, current 18, subtitle 14, 3 px gaps. */
   card: { inner: 68, ctx: 15, cur: 18, sub: 14, gap: 3 },
-  /** Nook: 152 px side-by-side column stage; generous vertical rhythm inspired by NotchNook. */
-  nook: { inner: 152, ctx: 22, cur: 24, sub: 16, gap: 8 },
+  /** Nook: 152 px side-by-side column stage; generous vertical rhythm inspired by NotchNook. The current line wraps
+   * (up to 3 rows of 22 px + a 16 px subtitle = `mainMax`) instead of shrinking or sliding, see `nookLadderY`. */
+  nook: { inner: 152, ctx: 22, cur: 24, sub: 16, gap: 8, mainMax: 82 },
 } as const;
+
+/**
+ * Edge Nook: vertical position (px) of a slot around the current line's measured height `mainH` (text + subtitle).
+ * The current line is centred in the column; context rows sit one `ctx + gap` step above and below it. Heights are
+ * clamped to one row … `mainMax`, so a 3-line current line still leaves the next line inside the column.
+ */
+export function nookLadderY(slot: number, mainH: number): number {
+  const { inner, ctx, cur, gap, mainMax } = LADDER.nook;
+  const h = Math.min(Math.max(mainH, cur), mainMax);
+  const y0 = Math.round((inner - h) / 2);
+  if (slot === 0) return y0;
+  if (slot < 0) return y0 + slot * (ctx + gap);
+  return y0 + h + gap + (slot - 1) * (ctx + gap);
+}
 
 /** Vertical position (px) of a slot. `hasSub` reserves the subtitle row so positions never jump between lines. */
 export function ladderY(mode: 'pill' | 'card' | 'nook', slot: number, hasSub: boolean): number {
@@ -122,7 +137,8 @@ export function ladderY(mode: 'pill' | 'card' | 'nook', slot: number, hasSub: bo
     const { row, sub } = LADDER.pill;
     return slot <= 0 ? slot * row : row + (hasSub ? sub : 0) + (slot - 1) * row;
   }
-  const { inner, ctx, cur, sub, gap } = mode === 'nook' ? LADDER.nook : LADDER.card;
+  if (mode === 'nook') return nookLadderY(slot, LADDER.nook.cur + (hasSub ? LADDER.nook.sub : 0));
+  const { inner, ctx, cur, sub, gap } = LADDER.card;
   const curH = cur + (hasSub ? sub : 0);
   const top = (inner - (ctx + gap + curH + gap + ctx)) / 2;
   if (slot <= -1) return top + (slot + 1) * (ctx + gap);
