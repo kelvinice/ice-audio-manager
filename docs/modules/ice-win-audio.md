@@ -29,7 +29,7 @@ global hotkeys, per-device spatial sound and `config.toml` hot reload. The only 
 
 ## How it works
 - **One `ice-audio` thread (MTA)** owns every COM object. Everything else posts a `Msg`: `Command`, `Audio(AudioEvent)`, `Mic`,
-  `Hotkey(id)`, `ConfigChanged`, `Media(MediaUpdate)`, `Quit`.
+  `Hotkey(id)`, `ConfigChanged`, `Media(MediaUpdate)`, `Quit` — except `Command::Media`, which fast-paths straight to `ice-media-cmd` via `MediaCommandSender` so media skips/seeks never wait behind device refreshes or spatial writes.
 - **Debounce:** device-change bursts (one unplug ≈ state + 3 default changes + dozens of property changes) collapse into one refresh:
   sliding 120 ms quiet, never later than 600 ms after the first event. Config reload waits 300 ms after the last write.
 - **"Current playback device" = the Multimedia default** (what media plays on, what volume events follow). `RoleSet::Default` =
@@ -60,3 +60,4 @@ Unit tests sit in each file; real-device paths use `#[ignore]` tests and the [ma
 ## Change log
 - 2026-11-23 Claude: initial recap.
 - 2026-11-24 Gemini: D-26 `loopback.rs` shared-mode WASAPI render loopback + `MeterHub::set_spectrum_enabled` (rebind state reset, DRM/silent loopback auto-fallback, Privacy switch wiring).
+- 2026-11-24 Gemini: `AudioEngine::send` fast-paths `Command::Media` straight to `MediaService`'s `MediaCommandSender` (`ice-media-cmd`).

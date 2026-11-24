@@ -197,6 +197,20 @@ pub fn read(s: &Session, art_px: Option<u32>) -> Result<(NowPlaying, Option<Art>
 /// # Errors
 /// Fails if the track or playback state can't be read.
 pub fn read_within(s: &Session, art_px: Option<u32>, art_budget: Duration) -> Result<(NowPlaying, Option<Art>)> {
+    read_within_cached(s, art_px, art_budget, None)
+}
+
+/// Like [`read_within`], but reuses `known_art` when the decoded thumbnail hashes to the same `id`, skipping
+/// accent extraction and PNG re-encoding.
+///
+/// # Errors
+/// Fails if the track or playback state can't be read.
+pub(crate) fn read_within_cached(
+    s: &Session,
+    art_px: Option<u32>,
+    art_budget: Duration,
+    known_art: Option<&ArtInfo>,
+) -> Result<(NowPlaying, Option<Art>)> {
     let props = wait(&s.TryGetMediaPropertiesAsync()?, CALL_LIMIT)?;
     let mut now = NowPlaying {
         app_id: s.SourceAppUserModelId()?.to_string(),
@@ -210,13 +224,23 @@ pub fn read_within(s: &Session, art_px: Option<u32>, art_budget: Duration) -> Re
         art: None,
     };
     refresh_playback(s, &mut now)?;
-    let art = art_px.and_then(|px| {
-        read_art(&props, px, art_budget)
+    let outcome = art_px.and_then(|px| {
+        read_art_cached(&props, px, art_budget, known_art)
             .inspect_err(|e| tracing::debug!(error = %e, "album art unavailable"))
             .ok()
             .flatten()
     });
-    now.art = art.as_ref().map(|a| a.info.clone());
+    let art = match outcome {
+        Some(ArtOutcome::New(art)) => {
+            now.art = Some(art.info.clone());
+            Some(art)
+        }
+        Some(ArtOutcome::Reused(info)) => {
+            now.art = Some(info);
+            None
+        }
+        None => None,
+    };
     Ok((now, art))
 }
 
@@ -331,7 +355,24 @@ fn fit(w: u32, h: u32, max_px: u32) -> (u32, u32) {
     (px(w), px(h))
 }
 
+enum ArtOutcome {
+    New(Art),
+    Reused(ArtInfo),
+}
+
 fn read_art(props: &MediaProperties, max_px: u32, total: Duration) -> Result<Option<Art>> {
+    match read_art_cached(props, max_px, total, None)? {
+        Some(ArtOutcome::New(art)) => Ok(Some(art)),
+        Some(ArtOutcome::Reused(_)) | None => Ok(None),
+    }
+}
+
+fn read_art_cached(
+    props: &MediaProperties,
+    max_px: u32,
+    total: Duration,
+    known_art: Option<&ArtInfo>,
+) -> Result<Option<ArtOutcome>> {
     let budget = Budget::new(total.min(ART_BUDGET));
     let max_px = max_px.clamp(*ART_PX.start(), *ART_PX.end());
     let Ok(thumb) = props.Thumbnail() else { return Ok(None) };
@@ -373,9 +414,16 @@ fn read_art(props: &MediaProperties, max_px: u32, total: Duration) -> Result<Opt
     if pixels.len() as u64 != u64::from(out_w) * u64::from(out_h) * 4 {
         return Err(Error::new(E_UNEXPECTED, "album art pixel buffer has an unexpected size"));
     }
-    let info =
-        ArtInfo { id: art_id(out_w, out_h, pixels), width: out_w, height: out_h, accent: accent_for_art(Some(pixels)) };
-    Ok(Some(Art { info, png: encode_png(pixels, out_w, out_h, &budget)? }))
+    let id = art_id(out_w, out_h, pixels);
+    if let Some(known) = known_art
+        && known.id == id
+        && known.width == out_w
+        && known.height == out_h
+    {
+        return Ok(Some(ArtOutcome::Reused(known.clone())));
+    }
+    let info = ArtInfo { id, width: out_w, height: out_h, accent: accent_for_art(Some(pixels)) };
+    Ok(Some(ArtOutcome::New(Art { info, png: encode_png(pixels, out_w, out_h, &budget)? })))
 }
 
 fn encode_png(pixels: &[u8], w: u32, h: u32, budget: &Budget) -> Result<Vec<u8>> {

@@ -29,7 +29,7 @@ use crate::endpoints::Endpoints;
 use crate::file_watch::DirWatch;
 use crate::hotkeys::HotkeyService;
 use crate::lyrics::LyricsService;
-use crate::media_service::{MediaService, MediaUpdate};
+use crate::media_service::{MediaCommandSender, MediaService, MediaUpdate};
 use crate::meter::MeterHub;
 use crate::spatial::{self, SpatialFormat};
 use crate::{notify, policy, volume};
@@ -78,6 +78,8 @@ struct Shared {
     art: VecDeque<(String, Vec<u8>)>,
     /// Visualizer levels on their own thread, which runs only while subscribed.
     meter: Arc<MeterHub>,
+    /// Dedicated outbound media command sender so transport/seek never wait behind `ice-audio`.
+    media_cmd: Option<MediaCommandSender>,
 }
 
 fn lock(m: &Mutex<Shared>) -> MutexGuard<'_, Shared> {
@@ -103,6 +105,7 @@ impl AudioEngine {
             subscribers: Vec::new(),
             art: VecDeque::new(),
             meter: MeterHub::new(),
+            media_cmd: None,
         }));
         let (ready_tx, ready_rx) = mpsc::channel::<Result<(), String>>();
         let (worker_shared, worker_tx) = (Arc::clone(&shared), tx.clone());
@@ -129,6 +132,13 @@ impl Engine for AudioEngine {
     }
 
     fn send(&self, command: Command) {
+        if let Command::Media { action } = command {
+            let sender = lock(&self.shared).media_cmd.clone();
+            if let Some(sender) = sender {
+                sender.send(action);
+                return;
+            }
+        }
         let _ = self.tx.send(Msg::Command(command));
     }
 
@@ -151,7 +161,11 @@ impl Engine for AudioEngine {
 
 impl Drop for AudioEngine {
     fn drop(&mut self) {
-        lock(&self.shared).meter.close();
+        {
+            let mut sh = lock(&self.shared);
+            sh.meter.close();
+            sh.media_cmd = None;
+        }
         let _ = self.tx.send(Msg::Quit);
         if let Some(j) = self.join.take() {
             let _ = j.join();
@@ -294,7 +308,11 @@ impl Worker {
         })
         .inspect_err(|e| tracing::warn!(error = %e, "lyrics thread failed to start; lyrics disabled"))
         .ok();
-        lock(&shared).meter.set_spectrum_enabled(config.visualizer_spectrum);
+        {
+            let mut sh = lock(&shared);
+            sh.meter.set_spectrum_enabled(config.visualizer_spectrum);
+            sh.media_cmd = media.as_ref().map(MediaService::command_sender);
+        }
         let mut w = Self {
             eps,
             endpoints: Vec::new(),
