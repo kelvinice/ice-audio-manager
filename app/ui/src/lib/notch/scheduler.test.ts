@@ -16,6 +16,7 @@ import {
   type ActivityView,
   type IdleMode,
 } from './scheduler.ts';
+import { resolveDisplayedView } from './nowPlaying.ts';
 
 function expectActivity<K extends ActivityView['kind']>(
   sched: NotchActivityScheduler,
@@ -79,7 +80,7 @@ function sampleSnapshot(): EngineSnapshot {
       pinnedMonitor: null,
       knobGestures: false,
       showDisconnected: false,
-      appearance: { theme: 'ice', preset: 'smooth', idleStyle: 'mini_pill' },
+      appearance: { theme: 'ice', preset: 'smooth', idleStyle: 'mini_pill', nowPlaying: 'brief' },
     },
     media: null,
   };
@@ -398,4 +399,38 @@ test('media helpers format timecodes, scrubber percentage, and accent colours', 
   const modes: IdleMode[] = ['mini_pill', 'dot', 'hidden'];
   assert.equal(DEFAULT_IDLE_MODE, 'mini_pill');
   assert.equal(modes.includes(DEFAULT_IDLE_MODE), true);
+});
+
+test('now playing pill: off never pops up, while_playing stays while playing and shrinks on pause', () => {
+  const withMode = (nowPlaying: 'brief' | 'while_playing' | 'off') => {
+    const snap = sampleSnapshot();
+    snap.settings.appearance.nowPlaying = nowPlaying;
+    snap.media = sampleMedia({ status: 'playing', title: 'A', artist: 'X' });
+    const sched = new NotchActivityScheduler(0);
+    sched.applySnapshot(snap, 0);
+    return sched;
+  };
+  const next = sampleMedia({ status: 'playing', title: 'B', artist: 'Y' });
+
+  // Off: the title updates but no track activity and nothing to wake.
+  const off = withMode('off');
+  const offRes = off.applyEnvelope({ revision: 2, event: { type: 'mediaChanged', media: next } }, 100);
+  assert.equal(offRes.wokeActivity, false);
+  assert.equal(off.state.activity.kind, 'idle');
+  assert.equal(off.state.media?.title, 'B');
+
+  // While playing: the pop-up expires as usual, then the idle notch keeps showing the same pill (same trackSeq).
+  const wp = withMode('while_playing');
+  wp.applyEnvelope({ revision: 2, event: { type: 'mediaChanged', media: next } }, 100);
+  const pop = expectActivity(wp, 'track');
+  wp.tick(100 + TRACK_CHANGE_DURATION_MS, false);
+  assert.equal(wp.state.activity.kind, 'idle');
+  const shown = resolveDisplayedView(wp.state.activity, wp.state.media, 'while_playing', wp.lastTrackSeq);
+  assert.equal(shown.kind, 'track');
+  assert.equal(shown.kind === 'track' && shown.trackSeq, pop.trackSeq, 'no replayed entrance animation');
+  const paused = { ...next, status: 'paused' as const };
+  assert.equal(resolveDisplayedView(wp.state.activity, paused, 'while_playing', wp.lastTrackSeq).kind, 'idle');
+
+  // Brief (default) shrinks back to idle once the pop-up expires.
+  assert.equal(resolveDisplayedView({ kind: 'idle' }, next, 'brief', 1).kind, 'idle');
 });

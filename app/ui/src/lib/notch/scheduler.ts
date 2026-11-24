@@ -6,6 +6,7 @@ import type {
   Envelope,
   Notice,
   NowPlaying,
+  NowPlayingPill,
   Rgb,
   RoleSet,
   SettingsView,
@@ -239,9 +240,16 @@ function upsertArrivedDevice(list: DeviceSummary[], arrived: DeviceSummary): Dev
   return [...list.filter((d) => d.id !== arrived.id), merged];
 }
 
+/** `appearance.nowPlaying` with the owner's default (`brief`: pop up, then shrink to the idle pill). */
+export function nowPlayingMode(settings: SettingsView | null | undefined): NowPlayingPill {
+  return settings?.appearance.nowPlaying ?? 'brief';
+}
+
 export class NotchActivityScheduler {
   state: NotchSchedulerState;
   private seqCounter = 0;
+  /** `trackSeq` of the last track pop-up (see `nowPlaying.ts#resolveDisplayedView`). */
+  lastTrackSeq = 0;
 
   constructor(nowMs = 0) {
     this.state = {
@@ -517,6 +525,14 @@ export class NotchActivityScheduler {
         }
 
         if (!isSameTrack(prev, next)) {
+          // `off`: no pop-up; the idle pill (or the expanded card) just shows the new title.
+          if (nowPlayingMode(this.state.settings) === 'off') {
+            if (this.state.activity.kind === 'track') {
+              this.state.activity = { kind: 'idle' };
+              this.state.idleSinceMs = nowMs;
+            }
+            return { status: 'applied', wokeActivity: false };
+          }
           const prevTrack =
             this.state.activity.kind === 'track'
               ? this.state.activity.media
@@ -532,6 +548,7 @@ export class NotchActivityScheduler {
             trackSeq: ++this.seqCounter,
             expiresAtMs: nowMs + TRACK_CHANGE_DURATION_MS,
           };
+          this.lastTrackSeq = this.seqCounter;
           this.state.idleSinceMs = null;
           this.state.suspendDispatched = false;
           return { status: 'applied', wokeActivity: true };

@@ -16,7 +16,7 @@ the Phase 4 Settings window exists. It only builds menus from `EngineSnapshot` a
 ## What the menu offers
 Playback devices (switch; per-device **Show in notch**, spatial sound submenu with `SPATIAL_OPTIONS`) · playback volume line · recording devices ·
 communications mic line · **Toggle pairs** (and "Toggle with the current device…" one-click setup) · **Show disconnected devices** ·
-**Knob gestures** · **Theme / Animation / Idle notch** submenus (saved in `[appearance]`) · **Performance profile** · **Pinned monitor** · notice/feedback entries
+**Knob gestures** · **Theme / Animation / Idle notch / Now playing pill** submenus (saved in `[appearance]`) · **Performance profile** · **Pinned monitor** · notice/feedback entries
 (Dismiss, Choose device for X, Cancel) · "Audio unavailable" while the engine is starting.
 
 ## How it works
@@ -38,3 +38,4 @@ Unit tests in `tray.rs` and `preferences.rs` cover id round-trips and favourite 
 ## Change log
 - 2026-11-23 Claude: initial recap.
 - 2026-11-23 Claude: "Launch at sign-in" reads the registry through `startup.rs` each time the menu opens (Settings can change it too).
+- 2026-11-24 Claude: "Now playing pill" submenu (Brief, then small (default) / While playing / Off).

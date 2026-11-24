@@ -313,6 +313,7 @@ impl Engine for FakeEngine {
             | Command::SetTheme { .. }
             | Command::SetPreset { .. }
             | Command::SetIdleStyle { .. }
+            | Command::SetNowPlayingPill { .. }
             | Command::SetShowDisconnected { .. }
             | Command::SetDefaultRoles { .. } => {
                 let eps = endpoints(&st.snap);

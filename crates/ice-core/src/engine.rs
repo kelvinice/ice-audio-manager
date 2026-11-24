@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "ts")]
 use ts_rs::TS;
 
-use crate::appearance::{Appearance, IdleStyle, SpringPreset, ThemeKind};
+use crate::appearance::{Appearance, IdleStyle, NowPlayingPill, SpringPreset, ThemeKind};
 use crate::device::{DeviceState, Flow, Role};
 use crate::media::NowPlaying;
 
@@ -242,6 +242,9 @@ pub enum Command {
     SetIdleStyle {
         style: IdleStyle,
     },
+    SetNowPlayingPill {
+        mode: NowPlayingPill,
+    },
     SetPerformanceProfile {
         profile: PerformanceProfile,
     },
@@ -277,6 +280,7 @@ impl Command {
             | Self::SetTheme { .. }
             | Self::SetPreset { .. }
             | Self::SetIdleStyle { .. }
+            | Self::SetNowPlayingPill { .. }
             | Self::SetPerformanceProfile { .. }
             | Self::SetPinnedMonitor { .. }
             | Self::SetKnobGestures { .. }

@@ -179,7 +179,8 @@ pub(super) fn build(app: &AppHandle, state: Arc<SharedRuntime>) -> tauri::Result
         let snapshot = state.engine.snapshot();
         let available = state.engine.unavailable().is_none();
         let (pinned, profiles) = preferences::placement_menus(app, state, &snapshot.settings, available)?;
-        let [theme, animation, idle] = preferences::appearance_menus(app, snapshot.settings.appearance, available)?;
+        let [theme, animation, idle, now_playing] =
+            preferences::appearance_menus(app, snapshot.settings.appearance, available)?;
         Menu::with_items(
             app,
             &[
@@ -190,6 +191,7 @@ pub(super) fn build(app: &AppHandle, state: Arc<SharedRuntime>) -> tauri::Result
                 &theme,
                 &animation,
                 &idle,
+                &now_playing,
                 &menu_launch,
                 &PredefinedMenuItem::separator(app)?,
                 &item(app, "quit", "Quit Ice Audio Manager")?,

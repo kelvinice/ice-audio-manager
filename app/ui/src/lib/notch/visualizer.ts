@@ -43,6 +43,35 @@ export function perceptualLevel(linearAmplitude: number): number {
   return Math.pow(normalized, PERCEPTUAL_GAMMA);
 }
 
+/** Bars in the now-playing pill's waveform scrubber. */
+export const WIDE_BAR_COUNT = 14;
+// A fixed, uneven texture so interpolated neighbours don't look identical (a waveform, not a ramp).
+const WIDE_TEXTURE = [0.78, 1, 0.66, 0.9, 0.72, 0.96, 0.6, 0.88, 0.7, 1, 0.64, 0.92, 0.74, 0.84];
+// Resting waveform shown while paused or between frames, so the progress colouring stays readable.
+const WIDE_REST = 0.32;
+
+/**
+ * Spreads the bank's 4–6 levels across `count` bars for the wide waveform: linear interpolation, the fixed
+ * texture, and a resting floor. Pure; `out` is reused to avoid per-frame allocation.
+ */
+export function spreadLevels(levels: ReadonlyArray<number>, count: number, out: number[] = []): number[] {
+  out.length = count;
+  const n = levels.length;
+  for (let i = 0; i < count; i += 1) {
+    let level = 0;
+    if (n > 0) {
+      const pos = count > 1 ? (i / (count - 1)) * (n - 1) : 0;
+      const lo = Math.floor(pos);
+      const hi = Math.min(n - 1, lo + 1);
+      const frac = pos - lo;
+      level = clamp01(levels[lo] ?? 0) * (1 - frac) + clamp01(levels[hi] ?? 0) * frac;
+    }
+    const texture = WIDE_TEXTURE[i % WIDE_TEXTURE.length];
+    out[i] = clamp01(Math.max(WIDE_REST * texture, level * texture));
+  }
+  return out;
+}
+
 export function barScaleY(level: number): number {
   return MIN_BAR_SCALE + (1 - MIN_BAR_SCALE) * clamp01(level);
 }

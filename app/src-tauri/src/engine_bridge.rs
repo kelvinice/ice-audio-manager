@@ -3,6 +3,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
+use ice_core::appearance::NowPlayingPill;
 use ice_core::config::ConfigStore;
 use ice_core::device::Flow;
 use ice_core::engine::{
@@ -281,7 +282,10 @@ fn apply_event(app: &AppHandle, state: &Arc<SharedRuntime>, delta: Envelope) {
         }
         EngineEvent::MediaChanged { media } => {
             let mut last = state.last_track.lock().unwrap_or_else(PoisonError::into_inner);
-            is_new_track(&mut last, media.as_ref()).then_some(ActivityKind::Track)
+            // Always remember the track; only wake the notch when the now-playing pill pops up at all.
+            let new_track = is_new_track(&mut last, media.as_ref());
+            (new_track && snapshot.settings.appearance.now_playing != NowPlayingPill::Off)
+                .then_some(ActivityKind::Track)
         }
         EngineEvent::DevicesChanged { .. }
         | EngineEvent::NoticesChanged { .. }

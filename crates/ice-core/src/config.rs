@@ -18,7 +18,8 @@ use crate::hotkey::Chord;
 use crate::resolve::{DeviceRef, MatchMode, resolve};
 
 /// v2: performance profile and pinned monitor. v3: `show_disconnected`. v4: saved notch appearance.
-pub const SCHEMA_VERSION: u32 = 4;
+/// v5: `appearance.nowPlaying` (how the now-playing pill behaves).
+pub const SCHEMA_VERSION: u32 = 5;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
@@ -182,7 +183,7 @@ impl Config {
         match cfg.schema_version {
             v if v > SCHEMA_VERSION => Err(ConfigError::TooNew(v)),
             // v0/v1 gain the default profile and an initially unassigned monitor pin, and v0–v2 gain
-            // `show_disconnected = false`, all via serde defaults.
+            // `show_disconnected = false`, and v0–v4 gain `appearance.nowPlaying = "brief"`, all via serde defaults.
             _ => Ok(Self { schema_version: SCHEMA_VERSION, ..cfg }),
         }
     }
@@ -364,6 +365,7 @@ impl Config {
             Command::SetTheme { theme } => next.appearance.theme = *theme,
             Command::SetPreset { preset } => next.appearance.preset = *preset,
             Command::SetIdleStyle { style } => next.appearance.idle_style = *style,
+            Command::SetNowPlayingPill { mode } => next.appearance.now_playing = *mode,
             Command::SetShowDisconnected { enabled } => next.show_disconnected = *enabled,
             Command::SetDefaultRoles { roles } => next.default_roles = *roles,
             _ => return Ok(false),
@@ -652,8 +654,29 @@ mod tests {
         let saved = Config::from_toml(&config.to_toml()).unwrap();
         assert_eq!(
             saved.view(&[]).appearance,
-            Appearance { theme: ThemeKind::Midnight, preset: SpringPreset::Bouncy, idle_style: IdleStyle::Dot }
+            Appearance {
+                theme: ThemeKind::Midnight,
+                preset: SpringPreset::Bouncy,
+                idle_style: IdleStyle::Dot,
+                ..Appearance::default()
+            }
         );
+    }
+
+    #[test]
+    fn v4_migrates_with_brief_now_playing_and_saves_the_choice() {
+        use crate::appearance::{IdleStyle, NowPlayingPill};
+        let v4 = "schema_version = 4\n[appearance]\nidleStyle = 'dot'";
+        let mut config = Config::from_toml(v4).unwrap();
+        assert_eq!(config.schema_version, SCHEMA_VERSION);
+        assert_eq!(config.view(&[]).appearance.idle_style, IdleStyle::Dot, "v4 appearance is kept");
+        assert_eq!(config.view(&[]).appearance.now_playing, NowPlayingPill::Brief, "owner default");
+
+        let set = Command::SetNowPlayingPill { mode: NowPlayingPill::WhilePlaying };
+        assert_eq!(config.apply_setting(&set, &[]), Ok(true));
+        assert_eq!(config.apply_setting(&set, &[]), Ok(false), "already set");
+        let saved = Config::from_toml(&config.to_toml()).unwrap();
+        assert_eq!(saved.view(&[]).appearance.now_playing, NowPlayingPill::WhilePlaying);
     }
 
     #[test]

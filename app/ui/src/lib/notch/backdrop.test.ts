@@ -19,7 +19,7 @@ function parseRgba(css: string): { rgb: Rgb; alpha: number } {
 }
 
 const baseSettings: SettingsView = {
-  appearance: { theme: 'ice', preset: 'smooth', idleStyle: 'mini_pill' },
+  appearance: { theme: 'ice', preset: 'smooth', idleStyle: 'mini_pill', nowPlaying: 'brief' },
   performanceProfile: 'instant',
   pinnedMonitor: null,
   defaultRoles: 'both',

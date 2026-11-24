@@ -13,7 +13,7 @@ contract types, and `cargo test -p ice-core --all-features` exports them to `app
 |---|---|
 | `engine.rs` | The contract: `Engine` trait, `Command`, `EngineEvent`, `Envelope`, `EngineSnapshot`, `Notice`, `SettingsView`, `RoleSet`, `PerformanceProfile`, `SpatialMode`, `MediaAction` |
 | `engine/fake.rs` | `FakeEngine`: in-memory engine with the owner's devices, three fake Spotify tracks and stereo meter levels. Used by `--fake-engine`, UI work and tests |
-| `config.rs` | `config.toml` schema (v4), `Config`, `ConfigStore` (load/save/read), `Config::apply_setting` (every settings command), `Config::view` → `SettingsView` |
+| `config.rs` | `config.toml` schema (v5: `appearance.nowPlaying`), `Config`, `ConfigStore` (load/save/read), `Config::apply_setting` (every settings command), `Config::view` → `SettingsView` |
 | `resolve.rs` | D-16 device identity: `DeviceRef`, `MatchMode`, `resolve`, `candidates`, `toggle`, `normalize_name` |
 | `device.rs` | `EndpointInfo`, `Flow` (render/capture), `Role`, `DeviceState`, `hardware_key_from_devnode` |
 | `event.rs` | `AudioEvent`: what COM callbacks push into a channel (device added/removed/state/default/property, volume) |
@@ -59,8 +59,9 @@ contract types, and `cargo test -p ice-core --all-features` exports them to `app
 
 ## Tests
 Inline `#[cfg(test)]` in each file. `resolve.rs` is built from the owner's real endpoints (incl. new-USB-port case, QA B3/B4).
-`config.rs` holds the migration fixtures (v2 → v4). Run: `cargo test -p ice-core --all-features`.
+`config.rs` holds the migration fixtures (v2 → v5). Run: `cargo test -p ice-core --all-features`.
 
 ## Change log
 - 2026-11-23 Claude: initial recap.
 - 2026-11-23 Claude: `Command::is_setting()`.
+- 2026-11-24 Claude: schema v5, `Appearance.now_playing` (`NowPlayingPill`: `brief` default, `while_playing`, `off`) + `Command::SetNowPlayingPill`.

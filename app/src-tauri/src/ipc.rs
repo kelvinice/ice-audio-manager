@@ -137,6 +137,8 @@ mod tests {
             "",
             &format!("export {}", IdleStyle::decl(&cfg)),
             "",
+            &format!("export {}", ice_core::appearance::NowPlayingPill::decl(&cfg)),
+            "",
             &format!("export {}", ice_core::appearance::Appearance::decl(&cfg)),
             "",
             &format!("export {}", Flow::decl(&cfg)),

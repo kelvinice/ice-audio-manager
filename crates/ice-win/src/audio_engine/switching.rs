@@ -79,6 +79,7 @@ impl Worker {
             | Command::SetTheme { .. }
             | Command::SetPreset { .. }
             | Command::SetIdleStyle { .. }
+            | Command::SetNowPlayingPill { .. }
             | Command::SetShowDisconnected { .. }
             | Command::SetDefaultRoles { .. } => self.edit_settings(&command),
         }

@@ -1,6 +1,6 @@
 use std::sync::PoisonError;
 
-use ice_core::appearance::{Appearance, IdleStyle, SpringPreset, ThemeKind};
+use ice_core::appearance::{Appearance, IdleStyle, NowPlayingPill, SpringPreset, ThemeKind};
 use ice_core::device::Flow;
 use ice_core::engine::{Command, DeviceSummary, EngineSnapshot, PerformanceProfile, SavedDevice, SettingsView};
 use tauri::AppHandle;
@@ -74,8 +74,8 @@ pub(super) fn appearance_menus(
     app: &AppHandle,
     current: Appearance,
     available: bool,
-) -> tauri::Result<[Submenu<tauri::Wry>; 3]> {
-    use Command::{SetIdleStyle, SetPreset, SetTheme};
+) -> tauri::Result<[Submenu<tauri::Wry>; 4]> {
+    use Command::{SetIdleStyle, SetNowPlayingPill, SetPreset, SetTheme};
     Ok([
         choices(
             app,
@@ -110,6 +110,17 @@ pub(super) fn appearance_menus(
                 ("Pill", SetIdleStyle { style: IdleStyle::MiniPill }),
                 ("Dot", SetIdleStyle { style: IdleStyle::Dot }),
                 ("Hidden", SetIdleStyle { style: IdleStyle::Hidden }),
+            ],
+        )?,
+        choices(
+            app,
+            "Now playing pill",
+            available,
+            SetNowPlayingPill { mode: current.now_playing },
+            &[
+                ("Brief, then small (default)", SetNowPlayingPill { mode: NowPlayingPill::Brief }),
+                ("While playing", SetNowPlayingPill { mode: NowPlayingPill::WhilePlaying }),
+                ("Off", SetNowPlayingPill { mode: NowPlayingPill::Off }),
             ],
         )?,
     ])

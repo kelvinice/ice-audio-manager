@@ -23,9 +23,11 @@ import {
   formatSpatialBadge,
   isMediaActive,
   NotchActivityScheduler,
+  nowPlayingMode,
   shortDeviceName,
   type ActivityView,
 } from './scheduler';
+import { resolveDisplayedView } from './nowPlaying';
 
 export class NotchController {
   private readonly scheduler = new NotchActivityScheduler(Date.now());
@@ -55,7 +57,25 @@ export class NotchController {
     return this.engineState.settings?.performanceProfile === 'balanced';
   }
   readonly isNotchVisible = $derived(!(this.notchSnapshot?.hiddenForBench ?? false) && !this.isSuspended);
-  readonly activeView = $derived<ActivityView>(this.benchOverride ?? this.engineState.activity);
+  readonly activeView = $derived<ActivityView>(
+    this.benchOverride ??
+      resolveDisplayedView(
+        this.engineState.activity,
+        this.engineState.media,
+        nowPlayingMode(this.engineState.settings),
+        this.scheduler.lastTrackSeq,
+      ),
+  );
+
+  /** The engine's activity as shown, i.e. with the `appearance.nowPlaying` setting applied (non-reactive read). */
+  private displayedEngineView(): ActivityView {
+    return resolveDisplayedView(
+      this.engineState.activity,
+      this.engineState.media,
+      nowPlayingMode(this.engineState.settings),
+      this.scheduler.lastTrackSeq,
+    );
+  }
 
   readonly effectiveMicMuted = $derived(this.engineState.micMuted ?? this.notchSnapshot?.micMuted ?? false);
   readonly effectiveVolumePercent = $derived(
@@ -152,7 +172,8 @@ export class NotchController {
       if (outcome.dismissedToIdle) this.syncGeometry(false);
       if (outcome.shouldRequestSuspend && !nowSnap.hiddenForBench && !nowSnap.suspended) {
         // Instant keeps the WebView notch awake; only Balanced hands over to the native pill (shell checks too).
-        if (this.suspendsOnIdle) void invoke('request_idle_suspend');
+        // A "while playing" now-playing pill isn't idle either; pausing re-arms the linger (`applyEngineEnvelope`).
+        if (this.suspendsOnIdle && this.displayedEngineView().kind === 'idle') void invoke('request_idle_suspend');
         return;
       }
       this.scheduleNextTick();
@@ -166,7 +187,7 @@ export class NotchController {
     this.springs.setPaused(paused);
     this.springs.setPreset(preset);
 
-    const view = this.benchOverride ?? this.engineState.activity;
+    const view = this.benchOverride ?? this.displayedEngineView();
     const expandedNow = (snap?.expanded ?? false) || this.hoverExpanded;
     const micMutedNow = this.engineState.micMuted ?? snap?.micMuted ?? false;
     const fallbackVol = this.engineState.volume?.percent ?? snap?.volumePercent ?? 40;
@@ -262,7 +283,13 @@ export class NotchController {
       this.rearmLingerOnProfileChange(prevProfile);
       this.scheduleNextTick();
     }
-    if (res.wokeActivity || delta.event.type === 'devicesChanged' || delta.event.type === 'mediaChanged') {
+    const type = delta.event.type;
+    if (type === 'mediaChanged' && nowPlayingMode(this.engineState.settings) === 'while_playing') {
+      // Play/pause flips the "while playing" pill; restart the idle linger so Balanced suspends only once it's idle.
+      this.scheduler.markInteraction(Date.now());
+    }
+    // `settingsChanged`: the now-playing mode (or idle style) can change what the idle notch shows.
+    if (res.wokeActivity || type === 'devicesChanged' || type === 'mediaChanged' || type === 'settingsChanged') {
       this.benchOverride = null;
       this.syncGeometry(false);
       this.scheduleNextTick();

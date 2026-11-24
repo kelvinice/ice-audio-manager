@@ -21,7 +21,8 @@ any time (D-15). Heavy work (image decode, colour extraction, device sorting) ha
 | `ipc/types.ts` | **Generated** shell types (`NotchSnapshot`, `NotchDelta`, `ActivityKind`, `HitRect`, `MonitorSummary`) |
 | `motion/spring.ts` | `Spring1D`: closed-form damped oscillator `(stiffness, damping, mass)`, frame-rate independent (tested at 75/144/240 Hz); `SPRING_PRESETS` snappy/smooth/bouncy/off |
 | `motion/spring.svelte.ts` | `SpringGroup`: thin Svelte adapter, drives the loop only while something is still moving |
-| `notch/scheduler.ts` | `NotchActivityScheduler` + `ActivityView` (`idle`, `volume`, `switch`, `plug`, `mic`, `track`): priorities, durations, merge rules (plug+switch within 1.5 s), snapshot sync and monotonic envelope handling (`NeedsResnapshot` on gap). **604 lines, at the limit** |
+| `notch/scheduler.ts` | `NotchActivityScheduler` + `ActivityView` (`idle`, `volume`, `switch`, `plug`, `mic`, `track`): priorities, durations, merge rules (plug+switch within 1.5 s), snapshot sync and monotonic envelope handling (`NeedsResnapshot` on gap); `nowPlaying: off` creates no track pop-up. **621 lines, over the limit (split planned)** |
+| `notch/nowPlaying.ts` | `resolveDisplayedView`: with `appearance.nowPlaying = while_playing` the idle notch shows the track pill while media plays (state-derived, no timer; reuses `lastTrackSeq` so it doesn't re-animate) |
 | `notch/controller.svelte.ts` | `NotchController` (`createNotchController`): listens to `engine://*` and `notch://delta/v1`, owns springs, hover intent, wheel/aux-click, timers, calls Tauri commands |
 | `notch/geometry.ts` | Canvas/pill sizes (twin of the native pill constants), `targetGeometry`, `computeHitRect`, `computeClipPath`, `resolveRimStroke` |
 | `notch/devices.ts` | `buildNotchDeviceRow`: favourites in order, current default first, max 4 chips (D-18); `toggleFavouriteDeviceIds` |
@@ -66,3 +67,4 @@ updating the constants.
 - 2026-11-24 Claude: expanded relayout with a side rail (pin, mic, services, settings), draggable volume bar, `--ice-radius-md`; canvas 440×210 and a
   smaller `--ice-drop-shadow` so the shadow isn't clipped; Instant no longer requests idle suspend.
 - 2026-11-24 Claude: "More…" and the in-notch picker removed (`NotchDeviceRowModel` is just `chips`); visualizer `BarShaper` + `clip-path` bars.
+- 2026-11-24 Claude: "Now playing pill" setting (`nowPlaying.ts`, Settings → Notch, tray); Balanced only idle-suspends when the shown view is idle.

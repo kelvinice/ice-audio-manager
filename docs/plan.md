@@ -360,6 +360,11 @@ to the static native pill. Done by Claude; module docs: [app-ui-notch](modules/a
       timeline duration jump as a new track, and gives the first read's cover 400 ms so a slow cover can't hold back the
       title (the re-reads pick it up)
 - [ ] By hand: skip tracks in Spotify and YouTube Music; the title should change within ~0.3 s (`--verbose` logs "now playing")
+- [x] **"Now playing pill" setting** (owner, 2026-11-24; config schema v5 `appearance.nowPlaying`, Settings → Notch,
+      tray submenu): **Brief, then small** (default: the 2.4 s pop-up, then the idle pill) · **While playing** (stays as the
+      cover-and-controls pill while media plays; pausing shrinks it; Balanced doesn't idle-suspend while it shows) · **Off**
+      (no pop-up and no notch wake on a new track; the idle pill just shows the title)
+- [ ] By hand: each of the three modes with Spotify (skip, pause, resume) in Instant and Balanced
 - [ ] Visual QA of the new card on both monitors at 100 % / 150 %, light/dark desktops, all 4 themes (owner)
 - [ ] Phase 6: measure Instant idle with the WebView awake (expected ≈ 77 MB private WS from Phase 0.2, inside the ≤ 100 MB
       target) and the cursor poll's idle CPU, which now runs for as long as Instant shows the notch. D-21.1 L2
@@ -492,7 +497,7 @@ own `refactor:` PR by the path's owner, or sooner if a feature needs to grow the
 |---|---|---|---|
 | `crates/ice-win/src/native_dot.rs` | Gemini | 1706 lines (limit ~600) | window/message loop · GDI drawing · layout/geometry · theme colours |
 | `app/src-tauri/src/main.rs` | Codex | 1414 lines; `#[allow(too_many_lines)]` at the setup fn | app setup · notch window lifecycle · commands · profiles/gaming mode |
-| `app/ui/src/lib/notch/scheduler.ts` | Gemini | 604 lines, at the limit | Watch it. Split the merge rules out if it grows |
+| `app/ui/src/lib/notch/scheduler.ts` | Gemini | 621 lines (2026-11-24), over the limit | Split the merge rules and the media/track handling out (the now-playing view already lives in `nowPlaying.ts`) |
 | Repeated `#[allow(clippy::cast_possible_truncation, cast_sign_loss)]` (native_dot ×5, audio_engine, media) | Claude + Gemini | Same `f64` → integer conversion repeated without a reason | One checked conversion helper in `ice-win`; remaining suppressions become `#[expect(…, reason)]` |
 
 ## Dependency map

@@ -1860,7 +1860,13 @@ mod tests {
             thread::sleep(Duration::from_millis(5));
         }
         assert!(dot.pill_state().mic_muted);
-        assert!(dot.is_visible());
+        // `pill_state` updates on the subscriber thread; `visible` only once the window thread has painted.
+        // Wait for it like the other steps (asserting at once raced under parallel test load).
+        let deadline = std::time::Instant::now() + Duration::from_secs(2);
+        while !dot.is_visible() {
+            assert!(std::time::Instant::now() < deadline, "timed out waiting for the dot to show");
+            thread::sleep(Duration::from_millis(5));
+        }
 
         dot.hide();
         let deadline = std::time::Instant::now() + Duration::from_secs(2);
