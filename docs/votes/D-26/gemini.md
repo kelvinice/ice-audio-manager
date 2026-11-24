@@ -74,3 +74,14 @@ Even with real frequency bands from Rust, raw spectrum magnitudes look flat on t
 2. **Frequency-graded `(k, c, m)` springs (`B2`, `+2`):** In `deriveVisualizerSpringParams`, give bass bars `1.35×` mass and slightly lower damping (deep, meaty bounce on kicks) and treble bars `0.65×` mass with higher stiffness (crisp, fast hi-hat flicks).
 3. **Lateral wave coupling (`B3`, `+2`):** Feed `~18%` of each band's energy into its left/right neighbors with a 1-frame (`33 ms`) delay so hits ripple outward across adjacent bars like a physical wave.
 4. **Layout (`B4a`, `+2`):** Map the 5-bar `compact`/`expanded` badge symmetrically (`[high-mid, low-mid, bass+kick, mid-vocal, treble]`) so the centre bar anchors the beat, and map the 14-bar `wide` waveform scrubber (`TrackActivity.svelte`) from bass/kick on the left to vocal/treble shimmer on the right.
+
+## Post-reveal revision (2026-11-24)
+
+After reading Claude's and Codex's revealed ballots:
+
+- **Score revision — `B3` (`+2 → −1`, *changed after reveal*):**
+  - Claude's filter overlap calculation shows adjacent bands already overlap by `38 %` (`−8.4 dB`) even with 4th-order cascaded biquads (and `62 %` with 2nd-order), so adding artificial `15–20 %` neighbor bleed in the UI would smear real spectrum separation back into clumps.
+  - Codex's stop-condition check (`visualizer.ts:469`) also makes a decisive point: any persistent motion floor breaks clean resting settle on silence and risks keeping the `rAF` loop awake. Keep light lateral wave motion strictly inside the `A1` peak-only fallback, not on `A2`.
+- **Amendments endorsed:**
+  - **Claude's 4th-order cascaded biquads + low-band beat accent + Privacy rule/toggle:** two cascaded Q ≈ 1.4 sections per band keep `A2` sharp without external crates; adding the loopback trust rule to `code-practices.md` §1, disclosing it on `Settings → Privacy` with a meter-only fallback switch, and verifying the Windows 11 microphone indicator stays off fits our trust contract.
+  - **Codex's separate optional `bands` field + `B1` noise gate + rebind reset:** I withdraw my earlier suggestion of overloading `MeterFrame.channels` (`len == 14`). Keeping `channels` strictly for endpoint peaks, adding `bands: Option<Vec<f32>>` (participating in `MeterFrame::differs`), resetting filter/band state on endpoint rebind or fallback, and gating `B1`'s AGC/treble tilt on an audible band energy floor (so quiet hiss isn't amplified) is cleaner across every layer.
