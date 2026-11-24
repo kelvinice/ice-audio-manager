@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import type { EngineSnapshot, Envelope, MediaAction } from '../ipc/engine';
+import type { EngineSnapshot, Envelope, MediaAction, NotchStyle } from '../ipc/engine';
 import type { HitRect, NotchDelta, NotchSnapshot } from '../ipc/types';
 import { SpringGroup } from '../motion/spring.svelte';
 import {
@@ -12,15 +12,13 @@ import {
 } from './backdrop';
 import {
   CARD_LYRICS_H,
-  computeClipPath,
-  computeHitRect,
   deriveBenchOverride,
   effectivePreset,
   PILL_LYRICS_H,
   PILL_LYRICS_SUB_H,
   resolveRimStroke,
-  targetGeometry,
 } from './geometry';
+import { getNotchStyleStrategy } from './notchStyle';
 import { hasSubtitleLines, shouldShowCardLyrics, shouldShowPillLyrics } from './lyrics';
 import {
   DEFAULT_IDLE_MODE,
@@ -66,6 +64,10 @@ export class NotchController {
   private resnapshotting = false;
 
   readonly idleMode = $derived(this.notchSnapshot?.idleStyle ?? DEFAULT_IDLE_MODE);
+  readonly notchStyle = $derived<NotchStyle>(
+    this.notchSnapshot?.notchStyle ?? this.engineState.settings?.appearance.notchStyle ?? 'floating',
+  );
+  readonly styleStrategy = $derived(getNotchStyleStrategy(this.notchStyle));
   readonly isExpanded = $derived((this.notchSnapshot?.expanded ?? false) || this.hoverExpanded);
   readonly isInstant = $derived(
     (this.notchSnapshot?.systemReduceMotion ?? false) || (this.notchSnapshot?.preset ?? 'bouncy') === 'off',
@@ -164,9 +166,9 @@ export class NotchController {
     resolveMusicServices(this.engineState.settings, this.engineState.media),
   );
   readonly isIdleHidden = $derived(!this.isExpanded && this.activeView.kind === 'idle' && this.idleMode === 'hidden');
-  private readonly clipMetrics = $derived(computeClipPath(this.pillSize));
-  readonly insetLeft = $derived(this.clipMetrics.insetLeft);
-  readonly clipPath = $derived(this.clipMetrics.clipPath);
+  readonly surfaceShape = $derived(this.styleStrategy.computeSurfaceShape(this.pillSize));
+  readonly insetLeft = $derived(this.surfaceShape.insetLeft);
+  readonly clipPath = $derived(this.surfaceShape.clipPath);
   readonly showPillLyrics = $derived(
     !this.isExpanded &&
       this.activeView.kind === 'track' &&
@@ -185,28 +187,32 @@ export class NotchController {
         this.lyricsCardOpen,
       ),
   );
-  private computeLyricsExtraH(view: ActivityView, expandedNow: boolean, hasMedia: boolean): number {
+  private computePillLyricsExtraH(view: ActivityView): number {
     const cfg = this.engineState.settings?.lyrics;
-    if (expandedNow) {
-      return shouldShowCardLyrics(cfg, this.engineState.lyrics, hasMedia, this.lyricsCardOpen) ? CARD_LYRICS_H : 0;
-    }
     if (view.kind === 'track' && shouldShowPillLyrics(cfg, this.engineState.lyrics, isMediaActive(view.media))) {
       const hasSub = hasSubtitleLines(this.engineState.lyrics.document, cfg?.romaji ?? true);
       return hasSub ? PILL_LYRICS_SUB_H : PILL_LYRICS_H;
     }
     return 0;
   }
-  readonly targetBox = $derived(
-    targetGeometry(
-      this.activeView,
-      this.isExpanded,
-      this.effectiveMicMuted,
-      this.idleMode,
-      isMediaActive(this.engineState.media),
-      this.engineState.volume?.percent ?? this.notchSnapshot?.volumePercent ?? 40,
-      this.computeLyricsExtraH(this.activeView, this.isExpanded, isMediaActive(this.engineState.media)),
-    ),
-  );
+  private computeCardLyricsExtraH(hasMedia: boolean): number {
+    const cfg = this.engineState.settings?.lyrics;
+    return shouldShowCardLyrics(cfg, this.engineState.lyrics, hasMedia, this.lyricsCardOpen) ? CARD_LYRICS_H : 0;
+  }
+  readonly targetBox = $derived.by(() => {
+    const hasMedia = isMediaActive(this.engineState.media);
+    return this.styleStrategy.targetGeometry({
+      view: this.activeView,
+      expanded: this.isExpanded,
+      micMuted: this.effectiveMicMuted,
+      idleMode: this.idleMode,
+      hasMedia,
+      fallbackVolume: this.engineState.volume?.percent ?? this.notchSnapshot?.volumePercent ?? 40,
+      pillLyricsExtraH: this.computePillLyricsExtraH(this.activeView),
+      cardLyricsExtraH: this.computeCardLyricsExtraH(hasMedia),
+      showCardLyrics: this.showCardLyrics,
+    });
+  });
   readonly rimStroke = $derived(resolveRimStroke(this.activeView, this.isExpanded, this.effectiveMicMuted));
 
   constructor() {
@@ -264,22 +270,28 @@ export class NotchController {
     const micMutedNow = this.engineState.micMuted ?? snap?.micMuted ?? false;
     const fallbackVol = this.engineState.volume?.percent ?? snap?.volumePercent ?? 40;
     const hasMedia = isMediaActive(this.engineState.media);
-    const target = targetGeometry(
+    const strategy = getNotchStyleStrategy(snap?.notchStyle ?? this.engineState.settings?.appearance.notchStyle);
+    const showLyrics = expandedNow
+      ? shouldShowCardLyrics(this.engineState.settings?.lyrics, this.engineState.lyrics, hasMedia, this.lyricsCardOpen)
+      : false;
+    const target = strategy.targetGeometry({
       view,
-      expandedNow,
-      micMutedNow,
-      this.idleMode,
+      expanded: expandedNow,
+      micMuted: micMutedNow,
+      idleMode: this.idleMode,
       hasMedia,
-      fallbackVol,
-      this.computeLyricsExtraH(view, expandedNow, hasMedia),
-    );
+      fallbackVolume: fallbackVol,
+      pillLyricsExtraH: this.computePillLyricsExtraH(view),
+      cardLyricsExtraH: this.computeCardLyricsExtraH(hasMedia),
+      showCardLyrics: showLyrics,
+    });
 
     if (instantMove || preset === 'off' || paused) {
       this.springs.snapAll(target);
     } else {
       this.springs.setTargets(target);
     }
-    const nextRect = computeHitRect(target);
+    const nextRect = strategy.computeHitRect(target);
     if (
       !this.lastHitRect ||
       this.lastHitRect.x !== nextRect.x ||

@@ -127,7 +127,7 @@ test('lyricRows keeps a line on the same key as it moves up, so the change slide
 });
 
 test('ladderY stacks slots top to bottom and reserves the subtitle row', () => {
-  for (const mode of ['pill', 'card'] as const) {
+  for (const mode of ['pill', 'card', 'nook'] as const) {
     for (const hasSub of [false, true]) {
       const ys = [-2, -1, 0, 1].map((s) => ladderY(mode, s, hasSub));
       assert.ok(ys.every((y, i) => i === 0 || y > ys[i - 1]), `${mode} ${hasSub}: ${ys}`);
@@ -136,4 +136,5 @@ test('ladderY stacks slots top to bottom and reserves the subtitle row', () => {
   assert.equal(ladderY('pill', 0, false), 0);
   assert.equal(ladderY('pill', 1, true) - ladderY('pill', 1, false), 14, 'room for the subtitle under the main row');
   assert.ok(ladderY('card', 1, true) + 15 <= 68, 'the card fits its drawer with a subtitle');
+  assert.ok(ladderY('nook', 1, true) + 22 <= 132, 'the Edge Nook column fits with a subtitle');
 });

@@ -1,11 +1,12 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { createNotchController } from '../lib/notch/controller.svelte';
-  import { CANVAS_H, CANVAS_W, TOP_PAD } from '../lib/notch/geometry';
+  import { CANVAS_H, CANVAS_W } from '../lib/notch/geometry';
   import ExpandedNotch from './activities/ExpandedNotch.svelte';
   import IdlePill from './activities/IdlePill.svelte';
   import LyricsExtension from './activities/LyricsExtension.svelte';
   import MicActivity from './activities/MicActivity.svelte';
+  import NookExpandedNotch from './activities/NookExpandedNotch.svelte';
   import NotchBackdrop from './activities/NotchBackdrop.svelte';
   import PlugActivity from './activities/PlugActivity.svelte';
   import SwitchActivity from './activities/SwitchActivity.svelte';
@@ -27,15 +28,15 @@
 >
   <div
     class="pill-shadow"
-    style:top={`${TOP_PAD}px`}
+    style:top={`${ctrl.surfaceShape.topPad}px`}
     style:width={`${ctrl.pillSize.w}px`}
     style:height={`${ctrl.pillSize.h}px`}
-    style:border-radius={`${ctrl.pillSize.r}px`}
+    style:border-radius={ctrl.surfaceShape.shadowRadiusCss}
     aria-hidden="true"
   ></div>
   <div
     class="pill-clip"
-    style:clip-path={ctrl.clipPath}
+    style:clip-path={ctrl.surfaceShape.clipPath}
     onpointerenter={ctrl.onPointerEnter}
     onpointerleave={ctrl.onPointerLeave}
     onwheel={ctrl.onWheel}
@@ -62,13 +63,15 @@
         instant={ctrl.isInstant}
         ambientState={ctrl.ambientMotionState}
         compactPill={!ctrl.isExpanded}
-        boxW={ctrl.targetBox.w}
+        boxW={ctrl.targetBox.w + ctrl.surfaceShape.earRadius * 2}
         boxH={ctrl.targetBox.h}
-        topPad={TOP_PAD}
+        topPad={ctrl.surfaceShape.topPad}
       />
       <div
         class="pill-slot"
-        style:top={`${TOP_PAD}px`}
+        class:nook={ctrl.notchStyle === 'nook'}
+        class:compact={!ctrl.isExpanded}
+        style:top={`${ctrl.surfaceShape.topPad}px`}
         style:width={`${ctrl.targetBox.w}px`}
         style:height={`${ctrl.targetBox.h}px`}
       >
@@ -116,6 +119,36 @@
               notchVisible={ctrl.isNotchVisible}
             />
           {/if}
+        {:else if ctrl.notchSnapshot && ctrl.isExpanded && ctrl.notchStyle === 'nook'}
+          <NookExpandedNotch
+            playback={ctrl.engineState.playback}
+            settings={ctrl.engineState.settings}
+            disconnected={ctrl.engineState.disconnected}
+            musicServices={ctrl.musicServices}
+            activeDeviceName={ctrl.effectiveDeviceName}
+            spatialBadge={ctrl.effectiveSpatialBadge}
+            volumePercent={ctrl.effectiveVolumePercent}
+            muted={ctrl.effectiveVolumeMuted}
+            barPercent={ctrl.pillSize.vol}
+            micMuted={ctrl.effectiveMicMuted}
+            media={ctrl.effectiveMedia}
+            lyrics={ctrl.engineState.lyrics}
+            showLyrics={ctrl.showCardLyrics}
+            lyricsDrawerOpen={ctrl.lyricsCardOpen}
+            instant={ctrl.isInstant}
+            notchVisible={ctrl.isNotchVisible}
+            preset={ctrl.notchSnapshot.preset}
+            expanded={ctrl.notchSnapshot.expanded}
+            onToggleExpand={ctrl.toggleExpand}
+            onToggleMute={ctrl.toggleMute}
+            onSetVolume={ctrl.setVolume}
+            onSwitchDevice={ctrl.switchDevice}
+            onToggleMicMute={ctrl.toggleMicMute}
+            onToggleLyrics={ctrl.toggleLyricsCard}
+            onMediaAction={(action) => ctrl.sendMediaAction(action)}
+            onOpenMusicService={ctrl.openMusicService}
+            onOpenSettings={ctrl.openSettings}
+          />
         {:else if ctrl.notchSnapshot && ctrl.isExpanded}
           <ExpandedNotch
             playback={ctrl.engineState.playback}
@@ -152,19 +185,36 @@
   </div>
 
   <!-- Crisp 1px SVG rim driven by spring (w, h, r) with vector-effect="non-scaling-stroke" -->
-  <svg class="rim-svg" width={CANVAS_W} height={CANVAS_H} viewBox={`0 0 ${CANVAS_W} ${CANVAS_H}`} aria-hidden="true">
-    <rect
-      x={ctrl.insetLeft + 0.5}
-      y={TOP_PAD + 0.5}
-      width={Math.max(1, ctrl.pillSize.w - 1)}
-      height={Math.max(1, ctrl.pillSize.h - 1)}
-      rx={ctrl.pillSize.r}
-      ry={ctrl.pillSize.r}
-      fill="none"
-      stroke={ctrl.rimStroke}
-      stroke-width="1"
-      vector-effect="non-scaling-stroke"
-    />
+  <svg
+    class="rim-svg"
+    width={CANVAS_W}
+    height={CANVAS_H}
+    viewBox={`0 0 ${CANVAS_W} ${CANVAS_H}`}
+    style:clip-path={ctrl.surfaceShape.rimKind === 'path' ? ctrl.surfaceShape.clipPath : undefined}
+    aria-hidden="true"
+  >
+    {#if ctrl.surfaceShape.rimKind === 'path'}
+      <path
+        d={ctrl.surfaceShape.rimPathD}
+        fill="none"
+        stroke={ctrl.rimStroke}
+        stroke-width="2"
+        vector-effect="non-scaling-stroke"
+      />
+    {:else}
+      <rect
+        x={ctrl.insetLeft + 0.5}
+        y={ctrl.surfaceShape.topPad + 0.5}
+        width={Math.max(1, ctrl.pillSize.w - 1)}
+        height={Math.max(1, ctrl.pillSize.h - 1)}
+        rx={ctrl.pillSize.r}
+        ry={ctrl.pillSize.r}
+        fill="none"
+        stroke={ctrl.rimStroke}
+        stroke-width="1"
+        vector-effect="non-scaling-stroke"
+      />
+    {/if}
   </svg>
 </div>
 
@@ -231,6 +281,10 @@
     align-items: center;
     padding: 0 12px;
     overflow: hidden;
+  }
+
+  .pill-slot.nook.compact {
+    padding-top: 2px;
   }
 
   .rim-svg {

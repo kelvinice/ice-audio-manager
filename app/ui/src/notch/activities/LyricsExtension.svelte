@@ -17,7 +17,7 @@
   interface Props {
     lyrics: LyricsState;
     media: NowPlaying;
-    mode: 'pill' | 'card';
+    mode: 'pill' | 'card' | 'nook';
     wordHighlight: boolean;
     showRomaji: boolean;
     instant: boolean;
@@ -87,7 +87,11 @@
   const rows = $derived(lyricRows(frame, mode));
   const hasSub = $derived(hasSubtitleLines(doc, showRomaji));
   const ladderHeight = $derived(
-    mode === 'pill' ? ladderY('pill', 1, hasSub) + LADDER.pill.row : LADDER.card.inner,
+    mode === 'pill'
+      ? ladderY('pill', 1, hasSub) + LADDER.pill.row
+      : mode === 'nook'
+        ? LADDER.nook.inner
+        : LADDER.card.inner,
   );
   const highlightActiveWords = $derived(
     wordHighlight && !instant && frame.activeLine !== null && frame.activeLine.words.length > 0,
@@ -144,7 +148,7 @@
   {/if}
 {/snippet}
 
-<div class="lyrics-ext" class:pill={mode === 'pill'} class:card={mode === 'card'} class:instant>
+<div class="lyrics-ext" class:pill={mode === 'pill'} class:card={mode === 'card'} class:nook={mode === 'nook'} class:instant>
   {#if mode === 'pill'}
     <div class="pill-inner">
       <span class="note-dot" class:playing={isPlaying} aria-hidden="true">♪</span>
@@ -184,7 +188,7 @@
           type="button"
           tabindex={hiddenSlot(row.slot) ? -1 : 0}
           disabled={!row.line}
-          style:transform={`translateY(${ladderY('card', row.slot, hasSub)}px)`}
+          style:transform={`translateY(${ladderY(mode === 'nook' ? 'nook' : 'card', row.slot, hasSub)}px)`}
           onclick={() => seekTo(row)}
         >
           <span class="rung-enter">
@@ -239,6 +243,26 @@
     height: 82px;
     padding: 6px 8px 8px;
     mask-image: linear-gradient(180deg, transparent 0%, #000 14%, #000 86%, transparent 100%);
+  }
+
+  .lyrics-ext.nook {
+    border-top: none;
+    height: 100%;
+    padding: 2px 4px;
+    mask-image: linear-gradient(180deg, transparent 0%, #000 16%, #000 84%, transparent 100%);
+  }
+
+  .lyrics-ext.nook .card-ladder .rung-text {
+    font-size: 14px;
+    line-height: 22px;
+  }
+
+  .lyrics-ext.nook .card-ladder .rung.main .rung-text {
+    font-weight: 700;
+  }
+
+  .lyrics-ext.nook .card-ladder .rung:not(.main) .rung-text {
+    transform: scale(0.84);
   }
 
   /* ---- Ladder: rows in absolute slots (heights twin `LADDER` in lyrics.ts). ---- */

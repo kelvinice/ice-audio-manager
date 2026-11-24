@@ -80,7 +80,7 @@ export interface LyricRow {
  * - pill: past (hidden above), current (or the upcoming line in an intro/gap), next.
  * - card: before-previous (hidden above), previous (dim), current (or "···" in a gap), next.
  */
-export function lyricRows(frame: LyricFrame, mode: 'pill' | 'card'): LyricRow[] {
+export function lyricRows(frame: LyricFrame, mode: 'pill' | 'card' | 'nook'): LyricRow[] {
   const rows: LyricRow[] = [];
   const add = (line: LyricLine | null, slot: number, role: LyricRole) => {
     if (line && !rows.some((r) => r.key === String(line.startMs))) {
@@ -112,15 +112,17 @@ export const LADDER = {
   pill: { row: 16, sub: 14 },
   /** Card: 68 px inside the 82 px drawer; context rows 15, current 18, subtitle 14, 3 px gaps. */
   card: { inner: 68, ctx: 15, cur: 18, sub: 14, gap: 3 },
+  /** Nook: 132 px side-by-side column stage; generous vertical rhythm inspired by NotchNook. */
+  nook: { inner: 132, ctx: 22, cur: 24, sub: 16, gap: 8 },
 } as const;
 
 /** Vertical position (px) of a slot. `hasSub` reserves the subtitle row so positions never jump between lines. */
-export function ladderY(mode: 'pill' | 'card', slot: number, hasSub: boolean): number {
+export function ladderY(mode: 'pill' | 'card' | 'nook', slot: number, hasSub: boolean): number {
   if (mode === 'pill') {
     const { row, sub } = LADDER.pill;
     return slot <= 0 ? slot * row : row + (hasSub ? sub : 0) + (slot - 1) * row;
   }
-  const { inner, ctx, cur, sub, gap } = LADDER.card;
+  const { inner, ctx, cur, sub, gap } = mode === 'nook' ? LADDER.nook : LADDER.card;
   const curH = cur + (hasSub ? sub : 0);
   const top = (inner - (ctx + gap + curH + gap + ctx)) / 2;
   if (slot <= -1) return top + (slot + 1) * (ctx + gap);

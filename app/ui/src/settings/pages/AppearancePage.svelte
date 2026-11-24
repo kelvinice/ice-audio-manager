@@ -43,7 +43,7 @@
       onchange={(theme) => client.apply({ type: 'setTheme', theme })}
     >
       {#snippet preview(choice)}
-        <NotchPreview theme={choice.value} mode="volume" />
+        <NotchPreview theme={choice.value} mode="volume" notchStyle={settings.appearance.notchStyle} />
       {/snippet}
     </ChoiceGroup>
   </Section>

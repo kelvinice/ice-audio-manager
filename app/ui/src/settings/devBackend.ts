@@ -40,7 +40,7 @@ function initialSnapshot(): EngineSnapshot {
     media: null,
     lyrics: { status: 'disabled', trackKey: null, document: null },
     settings: {
-      appearance: { theme: 'ice', preset: 'bouncy', idleStyle: 'mini_pill', nowPlaying: 'brief', movingBackdrop: true },
+      appearance: { theme: 'ice', preset: 'bouncy', idleStyle: 'mini_pill', notchStyle: 'floating', nowPlaying: 'brief', movingBackdrop: true },
       performanceProfile: 'instant',
       pinnedMonitor: 'DISPLAY-PATH-1',
       defaultRoles: 'default',
@@ -90,6 +90,7 @@ const notch: NotchSnapshot = {
   systemReduceMotion: false,
   theme: 'ice',
   idleStyle: 'mini_pill',
+  notchStyle: 'floating',
   expanded: false,
   suspended: false,
   hiddenForBench: false,
@@ -108,6 +109,7 @@ function applyCommand(s: EngineSnapshot, c: Command): void {
     case 'setTheme': st.appearance.theme = c.theme; break;
     case 'setPreset': st.appearance.preset = c.preset; break;
     case 'setIdleStyle': st.appearance.idleStyle = c.style; break;
+    case 'setNotchStyle': st.appearance.notchStyle = c.style; break;
     case 'setNowPlayingPill': st.appearance.nowPlaying = c.mode; break;
     case 'setMovingBackdrop': st.appearance.movingBackdrop = c.enabled; break;
     case 'setPerformanceProfile': st.performanceProfile = c.profile; break;

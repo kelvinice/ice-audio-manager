@@ -2,8 +2,8 @@ import type { HitRect, NotchSnapshot, SpringPreset } from '../ipc/types.ts';
 import { DEFAULT_IDLE_MODE, type ActivityView, type IdleMode } from './scheduler.ts';
 
 // Twin: `NOTCH_CANVAS_W`/`NOTCH_CANVAS_H` in app/src-tauri/src/main.rs. The canvas keeps ≥ 24 px around the expanded
-// pill (+ bottom lyrics extension) so `--ice-drop-shadow` is never clipped by the window edge.
-export const CANVAS_W = 440;
+// pill (+ bottom lyrics extension or Edge Nook side-by-side split + ears) so `--ice-drop-shadow` is never clipped.
+export const CANVAS_W = 648;
 export const CANVAS_H = 292;
 export const TOP_PAD = 6;
 
@@ -66,25 +66,30 @@ export function targetGeometry(
   }
 }
 
-function idleGeometry(
+export function idleGeometry(
   idleModeNow: IdleMode,
   hasMedia: boolean,
   micMutedNow: boolean,
   vol: number,
+  extraH = 0,
+  nookRadius = false,
 ): PillBox {
   if (idleModeNow === 'hidden') {
-    return { w: 96, h: 10, r: 5, vol };
+    return { w: 96, h: Math.max(8, 10 - (nookRadius ? 2 : 0)), r: nookRadius ? 4 : 5, vol };
   }
   if (idleModeNow === 'dot') {
+    const h = 18 + extraH;
     if (hasMedia) {
-      return { w: micMutedNow ? 58 : 44, h: 18, r: 9, vol };
+      return { w: micMutedNow ? 58 : 44, h, r: 9, vol };
     }
-    return { w: micMutedNow ? 42 : 36, h: 18, r: 9, vol };
+    return { w: micMutedNow ? 42 : 36, h, r: 9, vol };
   }
+  const h = 28 + extraH;
+  const r = nookRadius ? 13 : 14;
   if (hasMedia) {
-    return { w: micMutedNow ? 216 : 196, h: 28, r: 14, vol };
+    return { w: micMutedNow ? 216 : 196, h, r, vol };
   }
-  return { w: micMutedNow ? 132 : 116, h: 28, r: 14, vol };
+  return { w: micMutedNow ? 132 : 116, h, r, vol };
 }
 
 export function computeHitRect(target: { w: number; h: number }): HitRect {

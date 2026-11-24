@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { IdleStyle, NowPlayingPill } from '../../lib/ipc/engine';
+  import type { IdleStyle, NotchStyle, NowPlayingPill } from '../../lib/ipc/engine';
   import type { SettingsClient } from '../../lib/settings/client.svelte';
   import ChoiceGroup from '../controls/ChoiceGroup.svelte';
   import InfoBar from '../controls/InfoBar.svelte';
@@ -21,6 +21,20 @@
         !monitors.some((m) => m.displayPath.toLowerCase() === settings.pinnedMonitor?.toLowerCase()),
     ),
   );
+
+  const notchStyles: { value: NotchStyle; label: string; description: string; badge?: string }[] = [
+    {
+      value: 'floating',
+      label: 'Floating',
+      badge: 'Default',
+      description: 'Classic floating pill below the top bezel, with stacked controls and lyrics.',
+    },
+    {
+      value: 'nook',
+      label: 'Edge Nook',
+      description: 'Docked flush to the top bezel with curved ears and a side-by-side media & lyrics layout.',
+    },
+  ];
 
   const idleStyles: { value: IdleStyle; label: string; description: string; badge?: string }[] = [
     { value: 'mini_pill', label: 'Mini pill', badge: 'Default', description: 'The device and volume, small and readable.' },
@@ -45,6 +59,22 @@
 </script>
 
 {#if settings}
+  <Section
+    title="Notch style"
+    description="Choose whether the notch floats as a pill or docks flush to the top edge of the screen."
+  >
+    <ChoiceGroup
+      label="Notch style"
+      value={settings.appearance.notchStyle}
+      choices={notchStyles}
+      onchange={(style) => client.apply({ type: 'setNotchStyle', style })}
+    >
+      {#snippet preview(choice)}
+        <NotchPreview theme={settings.appearance.theme} mode="volume" notchStyle={choice.value} />
+      {/snippet}
+    </ChoiceGroup>
+  </Section>
+
   <Section title="When nothing is happening" description="What the notch shows between activities.">
     <ChoiceGroup
       label="Idle notch"
@@ -53,7 +83,7 @@
       onchange={(style) => client.apply({ type: 'setIdleStyle', style })}
     >
       {#snippet preview(choice)}
-        <NotchPreview theme={settings.appearance.theme} mode={choice.value} />
+        <NotchPreview theme={settings.appearance.theme} mode={choice.value} notchStyle={settings.appearance.notchStyle} />
       {/snippet}
     </ChoiceGroup>
   </Section>
