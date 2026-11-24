@@ -92,7 +92,7 @@
     <nav class="top-actions" aria-label="Edge Nook quick actions">
       {#if activeMedia && musicServices.length > 0}
         <div class="svc-strip">
-          <MusicServicesWidget services={musicServices} variant="rail" {onOpenService} />
+          <MusicServicesWidget services={musicServices} variant="rail" onOpenService={onOpenMusicService} />
         </div>
       {/if}
       {#if showLyricsToggle}
@@ -218,7 +218,7 @@
     padding: 8px 6px 12px;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 6px;
   }
 
   .nook-shell.stagger {
@@ -334,7 +334,7 @@
   .nook-media {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 5px;
   }
 
   .media-head {
@@ -384,7 +384,7 @@
     align-items: center;
     justify-content: center;
     gap: 14px;
-    height: 28px;
+    height: 26px;
   }
 
   .t-btn {
@@ -412,8 +412,8 @@
   }
 
   .t-play {
-    width: 28px;
-    height: 28px;
+    width: 26px;
+    height: 26px;
     background: var(--ice-play-bg);
     color: var(--ice-play-fg);
   }

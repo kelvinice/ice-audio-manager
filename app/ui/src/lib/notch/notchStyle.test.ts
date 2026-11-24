@@ -11,9 +11,10 @@ import {
   nookStyleStrategy,
 } from './notchStyle.ts';
 
-test('strategy registry returns floating by default and nook when selected', () => {
+test('strategy registry returns nook by default and floating when selected', () => {
   assert.equal(getNotchStyleStrategy('floating'), floatingStyleStrategy);
-  assert.equal(getNotchStyleStrategy(null), floatingStyleStrategy);
+  assert.equal(getNotchStyleStrategy(null), nookStyleStrategy);
+  assert.equal(getNotchStyleStrategy(undefined), nookStyleStrategy);
   assert.equal(getNotchStyleStrategy('nook'), nookStyleStrategy);
   assert.equal(floatingStyleStrategy.topPad, TOP_PAD);
   assert.equal(nookStyleStrategy.topPad, 0);
@@ -37,6 +38,7 @@ test('expanded Nook widens into two-column split only when lyrics are active', (
   assert.equal(nookSingle.w, NOOK_EXPANDED_W_SINGLE);
   assert.equal(nookSplit.w, NOOK_EXPANDED_W_SPLIT);
   assert.ok(nookSplit.w > nookSingle.w);
+  assert.equal(nookSingle.h, nookSplit.h, 'toggling Edge Nook lyrics split only widens, with zero vertical jump');
   assert.ok(floatBox.h > nookSplit.h, 'Floating stacks lyrics vertically while Nook splits side-by-side');
 });
 

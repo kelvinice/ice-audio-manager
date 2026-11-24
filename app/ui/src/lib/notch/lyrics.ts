@@ -112,8 +112,8 @@ export const LADDER = {
   pill: { row: 16, sub: 14 },
   /** Card: 68 px inside the 82 px drawer; context rows 15, current 18, subtitle 14, 3 px gaps. */
   card: { inner: 68, ctx: 15, cur: 18, sub: 14, gap: 3 },
-  /** Nook: 132 px side-by-side column stage; generous vertical rhythm inspired by NotchNook. */
-  nook: { inner: 132, ctx: 22, cur: 24, sub: 16, gap: 8 },
+  /** Nook: 152 px side-by-side column stage; generous vertical rhythm inspired by NotchNook. */
+  nook: { inner: 152, ctx: 22, cur: 24, sub: 16, gap: 8 },
 } as const;
 
 /** Vertical position (px) of a slot. `hasSub` reserves the subtitle row so positions never jump between lines. */

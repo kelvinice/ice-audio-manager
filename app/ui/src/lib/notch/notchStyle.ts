@@ -17,9 +17,9 @@ import type { ActivityView, IdleMode } from './scheduler.ts';
 // Twin: `frame_metrics` in `crates/ice-win/src/native_dot.rs`.
 export const NOOK_EXPANDED_W_SINGLE = 408;
 export const NOOK_EXPANDED_W_SPLIT = 572;
-export const NOOK_EXPANDED_H_MEDIA = 172;
-export const NOOK_EXPANDED_H_SPLIT = 186;
-export const NOOK_EXPANDED_H_EMPTY = 152;
+export const NOOK_EXPANDED_H_MEDIA = 206;
+export const NOOK_EXPANDED_H_SPLIT = 206;
+export const NOOK_EXPANDED_H_EMPTY = 166;
 export const NOOK_EXPANDED_R = 22;
 
 export interface GeometryContext {
@@ -214,5 +214,5 @@ const STRATEGIES: Record<NotchStyle, NotchStyleStrategy> = {
 };
 
 export function getNotchStyleStrategy(style: NotchStyle | null | undefined): NotchStyleStrategy {
-  return style === 'nook' ? STRATEGIES.nook : STRATEGIES.floating;
+  return style === 'floating' ? STRATEGIES.floating : STRATEGIES.nook;
 }
