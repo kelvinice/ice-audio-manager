@@ -336,7 +336,8 @@ Items marked *(needs Settings)* wait for the Phase 4 Settings window. The rest c
       (schema v7, `ice_core::media::MusicServices`), `Command::SetMusicService`, new Settings → Activities page;
       `resolveMusicServices` reads `settings.musicServices`*
 
-**D-22 · Lyrics (opt-in, LRCLIB) *(needs Settings)*:**
+**D-22 · Lyrics (opt-in, LRCLIB + local `.lrc` + Romaji + Storage cache) *(needs Settings)*:**
+- Full design spec: [`docs/lyrics.md`](lyrics.md) (bottom pill/card extension, active-word emphasis, Options A & B + Option C constraints, offline Japanese Romaji, Settings → Privacy & Storage max cache size, and phased implementation path).
 - [ ] Settings → Privacy: lists every network feature, its destination and the data sent, with one "all network features
       off" switch (Codex)
 - [ ] Rust LRCLIB client (Claude), written from LRCLIB's docs (code-practices §1.8):
