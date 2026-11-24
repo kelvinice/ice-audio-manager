@@ -176,10 +176,10 @@ export function deriveSecondaryStop(primary: Rgb): Rgb {
 function tuneWashColor(rgb: Rgb, isLightTheme: boolean): Rgb {
   const [h, s, l] = rgbToHsl(rgb);
   if (isLightTheme) {
-    return hslToRgb(h, s < 0.08 ? 0.16 : clamp(Math.max(s, 0.52), 0.52, 0.85), clamp(l, 0.56, 0.72));
+    return hslToRgb(h, s < 0.08 ? 0.2 : clamp(Math.max(s, 0.58), 0.58, 0.9), clamp(l, 0.58, 0.74));
   }
-  // Keep dark-theme wash blobs vivid but below L=0.44 so moving blobs stay clearly visible while preserving >= 4.5:1 muted text contrast.
-  return hslToRgb(h, s < 0.08 ? 0.18 : clamp(Math.max(s, 0.58), 0.58, 0.92), clamp(l, 0.32, 0.44));
+  // Vivid jewel saturation with capped lightness so overlapping lava-lamp orbs stay lush while holding >= 4.5:1 muted text contrast.
+  return hslToRgb(h, s < 0.08 ? 0.24 : clamp(Math.max(s, 0.68), 0.68, 0.96), clamp(l, 0.3, 0.42));
 }
 
 function scrimAlphasForLuminance(lum: number, isLightTheme: boolean): { top: number; bottom: number } {
@@ -240,10 +240,10 @@ export function computeArtBackdrop(
   }
 
   const rawPrimary = art.palette?.[0] ?? art.accent ?? DEFAULT_RGB;
-  const rawSecondary = art.palette?.[1] ?? art.secondary ?? deriveSecondaryStop(rawPrimary);
-  const rawTertiary = art.palette?.[2] ?? deriveHueVariant(rawPrimary, -34, 0.48, 0.9);
-  const rawQuaternary = art.palette?.[3] ?? deriveHueVariant(rawPrimary, -62, 0.46, 0.84);
-  const rawHighlight = deriveHueVariant(rawPrimary, 54, 0.5, 0.95);
+  const rawSecondary = art.palette?.[1] ?? art.secondary ?? deriveHueVariant(rawPrimary, 32, 0.56, 0.9);
+  const rawTertiary = art.palette?.[2] ?? deriveHueVariant(rawPrimary, -38, 0.56, 0.9);
+  const rawQuaternary = art.palette?.[3] ?? deriveHueVariant(rawPrimary, -78, 0.54, 0.84);
+  const rawHighlight = deriveHueVariant(rawPrimary, 62, 0.56, 0.94);
   const primary = tuneWashColor(rawPrimary, isLightTheme);
   const secondary = tuneWashColor(rawSecondary, isLightTheme);
   const tertiary = tuneWashColor(rawTertiary, isLightTheme);
@@ -259,14 +259,14 @@ export function computeArtBackdrop(
   const { top, bottom } = scrimAlphasForLuminance(coverLuminance, isLightTheme);
   const scrimRgb = isLightTheme ? LIGHT_SCRIM_RGB : DARK_SCRIM_RGB;
   const scrimBotRgb = isLightTheme ? { r: 240, g: 243, b: 248 } : { r: 10, g: 13, b: 18 };
-  const primaryAlpha = isLightTheme ? 0.34 : 0.42;
-  const secondaryAlpha = isLightTheme ? 0.28 : 0.36;
-  const tertiaryAlpha = isLightTheme ? 0.26 : 0.34;
-  const quaternaryAlpha = isLightTheme ? 0.24 : 0.30;
-  const highlightAlpha = isLightTheme ? 0.24 : 0.32;
-  const baseStart = formatRgbGlowCss(primary, isLightTheme ? 0.11 : 0.14) ?? 'rgba(107, 197, 255, 0.14)';
-  const baseMid = formatRgbGlowCss(tertiary, isLightTheme ? 0.08 : 0.10) ?? 'rgba(72, 196, 184, 0.10)';
-  const baseEnd = formatRgbGlowCss(secondary, isLightTheme ? 0.10 : 0.12) ?? 'rgba(88, 118, 226, 0.12)';
+  const primaryAlpha = isLightTheme ? 0.36 : 0.40;
+  const secondaryAlpha = isLightTheme ? 0.32 : 0.36;
+  const tertiaryAlpha = isLightTheme ? 0.30 : 0.34;
+  const quaternaryAlpha = isLightTheme ? 0.28 : 0.32;
+  const highlightAlpha = isLightTheme ? 0.28 : 0.32;
+  const baseStart = formatRgbGlowCss(primary, isLightTheme ? 0.14 : 0.18) ?? 'rgba(107, 197, 255, 0.18)';
+  const baseMid = formatRgbGlowCss(tertiary, isLightTheme ? 0.10 : 0.14) ?? 'rgba(72, 196, 184, 0.14)';
+  const baseEnd = formatRgbGlowCss(quaternary, isLightTheme ? 0.12 : 0.16) ?? 'rgba(88, 118, 226, 0.16)';
 
   return {
     hasArt: true,
