@@ -51,7 +51,7 @@ export class NotchController {
   readonly idleMode = $derived(this.notchSnapshot?.idleStyle ?? DEFAULT_IDLE_MODE);
   readonly isExpanded = $derived((this.notchSnapshot?.expanded ?? false) || this.hoverExpanded);
   readonly isInstant = $derived(
-    (this.notchSnapshot?.systemReduceMotion ?? false) || (this.notchSnapshot?.preset ?? 'smooth') === 'off',
+    (this.notchSnapshot?.systemReduceMotion ?? false) || (this.notchSnapshot?.preset ?? 'bouncy') === 'off',
   );
   readonly isSuspended = $derived(this.notchSnapshot?.suspended ?? false);
   /** Twin: `Placement::suspends_on_idle` in app/src-tauri/src/placement.rs. */
@@ -162,7 +162,7 @@ export class NotchController {
   constructor() {
     this.springs = new SpringGroup<'w' | 'h' | 'r' | 'vol'>(
       { w: 116, h: 28, r: 14, vol: 40 },
-      'smooth',
+      'bouncy',
       (vals) => {
         this.pillSize = { w: vals.w, h: vals.h, r: vals.r, vol: vals.vol };
       },

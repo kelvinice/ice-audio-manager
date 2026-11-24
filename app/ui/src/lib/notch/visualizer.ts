@@ -144,7 +144,7 @@ export class VisualizerBank {
   private readonly springs: Spring1D[];
   private effectivePreset: SpringPresetId;
 
-  constructor(barCount = DEFAULT_BAR_COUNT, preset: SpringPresetId = 'smooth') {
+  constructor(barCount = DEFAULT_BAR_COUNT, preset: SpringPresetId = 'bouncy') {
     const count = Math.max(MIN_BAR_COUNT, Math.min(BEAT_BAR_COUNT, Math.round(barCount)));
     this.effectivePreset = preset;
     const initialParams = deriveVisualizerSpringParams(preset, 'decay');

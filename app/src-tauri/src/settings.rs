@@ -11,9 +11,9 @@ use tauri::{AppHandle, Manager, State, Theme, WebviewUrl, WebviewWindowBuilder};
 use super::{SharedRuntime, placement, startup};
 
 pub(super) const LABEL: &str = "settings";
-/// Logical size: a navigation rail plus a content column that fits a 600 px card at 150 % on a 1080p screen.
-const WIDTH: i32 = 920;
-const HEIGHT: i32 = 640;
+/// Logical size: a navigation rail plus a roomy content column sized cleanly for 1440p/1080p screens.
+const WIDTH: i32 = 1020;
+const HEIGHT: i32 = 680;
 const MIN_WIDTH: f64 = 720.0;
 const MIN_HEIGHT: f64 = 480.0;
 

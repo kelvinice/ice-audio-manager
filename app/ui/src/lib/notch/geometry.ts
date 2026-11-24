@@ -21,7 +21,7 @@ export interface PillBox {
 }
 
 export function effectivePreset(snap: NotchSnapshot | null): SpringPreset {
-  if (!snap) return 'smooth';
+  if (!snap) return 'bouncy';
   return snap.systemReduceMotion ? 'off' : snap.preset;
 }
 

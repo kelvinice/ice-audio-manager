@@ -39,7 +39,7 @@ function initialSnapshot(): EngineSnapshot {
     notices: [],
     media: null,
     settings: {
-      appearance: { theme: 'ice', preset: 'smooth', idleStyle: 'mini_pill', nowPlaying: 'brief', movingBackdrop: true },
+      appearance: { theme: 'ice', preset: 'bouncy', idleStyle: 'mini_pill', nowPlaying: 'brief', movingBackdrop: true },
       performanceProfile: 'instant',
       pinnedMonitor: 'DISPLAY-PATH-1',
       defaultRoles: 'default',
@@ -75,7 +75,7 @@ const notch: NotchSnapshot = {
   activeDevice: arctis.name,
   targetDevice: speakers.name,
   spatialBadge: 'Atmos',
-  preset: 'smooth',
+  preset: 'bouncy',
   systemReduceMotion: false,
   theme: 'ice',
   idleStyle: 'mini_pill',

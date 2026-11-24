@@ -27,9 +27,9 @@
   ];
 
   const presets: { value: SpringPreset; label: string; description: string; badge?: string }[] = [
+    { value: 'bouncy', label: 'Bouncy', badge: 'Default', description: 'A playful overshoot.' },
+    { value: 'smooth', label: 'Smooth', description: 'Gentle, with no bounce.' },
     { value: 'snappy', label: 'Snappy', description: 'Quick and crisp.' },
-    { value: 'smooth', label: 'Smooth', badge: 'Default', description: 'Gentle, with no bounce.' },
-    { value: 'bouncy', label: 'Bouncy', description: 'A playful overshoot.' },
     { value: 'off', label: 'Off', description: 'No motion. Changes appear at once.' },
   ];
 </script>

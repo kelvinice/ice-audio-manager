@@ -96,9 +96,9 @@ pub(super) fn appearance_menus(
             available,
             SetPreset { preset: current.preset },
             &[
-                ("Snappy", SetPreset { preset: SpringPreset::Snappy }),
-                ("Smooth", SetPreset { preset: SpringPreset::Smooth }),
                 ("Bouncy", SetPreset { preset: SpringPreset::Bouncy }),
+                ("Smooth", SetPreset { preset: SpringPreset::Smooth }),
+                ("Snappy", SetPreset { preset: SpringPreset::Snappy }),
                 ("Off", SetPreset { preset: SpringPreset::Off }),
             ],
         )?,

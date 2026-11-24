@@ -23,7 +23,7 @@
 
   let {
     active,
-    preset = 'smooth',
+    preset = 'bouncy',
     instant = false,
     variant = 'compact',
     progress = null,

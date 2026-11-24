@@ -8,10 +8,10 @@ use ts_rs::TS;
 #[cfg_attr(feature = "ts", derive(TS))]
 #[serde(rename_all = "snake_case")]
 pub enum SpringPreset {
-    Snappy,
     #[default]
-    Smooth,
     Bouncy,
+    Smooth,
+    Snappy,
     Off,
 }
 

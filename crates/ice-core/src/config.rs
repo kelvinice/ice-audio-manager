@@ -692,10 +692,11 @@ mod tests {
         assert_eq!(config.schema_version, SCHEMA_VERSION);
         assert!(config.show_disconnected, "v3 settings are kept");
         assert_eq!(config.view(&[]).appearance, Appearance::default());
+        assert_eq!(Appearance::default().preset, SpringPreset::Bouncy, "owner default");
         assert_eq!(Appearance::default().idle_style, IdleStyle::MiniPill, "Q-10 default");
         for cmd in [
             Command::SetTheme { theme: ThemeKind::Midnight },
-            Command::SetPreset { preset: SpringPreset::Bouncy },
+            Command::SetPreset { preset: SpringPreset::Smooth },
             Command::SetIdleStyle { style: IdleStyle::Dot },
         ] {
             assert_eq!(config.apply_setting(&cmd, &[]), Ok(true));
@@ -705,7 +706,7 @@ mod tests {
             saved.view(&[]).appearance,
             Appearance {
                 theme: ThemeKind::Midnight,
-                preset: SpringPreset::Bouncy,
+                preset: SpringPreset::Smooth,
                 idle_style: IdleStyle::Dot,
                 ..Appearance::default()
             }

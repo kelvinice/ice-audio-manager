@@ -25,7 +25,7 @@
     micMuted,
     media = null,
     idleMode = DEFAULT_IDLE_MODE,
-    preset = 'smooth',
+    preset = 'bouncy',
     instant = false,
     notchVisible = true,
   }: Props = $props();
