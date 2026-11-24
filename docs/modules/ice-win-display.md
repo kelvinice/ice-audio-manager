@@ -13,6 +13,7 @@ integration and autostart. All `unsafe` stays here. No hooks into other processe
 | `overlay_win.rs` | `apply_overlay_styles` (transparent, topmost, `WS_EX_NOACTIVATE`/tool window, `MA_NOACTIVATE`), `remove_overlay_subclass`, `set_click_through`, `move_top_center`, `ensure_topmost`, `move_pos_no_resize`, `apply_settings_mica`, `cursor_pos`, `window_rect`, `foreground_hwnd`, `reduce_motion_enabled` |
 | `monitors.rs` | `MonitorInfo` (id, persistent display path, size, DPI scale, refresh Hz, work area), `list_monitors`, `resolve_target_monitor`, `PlacementMode` (`Pinned` default, `Primary`, `Cursor`) |
 | `fullscreen.rs` | `FullscreenWatcher::start(sink)` on a hidden-window thread: WinEvent notifications + `WM_DISPLAYCHANGE` → `FullscreenEvent::{Changed, DisplaysChanged}`; `snapshot()`, `is_monitor_covered(snapshot, monitor)`. `SHQueryUserNotificationState` is a hint only |
+| `session_watch.rs` | `SessionWatcher::start(sink)`: same hidden top-level window pattern; `WTSRegisterSessionNotification` + `WM_POWERBROADCAST` → `SessionEvent::{Locked, Unlocked, Suspending, Resumed}` (2026-11-24, for the notch pin) |
 | `webview2.rs` | `try_suspend`, `resume`, `process_infos` (PIDs of the app's WebView2 tree), `on_process_exit` |
 | `proc_metrics.rs` | `sample_pids`, `cpu_percent_between`, `TreeSnapshot`: Private Bytes, private working set, CPU for the host + WebView2 processes |
 | `desktop.rs` | `InstanceGuard::acquire` (single instance), `finish_tray_menu`, `notify_tray` (tray balloon by GUID) |

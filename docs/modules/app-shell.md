@@ -15,6 +15,7 @@ state to the UI, and exposes a small set of Tauri commands. Thin by rule: valida
 | `settings.rs` | Settings window (920×640, min 720×480, transparent over Mica, title bar follows light/dark via `WindowEvent::ThemeChanged`) and its commands: `apply_setting` (only `Command::is_setting`), `get_launch_at_sign_in`, `set_launch_at_sign_in` |
 | `startup.rs` | Launch at sign-in, shared by the tray and Settings; reads the registry each time (no cached copy) |
 | `ipc.rs` | `NotchSnapshot`, `NotchDelta`, `ActivityKind`, `MonitorSummary` (index, id, `display_path`, `name`, position, size, scale, Hz), `HitRect` (TS bindings generated into `app/ui/src/lib/ipc/types.ts`) and the `open_music_service` command (notch window only; runs `ice_win::music_service::open` on a blocking task) |
+| `session.rs` | D-21.1 L3: `ice_win::session_watch` → clears the notch pin (`expanded`) on session lock or sleep |
 | `placement.rs` | `Placement` (profile, pinned monitor, coverage, `gaming`, `generation`), `watch` (fullscreen + display changes), `reconcile` (apply profile/monitor/gaming to windows and the native pill) |
 | `meter.rs` | `Visualizer`: the shell owns the `audio://meter/v1` subscription; the WebView only *requests* frames |
 | `art.rs` | `iceart://<id>` handler: engine PNGs only, no paths/queries/other methods |
@@ -59,3 +60,4 @@ Unit tests in `art.rs`, `engine_bridge.rs`, `ipc.rs`, `meter.rs`, `placement.rs`
 - 2026-11-24 Claude: `Instant` no longer idle-suspends (`Placement::suspends_on_idle`); switching to Instant wakes a suspended notch; `set_volume` command;
   notch canvas 440×210 (was 420×190) so the drop shadow isn't clipped.
 - 2026-11-24 Claude: removed `set_notch_devices` (the notch has no device picker; Settings uses `apply_setting`).
+- 2026-11-24 Claude: `session.rs` clears the notch pin on session lock or sleep (`ice_win::session_watch`).

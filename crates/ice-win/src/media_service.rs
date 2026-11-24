@@ -19,6 +19,17 @@ use crate::media::{self, Art, MediaSignal, MediaWatcher};
 
 /// Quiet period after the first signal of a burst before reading.
 const SETTLE: Duration = Duration::from_millis(60);
+/// Re-reads after a track read, measured from it. Spotify (and some browsers) fire "properties changed" before
+/// the new title is readable, so the first read can still return the previous track; nothing else re-reads
+/// titles, so the notch showed the old song until some later event (owner report 2026-11-24: ~5 s). Three
+/// bounded reads per track change, never at idle; an unchanged result emits nothing.
+const CONFIRM_AFTER: [Duration; 3] =
+    [Duration::from_millis(300), Duration::from_millis(1000), Duration::from_millis(2500)];
+/// Art budget for the first read of a burst, so a cover that isn't ready can't hold back the new title
+/// (normal reads take 30–60 ms); the confirm reads use the full [`media::ART_BUDGET`] and pick the cover up.
+const FIRST_ART_BUDGET: Duration = Duration::from_millis(400);
+/// A timeline duration change this large means a new track even without a properties event.
+const DURATION_JUMP_MS: u64 = 1500;
 /// Longer side of the downscaled art.
 const ART_PX: u32 = 128;
 
@@ -98,10 +109,12 @@ fn run(rx: &Receiver<In>, wake: Sender<In>, out: &dyn Fn(MediaUpdate)) {
         }
     };
     let mut state = State::default();
-    state.apply(SESSION_BITS, &mut watcher, true, out);
+    state.apply(SESSION_BITS, &mut watcher, true, media::ART_BUDGET, out);
     let mut settle_at: Option<Instant> = None;
+    let mut confirm = Confirm::default();
     loop {
-        let msg = match settle_at {
+        let deadline = [settle_at, confirm.at].into_iter().flatten().min();
+        let msg = match deadline {
             Some(t) => match rx.recv_timeout(t.saturating_duration_since(Instant::now())) {
                 Ok(m) => Some(m),
                 Err(RecvTimeoutError::Timeout) => None,
@@ -123,12 +136,47 @@ fn run(rx: &Receiver<In>, wake: Sender<In>, out: &dyn Fn(MediaUpdate)) {
                 settle_at.get_or_insert_with(|| Instant::now() + SETTLE);
             }
             None => {
-                settle_at = None;
-                let bits = dirty.swap(0, Ordering::AcqRel);
-                state.apply(bits, &mut watcher, false, out);
+                let now = Instant::now();
+                if settle_at.is_some_and(|t| t <= now) {
+                    settle_at = None;
+                    let bits = dirty.swap(0, Ordering::AcqRel);
+                    if state.apply(bits, &mut watcher, false, FIRST_ART_BUDGET, out) {
+                        confirm.arm(now);
+                    }
+                } else if confirm.at.is_some_and(|t| t <= now) {
+                    confirm.advance();
+                    state.apply(MediaSignal::PropertiesChanged.bit(), &mut watcher, false, media::ART_BUDGET, out);
+                }
             }
         }
     }
+}
+
+/// The pending [`CONFIRM_AFTER`] re-reads of the last track read.
+#[derive(Default)]
+struct Confirm {
+    armed_at: Option<Instant>,
+    step: usize,
+    at: Option<Instant>,
+}
+
+impl Confirm {
+    fn arm(&mut self, now: Instant) {
+        self.armed_at = Some(now);
+        self.step = 0;
+        self.at = Some(now + CONFIRM_AFTER[0]);
+    }
+
+    fn advance(&mut self) {
+        self.step += 1;
+        self.at = self.armed_at.zip(CONFIRM_AFTER.get(self.step)).map(|(t, d)| t + *d);
+    }
+}
+
+/// A new track can arrive with only playback/timeline events (or with a stale properties read): a jump in
+/// duration gives it away.
+fn duration_jumped(prev: &NowPlaying, next: &NowPlaying) -> bool {
+    matches!((prev.duration_ms, next.duration_ms), (Some(a), Some(b)) if a.abs_diff(b) > DURATION_JUMP_MS)
 }
 
 #[derive(Default)]
@@ -139,38 +187,52 @@ struct State {
 }
 
 impl State {
-    fn apply(&mut self, bits: u8, watcher: &mut MediaWatcher, first: bool, out: &dyn Fn(MediaUpdate)) {
+    /// Reads and emits what changed. Returns `true` when it read the track (not just playback/timeline), so the
+    /// caller can schedule the confirm reads.
+    fn apply(
+        &mut self,
+        bits: u8,
+        watcher: &mut MediaWatcher,
+        first: bool,
+        art_budget: Duration,
+        out: &dyn Fn(MediaUpdate),
+    ) -> bool {
         let session_changed = bits & SESSION_BITS != 0 && watcher.follow_current();
-        let full = first || session_changed || bits & MediaSignal::PropertiesChanged.bit() != 0;
+        let mut full = first || session_changed || bits & MediaSignal::PropertiesChanged.bit() != 0;
         if !full && bits & PLAYBACK_BITS == 0 {
-            return; // e.g. another app's session opened or closed
+            return false; // e.g. another app's session opened or closed
         }
         let session = watcher.manager().GetCurrentSession().ok();
-        let (media, art) = match session {
-            None => (None, None),
-            Some(s) => match self.last.clone().filter(|_| !full) {
-                // Only status/timeline changed: cheap local reads, track and art kept.
-                Some(mut now) => match media::refresh_playback(&s, &mut now) {
-                    Ok(()) => (Some(now), None),
-                    Err(e) => {
-                        tracing::debug!(error = %e, "playback read failed; keeping the last state");
-                        return;
-                    }
-                },
-                // Art is re-read on every properties change: some apps send the new title first and the new
-                // thumbnail in a second change, so "same title" doesn't mean "same art".
-                None => match media::read(&s, Some(ART_PX)) {
-                    Ok((now, art)) => (Some(now), art),
-                    Err(e) => {
-                        tracing::debug!(error = %e, "media read failed; keeping the last state");
-                        return;
-                    }
-                },
+        // Only status/timeline changed: cheap local reads, track and art kept, unless the duration jumped.
+        let mut quick = None;
+        if let (Some(s), Some(last), false) = (&session, &self.last, full) {
+            let mut now = last.clone();
+            if let Err(e) = media::refresh_playback(s, &mut now) {
+                tracing::debug!(error = %e, "playback read failed; keeping the last state");
+                return false;
+            }
+            if duration_jumped(last, &now) {
+                full = true;
+            } else {
+                quick = Some(now);
+            }
+        }
+        let (media, art) = match (session, quick) {
+            (None, _) => (None, None),
+            (Some(_), Some(now)) => (Some(now), None),
+            // Art is re-read on every track read: some apps send the new title first and the new thumbnail in
+            // a second change, so "same title" doesn't mean "same art".
+            (Some(s), None) => match media::read_within(&s, Some(ART_PX), art_budget) {
+                Ok((now, art)) => (Some(now), art),
+                Err(e) => {
+                    tracing::debug!(error = %e, "media read failed; keeping the last state");
+                    return full;
+                }
             },
         };
         let art = art.filter(|a| self.sent_art.as_deref() != Some(a.info.id.as_str()));
         if media == self.last && art.is_none() {
-            return;
+            return full;
         }
         if let Some(a) = &art {
             self.sent_art = Some(a.info.id.clone());
@@ -180,5 +242,46 @@ impl State {
         }
         self.last.clone_from(&media);
         out(MediaUpdate { media, art });
+        full
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ice_core::media::PlaybackStatus;
+
+    fn track(duration_ms: Option<u64>) -> NowPlaying {
+        NowPlaying {
+            app_id: "Spotify.exe".into(),
+            title: "A".into(),
+            artist: "B".into(),
+            album: String::new(),
+            status: PlaybackStatus::Playing,
+            position_ms: Some(0),
+            duration_ms,
+            art: None,
+        }
+    }
+
+    #[test]
+    fn a_duration_jump_means_a_new_track() {
+        assert!(duration_jumped(&track(Some(200_000)), &track(Some(260_000))));
+        assert!(!duration_jumped(&track(Some(200_000)), &track(Some(200_900))));
+        assert!(!duration_jumped(&track(None), &track(Some(200_000))));
+    }
+
+    #[test]
+    fn confirm_reads_run_once_each_then_stop() {
+        let t0 = Instant::now();
+        let mut c = Confirm::default();
+        assert_eq!(c.at, None);
+        c.arm(t0);
+        let mut seen = Vec::new();
+        while let Some(at) = c.at {
+            seen.push(at - t0);
+            c.advance();
+        }
+        assert_eq!(seen, CONFIRM_AFTER.to_vec());
     }
 }

@@ -291,10 +291,12 @@ Runs between Phase 3 and Phase 4. Item 1 is a bug fix that comes first. D-21 Par
 - [ ] L2 · Event-driven hit-testing for the WebView notch, replacing the cursor poll (Codex).
   - Spike on the real host first: moving edges during spring morphs, mixed DPI, glow/shadow not clipped.
   - If it can't follow the springs cleanly, narrow when the poll runs instead.
-- [ ] L3 · Session pin on the expanded notch: "keep open until unpinned" (Gemini UI, Codex shell). It shows a pin mark and
+- [x] L3 · Session pin on the expanded notch: "keep open until unpinned" (Gemini UI, Codex shell). It shows a pin mark and
       clears on session lock or sleep. Gaming mode still releases it
   - [x] Pin button with an on state in the notch side rail (`toggle_expand`); gaming mode resets `expanded`
-  - [ ] Clear the pin on session lock and sleep (shell)
+  - [x] Clear the pin on session lock and sleep (Claude, 2026-11-24): `ice_win::session_watch` (hidden top-level window,
+        `WTSRegisterSessionNotification` + `WM_POWERBROADCAST`, no polling) → `app/src-tauri/src/session.rs`
+  - [ ] By hand: pin, lock (Win+L) and unlock → collapsed; pin, sleep and wake → collapsed (QA checklist)
 - [ ] L6 · Live cost readout in Settings → General: RAM and CPU of the process tree, sampled only while that page is open
       (Codex, via `ice_win::proc_metrics`)
 
@@ -352,6 +354,12 @@ to the static native pill. Done by Claude; module docs: [app-ui-notch](modules/a
       in the shell and the UI; switching to Instant wakes a suspended notch; switching away re-arms the idle linger
 - [x] **Visualizer bars** (see Phase 3)
 - [x] New tokens/icons: `--ice-radius-md` (12 px), `settings` icon
+- [x] **Song-change delay fix** (owner report: the notch and native pill kept the previous song for ~5 s). Spotify can fire
+      "properties changed" before the new title is readable, and only properties events re-read the title. `media_service`
+      now re-reads the track at +300 ms / +1 s / +2.5 s after each track read (emits only on change, never at idle), treats a
+      timeline duration jump as a new track, and gives the first read's cover 400 ms so a slow cover can't hold back the
+      title (the re-reads pick it up)
+- [ ] By hand: skip tracks in Spotify and YouTube Music; the title should change within ~0.3 s (`--verbose` logs "now playing")
 - [ ] Visual QA of the new card on both monitors at 100 % / 150 %, light/dark desktops, all 4 themes (owner)
 - [ ] Phase 6: measure Instant idle with the WebView awake (expected ≈ 77 MB private WS from Phase 0.2, inside the ≤ 100 MB
       target) and the cursor poll's idle CPU, which now runs for as long as Instant shows the notch. D-21.1 L2

@@ -25,6 +25,7 @@ pub mod overlay_win;
 pub mod policy;
 pub mod proc_metrics;
 pub mod props;
+pub mod session_watch;
 pub mod spatial;
 pub mod volume;
 #[cfg(feature = "webview2")]

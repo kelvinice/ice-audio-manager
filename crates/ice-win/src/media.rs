@@ -162,7 +162,7 @@ pub struct Art {
 /// Fails if the image is too large, can't be decoded or encoded, or takes longer than [`ART_BUDGET`].
 pub fn current_art(mgr: &Manager, max_px: u32) -> Result<Option<Art>> {
     let Ok(session) = mgr.GetCurrentSession() else { return Ok(None) };
-    read_art(&wait(&session.TryGetMediaPropertiesAsync()?, CALL_LIMIT)?, max_px)
+    read_art(&wait(&session.TryGetMediaPropertiesAsync()?, CALL_LIMIT)?, max_px, ART_BUDGET)
 }
 
 /// Reads a session once: track, playback status, timeline and, with `art_px`, the art from the *same*
@@ -172,6 +172,15 @@ pub fn current_art(mgr: &Manager, max_px: u32) -> Result<Option<Art>> {
 /// # Errors
 /// Fails if the track or playback state can't be read.
 pub fn read(s: &Session, art_px: Option<u32>) -> Result<(NowPlaying, Option<Art>)> {
+    read_within(s, art_px, ART_BUDGET)
+}
+
+/// [`read`] with a custom art budget. A short budget keeps a slow cover from holding back a new title; the
+/// caller re-reads later to pick the cover up.
+///
+/// # Errors
+/// Fails if the track or playback state can't be read.
+pub fn read_within(s: &Session, art_px: Option<u32>, art_budget: Duration) -> Result<(NowPlaying, Option<Art>)> {
     let props = wait(&s.TryGetMediaPropertiesAsync()?, CALL_LIMIT)?;
     let mut now = NowPlaying {
         app_id: s.SourceAppUserModelId()?.to_string(),
@@ -185,7 +194,10 @@ pub fn read(s: &Session, art_px: Option<u32>) -> Result<(NowPlaying, Option<Art>
     };
     refresh_playback(s, &mut now)?;
     let art = art_px.and_then(|px| {
-        read_art(&props, px).inspect_err(|e| tracing::debug!(error = %e, "album art unavailable")).ok().flatten()
+        read_art(&props, px, art_budget)
+            .inspect_err(|e| tracing::debug!(error = %e, "album art unavailable"))
+            .ok()
+            .flatten()
     });
     now.art = art.as_ref().map(|a| a.info.clone());
     Ok((now, art))
@@ -232,8 +244,8 @@ fn fit(w: u32, h: u32, max_px: u32) -> (u32, u32) {
     (px(w), px(h))
 }
 
-fn read_art(props: &MediaProperties, max_px: u32) -> Result<Option<Art>> {
-    let budget = Budget::new(ART_BUDGET);
+fn read_art(props: &MediaProperties, max_px: u32, total: Duration) -> Result<Option<Art>> {
+    let budget = Budget::new(total.min(ART_BUDGET));
     let max_px = max_px.clamp(*ART_PX.start(), *ART_PX.end());
     let Ok(thumb) = props.Thumbnail() else { return Ok(None) };
     let stream: IRandomAccessStream = wait(&thumb.OpenReadAsync()?, budget.left())?.cast()?;

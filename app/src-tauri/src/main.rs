@@ -7,6 +7,7 @@ mod ipc;
 mod logging;
 mod meter;
 mod placement;
+mod session;
 mod settings;
 mod startup;
 mod tray;
@@ -1334,6 +1335,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                     *setup_state.native_dot.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = Some(dot);
                 }
                 placement::watch(&handle, &setup_state);
+                session::watch(&handle, &setup_state);
                 engine_bridge::watch(handle.clone(), Arc::clone(&setup_state))?;
                 let engine = if fake_engine { "fake" } else { "windows" };
                 tracing::info!(engine, "Ice Audio Manager tray ready");
@@ -1358,6 +1360,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         tauri::RunEvent::Exit => {
             meter::released(&exit_flag_ref);
             placement::stop(_app_handle);
+            session::stop(_app_handle);
             tray::close();
         }
         tauri::RunEvent::ExitRequested { api, .. } if !exit_flag_ref.allow_exit.load(Ordering::Acquire) => {

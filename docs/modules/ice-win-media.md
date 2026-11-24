@@ -17,6 +17,10 @@ browser or installed app is the second). No network, no sign-in.
 - **Event-driven, no polling.** `MediaWatcher` forwards session / properties / playback / timeline events. `media_service` sets bits in a
   dirty mask (`SESSION_BITS`, `PLAYBACK_BITS`) and wakes at most once per burst, then waits `SETTLE` (60 ms) so a track change (properties +
   playback + timeline together) is read once.
+- **Confirm reads (`CONFIRM_AFTER`: +300 ms, +1 s, +2.5 s after a track read).** Spotify can fire "properties changed" before the new
+  title is readable, so the first read may return the old track; the re-reads correct it and emit only if something changed. A timeline
+  duration jump (`DURATION_JUMP_MS`) on a playback-only event also forces a track read. The first read gives the cover only
+  `FIRST_ART_BUDGET` (400 ms, `media::read_within`) so a slow cover can't hold back the title; the re-reads use the full `ART_BUDGET`.
 - **Own MTA thread (`ice-media`).** Every call here blocks on cross-process WinRT, so it must never run on a UI (STA) thread or on
   `ice-audio` (a slow media app must not delay a device switch). MED-09.
 - **Bounded:** `CALL_LIMIT` 500 ms per WinRT call, `ART_BUDGET` 2 s for all art work for one read; oversized art is rejected before decode (MED-02/03).
@@ -37,3 +41,4 @@ Unit tests for colour maths live in `ice-core`; this module is covered by the ma
 
 ## Change log
 - 2026-11-23 Claude: initial recap.
+- 2026-11-24 Claude: confirm reads, duration-jump detection and a short first-read art budget (fixes a ~5 s stale title on song change).
