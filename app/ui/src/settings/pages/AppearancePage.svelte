@@ -70,11 +70,11 @@
     </ChoiceGroup>
   </Section>
 
-  <Section title="Background" description="Ambient motion behind the controls on the expanded card.">
+  <Section title="Background" description="Ambient lava-lamp motion behind the music pill and expanded card.">
     <SettingCard
       icon="color"
       title="Moving background"
-      description="Slowly drift the album-art wash on the expanded card while music plays. Pauses automatically when playback stops or animation effects are off."
+      description="Slowly drift the album-art wash across the music pill and expanded card while music plays, paced by the beat. Pauses automatically when playback stops or animation effects are off."
     >
       {#snippet control()}
         <Toggle

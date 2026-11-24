@@ -133,6 +133,7 @@ export class NotchController {
     resolveAmbientMotionState({
       hasArt: this.hasBackdropArt,
       isExpanded: this.isExpanded,
+      isTrackPill: this.activeView.kind === 'track',
       isVisible: this.isNotchVisible,
       isInstant: this.isInstant,
       isPlaying: this.displayedMedia?.status === 'playing',

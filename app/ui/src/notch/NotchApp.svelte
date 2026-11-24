@@ -51,6 +51,7 @@
       style:--ice-active-wash-secondary={ctrl.artBackdrop.washSecondaryCss}
       style:--ice-active-wash-tertiary={ctrl.artBackdrop.washTertiaryCss}
       style:--ice-active-wash-quaternary={ctrl.artBackdrop.washQuaternaryCss}
+      style:--ice-active-wash-highlight={ctrl.artBackdrop.washHighlightCss}
       style:--ice-active-scrim-top={ctrl.artBackdrop.scrimTopCss}
       style:--ice-active-scrim-bottom={ctrl.artBackdrop.scrimBottomCss}
     >

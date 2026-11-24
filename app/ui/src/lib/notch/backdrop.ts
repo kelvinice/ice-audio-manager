@@ -28,6 +28,7 @@ export interface ArtBackdropStyle {
   washSecondaryCss: string;
   washTertiaryCss: string;
   washQuaternaryCss: string;
+  washHighlightCss: string;
   scrimTopCss: string;
   scrimBottomCss: string;
   coverLuminance: number;
@@ -38,6 +39,7 @@ export type AmbientMotionState = 'running' | 'paused' | 'stopped';
 export interface AmbientMotionInput {
   hasArt: boolean;
   isExpanded: boolean;
+  isTrackPill?: boolean;
   isVisible: boolean;
   isInstant: boolean;
   isPlaying: boolean;
@@ -45,13 +47,14 @@ export interface AmbientMotionInput {
 }
 
 /**
- * Resolves the D-25 ambient backdrop animation lifecycle:
- * - `'stopped'` when collapsed (`B1`), hidden/suspended (`C2`), reduce motion/`Off` (`D-13`), no art, or user disabled (`C3`);
- * - `'paused'` when visible & expanded with playback paused (`C1` freezes phase in place);
- * - `'running'` only while visible, expanded, and playing.
+ * Resolves the D-25 ambient backdrop animation lifecycle (owner tuning: expanded card + music pill, never idle pill):
+ * - `'stopped'` when neither expanded nor music pill, hidden/suspended (`C2`), reduce motion/`Off` (`D-13`), no art, or user disabled (`C3`);
+ * - `'paused'` when visible with playback paused (`C1` freezes orb phase in place);
+ * - `'running'` only while visible and playing.
  */
 export function resolveAmbientMotionState(input: AmbientMotionInput): AmbientMotionState {
-  if (!input.hasArt || !input.isExpanded || !input.isVisible || input.isInstant || !input.movingBackdrop) {
+  const activeSurface = input.isExpanded || Boolean(input.isTrackPill);
+  if (!input.hasArt || !activeSurface || !input.isVisible || input.isInstant || !input.movingBackdrop) {
     return 'stopped';
   }
   return input.isPlaying ? 'running' : 'paused';
@@ -229,6 +232,7 @@ export function computeArtBackdrop(
       washSecondaryCss: formatRgbGlowCss(DEFAULT_SECONDARY_RGB, isLightTheme ? 0.18 : 0.22) ?? 'rgba(88, 118, 226, 0.22)',
       washTertiaryCss: formatRgbGlowCss(deriveHueVariant(DEFAULT_RGB, -48, 0.45, 0.9), isLightTheme ? 0.16 : 0.18) ?? 'rgba(72, 196, 184, 0.18)',
       washQuaternaryCss: formatRgbGlowCss(deriveHueVariant(DEFAULT_RGB, 115, 0.42, 0.88), isLightTheme ? 0.14 : 0.16) ?? 'rgba(196, 118, 226, 0.16)',
+      washHighlightCss: formatRgbGlowCss(deriveHueVariant(DEFAULT_RGB, 54, 0.46, 0.94), isLightTheme ? 0.14 : 0.16) ?? 'rgba(134, 152, 236, 0.16)',
       scrimTopCss: isLightTheme ? 'rgba(246, 247, 249, 0.74)' : 'rgba(12, 15, 20, 0.56)',
       scrimBottomCss: isLightTheme ? 'rgba(240, 243, 248, 0.90)' : 'rgba(10, 13, 18, 0.84)',
       coverLuminance: 0.1,
@@ -239,10 +243,12 @@ export function computeArtBackdrop(
   const rawSecondary = art.palette?.[1] ?? art.secondary ?? deriveSecondaryStop(rawPrimary);
   const rawTertiary = art.palette?.[2] ?? deriveHueVariant(rawPrimary, -34, 0.48, 0.9);
   const rawQuaternary = art.palette?.[3] ?? deriveHueVariant(rawPrimary, -62, 0.46, 0.84);
+  const rawHighlight = deriveHueVariant(rawPrimary, 54, 0.5, 0.95);
   const primary = tuneWashColor(rawPrimary, isLightTheme);
   const secondary = tuneWashColor(rawSecondary, isLightTheme);
   const tertiary = tuneWashColor(rawTertiary, isLightTheme);
   const quaternary = tuneWashColor(rawQuaternary, isLightTheme);
+  const highlight = tuneWashColor(rawHighlight, isLightTheme);
   const coverLuminance = clamp(
     typeof art.luminance === 'number' && Number.isFinite(art.luminance)
       ? art.luminance
@@ -253,10 +259,11 @@ export function computeArtBackdrop(
   const { top, bottom } = scrimAlphasForLuminance(coverLuminance, isLightTheme);
   const scrimRgb = isLightTheme ? LIGHT_SCRIM_RGB : DARK_SCRIM_RGB;
   const scrimBotRgb = isLightTheme ? { r: 240, g: 243, b: 248 } : { r: 10, g: 13, b: 18 };
-  const primaryAlpha = isLightTheme ? 0.34 : 0.44;
-  const secondaryAlpha = isLightTheme ? 0.28 : 0.38;
+  const primaryAlpha = isLightTheme ? 0.34 : 0.42;
+  const secondaryAlpha = isLightTheme ? 0.28 : 0.36;
   const tertiaryAlpha = isLightTheme ? 0.26 : 0.34;
-  const quaternaryAlpha = isLightTheme ? 0.22 : 0.28;
+  const quaternaryAlpha = isLightTheme ? 0.24 : 0.30;
+  const highlightAlpha = isLightTheme ? 0.24 : 0.32;
   const baseStart = formatRgbGlowCss(primary, isLightTheme ? 0.11 : 0.14) ?? 'rgba(107, 197, 255, 0.14)';
   const baseMid = formatRgbGlowCss(tertiary, isLightTheme ? 0.08 : 0.10) ?? 'rgba(72, 196, 184, 0.10)';
   const baseEnd = formatRgbGlowCss(secondary, isLightTheme ? 0.10 : 0.12) ?? 'rgba(88, 118, 226, 0.12)';
@@ -265,10 +272,11 @@ export function computeArtBackdrop(
     hasArt: true,
     artId: art.id,
     washBaseCss: `linear-gradient(125deg, ${baseStart} 0%, ${baseMid} 52%, ${baseEnd} 100%)`,
-    washPrimaryCss: formatRgbGlowCss(primary, primaryAlpha) ?? 'rgba(107, 197, 255, 0.44)',
-    washSecondaryCss: formatRgbGlowCss(secondary, secondaryAlpha) ?? 'rgba(88, 118, 226, 0.38)',
+    washPrimaryCss: formatRgbGlowCss(primary, primaryAlpha) ?? 'rgba(107, 197, 255, 0.42)',
+    washSecondaryCss: formatRgbGlowCss(secondary, secondaryAlpha) ?? 'rgba(88, 118, 226, 0.36)',
     washTertiaryCss: formatRgbGlowCss(tertiary, tertiaryAlpha) ?? 'rgba(72, 196, 184, 0.34)',
-    washQuaternaryCss: formatRgbGlowCss(quaternary, quaternaryAlpha) ?? 'rgba(196, 118, 226, 0.28)',
+    washQuaternaryCss: formatRgbGlowCss(quaternary, quaternaryAlpha) ?? 'rgba(196, 118, 226, 0.30)',
+    washHighlightCss: formatRgbGlowCss(highlight, highlightAlpha) ?? 'rgba(134, 152, 236, 0.32)',
     scrimTopCss: `rgba(${scrimRgb.r}, ${scrimRgb.g}, ${scrimRgb.b}, ${top.toFixed(3)})`,
     scrimBottomCss: `rgba(${scrimBotRgb.r}, ${scrimBotRgb.g}, ${scrimBotRgb.b}, ${bottom.toFixed(3)})`,
     coverLuminance,

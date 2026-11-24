@@ -137,18 +137,20 @@ test('resolveMusicServices enables Spotify and YouTube Music by default and trac
   );
 });
 
-test('resolveAmbientMotionState enforces B1, C1, C2, and C3 lifecycle gates', () => {
+test('resolveAmbientMotionState enforces expanded/music-pill, C1, C2, and C3 lifecycle gates', () => {
   const base = {
     hasArt: true,
     isExpanded: true,
+    isTrackPill: false,
     isVisible: true,
     isInstant: false,
     isPlaying: true,
     movingBackdrop: true,
   };
   assert.equal(resolveAmbientMotionState(base), 'running');
+  assert.equal(resolveAmbientMotionState({ ...base, isExpanded: false, isTrackPill: true }), 'running');
   assert.equal(resolveAmbientMotionState({ ...base, isPlaying: false }), 'paused');
-  assert.equal(resolveAmbientMotionState({ ...base, isExpanded: false }), 'stopped');
+  assert.equal(resolveAmbientMotionState({ ...base, isExpanded: false, isTrackPill: false }), 'stopped');
   assert.equal(resolveAmbientMotionState({ ...base, isVisible: false }), 'stopped');
   assert.equal(resolveAmbientMotionState({ ...base, hasArt: false }), 'stopped');
   assert.equal(resolveAmbientMotionState({ ...base, isInstant: true }), 'stopped');
