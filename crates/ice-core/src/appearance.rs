@@ -44,9 +44,9 @@ pub enum IdleStyle {
 #[serde(rename_all = "snake_case")]
 pub enum NotchStyle {
     /// Floating capsule below the top screen bezel (original Ice pill).
-    #[default]
     Floating,
     /// Docked flush to the top screen edge with concave ears and a side-by-side expanded card.
+    #[default]
     Nook,
 }
 
@@ -56,9 +56,9 @@ pub enum NotchStyle {
 #[serde(rename_all = "snake_case")]
 pub enum NowPlayingPill {
     /// Pops up on a new track (and on play/pause while it shows), then shrinks back to the idle pill.
-    #[default]
     Brief,
     /// Stays as the now-playing pill for as long as something is playing; pausing shrinks it after the brief time.
+    #[default]
     WhilePlaying,
     /// No pop-up: the idle pill just shows the new title.
     Off,

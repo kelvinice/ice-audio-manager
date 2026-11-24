@@ -1765,9 +1765,9 @@ mod tests {
         } else if let PillMode::MicVolume { percent, .. } = mode {
             st.mic_volume = Some(percent);
         }
-        let (lw, lh) = logical_dimensions(mode, st.idle_style);
-        let w = (lw as f32 * scale).round() as i32;
-        let h = (lh as f32 * scale).round() as i32;
+        let metrics = frame_metrics(mode, st.idle_style, st.notch_style);
+        let w = (metrics.total_w() as f32 * scale).round() as i32;
+        let h = (metrics.body_h as f32 * scale).round() as i32;
         let mut px = vec![0u32; (w * h) as usize];
         rasterize_pill_frame(&mut px, w, h, scale, &st);
         (w, h, px)
@@ -1803,7 +1803,8 @@ mod tests {
             let mut st_pill = PillState::new(NativePillTheme::ice());
             st_pill.idle_style = IdleStyle::MiniPill;
             st_pill.volume = Some(VolumeState { percent: 40, muted: false });
-            let (pw, ph) = logical_dimensions(PillMode::Idle, IdleStyle::MiniPill);
+            let m_pill = frame_metrics(PillMode::Idle, IdleStyle::MiniPill, st_pill.notch_style);
+            let (pw, ph) = (m_pill.total_w(), m_pill.body_h);
             let w_pill = (pw as f32 * scale).round() as i32;
             let h_pill = (ph as f32 * scale).round() as i32;
             let mut px_pill = vec![0u32; (w_pill * h_pill) as usize];
@@ -1817,7 +1818,8 @@ mod tests {
 
             let mut st_dot = PillState::new(NativePillTheme::ice());
             st_dot.idle_style = IdleStyle::Dot;
-            let (dw, dh) = logical_dimensions(PillMode::Idle, IdleStyle::Dot);
+            let m_dot = frame_metrics(PillMode::Idle, IdleStyle::Dot, st_dot.notch_style);
+            let (dw, dh) = (m_dot.total_w(), m_dot.body_h);
             let w_dot = (dw as f32 * scale).round() as i32;
             let h_dot = (dh as f32 * scale).round() as i32;
             assert!(w_dot < w_pill);
@@ -1910,8 +1912,8 @@ mod tests {
         let (_, _, px_mid) =
             render_test(PillMode::Volume { percent: 85, muted: false }, NativePillTheme::midnight(), false, 1.0);
 
-        // Outer corner outside capsule must remain completely transparent.
-        assert_eq!(px_40[0], 0);
+        // Outer bottom-left corner outside silhouette must remain completely transparent.
+        assert_eq!(px_40[((h - 1) * w) as usize], 0);
         // Center pixel inside pill must have substantial alpha.
         let center_a = (px_40[((h / 2) * w + (w / 2)) as usize] >> 24) & 0xff;
         assert!(center_a >= 180, "expected opaque pill center, got alpha={center_a}");
@@ -1982,7 +1984,8 @@ mod tests {
 
     #[test]
     fn idle_mic_off_label_wins_over_a_known_volume() {
-        let (lw, lh) = logical_dimensions(PillMode::Idle, IdleStyle::MiniPill);
+        let m = frame_metrics(PillMode::Idle, IdleStyle::MiniPill, NotchStyle::default());
+        let (lw, lh) = (m.total_w(), m.body_h);
         let render = |volume: Option<VolumeState>| {
             let mut st = PillState::new(NativePillTheme::ice());
             st.mic_muted = true;
@@ -2043,7 +2046,8 @@ mod tests {
 
     #[test]
     fn hover_and_pressed_states_are_drawn_distinctly() {
-        let (lw, lh) = logical_dimensions(PillMode::Idle, IdleStyle::MiniPill);
+        let m = frame_metrics(PillMode::Idle, IdleStyle::MiniPill, NotchStyle::default());
+        let (lw, lh) = (m.total_w(), m.body_h);
         let render = |interaction| {
             let mut st = PillState::new(NativePillTheme::ice());
             st.interaction = interaction;
@@ -2167,17 +2171,17 @@ mod tests {
         let dot = NativeDotHandle::spawn(test_monitor(1.0)).expect("spawn native dot window");
         let snap = FakeEngine::new().snapshot();
         dot.apply_snapshot(&snap);
-        assert_eq!(dot.pill_state().notch_style, NotchStyle::Floating);
+        assert_eq!(dot.pill_state().notch_style, NotchStyle::Nook);
         assert!(!dot.is_visible());
 
         let mut next_settings = snap.settings;
-        next_settings.appearance.notch_style = NotchStyle::Nook;
+        next_settings.appearance.notch_style = NotchStyle::Floating;
         let out = dot.apply_envelope(&Envelope {
             revision: snap.revision + 1,
             event: EngineEvent::SettingsChanged { settings: next_settings },
         });
         assert_eq!(out, EnvelopeOutcome::Updated);
-        assert_eq!(dot.pill_state().notch_style, NotchStyle::Nook);
+        assert_eq!(dot.pill_state().notch_style, NotchStyle::Floating);
         assert!(!dot.is_visible(), "settings sync must not reveal a hidden native pill");
     }
 }

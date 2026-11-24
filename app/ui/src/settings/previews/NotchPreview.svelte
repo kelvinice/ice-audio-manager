@@ -9,7 +9,7 @@
     notchStyle?: NotchStyle;
   }
 
-  let { theme, mode, notchStyle = 'floating' }: Props = $props();
+  let { theme, mode, notchStyle = 'nook' }: Props = $props();
   const isNook = $derived(notchStyle === 'nook');
 </script>
 

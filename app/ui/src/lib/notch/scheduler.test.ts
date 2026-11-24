@@ -10,6 +10,7 @@ import {
   isMediaActive,
   mediaProgressPercent,
   NotchActivityScheduler,
+  nowPlayingMode,
   SWITCH_DURATION_MS,
   TRACK_CHANGE_DURATION_MS,
   VOLUME_DURATION_MS,
@@ -437,7 +438,9 @@ test('now playing pill: off never pops up, while_playing stays while playing and
   const paused = { ...next, status: 'paused' as const };
   assert.equal(resolveDisplayedView(wp.state.activity, paused, 'while_playing', wp.lastTrackSeq).kind, 'idle');
 
-  // Brief (default) shrinks back to idle once the pop-up expires.
+  assert.equal(nowPlayingMode(null), 'while_playing', 'default nowPlaying mode is while_playing');
+
+  // Brief shrinks back to idle once the pop-up expires.
   assert.equal(resolveDisplayedView({ kind: 'idle' }, next, 'brief', 1).kind, 'idle');
 });
 

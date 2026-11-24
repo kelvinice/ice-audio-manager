@@ -25,7 +25,7 @@ use crate::resolve::{DeviceRef, MatchMode, resolve};
 /// v8: `appearance.movingBackdrop` (D-25 ambient motion on the expanded card).
 /// v9: `[lyrics]` (D-22 opt-in LRCLIB, local `.lrc`, Romaji subtitles, and `cache_max_mb`).
 /// v10: `visualizer_spectrum` (D-26 local WASAPI loopback spectrum bars, default `true`; off = peak-meter-only).
-/// v11: `appearance.notchStyle` (`"floating"` default pill vs `"nook"` flush screen-edge docked style).
+/// v11: `appearance.notchStyle` (`"nook"` default flush screen-edge docked style vs `"floating"` pill).
 pub const SCHEMA_VERSION: u32 = 11;
 
 /// Default seconds the notch WebView stays awake at idle before `Balanced` hands over to the native pill
@@ -228,10 +228,10 @@ impl Config {
         match cfg.schema_version {
             v if v > SCHEMA_VERSION => Err(ConfigError::TooNew(v)),
             // v0/v1 gain the default profile and an initially unassigned monitor pin, v0–v2 gain
-            // `show_disconnected = false`, v0–v4 gain `appearance.nowPlaying = "brief"`, and v0–v5 gain
+            // `show_disconnected = false`, v0–v4 gain `appearance.nowPlaying = "while_playing"`, and v0–v5 gain
             // `idle_linger_secs = 15`, v0–v6 gain both music services on, v0–v7 gain
             // `appearance.movingBackdrop = true`, v0–v8 gain `[lyrics]` (off by default, 50 MB cap),
-            // v0–v9 gain `visualizer_spectrum = true`, and v0–v10 gain `appearance.notchStyle = "floating"`,
+            // v0–v9 gain `visualizer_spectrum = true`, and v0–v10 gain `appearance.notchStyle = "nook"`,
             // all via serde defaults.
             _ => Ok(Self { schema_version: SCHEMA_VERSION, ..cfg }),
         }
@@ -815,19 +815,19 @@ mod tests {
     }
 
     #[test]
-    fn v4_migrates_with_brief_now_playing_and_saves_the_choice() {
+    fn v4_migrates_with_while_playing_default_and_saves_the_choice() {
         use crate::appearance::{IdleStyle, NowPlayingPill};
         let v4 = "schema_version = 4\n[appearance]\nidleStyle = 'dot'";
         let mut config = Config::from_toml(v4).unwrap();
         assert_eq!(config.schema_version, SCHEMA_VERSION);
         assert_eq!(config.view(&[]).appearance.idle_style, IdleStyle::Dot, "v4 appearance is kept");
-        assert_eq!(config.view(&[]).appearance.now_playing, NowPlayingPill::Brief, "owner default");
+        assert_eq!(config.view(&[]).appearance.now_playing, NowPlayingPill::WhilePlaying, "owner default");
 
-        let set = Command::SetNowPlayingPill { mode: NowPlayingPill::WhilePlaying };
+        let set = Command::SetNowPlayingPill { mode: NowPlayingPill::Brief };
         assert_eq!(config.apply_setting(&set, &[]), Ok(true));
         assert_eq!(config.apply_setting(&set, &[]), Ok(false), "already set");
         let saved = Config::from_toml(&config.to_toml()).unwrap();
-        assert_eq!(saved.view(&[]).appearance.now_playing, NowPlayingPill::WhilePlaying);
+        assert_eq!(saved.view(&[]).appearance.now_playing, NowPlayingPill::Brief);
     }
 
     #[test]
@@ -884,18 +884,18 @@ mod tests {
     }
 
     #[test]
-    fn v10_migrates_with_floating_notch_style_and_saves_the_choice() {
+    fn v10_migrates_with_nook_notch_style_and_saves_the_choice() {
         use crate::appearance::NotchStyle;
         let v10 = "schema_version = 10\n[appearance]\ntheme = 'ice'";
         let mut config = Config::from_toml(v10).unwrap();
         assert_eq!(config.schema_version, SCHEMA_VERSION);
-        assert_eq!(config.view(&[]).appearance.notch_style, NotchStyle::Floating);
+        assert_eq!(config.view(&[]).appearance.notch_style, NotchStyle::Nook);
 
-        let set = Command::SetNotchStyle { style: NotchStyle::Nook };
+        let set = Command::SetNotchStyle { style: NotchStyle::Floating };
         assert_eq!(config.apply_setting(&set, &[]), Ok(true));
-        assert_eq!(config.apply_setting(&set, &[]), Ok(false), "already nook");
+        assert_eq!(config.apply_setting(&set, &[]), Ok(false), "already floating");
         let saved = Config::from_toml(&config.to_toml()).unwrap();
-        assert_eq!(saved.view(&[]).appearance.notch_style, NotchStyle::Nook);
+        assert_eq!(saved.view(&[]).appearance.notch_style, NotchStyle::Floating);
     }
 
     #[test]

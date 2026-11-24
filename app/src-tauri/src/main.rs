@@ -120,12 +120,14 @@ impl SharedRuntime {
             placement: Mutex::default(),
             preview_on_attach: AtomicBool::default(),
             start_minimized: AtomicBool::default(),
-            hit_rect: Mutex::new(HitRect {
-                x: (f64::from(NOTCH_CANVAS_W) - 116.0) / 2.0,
-                y: 6.0,
-                width: 116.0,
-                height: 28.0,
-            }),
+            hit_rect: Mutex::new(
+                if initial.settings.appearance.notch_style == ice_core::appearance::NotchStyle::Nook {
+                    let width = 116.0 + 16.0;
+                    HitRect { x: (f64::from(NOTCH_CANVAS_W) - width) / 2.0, y: 0.0, width, height: 30.0 }
+                } else {
+                    HitRect { x: (f64::from(NOTCH_CANVAS_W) - 116.0) / 2.0, y: 6.0, width: 116.0, height: 28.0 }
+                },
+            ),
             notch_hwnd: AtomicIsize::new(0),
             notch_visible: AtomicBool::new(false),
             allow_exit: AtomicBool::new(false),

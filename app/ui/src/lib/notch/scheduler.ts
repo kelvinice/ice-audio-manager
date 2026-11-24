@@ -243,9 +243,9 @@ function upsertArrivedDevice(list: DeviceSummary[], arrived: DeviceSummary): Dev
   return [...list.filter((d) => d.id !== arrived.id), merged];
 }
 
-/** `appearance.nowPlaying` with the owner's default (`brief`: pop up, then shrink to the idle pill). */
+/** `appearance.nowPlaying` with the default (`while_playing`: stays on the now-playing pill while music plays). */
 export function nowPlayingMode(settings: SettingsView | null | undefined): NowPlayingPill {
-  return settings?.appearance.nowPlaying ?? 'brief';
+  return settings?.appearance.nowPlaying ?? 'while_playing';
 }
 
 export class NotchActivityScheduler {

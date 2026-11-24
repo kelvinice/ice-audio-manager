@@ -40,7 +40,7 @@ function initialSnapshot(): EngineSnapshot {
     media: null,
     lyrics: { status: 'disabled', trackKey: null, document: null },
     settings: {
-      appearance: { theme: 'ice', preset: 'bouncy', idleStyle: 'mini_pill', notchStyle: 'floating', nowPlaying: 'brief', movingBackdrop: true },
+      appearance: { theme: 'ice', preset: 'bouncy', idleStyle: 'mini_pill', notchStyle: 'nook', nowPlaying: 'while_playing', movingBackdrop: true },
       performanceProfile: 'instant',
       pinnedMonitor: 'DISPLAY-PATH-1',
       defaultRoles: 'default',
@@ -90,7 +90,7 @@ const notch: NotchSnapshot = {
   systemReduceMotion: false,
   theme: 'ice',
   idleStyle: 'mini_pill',
-  notchStyle: 'floating',
+  notchStyle: 'nook',
   expanded: false,
   suspended: false,
   hiddenForBench: false,

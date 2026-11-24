@@ -24,15 +24,15 @@
 
   const notchStyles: { value: NotchStyle; label: string; description: string; badge?: string }[] = [
     {
-      value: 'floating',
-      label: 'Floating',
-      badge: 'Default',
-      description: 'Classic floating pill below the top bezel, with stacked controls and lyrics.',
-    },
-    {
       value: 'nook',
       label: 'Edge Nook',
+      badge: 'Default',
       description: 'Docked flush to the top bezel with curved ears and a side-by-side media & lyrics layout.',
+    },
+    {
+      value: 'floating',
+      label: 'Floating',
+      description: 'Classic floating pill below the top bezel, with stacked controls and lyrics.',
     },
   ];
 
@@ -44,17 +44,17 @@
 
   const nowPlayingModes: { value: NowPlayingPill; label: string; description: string; badge?: string }[] = [
     {
-      value: 'brief',
-      label: 'Brief, then small',
-      badge: 'Default',
-      description: 'Pops up with the cover and controls for a few seconds, then shrinks to the idle notch.',
-    },
-    {
       value: 'while_playing',
       label: 'While playing',
-      description: 'Stays as the cover-and-controls pill as long as music plays. Pause to shrink it.',
+      badge: 'Default',
+      description: 'Keeps the cover, waveform and lyrics visible while music plays. Pause to shrink back to idle.',
     },
-    { value: 'off', label: 'Off', description: 'No pop-up. The idle notch just shows the new title.' },
+    {
+      value: 'brief',
+      label: 'Brief, then small',
+      description: 'Pops up with the cover and waveform for a few seconds when the track changes, then shrinks to idle.',
+    },
+    { value: 'off', label: 'Off', description: 'No music pop-up. The idle notch just shows the current track.' },
   ];
 </script>
 
@@ -88,7 +88,7 @@
     </ChoiceGroup>
   </Section>
 
-  <Section title="When the song changes" description="How the notch shows a new track from Spotify, YouTube Music or any player.">
+  <Section title="Now playing" description="How the notch shows music playing from Spotify, YouTube Music or any media player.">
     <ChoiceGroup
       label="Now playing pill"
       value={settings.appearance.nowPlaying}

@@ -52,7 +52,7 @@ export class NotchController {
   private hoverExpanded = $state(false);
   private pointerInside = $state(false);
   lyricsCardOpen = $state(true);
-  pillSize = $state({ w: 116, h: 28, r: 14, vol: 40 });
+  pillSize = $state({ w: 116, h: 30, r: 13, vol: 40 });
 
   private hoverTimer: number | null = null;
   private leaveTimer: number | null = null;
@@ -65,7 +65,7 @@ export class NotchController {
 
   readonly idleMode = $derived(this.notchSnapshot?.idleStyle ?? DEFAULT_IDLE_MODE);
   readonly notchStyle = $derived<NotchStyle>(
-    this.notchSnapshot?.notchStyle ?? this.engineState.settings?.appearance.notchStyle ?? 'floating',
+    this.notchSnapshot?.notchStyle ?? this.engineState.settings?.appearance.notchStyle ?? 'nook',
   );
   readonly styleStrategy = $derived(getNotchStyleStrategy(this.notchStyle));
   readonly isExpanded = $derived((this.notchSnapshot?.expanded ?? false) || this.hoverExpanded);

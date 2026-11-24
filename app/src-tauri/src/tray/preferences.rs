@@ -96,8 +96,8 @@ pub(super) fn appearance_menus(
             available,
             SetNotchStyle { style: current.notch_style },
             &[
-                ("Floating (default)", SetNotchStyle { style: NotchStyle::Floating }),
-                ("Edge Nook", SetNotchStyle { style: NotchStyle::Nook }),
+                ("Edge Nook (default)", SetNotchStyle { style: NotchStyle::Nook }),
+                ("Floating", SetNotchStyle { style: NotchStyle::Floating }),
             ],
         )?,
         choices(
@@ -129,8 +129,8 @@ pub(super) fn appearance_menus(
             available,
             SetNowPlayingPill { mode: current.now_playing },
             &[
-                ("Brief, then small (default)", SetNowPlayingPill { mode: NowPlayingPill::Brief }),
-                ("While playing", SetNowPlayingPill { mode: NowPlayingPill::WhilePlaying }),
+                ("While playing (default)", SetNowPlayingPill { mode: NowPlayingPill::WhilePlaying }),
+                ("Brief, then small", SetNowPlayingPill { mode: NowPlayingPill::Brief }),
                 ("Off", SetNowPlayingPill { mode: NowPlayingPill::Off }),
             ],
         )?,
