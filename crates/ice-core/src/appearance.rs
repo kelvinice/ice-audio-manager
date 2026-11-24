@@ -38,6 +38,18 @@ pub enum IdleStyle {
     Hidden,
 }
 
+/// Visual attachment style of the notch overlay (floating capsule vs flush screen-edge nook).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(TS))]
+#[serde(rename_all = "snake_case")]
+pub enum NotchStyle {
+    /// Floating capsule below the top screen bezel (original Ice pill).
+    #[default]
+    Floating,
+    /// Docked flush to the top screen edge with concave ears and a side-by-side expanded card.
+    Nook,
+}
+
 /// How the notch shows a new track (owner, 2026-11-24). Only the WebView notch has the large now-playing pill.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[cfg_attr(feature = "ts", derive(TS))]
@@ -59,6 +71,7 @@ pub struct Appearance {
     pub theme: ThemeKind,
     pub preset: SpringPreset,
     pub idle_style: IdleStyle,
+    pub notch_style: NotchStyle,
     pub now_playing: NowPlayingPill,
     /// D-25: slow ambient drift of the art wash on the expanded card while playing.
     pub moving_backdrop: bool,
@@ -70,6 +83,7 @@ impl Default for Appearance {
             theme: ThemeKind::default(),
             preset: SpringPreset::default(),
             idle_style: IdleStyle::default(),
+            notch_style: NotchStyle::default(),
             now_playing: NowPlayingPill::default(),
             moving_backdrop: true,
         }

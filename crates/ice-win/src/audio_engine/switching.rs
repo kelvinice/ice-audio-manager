@@ -79,6 +79,7 @@ impl Worker {
             | Command::SetTheme { .. }
             | Command::SetPreset { .. }
             | Command::SetIdleStyle { .. }
+            | Command::SetNotchStyle { .. }
             | Command::SetNowPlayingPill { .. }
             | Command::SetMovingBackdrop { .. }
             | Command::SetShowDisconnected { .. }

@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "ts")]
 use ts_rs::TS;
 
-use crate::appearance::{Appearance, IdleStyle, NowPlayingPill, SpringPreset, ThemeKind};
+use crate::appearance::{Appearance, IdleStyle, NotchStyle, NowPlayingPill, SpringPreset, ThemeKind};
 use crate::device::{DeviceState, Flow, Role};
 use crate::lyrics::{LyricsConfig, LyricsState};
 use crate::media::{MusicServiceId, MusicServices, NowPlaying};
@@ -251,6 +251,9 @@ pub enum Command {
     SetIdleStyle {
         style: IdleStyle,
     },
+    SetNotchStyle {
+        style: NotchStyle,
+    },
     SetNowPlayingPill {
         mode: NowPlayingPill,
     },
@@ -331,6 +334,7 @@ impl Command {
             | Self::SetTheme { .. }
             | Self::SetPreset { .. }
             | Self::SetIdleStyle { .. }
+            | Self::SetNotchStyle { .. }
             | Self::SetNowPlayingPill { .. }
             | Self::SetMovingBackdrop { .. }
             | Self::SetPerformanceProfile { .. }
@@ -595,6 +599,7 @@ mod tests {
     #[test]
     fn only_config_edits_count_as_settings() {
         assert!(Command::SetTheme { theme: crate::appearance::ThemeKind::Midnight }.is_setting());
+        assert!(Command::SetNotchStyle { style: crate::appearance::NotchStyle::Nook }.is_setting());
         assert!(Command::RemoveBinding { binding_id: "b".into() }.is_setting());
         assert!(!Command::SwitchTo { device_id: "d".into(), roles: RoleSet::Default }.is_setting());
         assert!(!Command::SetSpatial { device_id: "d".into(), mode: SpatialMode::Off }.is_setting());

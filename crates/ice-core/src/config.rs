@@ -25,7 +25,8 @@ use crate::resolve::{DeviceRef, MatchMode, resolve};
 /// v8: `appearance.movingBackdrop` (D-25 ambient motion on the expanded card).
 /// v9: `[lyrics]` (D-22 opt-in LRCLIB, local `.lrc`, Romaji subtitles, and `cache_max_mb`).
 /// v10: `visualizer_spectrum` (D-26 local WASAPI loopback spectrum bars, default `true`; off = peak-meter-only).
-pub const SCHEMA_VERSION: u32 = 10;
+/// v11: `appearance.notchStyle` (`"floating"` default pill vs `"nook"` flush screen-edge docked style).
+pub const SCHEMA_VERSION: u32 = 11;
 
 /// Default seconds the notch WebView stays awake at idle before `Balanced` hands over to the native pill
 /// (`Instant` never does; `Lite` has no WebView).
@@ -229,7 +230,8 @@ impl Config {
             // v0/v1 gain the default profile and an initially unassigned monitor pin, v0–v2 gain
             // `show_disconnected = false`, v0–v4 gain `appearance.nowPlaying = "brief"`, and v0–v5 gain
             // `idle_linger_secs = 15`, v0–v6 gain both music services on, v0–v7 gain
-            // `appearance.movingBackdrop = true`, and v0–v8 gain `[lyrics]` (off by default, 50 MB cap),
+            // `appearance.movingBackdrop = true`, v0–v8 gain `[lyrics]` (off by default, 50 MB cap),
+            // v0–v9 gain `visualizer_spectrum = true`, and v0–v10 gain `appearance.notchStyle = "floating"`,
             // all via serde defaults.
             _ => Ok(Self { schema_version: SCHEMA_VERSION, ..cfg }),
         }
@@ -417,6 +419,7 @@ impl Config {
             Command::SetTheme { theme } => next.appearance.theme = *theme,
             Command::SetPreset { preset } => next.appearance.preset = *preset,
             Command::SetIdleStyle { style } => next.appearance.idle_style = *style,
+            Command::SetNotchStyle { style } => next.appearance.notch_style = *style,
             Command::SetNowPlayingPill { mode } => next.appearance.now_playing = *mode,
             Command::SetMovingBackdrop { enabled } => next.appearance.moving_backdrop = *enabled,
             Command::SetShowDisconnected { enabled } => next.show_disconnected = *enabled,
@@ -878,6 +881,21 @@ mod tests {
         assert_eq!(config.apply_setting(&off, &[]), Ok(false), "already off");
         let saved = Config::from_toml(&config.to_toml()).unwrap();
         assert!(!saved.view(&[]).visualizer_spectrum);
+    }
+
+    #[test]
+    fn v10_migrates_with_floating_notch_style_and_saves_the_choice() {
+        use crate::appearance::NotchStyle;
+        let v10 = "schema_version = 10\n[appearance]\ntheme = 'ice'";
+        let mut config = Config::from_toml(v10).unwrap();
+        assert_eq!(config.schema_version, SCHEMA_VERSION);
+        assert_eq!(config.view(&[]).appearance.notch_style, NotchStyle::Floating);
+
+        let set = Command::SetNotchStyle { style: NotchStyle::Nook };
+        assert_eq!(config.apply_setting(&set, &[]), Ok(true));
+        assert_eq!(config.apply_setting(&set, &[]), Ok(false), "already nook");
+        let saved = Config::from_toml(&config.to_toml()).unwrap();
+        assert_eq!(saved.view(&[]).appearance.notch_style, NotchStyle::Nook);
     }
 
     #[test]

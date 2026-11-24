@@ -385,6 +385,7 @@ impl Engine for FakeEngine {
             | Command::SetTheme { .. }
             | Command::SetPreset { .. }
             | Command::SetIdleStyle { .. }
+            | Command::SetNotchStyle { .. }
             | Command::SetNowPlayingPill { .. }
             | Command::SetMovingBackdrop { .. }
             | Command::SetShowDisconnected { .. }
