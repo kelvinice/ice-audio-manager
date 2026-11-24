@@ -2456,6 +2456,82 @@ Each supports the peak-based A1 fallback. Mark any score revision “changed aft
 
 ---
 
+### D-27 · Hibernate mode: a plain notch for meetings and screen sharing *(added 2026-11-25, owner request; neutral entry under §0.4; open, for later)*
+
+**Owner request (2026-11-25):** *"Hibernate mode. The reason is serious time / meeting time: we don't want to be
+distracted, or want someone to see our last played song when we share the screen. Make it look like just a normal notch
+that has a way to wake up again."* The owner asked for this to be **opened for later**, not built now.
+
+**Facts: what the notch shows today when nothing is happening (checked in the code 2026-11-25):**
+- The idle pill (WebView `IdlePill.svelte`, native `crates/ice-win/src/native_dot.rs`) shows volume, mute, mic state and,
+  while media plays, the track (art/title or a visualizer). Even with the now-playing pill set to **Off**
+  (`appearance.now_playing`, `crates/ice-core/src/appearance.rs`), the idle pill still shows the title.
+- A track change can pop up the music pill (art, title, artist, waveform) and, if lyrics are on, the current line
+  (`TrackActivity.svelte`, `LyricsExtension.svelte`). Hovering the pill opens the expanded card (art, title, lyrics).
+- `idle_style = hidden` (`IdleStyle::Hidden`) hides the idle pill, but activities still pop up on events (volume, track).
+- There is no "do not disturb" state, no hotkey for it, and nothing that hides the notch from screen capture.
+- **Screen capture:** Windows has a documented, user-mode API, `SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE)`
+  (Windows 10 2004+), that leaves a window out of screen captures (desktop duplication, Windows.Graphics.Capture, BitBlt)
+  while it stays visible to the user. It is not used in the code today (`grep DisplayAffinity` = 0 hits). Untested here:
+  how Teams, Zoom, Meet in Chrome/Edge, OBS and Remote Desktop treat it. Each must be checked on the owner's PC before
+  we rely on it.
+- **Detecting a meeting/share:** there is no public Windows API that reports "the screen is being shared".
+  `SHQueryUserNotificationState` (already used in `fullscreen.rs`) reports presentation mode and full-screen apps only.
+  Windows 11's "Do not disturb" state has no documented read API. Automatic entry would therefore be a guess. Any
+  detection must stay within code-practices §1 (no hooks, no injection, no reading other apps' windows or content).
+
+**Options.**
+
+*Part A · How the notch looks while hibernating (pick one).*
+- **A1 · Plain notch:** the idle silhouette only, in a neutral dark fill: no text, glyphs, art, accent colour, visualizer
+  or lyrics. On Edge Nook it reads as a hardware notch (flush top, ears); on Floating, a small dark pill. Same shape on the
+  WebView and the native pill.
+- **A2 · Plain notch + mic dot:** A1 plus one small red dot when the microphone is muted (useful in a meeting, shows no
+  media). Nothing else.
+- **A3 · Fully hidden:** nothing on screen; wake only by hotkey or tray.
+
+*Part B · What is suppressed (pick one).*
+- **B1 · All content:** no activities at all (volume, switch, mic, track, lyrics pop-ups), no hover-expand. Volume keys
+  still change the volume; the notch just doesn't show it.
+- **B2 · Media only:** track/lyrics/art/visualizer/now-playing are suppressed; volume, mic and device-switch pop-ups still
+  show, without any track info.
+
+*Part C · Screen-capture privacy (independent, pick any).*
+- **C1 · Exclude from capture while hibernating:** set `WDA_EXCLUDEFROMCAPTURE` on the notch and native pill windows
+  while hibernate is on, so a screen share doesn't show the notch at all, even if it wakes.
+- **C2 · Exclude from capture always** (a Settings → Privacy switch, off by default).
+- **C3 · None:** rely on the plain look only.
+
+*Part D · Entering and waking (pick any).*
+- **D1 · Manual:** tray item "Hibernate notch", a hotkey (`RegisterHotKey`, unbound by default) and a Settings switch.
+- **D2 · Wake gesture:** a deliberate action on the plain notch wakes it: click (not hover), or a long hover (e.g. 600 ms).
+  Waking shows the normal notch; whether it re-hibernates by itself is Part E.
+- **D3 · Auto-enter (best effort):** enter while Windows reports presentation mode (`SHQueryUserNotificationState`).
+  Never by reading other apps' windows or processes.
+- **D4 · Auto-enter while a chosen app runs** (e.g. `Teams.exe`, `Zoom.exe`), reusing the Phase 5 "rules" engine
+  (process start/stop, no injection). Waits for Phase 5.
+
+*Part E · Leaving (pick one).*
+- **E1 · Until turned off** (persists across restarts, like a setting).
+- **E2 · For this session:** cleared on sign-out/restart; also offered as timed (30 min / 1 h / 2 h) from the tray.
+- **E3 · Wake is temporary:** after a D2 wake, the notch goes back to hibernate after the idle linger.
+
+**Cost and fit (for voters to check):**
+- Hibernate can also **release resources**: in every profile (even Instant) the WebView can `TrySuspend` and the native
+  pill can draw the plain shape (Lite-level RAM, < 25 MB target) while hibernating.
+- Config: one `[hibernate]` table (schema bump + migration test), `Command::SetHibernate`, and an `EngineEvent` so the tray,
+  native pill and UI agree. The native pill needs an `IdleContent::Plain` state (ties in with D-19's `IdleContent`).
+- `WDA_EXCLUDEFROMCAPTURE` is a documented `SetWindowDisplayAffinity` call in `ice-win` (one `unsafe` block with a
+  `// SAFETY:` note). It fails safely on older builds, and we only support Windows 11 (D-08).
+- Edge Nook first (owner, 2026-11-25): the plain look is designed and QA'd on Edge Nook, then Floating.
+
+**Questions to the owner:**
+1. In a meeting, do you still want to see mic-mute and volume feedback (A2/B2), or nothing at all (A1/B1)?
+2. Should the notch be invisible to screen shares (C1/C2), or is the plain look enough?
+3. Wake with a click, a long hover, or only the hotkey/tray?
+
+**Votes:** not opened yet. Opened when the owner schedules it (after the Edge Nook track is stable).
+
 ## 6. Session S5: Team workflow
 
 ### D-14 · Roles
@@ -2569,3 +2645,4 @@ A decision passes when all three agents have voted and the rules produce a resul
 | D-24 | Project licence: MIT or GPL-3.0 | G0 +4 (+1/+2/+1), G1 −3 (−1/−1/−1), G2 +5 (+2/+1/+2) | **Closed 2026-11-23 (owner)** | G2: stay MIT; licence changes only on the owner's explicit acceptance; references read, never copied (code-practices §1.8) |
 | D-25 | Ambient motion: moving gradient backdrop | A0 −1 (−1/−1/+1), **A1 +6 (+2/+2/+2)**, A2 −3, A3 −3, A4 −2 (0/−1/−1). **B1 +6**, B2 −3 (−1/−1/−1; Claude changed after reveal from +1), B3 −5 (−1/−2/−2, Gemini block). **C1 +6, C2 +6, C3 +6**, C4 −2 (0/−1/−1), C5 −3. **D1 +5 (+1/+2/+2)**, D2 −1 (0/0/−1), D3 +4 (+2/+1/+1) | **Closed 2026-11-24 (owner)** | Accepted: A1 on the expanded card only, while playing, stopped when hidden, with an off switch and one tuned speed (`--ice-ambient-period`, `0s` in Minimal). Amendments: compositor teardown, scrim anchored, shadow filter off the subtree, 144 Hz measurement gate with a 30 fps fallback. Moved to plan.md |
 | D-26 | Visualizer spectrum bands and bar dynamics | **A2 +6 (+2/+2/+2)** with **A1 +3** fallback; **B1 +4 (+2/+2/0)**, **B2 +5 (+1/+2/+2)**, **B4a +5 (+1/+2/+2)**; B3 −3 (−1/−1/−1; Gemini changed after reveal from +2); B4b +1 (0/0/+1) | **Closed 2026-11-24 (owner)** | Accepted with all amendments: 4th-order `f32` IIR bands on existing 30 Hz `ice-meter` tick, separate `MeterFrame.bands` in `differs`, rebind reset, low-band beat accent, `B1` audible-energy gate, §1 audio-stream rule, Settings → Privacy disclosure + meter-only switch, Win11 mic-indicator & CPU QA gates. Moved to plan.md |
+| D-27 | Hibernate mode: plain notch for meetings / screen sharing | Not voted | **Open (owner, 2026-11-25), for later** | Options A1–A3 look, B1–B2 suppression, C1–C3 capture exclusion (`WDA_EXCLUDEFROMCAPTURE`), D1–D4 entry/wake, E1–E3 exit; 3 owner questions |

@@ -464,6 +464,19 @@ criteria below pass on both monitors. Items come from Claude's review of the Edg
       bezel on both monitors; screenshot set for the QA checklist
 - [ ] D-19 `IdleContent` (Claude) lands for both pills, checked on the nook silhouette first
 
+**Open discussion, for later (owner, 2026-11-25):**
+- [ ] **D-27 · Hibernate mode** ([entry](planning-discussion.md#d-27--hibernate-mode-a-plain-notch-for-meetings-and-screen-sharing-added-2026-11-25-owner-request-neutral-entry-under-04-open-for-later)):
+      for meetings and screen sharing the notch turns into a plain notch (no track, art, lyrics or pop-ups), with a
+      deliberate way to wake it. Options include leaving the notch out of screen captures (`WDA_EXCLUDEFROMCAPTURE`).
+      Votes open once the Edge track is stable; no code before the owner closes it
+
+**Fixed (2026-11-25):**
+- [x] Clicks right around the pill and the music pill were swallowed (Claude): the cursor poll scaled the hit rect with a
+      stored monitor scale that can go stale (topology/DPI change, other monitor); it now uses the window's own size,
+      re-applies click-through every tick and resets it when it stops; the UI resends the rect after a wake or failed send
+- [ ] By hand: click just beside the idle pill and the music pill on both monitors (100 % and 150 %), after moving the
+      notch between monitors and after changing display scale
+
 **Edge exit criteria:** every activity and the expanded card pass visual QA in Edge Nook on the 144 Hz and 75 Hz monitors
 at 100 % / 150 %, light/dark desktops, all 4 themes; no accidental opens when reaching for browser tabs; the native and
 WebView idle silhouettes match. Then Floating work resumes (D-20 drag & snap, bottom anchors, R1).
