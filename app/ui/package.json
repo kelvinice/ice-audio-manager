@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "check": "tsc --noEmit",
-    "test": "node --experimental-strip-types --test src/lib/motion/spring.test.ts src/lib/notch/scheduler.test.ts src/lib/notch/visualizer.test.ts src/lib/notch/devices.test.ts src/lib/notch/backdrop.test.ts src/lib/settings/model.test.ts"
+    "test": "node --experimental-strip-types --test src/lib/motion/spring.test.ts src/lib/notch/scheduler.test.ts src/lib/notch/visualizer.test.ts src/lib/notch/beat.test.ts src/lib/notch/devices.test.ts src/lib/notch/backdrop.test.ts src/lib/settings/model.test.ts"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.9.0"

@@ -3,7 +3,6 @@ import test from 'node:test';
 import type { MeterFrame } from '../ipc/engine.ts';
 import { SPRING_PRESETS } from '../motion/spring.ts';
 import {
-  BarShaper,
   barScaleY,
   DEFAULT_BAR_COUNT,
   deriveVisualizerSpringParams,
@@ -11,7 +10,7 @@ import {
   MIN_BAR_SCALE,
   perceptualLevel,
   SILENT_THRESHOLD,
-  spreadLevels,
+  withRestShape,
   VisualizerBank,
   WIDE_BAR_COUNT,
 } from './visualizer.ts';
@@ -66,7 +65,7 @@ test('perceptual curve lifts quiet music while silence and NaN stay zero', () =>
   assert.equal(barScaleY(1), 1);
 });
 
-test('fast attack rises sharply while slow decay glides smoothly and stops loop on settle', () => {
+test('fast attack rises sharply, the fall is quick but still a glide, and the loop stops on settle', () => {
   const bank = new VisualizerBank(5, 'smooth');
   const hot: MeterFrame = { peak: 0.9, channels: [0.9, 0.9] };
   assert.equal(bank.setFrame(hot), true);
@@ -79,16 +78,20 @@ test('fast attack rises sharply while slow decay glides smoothly and stops loop 
     `expected center bar to reach >=75% within 45 ms, got ${afterAttack[2]} vs target ${targets[2]}`,
   );
 
-  // Settle at target, then drop to silence and check slow decay.
+  // Settle at target, then drop to silence. Bars must fall between beats (2026-11-24: they used to hang near the
+  // top and only twitch), but glide rather than jump.
   stepBankFor(bank, 144, 0.4);
   const peakValues = bank.values();
   bank.setFrame({ peak: 0, channels: [] });
 
-  stepBankFor(bank, 144, 0.15);
+  stepBankFor(bank, 144, 0.05);
+  const earlyFall = bank.values();
+  assert.ok(earlyFall[2] > peakValues[2] * 0.4, `a glide, not a jump, at 50 ms: ${earlyFall[2]} from ${peakValues[2]}`);
+  stepBankFor(bank, 144, 0.1);
   const midDecay = bank.values();
   assert.ok(
-    midDecay[2] > peakValues[2] * 0.15,
-    `expected slow decay still >15% at 150 ms, got ${midDecay[2]} from ${peakValues[2]}`,
+    midDecay[2] < peakValues[2] * 0.25,
+    `bars fall below 25% within 150 ms (before the next beat at 120 BPM), got ${midDecay[2]} from ${peakValues[2]}`,
   );
 
   const stillMoving = stepBankFor(bank, 144, 0.85);
@@ -103,7 +106,9 @@ test('visualizer springs are derived from config presets and remain frame-rate i
     const attack = deriveVisualizerSpringParams(preset, 'attack');
     const decay = deriveVisualizerSpringParams(preset, 'decay');
     assert.ok(attack.stiffness > SPRING_PRESETS[preset].stiffness);
-    assert.ok(decay.stiffness < SPRING_PRESETS[preset].stiffness);
+    // The fall is quick but still slower than the rise (natural frequency √(k/m)).
+    const omega = (p: { stiffness: number; mass: number }) => Math.sqrt(p.stiffness / p.mass);
+    assert.ok(omega(decay) < omega(attack));
     assert.equal(attack.instant, undefined);
   }
 
@@ -150,28 +155,6 @@ test('visualizer springs are derived from config presets and remain frame-rate i
   }
 });
 
-test('BarShaper ripples outward from the centre and keeps loud music from pinning every bar', () => {
-  const shaper = new BarShaper(5);
-  const loud: MeterFrame = { peak: 0.92, channels: [0.9, 0.92] };
-  const quiet: MeterFrame = { peak: 0.3, channels: [0.3, 0.3] };
-
-  // Sustained loud, compressed music: the hill shape survives instead of a flat block at the top.
-  let bars: number[] = [];
-  for (let i = 0; i < 40; i += 1) bars = shaper.shape(mapFrameToBars(loud, 5));
-  assert.ok(bars[2] > bars[0] + 0.1, `centre should stand above the edges, got ${bars}`);
-  assert.ok(bars.some((v) => v < 0.9), `bars shouldn't all be pinned, got ${bars}`);
-
-  // A dip reaches the centre first; outer bars still show the older, louder frame.
-  const dip = shaper.shape(mapFrameToBars(quiet, 5));
-  assert.ok(dip[2] < dip[1], `centre reacts first: ${dip}`);
-  assert.ok(dip[0] > dip[2], `edges still show the louder frame: ${dip}`);
-
-  // Silence passes straight through and clears the ripple history.
-  assert.deepEqual(shaper.shape(mapFrameToBars({ peak: 0, channels: [] }, 5)), [0, 0, 0, 0, 0]);
-  const fresh = shaper.shape(mapFrameToBars(quiet, 5));
-  assert.ok(fresh.every((v) => v >= 0 && v <= 1));
-});
-
 test('reduce motion / off preset jumps immediately with zero animation frames', () => {
   const bank = new VisualizerBank(5, 'smooth');
   bank.setPreset('smooth', true);
@@ -186,17 +169,12 @@ test('reduce motion / off preset jumps immediately with zero animation frames', 
   assert.deepEqual(bank.values(), [0, 0, 0, 0, 0]);
 });
 
-test('spreadLevels fills the wide waveform from the bank levels with a resting shape', () => {
-  const rest = spreadLevels([], WIDE_BAR_COUNT);
+
+test('withRestShape keeps live bars and puts a low, textured line under silence', () => {
+  const rest = withRestShape(new Array<number>(WIDE_BAR_COUNT).fill(0));
   assert.equal(rest.length, WIDE_BAR_COUNT);
-  assert.ok(rest.every((v) => v > 0.1 && v < 0.4), `paused waveform stays low but visible: ${rest}`);
+  assert.ok(rest.every((v) => v > 0 && v <= 0.1), `silence/paused stays low: ${rest}`);
   assert.ok(new Set(rest.map((v) => v.toFixed(3))).size > 3, 'textured, not a flat line');
-
-  const loud = spreadLevels([0.2, 0.6, 1, 0.6, 0.2], WIDE_BAR_COUNT);
-  const mid = Math.floor(WIDE_BAR_COUNT / 2);
-  assert.ok(loud[mid] > loud[0], `centre follows the loud centre level: ${loud}`);
-  assert.ok(loud.every((v, i) => v >= rest[i] - 1e-9 && v <= 1));
-
-  const buf: number[] = [];
-  assert.equal(spreadLevels([1, 1, 1, 1, 1], WIDE_BAR_COUNT, buf), buf, 'reuses the output buffer');
+  const live = withRestShape(new Array<number>(WIDE_BAR_COUNT).fill(0.8));
+  assert.ok(live.every((v) => v === 0.8), 'live levels pass through untouched');
 });

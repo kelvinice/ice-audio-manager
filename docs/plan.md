@@ -218,8 +218,18 @@ games on the pinned monitor. Budgets met in every profile.
         gaming mode, and Lite. A new document must request frames again.
   - [x] Notch (Gemini): 4–6 bars from `channels` (fall back to `peak`), fast-attack/slow-decay springs, no animation loop
         once frames stop and the bars have settled
-  - [x] Bars look fix (Claude, 2026-11-24): `BarShaper` (centre-out ripple + auto-gain, so loud music no longer pins every bar
-        at the top), a taller centre contour, `clip-path` instead of `scaleY` (round caps stay round), whole-pixel width/gap
+  - [x] Bars look fix (Claude, 2026-11-24): `clip-path` instead of `scaleY` (round caps stay round), whole-pixel width/gap
+  - [x] Beat-driven dynamics (Claude, 2026-11-24; owner: "not dynamic enough, only twitching; lower when silent; feel the
+        beat go up and down"). `lib/notch/beat.ts` `BeatShaper` replaces `BarShaper`: per-channel dB tracking of the
+        track's body level and recent peak, so bars measure how far a frame sits *above* the body (beats go high, bars
+        fall between hits, loud and quiet tracks alike); each detected beat throws a new pattern; centre bars swing with
+        the body, outer bars flick on fast rises. The bank animates 14 independent bars (wide waveform = all of them,
+        5-bar variants pick 5). Faster fall (decay ×2.4, was ×0.65), resting height 0.1 (was 0.18), peaks brighten.
+        Tested with simulated 120 BPM kicks on loud and quiet tracks (`beat.test.ts`)
+  - [ ] By hand: compare with Spotify on a few genres (EDM, hip-hop, acoustic, a quiet podcast) on both monitors
+  - [ ] Idea, needs its own decision: **real bass/treble bands.** The meter gives only a peak per channel (no spectrum),
+        so the bars follow beats, not pitch. True bands need WASAPI loopback capture + a small filter bank/FFT on the
+        meter thread while visible (CPU and the §2 stop condition to measure)
 - [ ] Secondary QA: Chromium/Edge/Firefox media sessions, **including YouTube Music** (the website, and the app installed
       from Chrome/Edge). Owner, 2026-11-23: Spotify and YouTube Music are the supported music services (see Backlog)
 - [x] Expanded card empty state when nothing plays: a clear hint (e.g. "Nothing playing. Start Spotify or YouTube Music"),

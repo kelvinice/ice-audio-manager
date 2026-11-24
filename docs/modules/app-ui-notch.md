@@ -27,7 +27,8 @@ any time (D-15). Heavy work (image decode, colour extraction, device sorting) ha
 | `notch/geometry.ts` | Canvas/pill sizes (twin of the native pill constants), `targetGeometry`, `computeHitRect`, `computeClipPath`, `resolveRimStroke` |
 | `notch/devices.ts` | `buildNotchDeviceRow`: favourites in order, current default first, max 4 chips (D-18); `toggleFavouriteDeviceIds` |
 | `notch/backdrop.ts` | D-23 backdrop maths (WCAG luminance/contrast, gradient stops, scrim) and `resolveMusicServices` (D-22 quick-launch items) |
-| `notch/visualizer.ts` | `VisualizerBank`, `mapFrameToBars`, `BarShaper`, `subscribeVisualizer`: 4–6 bars from `MeterFrame.channels`; `BarShaper` adds a centre-out ripple and auto-gain, then attack/decay springs; loop stops when settled. Bars render with `clip-path` (not `scaleY`) so caps stay round |
+| `notch/visualizer.ts` | `VisualizerBank` (14 springs: fast attack, quick fall), `subscribeVisualizer` (one shared bank; loop stops when settled), `withRestShape` (wide waveform's low resting line), `mapFrameToBars` (legacy mapping, tests). Bars render with `clip-path` (not `scaleY`) so caps stay round |
+| `notch/beat.ts` | `BeatShaper`: meter frame → 14 bar targets from beats, not raw loudness (per-channel dB body level + recent peak; a new pattern per beat; centre swings, edges flick; silence = rest). `pickBars` for the 5-bar variants. The meter has no spectrum, so this is beat feel, not pitch |
 
 ## `src/notch/activities/` (one component per job)
 `IdlePill`, `VolumeActivity`, `SwitchActivity`, `PlugActivity`, `MicActivity`, `TrackActivity`, `ExpandedNotch` (container), `ExpandedMediaCard`,
@@ -69,3 +70,4 @@ updating the constants.
 - 2026-11-24 Claude: "More…" and the in-notch picker removed (`NotchDeviceRowModel` is just `chips`); visualizer `BarShaper` + `clip-path` bars.
 - 2026-11-24 Claude: "Now playing pill" setting (`nowPlaying.ts`, Settings → Notch, tray); Balanced only idle-suspends when the shown view is idle.
 - 2026-11-24 Claude: `TrackActivity` has no transport buttons; a waveform scrubber (`VisualizerBars variant="wide"` + `spreadLevels`, accent up to the played position). Idle linger read from settings.
+- 2026-11-24 Claude: `beat.ts` `BeatShaper` replaces `BarShaper` (beat-driven, 14 independent bars, quick fall, lower rest); `spreadLevels` → `withRestShape`.

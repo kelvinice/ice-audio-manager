@@ -1,11 +1,13 @@
 import type { MeterFrame } from '../ipc/engine.ts';
 import { SPRING_PRESETS, Spring1D, type SpringParams, type SpringPresetId } from '../motion/spring.ts';
+import { BEAT_BAR_COUNT, BeatShaper } from './beat.ts';
 
 export const DEFAULT_BAR_COUNT = 5;
 export const MIN_BAR_COUNT = 4;
 export const MAX_BAR_COUNT = 6;
 export const SILENT_THRESHOLD = 0.001;
-export const MIN_BAR_SCALE = 0.18;
+/** Resting bar height (silence). Low, so the jump to a beat is big (was 0.18). */
+export const MIN_BAR_SCALE = 0.1;
 export const BAR_SPRING_PRECISION = 0.004;
 export const MOCK_METER_INTERVAL_MS = 33;
 
@@ -17,18 +19,12 @@ const STEREO_CENTER_PEAK_BLEND = 0.35;
 const CONTOUR_BASE = 0.62;
 const CONTOUR_ARCH = 0.38;
 
-// `BarShaper` dynamics, per meter frame (~21 frames/s after the engine's change filter), not per display frame.
-const SHAPER_MEAN_ALPHA = 0.08;
-const SHAPER_CEIL_DECAY = 0.97;
-const SHAPER_FLOOR_RATIO = 0.6;
-const SHAPER_MIN_SPAN = 0.25;
-const SHAPER_RAW_MIX = 0.25;
-
 // Multipliers applied to config SPRING_PRESETS for audio meter dynamics (fast attack, slow decay).
 const ATTACK_STIFFNESS_MULT = 4.5;
 const ATTACK_DAMPING_MULT = 1.18;
 const ATTACK_MASS_MULT = 0.35;
-const DECAY_STIFFNESS_MULT = 0.65;
+// Fast fall (was 0.65): bars must drop between beats to read as up-and-down, not twitch near the top (owner, 2026-11-24).
+const DECAY_STIFFNESS_MULT = 2.4;
 const DECAY_DAMPING_RATIO = 1.04;
 
 export function clamp01(value: number): number {
@@ -43,31 +39,20 @@ export function perceptualLevel(linearAmplitude: number): number {
   return Math.pow(normalized, PERCEPTUAL_GAMMA);
 }
 
-/** Bars in the now-playing pill's waveform scrubber. */
-export const WIDE_BAR_COUNT = 14;
-// A fixed, uneven texture so interpolated neighbours don't look identical (a waveform, not a ramp).
-const WIDE_TEXTURE = [0.78, 1, 0.66, 0.9, 0.72, 0.96, 0.6, 0.88, 0.7, 1, 0.64, 0.92, 0.74, 0.84];
-// Resting waveform shown while paused or between frames, so the progress colouring stays readable.
-const WIDE_REST = 0.32;
+/** Bars in the now-playing pill's waveform scrubber: the bank's full set (`BEAT_BAR_COUNT`), one bar each. */
+export const WIDE_BAR_COUNT = BEAT_BAR_COUNT;
+/** Bars the shared bank animates (`BeatShaper`); the 5-bar variants pick from them. */
+export const BANK_BAR_COUNT = BEAT_BAR_COUNT;
+// A low, uneven resting line while paused or silent: low (owner: "when no sound the bar should be lower"), but
+// textured so the progress colouring still reads.
+const WIDE_TEXTURE = [0.7, 1, 0.55, 0.85, 0.65, 0.95, 0.5, 0.9, 0.6, 1, 0.55, 0.8, 0.7, 0.85];
+const WIDE_REST = 0.1;
 
-/**
- * Spreads the bank's 4–6 levels across `count` bars for the wide waveform: linear interpolation, the fixed
- * texture, and a resting floor. Pure; `out` is reused to avoid per-frame allocation.
- */
-export function spreadLevels(levels: ReadonlyArray<number>, count: number, out: number[] = []): number[] {
-  out.length = count;
-  const n = levels.length;
-  for (let i = 0; i < count; i += 1) {
-    let level = 0;
-    if (n > 0) {
-      const pos = count > 1 ? (i / (count - 1)) * (n - 1) : 0;
-      const lo = Math.floor(pos);
-      const hi = Math.min(n - 1, lo + 1);
-      const frac = pos - lo;
-      level = clamp01(levels[lo] ?? 0) * (1 - frac) + clamp01(levels[hi] ?? 0) * frac;
-    }
-    const texture = WIDE_TEXTURE[i % WIDE_TEXTURE.length];
-    out[i] = clamp01(Math.max(WIDE_REST * texture, level * texture));
+/** Live levels with the wide waveform's resting shape underneath. Pure; `out` is reused. */
+export function withRestShape(levels: ReadonlyArray<number>, out: number[] = []): number[] {
+  out.length = levels.length;
+  for (let i = 0; i < levels.length; i += 1) {
+    out[i] = clamp01(Math.max(WIDE_REST * WIDE_TEXTURE[i % WIDE_TEXTURE.length], levels[i] ?? 0));
   }
   return out;
 }
@@ -129,57 +114,6 @@ export function mapFrameToBars(
   return out;
 }
 
-/**
- * Turns per-frame bar targets into lively bars. The meter only gives L/R peaks, so without this every bar moves
- * together and loud (compressed) music pins them all at the top:
- * - **ripple:** the centre bar shows the newest frame, each bar further out one frame older, so motion travels outward;
- * - **auto-gain:** levels are expanded around a slow running mean and ceiling, so transients move the bars at any loudness.
- * Silence passes straight through and resets the history.
- */
-export class BarShaper {
-  private history: number[][] = [];
-  private mean = 0;
-  private ceil = 0;
-  private readonly count: number;
-
-  constructor(count = DEFAULT_BAR_COUNT) {
-    this.count = Math.max(MIN_BAR_COUNT, Math.min(MAX_BAR_COUNT, Math.round(count)));
-  }
-
-  reset(): void {
-    this.history = [];
-    this.mean = 0;
-    this.ceil = 0;
-  }
-
-  shape(mapped: ReadonlyArray<number>): number[] {
-    const out = new Array<number>(this.count).fill(0);
-    if (mapped.every((v) => v <= 0)) {
-      this.history = [];
-      return out;
-    }
-    const depth = Math.ceil(this.count / 2);
-    this.history.unshift(Array.from({ length: this.count }, (_, i) => clamp01(mapped[i] ?? 0)));
-    if (this.history.length > depth) this.history.length = depth;
-
-    const frameMean = mapped.reduce((sum, v) => sum + clamp01(v), 0) / mapped.length;
-    this.mean = this.mean === 0 ? frameMean : this.mean + (frameMean - this.mean) * SHAPER_MEAN_ALPHA;
-    this.ceil = Math.max(frameMean, this.ceil * SHAPER_CEIL_DECAY);
-    const floor = this.mean * SHAPER_FLOOR_RATIO;
-    const span = Math.max(SHAPER_MIN_SPAN, this.ceil - floor);
-
-    const center = (this.count - 1) / 2;
-    for (let i = 0; i < this.count; i += 1) {
-      const age = Math.min(this.history.length - 1, Math.floor(Math.abs(i - center)));
-      const level = this.history[age][i];
-      if (level <= 0) continue;
-      const expanded = clamp01((level - floor) / span);
-      out[i] = clamp01(SHAPER_RAW_MIX * level + (1 - SHAPER_RAW_MIX) * expanded);
-    }
-    return out;
-  }
-}
-
 export function deriveVisualizerSpringParams(
   preset: SpringPresetId,
   phase: 'attack' | 'decay',
@@ -211,7 +145,7 @@ export class VisualizerBank {
   private effectivePreset: SpringPresetId;
 
   constructor(barCount = DEFAULT_BAR_COUNT, preset: SpringPresetId = 'smooth') {
-    const count = Math.max(MIN_BAR_COUNT, Math.min(MAX_BAR_COUNT, Math.round(barCount)));
+    const count = Math.max(MIN_BAR_COUNT, Math.min(BEAT_BAR_COUNT, Math.round(barCount)));
     this.effectivePreset = preset;
     const initialParams = deriveVisualizerSpringParams(preset, 'decay');
     this.springs = Array.from({ length: count }, () => new Spring1D(0, initialParams));
@@ -300,9 +234,10 @@ export interface VisualizerHandle {
 type LevelListener = (levels: number[], available: boolean) => void;
 
 class VisualizerController {
-  private readonly bank = new VisualizerBank(DEFAULT_BAR_COUNT);
-  private readonly shaper = new BarShaper(DEFAULT_BAR_COUNT);
-  private readonly levelsBuffer = new Array<number>(DEFAULT_BAR_COUNT).fill(0);
+  private readonly bank = new VisualizerBank(BANK_BAR_COUNT);
+  private readonly beat = new BeatShaper(BANK_BAR_COUNT);
+  private readonly targets = new Array<number>(BANK_BAR_COUNT).fill(0);
+  private readonly levelsBuffer = new Array<number>(BANK_BAR_COUNT).fill(0);
   private readonly listeners = new Set<LevelListener>();
   private activeCount = 0;
   private rafId: number | null = null;
@@ -380,7 +315,7 @@ class VisualizerController {
       this.stopRaf();
       this.stopMock();
       this.bank.snapSilence();
-      this.shaper.reset();
+      this.beat.reset();
       this.emitValues();
       void this.sendVisualizerHint(false);
       return;
@@ -477,7 +412,7 @@ class VisualizerController {
   }
 
   private pushFrame(frame: MeterFrame): void {
-    const moving = this.bank.setTargets(this.shaper.shape(mapFrameToBars(frame, this.bank.barCount)));
+    const moving = this.bank.setTargets(this.beat.shape(frame, performance.now(), this.targets));
     this.emitValues();
     if (moving && this.isVisibleAndActive()) {
       this.ensureRaf();

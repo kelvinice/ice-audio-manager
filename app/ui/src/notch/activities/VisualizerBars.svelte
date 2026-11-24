@@ -4,11 +4,12 @@
   import {
     barScaleY,
     DEFAULT_BAR_COUNT,
-    spreadLevels,
     subscribeVisualizer,
     WIDE_BAR_COUNT,
+    withRestShape,
     type VisualizerHandle,
   } from '../../lib/notch/visualizer';
+  import { pickBars } from '../../lib/notch/beat';
 
   interface Props {
     active: boolean;
@@ -39,7 +40,8 @@
   const barEls: Array<HTMLSpanElement | undefined> = [];
   const lastClips: string[] = [];
   const lastOpacities: string[] = [];
-  const wideLevels: number[] = [];
+  const shown: number[] = [];
+  const silence = new Array<number>(WIDE_BAR_COUNT).fill(0);
   let available = $state(true);
   let handle: VisualizerHandle | null = null;
 
@@ -51,7 +53,10 @@
       lastOpacities.length = 0;
       return;
     }
-    const levels = wide ? spreadLevels(nextAvailable ? rawLevels : [], barIndices.length, wideLevels) : rawLevels;
+    // Wide: every bar of the bank over a low resting line. Compact/expanded: 5 independent bars picked from it.
+    const levels = wide
+      ? withRestShape(nextAvailable ? rawLevels : silence, shown)
+      : pickBars(rawLevels, barIndices.length, shown);
     for (let i = 0; i < barIndices.length; i += 1) {
       const el = barEls[i];
       if (!el) continue;
@@ -63,7 +68,8 @@
         lastClips[i] = nextClip;
         el.style.clipPath = nextClip;
       }
-      const nextOpacity = (0.72 + 0.28 * level).toFixed(2);
+      // Peaks brighten as well as grow, so a hit pops against the resting bars.
+      const nextOpacity = (0.55 + 0.45 * level).toFixed(2);
       if (lastOpacities[i] !== nextOpacity) {
         lastOpacities[i] = nextOpacity;
         el.style.opacity = nextOpacity;
@@ -114,8 +120,8 @@
     height: 100%;
     border-radius: var(--ice-radius-pill);
     background: var(--ice-active-accent, var(--ice-accent));
-    /* Resting = MIN_BAR_SCALE (0.18): clip 41 % from each end. */
-    clip-path: inset(41% 0 41% 0 round 999px);
+    /* Resting = MIN_BAR_SCALE (0.1): clip 45 % from each end. */
+    clip-path: inset(45% 0 45% 0 round 999px);
     opacity: 0.72;
   }
 
