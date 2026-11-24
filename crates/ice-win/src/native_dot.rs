@@ -48,8 +48,8 @@ const MIC_H: i32 = 30;
 const DEVICE_W: i32 = 184;
 const DEVICE_H: i32 = 30;
 
-pub use ice_core::appearance::IdleStyle;
 use ice_core::appearance::ThemeKind;
+pub use ice_core::appearance::{IdleStyle, NotchStyle};
 
 mod glyphs;
 mod input;
@@ -418,6 +418,7 @@ pub struct PillState {
     pub spatial_active: bool,
     pub mode: PillMode,
     pub idle_style: IdleStyle,
+    pub notch_style: NotchStyle,
     pub theme: NativePillTheme,
     /// Pointer state. Owned by the window thread; `show_state` keeps the live value.
     pub interaction: PillInteraction,
@@ -443,6 +444,7 @@ impl PillState {
             spatial_active: false,
             mode: PillMode::Idle,
             idle_style: IdleStyle::default(),
+            notch_style: NotchStyle::default(),
             theme,
             interaction: PillInteraction::None,
         }
@@ -459,6 +461,7 @@ impl PillState {
     /// Applies an [`EngineSnapshot`] without replaying or inventing a transient activity.
     pub fn apply_snapshot(&mut self, snapshot: &EngineSnapshot) {
         self.revision = snapshot.revision;
+        self.notch_style = snapshot.settings.appearance.notch_style;
         self.volume = snapshot.volume.map(|v| VolumeState { percent: v.percent.min(100), muted: v.muted });
         self.mic_volume = snapshot.mic_volume.map(|p| p.min(100));
         self.mic_muted = snapshot.mic_muted.unwrap_or(false);
@@ -523,12 +526,11 @@ impl PillState {
                 self.spatial_active =
                     default_playback.and_then(|d| d.spatial).is_some_and(|s| s != ice_core::engine::SpatialMode::Off);
             }
-            // Media is tracked for the idle content but never wakes the pill (the notch shows track changes).
+            // Media and settings sync silently without waking the pill.
             EngineEvent::MediaChanged { media } => self.media_status = media.as_ref().map(|m| m.status),
-            // Notices and settings sync silently without waking the pill.
+            EngineEvent::SettingsChanged { settings } => self.notch_style = settings.appearance.notch_style,
             EngineEvent::Notice { .. }
             | EngineEvent::NoticesChanged { .. }
-            | EngineEvent::SettingsChanged { .. }
             | EngineEvent::LyricsChanged { .. }
             | EngineEvent::ShowNotch => {}
         }
@@ -702,6 +704,21 @@ impl NativeDotHandle {
             } else {
                 None
             }
+        };
+        if let Some(sig) = signal {
+            self.shared.post_signal(sig);
+        }
+    }
+
+    /// Sets whether the native pill floats below the top bezel or docks flush at the screen edge.
+    pub fn set_notch_style(&self, style: NotchStyle) {
+        let signal = {
+            let mut rt = self.shared.lock();
+            if rt.pill.notch_style == style {
+                return;
+            }
+            rt.pill.notch_style = style;
+            rt.desired_visible.then_some(ThreadSignal::Sync { restart_timer: false })
         };
         if let Some(sig) = signal {
             self.shared.post_signal(sig);
@@ -1219,12 +1236,38 @@ const fn logical_dimensions(mode: PillMode, idle_style: IdleStyle) -> (i32, i32)
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct FrameMetrics {
+    body_w: i32,
+    body_h: i32,
+    ear: i32,
+    top_offset: i32,
+}
+
+impl FrameMetrics {
+    const fn total_w(self) -> i32 {
+        self.body_w + self.ear * 2
+    }
+}
+
+// Twin: `app/ui/src/lib/notch/notchStyle.ts` (Floating vs Edge Nook top offset, ear radius and +2 px docked height).
+const fn frame_metrics(mode: PillMode, idle_style: IdleStyle, notch_style: NotchStyle) -> FrameMetrics {
+    let (body_w, base_h) = logical_dimensions(mode, idle_style);
+    match notch_style {
+        NotchStyle::Floating => FrameMetrics { body_w, body_h: base_h, ear: 0, top_offset: LOGICAL_TOP_OFFSET },
+        NotchStyle::Nook => {
+            let ear = if matches!(mode, PillMode::Idle) && matches!(idle_style, IdleStyle::Dot) { 6 } else { 8 };
+            FrameMetrics { body_w, body_h: base_h + 2, ear, top_offset: 0 }
+        }
+    }
+}
+
 fn paint_pill(hwnd: HWND, monitor: &MonitorInfo, state: &PillState) -> Result<()> {
-    let (logical_w, logical_h) = logical_dimensions(state.mode, state.idle_style);
-    let w = monitor.logical_to_physical(logical_w).max(16);
-    let h = monitor.logical_to_physical(logical_h).max(8);
+    let metrics = frame_metrics(state.mode, state.idle_style, state.notch_style);
+    let w = monitor.logical_to_physical(metrics.total_w()).max(16);
+    let h = monitor.logical_to_physical(metrics.body_h).max(8);
     let x = monitor.left + (monitor.width - w) / 2;
-    let y = monitor.top + monitor.logical_to_physical(LOGICAL_TOP_OFFSET);
+    let y = monitor.top + monitor.logical_to_physical(metrics.top_offset);
 
     // SAFETY: creates a memory DC compatible with the screen.
     let dc = unsafe { CreateCompatibleDC(None) };
@@ -1293,10 +1336,18 @@ pub(crate) fn rasterize_pill_frame(pixels: &mut [u32], w: i32, h: i32, scale: f3
     let lh = h as f32 / scale;
     let aa = 0.75 / scale;
 
-    let radius = (lh - 2.0) * 0.5;
+    let metrics = frame_metrics(state.mode, state.idle_style, state.notch_style);
+    let is_nook = state.notch_style == NotchStyle::Nook;
+    let ear = if is_nook { metrics.ear as f32 } else { 0.0 };
+    let body_w = (lw - 2.0 * ear).max(12.0);
+    let ox = ear;
+
     let cx = lw * 0.5;
-    let cy = lh * 0.5;
-    let half_w = (lw - 2.0) * 0.5;
+    let shape_cy = lh * 0.5;
+    // Shift interior elements down by 1 px in Edge Nook so content breathes below y = 0.
+    let cy = shape_cy + if is_nook { 1.0 } else { 0.0 };
+    let radius = if is_nook { (lh * 0.44).min(13.0) } else { (lh - 2.0) * 0.5 };
+    let half_w = (body_w - 2.0) * 0.5;
     let half_h = (lh - 2.0) * 0.5;
 
     let (bg_r, bg_g, bg_b, bg_a) = state.theme.bg.as_f32_rgba();
@@ -1341,14 +1392,14 @@ pub(crate) fn rasterize_pill_frame(pixels: &mut [u32], w: i32, h: i32, scale: f3
                 // A muted microphone is a privacy state, so it outranks the volume readout.
                 if state.mic_muted {
                     label_str = "MIC OFF";
-                    label_x = 28.0;
+                    label_x = ox + 28.0;
                     label_w = 76.0;
                     label_h = 11.5;
                     label_color = (dng_r, dng_g, dng_b);
                 } else if let Some(v) = state.volume {
                     label_buf = if v.muted { "MUTE".to_string() } else { format!("{}%", v.percent.min(100)) };
                     label_str = &label_buf;
-                    label_x = 28.0;
+                    label_x = ox + 28.0;
                     label_w = 76.0;
                     label_h = 11.5;
                     label_align = Align::Right;
@@ -1359,14 +1410,14 @@ pub(crate) fn rasterize_pill_frame(pixels: &mut [u32], w: i32, h: i32, scale: f3
         PillMode::Volume { percent, muted } | PillMode::MicVolume { percent, muted } => {
             label_buf = if muted { "MUTE".to_string() } else { format!("{}%", percent.min(100)) };
             label_str = &label_buf;
-            label_x = 141.0;
+            label_x = ox + 141.0;
             label_w = 40.0;
             label_color = if muted { (dng_r, dng_g, dng_b) } else { (fg_r, fg_g, fg_b) };
-            bar_bounds = Some((34.0, 134.0, f32::from(percent.min(100)) / 100.0, muted));
+            bar_bounds = Some((ox + 34.0, ox + 134.0, f32::from(percent.min(100)) / 100.0, muted));
         }
         PillMode::MicMute { muted } => {
             label_str = if muted { "MIC OFF" } else { "MIC ON" };
-            label_x = 42.0;
+            label_x = ox + 42.0;
             label_w = 100.0;
             label_color = if muted { (dng_r, dng_g, dng_b) } else { (ok_r, ok_g, ok_b) };
         }
@@ -1374,18 +1425,18 @@ pub(crate) fn rasterize_pill_frame(pixels: &mut [u32], w: i32, h: i32, scale: f3
             if is_removal {
                 label_str = "OFF";
                 label_color = (dng_r, dng_g, dng_b);
-                bar_bounds = Some((34.0, 126.0, 0.0, true));
+                bar_bounds = Some((ox + 34.0, ox + 126.0, 0.0, true));
             } else if let Some(v) = state.volume {
                 label_buf = if v.muted { "MUTE".to_string() } else { format!("{}%", v.percent.min(100)) };
                 label_str = &label_buf;
                 label_color = if v.muted { (dng_r, dng_g, dng_b) } else { (fg_r, fg_g, fg_b) };
-                bar_bounds = Some((34.0, 126.0, f32::from(v.percent.min(100)) / 100.0, v.muted));
+                bar_bounds = Some((ox + 34.0, ox + 126.0, f32::from(v.percent.min(100)) / 100.0, v.muted));
             } else {
                 label_str = "ON";
                 label_color = (acc_r, acc_g, acc_b);
-                bar_bounds = Some((34.0, 126.0, 1.0, false));
+                bar_bounds = Some((ox + 34.0, ox + 126.0, 1.0, false));
             }
-            label_x = 132.0;
+            label_x = ox + 132.0;
             label_w = 40.0;
         }
     }
@@ -1402,7 +1453,11 @@ pub(crate) fn rasterize_pill_frame(pixels: &mut [u32], w: i32, h: i32, scale: f3
         let ly = (py as f32 + 0.5) / scale;
         for px in 0..w {
             let lx = (px as f32 + 0.5) / scale;
-            let sdf = sd_round_box(lx, ly, cx, cy, half_w, half_h, radius);
+            let sdf = if is_nook {
+                sd_nook_notch(lx, ly, cx, half_w, lh, radius, ear)
+            } else {
+                sd_round_box(lx, ly, cx, shape_cy, half_w, half_h, radius)
+            };
             let coverage = ((aa * 0.5 - sdf) / aa).clamp(0.0, 1.0);
             if coverage <= 0.0 {
                 pixels[(py * w + px) as usize] = 0;
@@ -1433,7 +1488,7 @@ pub(crate) fn rasterize_pill_frame(pixels: &mut [u32], w: i32, h: i32, scale: f3
                 PillMode::Idle => {
                     // `IdlePill.svelte` uses `padding: 0 12px` and a `7 px` status dot (`r = 3.5`).
                     let icon_cx =
-                        if state.idle_style == IdleStyle::MiniPill && !label_str.is_empty() { 17.0 } else { cx };
+                        if state.idle_style == IdleStyle::MiniPill && !label_str.is_empty() { ox + 17.0 } else { cx };
                     if state.mic_muted {
                         // D-12 accessibility: render a distinct slashed-mic glyph shape in addition to danger colour.
                         let inv_scale = 1.25f32;
@@ -1453,26 +1508,29 @@ pub(crate) fn rasterize_pill_frame(pixels: &mut [u32], w: i32, h: i32, scale: f3
                     }
                 }
                 PillMode::Volume { muted, .. } => {
-                    let (icon_cov, is_danger_px) = speaker_icon_cov(lx, ly, 20.0, cy, muted, aa);
+                    let (icon_cov, is_danger_px) = speaker_icon_cov(lx, ly, ox + 20.0, cy, muted, aa);
                     if icon_cov > 0.0 {
                         let (ir, ig, ib) =
                             if muted && is_danger_px { (dng_r, dng_g, dng_b) } else { (fg_r, fg_g, fg_b) };
                         blend_over(&mut cr, &mut cg, &mut cb, ir, ig, ib, icon_cov);
                     }
                     if state.mic_muted {
-                        let badge_cov = smooth_cov(sd_circle(lx, ly, lw - 8.0, 7.5, 2.0), aa);
+                        let badge_cov = smooth_cov(
+                            sd_circle(lx, ly, ox + body_w - 8.0, 7.5 + if is_nook { 1.0 } else { 0.0 }, 2.0),
+                            aa,
+                        );
                         blend_over(&mut cr, &mut cg, &mut cb, dng_r, dng_g, dng_b, badge_cov);
                     }
                 }
                 PillMode::MicVolume { muted, .. } => {
-                    let (icon_cov, is_slash) = mic_icon_cov(lx, ly, 20.0, cy, muted, aa);
+                    let (icon_cov, is_slash) = mic_icon_cov(lx, ly, ox + 20.0, cy, muted, aa);
                     if icon_cov > 0.0 {
                         let (ir, ig, ib) = if muted && is_slash { (dng_r, dng_g, dng_b) } else { (fg_r, fg_g, fg_b) };
                         blend_over(&mut cr, &mut cg, &mut cb, ir, ig, ib, icon_cov);
                     }
                 }
                 PillMode::MicMute { muted } => {
-                    let (icon_cov, is_slash) = mic_icon_cov(lx, ly, 23.0, cy, muted, aa);
+                    let (icon_cov, is_slash) = mic_icon_cov(lx, ly, ox + 23.0, cy, muted, aa);
                     if icon_cov > 0.0 {
                         let (ir, ig, ib) = if muted && is_slash {
                             (dng_r, dng_g, dng_b)
@@ -1486,16 +1544,16 @@ pub(crate) fn rasterize_pill_frame(pixels: &mut [u32], w: i32, h: i32, scale: f3
                 }
                 PillMode::DeviceEvent { is_headphones, spatial_active, is_removal } => {
                     let (icon_cov, is_danger_px) = if is_headphones {
-                        headphones_icon_cov(lx, ly, 20.0, cy, is_removal, aa)
+                        headphones_icon_cov(lx, ly, ox + 20.0, cy, is_removal, aa)
                     } else {
-                        speaker_icon_cov(lx, ly, 20.0, cy, is_removal, aa)
+                        speaker_icon_cov(lx, ly, ox + 20.0, cy, is_removal, aa)
                     };
                     if icon_cov > 0.0 {
                         let (ir, ig, ib) = if is_danger_px { (dng_r, dng_g, dng_b) } else { (fg_r, fg_g, fg_b) };
                         blend_over(&mut cr, &mut cg, &mut cb, ir, ig, ib, icon_cov);
                     }
                     if spatial_active && !is_removal {
-                        let sp_cov = smooth_cov(sd_circle(lx, ly, lw - 9.0, cy, 2.3), aa);
+                        let sp_cov = smooth_cov(sd_circle(lx, ly, ox + body_w - 9.0, cy, 2.3), aa);
                         blend_over(&mut cr, &mut cg, &mut cb, acc_r, acc_g, acc_b, sp_cov);
                     }
                 }
@@ -1554,6 +1612,27 @@ fn sd_round_box(px: f32, py: f32, cx: f32, cy: f32, half_w: f32, half_h: f32, r:
     let dx = (px - cx).abs() - (half_w - r).max(0.0);
     let dy = (py - cy).abs() - (half_h - r).max(0.0);
     dx.max(0.0).hypot(dy.max(0.0)) + dx.max(dy).min(0.0) - r
+}
+
+/// Analytical SDF for the top-docked `NotchStyle::Nook` silhouette (flat flush top at `ly = 0`,
+/// concave top-left/top-right ears of radius `ear`, and convex bottom corners of radius `bottom_r`).
+fn sd_nook_notch(lx: f32, ly: f32, cx: f32, half_body_w: f32, h: f32, bottom_r: f32, ear: f32) -> f32 {
+    let ax = (lx - cx).abs();
+    let bottom_y = (h - 1.0).max(1.0);
+    let r = bottom_r.min(half_body_w).min((bottom_y - ear).max(1.0)).max(0.0);
+    if ly > bottom_y - r {
+        let bx = ax - (half_body_w - r).max(0.0);
+        let by = ly - (bottom_y - r);
+        return bx.max(0.0).hypot(by.max(0.0)) + bx.max(by).min(0.0) - r;
+    }
+    let ear_outer = half_body_w + ear;
+    if ear > 0.0 && ax > half_body_w && ly <= ear {
+        if ax > ear_outer {
+            return (ax - ear_outer).hypot(ly.max(0.0));
+        }
+        return ear - (ax - ear_outer).hypot(ly - ear);
+    }
+    ax - half_body_w
 }
 
 fn sd_circle(px: f32, py: f32, cx: f32, cy: f32, r: f32) -> f32 {
@@ -2051,5 +2130,54 @@ mod tests {
             assert!(std::time::Instant::now() < deadline, "timed out waiting for MicVolumeChanged reveal");
             thread::sleep(Duration::from_millis(5));
         }
+    }
+
+    #[test]
+    fn nook_style_renders_flush_top_edge_with_concave_ears_and_preserves_floating() {
+        let m_float = frame_metrics(PillMode::Idle, IdleStyle::MiniPill, NotchStyle::Floating);
+        assert_eq!(m_float.top_offset, LOGICAL_TOP_OFFSET);
+        assert_eq!(m_float.ear, 0);
+
+        let m_nook = frame_metrics(PillMode::Idle, IdleStyle::MiniPill, NotchStyle::Nook);
+        assert_eq!(m_nook.top_offset, 0);
+        assert!(m_nook.ear > 0);
+        assert!(m_nook.total_w() > m_float.total_w());
+        assert_eq!(m_nook.body_h, m_float.body_h + 2);
+
+        let mut st = PillState::new(NativePillTheme::ice());
+        st.notch_style = NotchStyle::Nook;
+        st.volume = Some(VolumeState { percent: 55, muted: false });
+        let w = m_nook.total_w();
+        let h = m_nook.body_h;
+        let mut px = vec![0u32; (w * h) as usize];
+        rasterize_pill_frame(&mut px, w, h, 1.0, &st);
+
+        // Top-center sits flush at y = 0 with full fill alpha.
+        let top_center_a = (px[(w / 2) as usize] >> 24) & 0xff;
+        assert!(top_center_a >= 180, "expected flush top center, got alpha={top_center_a}");
+        // Bottom-left corner outside body remains completely transparent.
+        assert_eq!(px[((h - 1) * w) as usize], 0);
+        // Inside upper concave ear near top-left edge is filled, while below the curve is transparent.
+        let ear_inside_x = 6;
+        let ear_inside_a = (px[ear_inside_x as usize] >> 24) & 0xff;
+        assert!(ear_inside_a >= 180, "expected concave ear fill near bezel, got alpha={ear_inside_a}");
+        assert_eq!(px[(m_nook.ear * w + 1) as usize], 0, "cutout below ear must stay transparent");
+
+        // Changing notchStyle via SettingsChanged updates PillState without revealing a hidden window.
+        let dot = NativeDotHandle::spawn(test_monitor(1.0)).expect("spawn native dot window");
+        let snap = FakeEngine::new().snapshot();
+        dot.apply_snapshot(&snap);
+        assert_eq!(dot.pill_state().notch_style, NotchStyle::Floating);
+        assert!(!dot.is_visible());
+
+        let mut next_settings = snap.settings;
+        next_settings.appearance.notch_style = NotchStyle::Nook;
+        let out = dot.apply_envelope(&Envelope {
+            revision: snap.revision + 1,
+            event: EngineEvent::SettingsChanged { settings: next_settings },
+        });
+        assert_eq!(out, EnvelopeOutcome::Updated);
+        assert_eq!(dot.pill_state().notch_style, NotchStyle::Nook);
+        assert!(!dot.is_visible(), "settings sync must not reveal a hidden native pill");
     }
 }
