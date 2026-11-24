@@ -508,7 +508,10 @@ impl PillState {
             // Media is tracked for the idle content but never wakes the pill (the notch shows track changes).
             EngineEvent::MediaChanged { media } => self.media_status = media.as_ref().map(|m| m.status),
             // Notices and settings sync silently without waking the pill.
-            EngineEvent::Notice { .. } | EngineEvent::NoticesChanged { .. } | EngineEvent::SettingsChanged { .. } => {}
+            EngineEvent::Notice { .. }
+            | EngineEvent::NoticesChanged { .. }
+            | EngineEvent::SettingsChanged { .. }
+            | EngineEvent::ShowNotch => {}
         }
         EnvelopeOutcome::Updated
     }

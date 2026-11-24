@@ -58,3 +58,4 @@ created when opened and destroyed when closed (shell: `app/src-tauri/src/setting
 
 ## Change log
 - 2026-11-23 Claude: Settings window built (General, Devices, Shortcuts, Notch, Appearance, About).
+- 2026-11-24 Claude: Activities page (Spotify / YouTube Music switches, D-22); Shortcuts → Notch ("show notch" hotkey, D-19); General → "Sleep the notch after" (Balanced); Notch → "Now playing pill".

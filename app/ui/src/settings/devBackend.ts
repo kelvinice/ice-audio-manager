@@ -59,6 +59,8 @@ function initialSnapshot(): EngineSnapshot {
       knobGestures: true,
       showDisconnected: false,
       idleLingerSecs: 15,
+      musicServices: { spotify: true, youtubeMusic: true },
+      showNotchHotkey: null,
     },
   };
 }
@@ -101,6 +103,8 @@ function applyCommand(s: EngineSnapshot, c: Command): void {
     case 'setKnobGestures': st.knobGestures = c.enabled; break;
     case 'setShowDisconnected': st.showDisconnected = c.enabled; break;
     case 'setIdleLinger': st.idleLingerSecs = c.secs; break;
+    case 'setMusicService': st.musicServices = { ...st.musicServices, [c.service === 'spotify' ? 'spotify' : 'youtubeMusic']: c.enabled }; break;
+    case 'setShowNotchHotkey': st.showNotchHotkey = c.hotkey; break;
     case 'setDefaultRoles': st.defaultRoles = c.roles; break;
     case 'setFavourites': st.favouritesPlayback = c.deviceIds.map(ref); break;
     case 'setDevicePrefs': {

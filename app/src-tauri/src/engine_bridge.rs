@@ -287,6 +287,10 @@ fn apply_event(app: &AppHandle, state: &Arc<SharedRuntime>, delta: Envelope) {
             (new_track && snapshot.settings.appearance.now_playing != NowPlayingPill::Off)
                 .then_some(ActivityKind::Track)
         }
+        EngineEvent::ShowNotch => {
+            super::show_notch::show(app, state, super::show_notch::Open::Toggle);
+            None
+        }
         EngineEvent::DevicesChanged { .. }
         | EngineEvent::NoticesChanged { .. }
         | EngineEvent::SettingsChanged { .. } => None,

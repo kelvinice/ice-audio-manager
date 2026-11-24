@@ -39,3 +39,4 @@ Unit tests in `tray.rs` and `preferences.rs` cover id round-trips and favourite 
 - 2026-11-23 Claude: initial recap.
 - 2026-11-23 Claude: "Launch at sign-in" reads the registry through `startup.rs` each time the menu opens (Settings can change it too).
 - 2026-11-24 Claude: "Now playing pill" submenu (Brief, then small (default) / While playing / Off).
+- 2026-11-24 Claude: left click goes through `open_quick_menu` (also used by the native pill and the show-notch hotkey in Lite).

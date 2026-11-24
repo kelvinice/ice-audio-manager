@@ -19,6 +19,9 @@ impl Worker {
         if let Some(c) = self.config.favourites.cycle_hotkey {
             wanted.push((c, HotkeyAction::CycleFavourites, "favourites".into(), false));
         }
+        if let Some(c) = self.config.show_notch_hotkey {
+            wanted.push((c, HotkeyAction::ShowNotch, "show-notch".into(), false));
+        }
         wanted.extend(knob_chords(&self.config.knob));
         if wanted.is_empty() {
             return;
@@ -55,6 +58,7 @@ impl Worker {
             HotkeyAction::Binding(binding_id) => self.command(Command::SwitchBinding { binding_id }),
             HotkeyAction::Pair(pair_id) => self.command(Command::TogglePair { pair_id }),
             HotkeyAction::CycleFavourites => self.cycle(Flow::Render, 1),
+            HotkeyAction::ShowNotch => self.emit(EngineEvent::ShowNotch),
             HotkeyAction::KnobCycle(step) => {
                 // Alt+Tab style: one switch per gesture, after the knob rests (F31; fast spins = 13–40 ms/detent).
                 if self.knob_at.is_none() {

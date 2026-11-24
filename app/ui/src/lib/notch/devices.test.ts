@@ -38,6 +38,8 @@ function baseSettings(overrides: Partial<SettingsView> = {}): SettingsView {
     knobGestures: true,
     showDisconnected: false,
     idleLingerSecs: 15,
+    musicServices: { spotify: true, youtubeMusic: true },
+    showNotchHotkey: null,
     ...overrides,
   };
 }

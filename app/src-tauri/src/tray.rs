@@ -8,10 +8,10 @@ use ice_core::device::{DeviceState, Flow};
 use ice_core::engine::{
     Command, DeviceSummary, EngineSnapshot, Notice, RoleSet, SavedDevice, SettingsView, SpatialMode,
 };
-use tauri::AppHandle;
 use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconEvent};
 use tauri::window::WindowBuilder;
+use tauri::{AppHandle, Manager};
 use tray_icon::{Icon, TrayIcon, TrayIconBuilder};
 
 use super::{Preview, SharedRuntime, request_preview, startup};
@@ -20,6 +20,8 @@ const TRAY_ID: &str = "ice-audio-tray";
 const COMMAND_PREFIX: &str = "audio/";
 const CHOICE_PREFIX: &str = "choice/";
 const DISMISS_ID: &str = "dismiss-feedback";
+/// Hidden window that owns the tray popups (menus need an owner window).
+const POPUP_OWNER: &str = "tray-menu-owner";
 
 const SPATIAL_OPTIONS: [(SpatialMode, &str); 4] = [
     (SpatialMode::Keep, "Keep"),
@@ -161,7 +163,7 @@ fn handle_prompt_action(state: &SharedRuntime, id: &str) -> bool {
 
 pub(super) fn build(app: &AppHandle, state: Arc<SharedRuntime>) -> tauri::Result<()> {
     let popup_owner =
-        WindowBuilder::new(app, "tray-menu-owner").visible(false).skip_taskbar(true).decorations(false).build()?;
+        WindowBuilder::new(app, POPUP_OWNER).visible(false).skip_taskbar(true).decorations(false).build()?;
     let owner_hwnd = popup_owner.hwnd()?.0 as isize;
     let launch_state = startup::enabled();
     let launch = CheckMenuItem::with_id(
@@ -259,23 +261,18 @@ pub(super) fn build(app: &AppHandle, state: Arc<SharedRuntime>) -> tauri::Result
             return;
         }
         let TrayIconEvent::Click { button, button_state: MouseButtonState::Up, .. } = event else { return };
-        let result = match button {
-            MouseButton::Left => {
-                let visible_prompts = prompts(&state).clone();
-                let snapshot = state.engine.snapshot();
-                tracing::debug!(revision = snapshot.revision, "Opening audio tray menu");
-                let unavailable = state.engine.unavailable();
-                quick_menu(app, &snapshot, &visible_prompts, unavailable.as_deref())
-                    .and_then(|menu| popup_owner.popup_menu(&menu))
+        match button {
+            MouseButton::Left => open_quick_menu(app, &state),
+            MouseButton::Right => {
+                let result = context_menu(app, &state).and_then(|menu| popup_owner.popup_menu(&menu));
+                if let Err(error) = ice_win::desktop::finish_tray_menu(owner_hwnd) {
+                    tracing::debug!(%error, "Could not signal the tray popup closed");
+                }
+                if let Err(error) = result {
+                    tracing::warn!(%error, "Could not open the tray menu");
+                }
             }
-            MouseButton::Right => context_menu(app, &state).and_then(|menu| popup_owner.popup_menu(&menu)),
-            _ => return,
-        };
-        if let Err(error) = ice_win::desktop::finish_tray_menu(owner_hwnd) {
-            tracing::debug!(%error, "Could not signal the tray popup closed");
-        }
-        if let Err(error) = result {
-            tracing::warn!(%error, "Could not open the tray menu");
+            _ => {}
         }
     });
 
@@ -289,6 +286,29 @@ pub(super) fn build(app: &AppHandle, state: Arc<SharedRuntime>) -> tauri::Result
     let icon = builder.build()?;
     TRAY.with_borrow_mut(|tray| *tray = Some(RegisteredTray { icon, guid }));
     Ok(())
+}
+
+/// The left-click quick-switch menu at the cursor. Also opened by the native pill and the "show notch" hotkey in
+/// `Lite`, which has no notch to show (D-19). Main thread only.
+pub(super) fn open_quick_menu(app: &AppHandle, state: &SharedRuntime) {
+    let Some(owner) = app.get_window(POPUP_OWNER) else {
+        tracing::warn!("Could not open the quick-switch menu: tray not ready");
+        return;
+    };
+    let visible_prompts = prompts(state).clone();
+    let snapshot = state.engine.snapshot();
+    tracing::debug!(revision = snapshot.revision, "Opening audio tray menu");
+    let unavailable = state.engine.unavailable();
+    let result =
+        quick_menu(app, &snapshot, &visible_prompts, unavailable.as_deref()).and_then(|menu| owner.popup_menu(&menu));
+    if let Ok(hwnd) = owner.hwnd()
+        && let Err(error) = ice_win::desktop::finish_tray_menu(hwnd.0 as isize)
+    {
+        tracing::debug!(%error, "Could not signal the tray popup closed");
+    }
+    if let Err(error) = result {
+        tracing::warn!(%error, "Could not open the tray menu");
+    }
 }
 
 fn item(app: &AppHandle, id: &str, text: &str) -> tauri::Result<MenuItem<tauri::Wry>> {

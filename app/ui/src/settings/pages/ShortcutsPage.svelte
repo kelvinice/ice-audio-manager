@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { SettingsClient } from '../../lib/settings/client.svelte';
+  import HotkeyField from '../controls/HotkeyField.svelte';
   import Icon from '../controls/Icon.svelte';
   import InfoBar from '../controls/InfoBar.svelte';
   import KeyCaps from '../controls/KeyCaps.svelte';
@@ -43,6 +44,22 @@
 {/each}
 
 {#if settings}
+  <Section title="Notch">
+    <SettingCard
+      icon="monitor"
+      title="Show the notch"
+      description="Opens the full notch, and closes it on a second press. In Lite it opens the quick-switch menu. Nothing happens over a full-screen game."
+    >
+      {#snippet control()}
+        <HotkeyField
+          label="Show the notch"
+          value={settings.showNotchHotkey}
+          onchange={(hotkey) => client.apply({ type: 'setShowNotchHotkey', hotkey })}
+        />
+      {/snippet}
+    </SettingCard>
+  </Section>
+
   <Section title="Toggle pairs" description="One shortcut flips between two devices, like speakers and headphones.">
     {#each settings.togglePairs as pair (pair.id)}
       <ShortcutCard {client} kind="pair" {pair} />

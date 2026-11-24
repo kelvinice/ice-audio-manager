@@ -31,6 +31,8 @@ const baseSettings: SettingsView = {
   knobGestures: true,
   showDisconnected: true,
   idleLingerSecs: 15,
+  musicServices: { spotify: true, youtubeMusic: true },
+  showNotchHotkey: null,
 };
 
 test('computeArtBackdrop derives 2-stop gradient washes and keeps WCAG AA scrim contrast on bright covers', () => {
@@ -102,7 +104,7 @@ test('resolveMusicServices enables Spotify and YouTube Music by default and trac
   assert.equal(whileSpotify[1].active, false);
 
   const withYtmDisabled = resolveMusicServices(
-    { ...baseSettings, youtubeMusicEnabled: false } as SettingsView,
+    { ...baseSettings, musicServices: { spotify: true, youtubeMusic: false } },
     { ...playingSpotify, appId: 'chrome.exe' },
   );
   assert.deepEqual(

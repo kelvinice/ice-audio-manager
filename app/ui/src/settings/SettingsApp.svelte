@@ -9,6 +9,7 @@
   import InfoBar from './controls/InfoBar.svelte';
   import type { IconName } from './icons';
   import AboutPage from './pages/AboutPage.svelte';
+  import ActivitiesPage from './pages/ActivitiesPage.svelte';
   import AppearancePage from './pages/AppearancePage.svelte';
   import DevicesPage from './pages/DevicesPage.svelte';
   import GeneralPage from './pages/GeneralPage.svelte';
@@ -21,12 +22,13 @@
 
   let { client }: Props = $props();
 
-  type PageId = 'general' | 'devices' | 'shortcuts' | 'notch' | 'appearance' | 'about';
+  type PageId = 'general' | 'devices' | 'shortcuts' | 'notch' | 'activities' | 'appearance' | 'about';
   const PAGES: { id: PageId; title: string; icon: IconName | 'notch' }[] = [
     { id: 'general', title: 'General', icon: 'settings' },
     { id: 'devices', title: 'Devices', icon: 'speakers' },
     { id: 'shortcuts', title: 'Shortcuts', icon: 'keyboard' },
     { id: 'notch', title: 'Notch', icon: 'notch' },
+    { id: 'activities', title: 'Activities', icon: 'music' },
     { id: 'appearance', title: 'Appearance', icon: 'color' },
     { id: 'about', title: 'About', icon: 'info' },
   ];
@@ -180,6 +182,8 @@
               <ShortcutsPage {client} />
             {:else if page === 'notch'}
               <NotchPage {client} />
+            {:else if page === 'activities'}
+              <ActivitiesPage {client} />
             {:else if page === 'appearance'}
               <AppearancePage {client} />
             {:else}

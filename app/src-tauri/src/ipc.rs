@@ -157,6 +157,8 @@ mod tests {
             "",
             &format!("export {}", ice_core::media::MusicServiceId::decl(&cfg)),
             "",
+            &format!("export {}", ice_core::media::MusicServices::decl(&cfg)),
+            "",
             &format!("export {}", MediaAction::decl(&cfg)),
             "",
             &format!("export {}", PlaybackStatus::decl(&cfg)),

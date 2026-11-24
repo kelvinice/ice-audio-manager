@@ -82,6 +82,8 @@ impl Worker {
             | Command::SetNowPlayingPill { .. }
             | Command::SetShowDisconnected { .. }
             | Command::SetIdleLinger { .. }
+            | Command::SetMusicService { .. }
+            | Command::SetShowNotchHotkey { .. }
             | Command::SetDefaultRoles { .. } => self.edit_settings(&command),
         }
     }

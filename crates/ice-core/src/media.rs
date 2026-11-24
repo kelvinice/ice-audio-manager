@@ -9,12 +9,36 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 /// Fixed destinations for the notch's user-initiated launch actions.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "ts", derive(TS))]
 #[serde(rename_all = "snake_case")]
 pub enum MusicServiceId {
     Spotify,
     YoutubeMusic,
+}
+
+/// D-22: which music services get a launch button in the notch. Both on by default (owner).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(TS))]
+#[serde(default, deny_unknown_fields, rename_all = "camelCase")]
+pub struct MusicServices {
+    pub spotify: bool,
+    pub youtube_music: bool,
+}
+
+impl Default for MusicServices {
+    fn default() -> Self {
+        Self { spotify: true, youtube_music: true }
+    }
+}
+
+impl MusicServices {
+    pub fn set(&mut self, service: MusicServiceId, enabled: bool) {
+        match service {
+            MusicServiceId::Spotify => self.spotify = enabled,
+            MusicServiceId::YoutubeMusic => self.youtube_music = enabled,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

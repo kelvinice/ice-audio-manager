@@ -15,11 +15,13 @@ use crate::engine::{
     TogglePairView,
 };
 use crate::hotkey::Chord;
+use crate::media::MusicServices;
 use crate::resolve::{DeviceRef, MatchMode, resolve};
 
 /// v2: performance profile and pinned monitor. v3: `show_disconnected`. v4: saved notch appearance.
 /// v5: `appearance.nowPlaying` (how the now-playing pill behaves). v6: `idle_linger_secs` (D-21.1 L1).
-pub const SCHEMA_VERSION: u32 = 6;
+/// v7: `[music_services]` (D-22 switches) and `show_notch_hotkey` (D-19).
+pub const SCHEMA_VERSION: u32 = 7;
 
 /// Default seconds the notch WebView stays awake at idle before `Balanced` hands over to the native pill
 /// (`Instant` never does; `Lite` has no WebView).
@@ -53,6 +55,11 @@ pub struct Config {
     pub show_disconnected: bool,
     /// D-21.1 L1: how long the notch stays awake at idle before `Balanced` suspends it ([`IDLE_LINGER_SECS`]).
     pub idle_linger_secs: u16,
+    /// D-22: launch buttons in the notch, one switch per service.
+    pub music_services: MusicServices,
+    /// D-19: opens (or closes) the expanded notch; in Lite, the tray quick-switch menu. Unbound by default.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub show_notch_hotkey: Option<Chord>,
 }
 
 impl Default for Config {
@@ -70,6 +77,8 @@ impl Default for Config {
             knob: KnobGestures::default(),
             show_disconnected: false,
             idle_linger_secs: IDLE_LINGER_SECS_DEFAULT,
+            music_services: MusicServices::default(),
+            show_notch_hotkey: None,
         }
     }
 }
@@ -201,7 +210,7 @@ impl Config {
             v if v > SCHEMA_VERSION => Err(ConfigError::TooNew(v)),
             // v0/v1 gain the default profile and an initially unassigned monitor pin, v0–v2 gain
             // `show_disconnected = false`, v0–v4 gain `appearance.nowPlaying = "brief"`, and v0–v5 gain
-            // `idle_linger_secs = 15`, all via serde defaults.
+            // `idle_linger_secs = 15`, and v0–v6 gain both music services on, all via serde defaults.
             _ => Ok(Self { schema_version: SCHEMA_VERSION, ..cfg }),
         }
     }
@@ -296,6 +305,8 @@ impl Config {
             knob_gestures: self.knob.enabled,
             show_disconnected: self.show_disconnected,
             idle_linger_secs: self.idle_linger_secs,
+            music_services: self.music_services,
+            show_notch_hotkey: self.show_notch_hotkey.map(|c| c.to_string()),
         }
     }
 
@@ -396,6 +407,11 @@ impl Config {
                 }
                 next.idle_linger_secs = *secs;
             }
+            Command::SetMusicService { service, enabled } => next.music_services.set(*service, *enabled),
+            Command::SetShowNotchHotkey { hotkey } => {
+                next.show_notch_hotkey = parse_hotkey(hotkey.as_deref())?;
+                next.check_hotkeys_unique()?;
+            }
             Command::SetDefaultRoles { roles } => next.default_roles = *roles,
             _ => return Ok(false),
         }
@@ -412,7 +428,8 @@ impl Config {
             .iter()
             .filter_map(|p| p.hotkey.map(|c| (c, format!("toggle pair \"{}\"", p.id))))
             .chain(self.bindings.iter().filter_map(|b| b.hotkey.map(|c| (c, format!("hotkey \"{}\"", b.id)))))
-            .chain(self.favourites.cycle_hotkey.map(|c| (c, "the favourites hotkey".to_string())));
+            .chain(self.favourites.cycle_hotkey.map(|c| (c, "the favourites hotkey".to_string())))
+            .chain(self.show_notch_hotkey.map(|c| (c, "the show-notch hotkey".to_string())));
         for (chord, owner) in named {
             if let Some((_, first)) = seen.iter().find(|(c, _)| *c == chord) {
                 return Err(format!("{chord} is already used by {first}"));
@@ -690,6 +707,40 @@ mod tests {
                 ..Appearance::default()
             }
         );
+    }
+
+    #[test]
+    fn show_notch_hotkey_is_unbound_by_default_parsed_and_unique() {
+        let mut config = Config::from_toml("schema_version = 6").unwrap();
+        assert_eq!(config.view(&[]).show_notch_hotkey, None, "unbound by default (D-19)");
+
+        let bind = |s: Option<&str>| Command::SetShowNotchHotkey { hotkey: s.map(str::to_string) };
+        assert_eq!(config.apply_setting(&bind(Some("Ctrl+Alt+N")), &[]), Ok(true));
+        let shown = config.view(&[]).show_notch_hotkey.expect("bound");
+        assert_eq!(Config::from_toml(&config.to_toml()).unwrap().view(&[]).show_notch_hotkey, Some(shown.clone()));
+
+        assert!(config.apply_setting(&bind(Some("not a key")), &[]).is_err(), "bad chord");
+        config.favourites.cycle_hotkey = config.show_notch_hotkey;
+        assert!(config.check_hotkeys_unique().is_err(), "one chord, two actions");
+        config.favourites.cycle_hotkey = None;
+
+        assert_eq!(config.apply_setting(&bind(None), &[]), Ok(true), "unbind");
+        assert_eq!(config.view(&[]).show_notch_hotkey, None);
+    }
+
+    #[test]
+    fn v6_migrates_with_both_music_services_on_and_saves_each_switch() {
+        use crate::media::{MusicServiceId, MusicServices};
+        let mut config = Config::from_toml("schema_version = 6\nidle_linger_secs = 30").unwrap();
+        assert_eq!(config.schema_version, SCHEMA_VERSION);
+        assert_eq!(config.idle_linger_secs, 30, "v6 settings are kept");
+        assert_eq!(config.view(&[]).music_services, MusicServices { spotify: true, youtube_music: true });
+
+        let off = Command::SetMusicService { service: MusicServiceId::YoutubeMusic, enabled: false };
+        assert_eq!(config.apply_setting(&off, &[]), Ok(true));
+        assert_eq!(config.apply_setting(&off, &[]), Ok(false), "already off");
+        let saved = Config::from_toml(&config.to_toml()).unwrap();
+        assert_eq!(saved.view(&[]).music_services, MusicServices { spotify: true, youtube_music: false });
     }
 
     #[test]

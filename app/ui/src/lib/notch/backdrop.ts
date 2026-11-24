@@ -30,12 +30,6 @@ export interface ArtBackdropStyle {
   coverLuminance: number;
 }
 
-type ServiceSettingsCompat = SettingsView & {
-  musicServices?: { spotify?: boolean; youtubeMusic?: boolean } | null;
-  spotifyEnabled?: boolean;
-  youtubeMusicEnabled?: boolean;
-};
-
 const DEFAULT_RGB: Rgb = { r: 107, g: 197, b: 255 };
 const DEFAULT_SECONDARY_RGB: Rgb = { r: 58, g: 132, b: 199 };
 const DARK_SCRIM_RGB: Rgb = { r: 12, g: 15, b: 20 };
@@ -183,14 +177,16 @@ export function computeArtBackdrop(art: ArtInfoWithPalette | null | undefined): 
   };
 }
 
-/** Builds enabled D-22 "Music services" quick-launch items (Spotify + YouTube Music, on by default). */
+/**
+ * Builds enabled D-22 "Music services" quick-launch items. Config `[music_services]` (Settings → Activities);
+ * both on by default, and while settings haven't loaded yet.
+ */
 export function resolveMusicServices(
   settings: SettingsView | null | undefined,
   media: NowPlaying | null | undefined,
 ): MusicServiceItem[] {
-  const compat = settings as ServiceSettingsCompat | null | undefined;
-  const spotifyEnabled = compat?.musicServices?.spotify ?? compat?.spotifyEnabled ?? true;
-  const youtubeMusicEnabled = compat?.musicServices?.youtubeMusic ?? compat?.youtubeMusicEnabled ?? true;
+  const spotifyEnabled = settings?.musicServices.spotify ?? true;
+  const youtubeMusicEnabled = settings?.musicServices.youtubeMusic ?? true;
 
   const activeApp = isMediaActive(media) ? media.appId : '';
   const items: MusicServiceItem[] = [];

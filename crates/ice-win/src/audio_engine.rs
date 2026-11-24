@@ -179,6 +179,7 @@ enum HotkeyAction {
     Binding(String),
     Pair(String),
     CycleFavourites,
+    ShowNotch,
     KnobCycle(i32),
     KnobFine(i8),
     KnobMic(f32),

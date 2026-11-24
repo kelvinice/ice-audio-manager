@@ -511,7 +511,9 @@ export class NotchActivityScheduler {
         return { status: 'applied', wokeActivity: false };
       }
 
-      case 'notice': {
+      // `showNotch`: the shell opens the notch (D-19); nothing to schedule here.
+      case 'notice':
+      case 'showNotch': {
         return { status: 'applied', wokeActivity: false };
       }
 

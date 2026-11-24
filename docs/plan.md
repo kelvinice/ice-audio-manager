@@ -257,8 +257,14 @@ Runs between Phase 3 and Phase 4. Item 1 is a bug fix that comes first. D-21 Par
     through `set_input_handler` and the shell wires them (Codex). Still open: the by-hand focus check (QA F4,
     `cargo test -p ice-win real_click -- --ignored`) and the wheel.*
   - The wheel ships only after testing Windows' "scroll inactive windows" setting on and off.
-- [ ] Shell wiring (Codex): pill click wakes and expands the notch; in Lite, a click opens the tray quick-switch menu
-- [ ] "Show notch" hotkey, unbound by default (Claude: binding + engine; Codex: tray/Settings entry)
+- [x] Shell wiring (Codex): pill click wakes and expands the notch; in Lite, a click opens the tray quick-switch menu.
+      *Done 2026-11-24 (Claude): `app/src-tauri/src/show_notch.rs` (`wire_native_pill`); middle click = mute; hover-to-open
+      (opt-in) does the same as a click; nothing happens over a fullscreen game; `tray::open_quick_menu` extracted*
+- [x] "Show notch" hotkey, unbound by default (Claude: binding + engine; Codex: tray/Settings entry). *Done 2026-11-24
+      (Claude): config `show_notch_hotkey` (schema v7, unique with every other chord), `Command::SetShowNotchHotkey`,
+      `EngineEvent::ShowNotch` → `show_notch::show` (toggles the pinned notch; Lite → quick-switch menu); Settings →
+      Shortcuts → Notch*
+- [ ] By hand: hotkey in Instant / Balanced (asleep) / Lite / over a game; pill click and middle click in Balanced and Lite
 - [x] Native pill renderer (Gemini): spike GDI glyphs into the existing DIB first, then Direct2D/DirectWrite only if needed.
       Its RAM budget in every idle profile where it shows (Lite, Balanced < 30/40 MB; Instant no longer suspends) is checked in the
       Phase 6 testing pass. Size and
@@ -314,8 +320,10 @@ Items marked *(needs Settings)* wait for the Phase 4 Settings window. The rest c
   - Quick-launch buttons (`MusicServicesWidget.svelte`, `backdrop.ts#resolveMusicServices`) for Spotify and YouTube Music: icons
     in the side rail while media plays, labelled buttons in the empty state (`open_music_service`).
 - [x] Shell side (Codex): find and launch the installed Spotify / YouTube Music web apps; fall back to the URL.
-- [ ] One switch per service in Settings → Activities (Spotify, YouTube Music), both on by default; config fields with defaults
-      (Claude) *(the switches need Settings; the config can land first)*
+- [x] One switch per service in Settings → Activities (Spotify, YouTube Music), both on by default; config fields with defaults
+      (Claude) *(the switches need Settings; the config can land first)*. *Done 2026-11-24 (Claude): `[music_services]`
+      (schema v7, `ice_core::media::MusicServices`), `Command::SetMusicService`, new Settings → Activities page;
+      `resolveMusicServices` reads `settings.musicServices`*
 
 **D-22 · Lyrics (opt-in, LRCLIB) *(needs Settings)*:**
 - [ ] Settings → Privacy: lists every network feature, its destination and the data sent, with one "all network features
@@ -393,6 +401,8 @@ to the static native pill. Done by Claude; module docs: [app-ui-notch](modules/a
         Appearance (theme and animation with live previews) · About (version, trust promises)
   - [ ] Activities page (needs config for module switches, D-20 R2 / D-22), notch anchor (D-20), favourites cycle hotkey
         (config has `cycle_hotkey` but no command yet), live cost readout (D-21.1 L6)
+    - [x] Activities page with the D-22 music service switches; Shortcuts → Notch has the "show notch" hotkey (2026-11-24)
+    - [ ] Still open: D-20 R2 module switches, notch anchor, favourites cycle hotkey command, live cost readout
 - [ ] Theme system: bundled `Ice` (default, portfolio palette), `Midnight`, `Fluent`, `Minimal`. User themes = CSS files in
       `%APPDATA%\IceAudioManager\themes\` overriding documented `--ice-*` tokens, **validated before applying**, with **live preview**
 - [ ] Strict CSP: a theme with remote `url()`/`@import` produces zero network requests (verified)

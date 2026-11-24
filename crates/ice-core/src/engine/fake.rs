@@ -316,6 +316,8 @@ impl Engine for FakeEngine {
             | Command::SetNowPlayingPill { .. }
             | Command::SetShowDisconnected { .. }
             | Command::SetIdleLinger { .. }
+            | Command::SetMusicService { .. }
+            | Command::SetShowNotchHotkey { .. }
             | Command::SetDefaultRoles { .. } => {
                 let eps = endpoints(&st.snap);
                 match st.config.apply_setting(&command, &eps) {

@@ -81,6 +81,8 @@ function sampleSnapshot(): EngineSnapshot {
       knobGestures: false,
       showDisconnected: false,
       idleLingerSecs: 15,
+      musicServices: { spotify: true, youtubeMusic: true },
+      showNotchHotkey: null,
       appearance: { theme: 'ice', preset: 'smooth', idleStyle: 'mini_pill', nowPlaying: 'brief' },
     },
     media: null,

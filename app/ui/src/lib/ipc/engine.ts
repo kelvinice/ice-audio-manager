@@ -59,6 +59,8 @@ percent: number, muted: boolean, };
 
 export type MusicServiceId = "spotify" | "youtube_music";
 
+export type MusicServices = { spotify: boolean, youtubeMusic: boolean, };
+
 export type MediaAction = "playPause" | "play" | "pause" | "next" | "previous";
 
 export type PlaybackStatus = "playing" | "paused" | "stopped" | "changing" | "opened" | "closed";
@@ -107,7 +109,15 @@ export type SettingsView = { appearance: Appearance, performanceProfile: Perform
 /**
  * Seconds before `Balanced` suspends the idle notch (`config::IDLE_LINGER_SECS`).
  */
-idleLingerSecs: number, };
+idleLingerSecs: number,
+/**
+ * D-22 launch buttons in the notch.
+ */
+musicServices: MusicServices,
+/**
+ * D-19 "show notch" hotkey, if bound.
+ */
+showNotchHotkey: string | null, };
 
 export type EngineSnapshot = { revision: number,
 /**
@@ -149,7 +159,7 @@ settings: SettingsView,
  */
 media: NowPlaying | null, };
 
-export type Command = { "type": "switchTo", deviceId: string, roles: RoleSet, } | { "type": "switchBinding", bindingId: string, } | { "type": "togglePair", pairId: string, } | { "type": "cycleFavourites", flow: Flow, step: number, } | { "type": "setVolume", percent: number, } | { "type": "stepVolume", delta: number, } | { "type": "toggleMute" } | { "type": "toggleMicMute" } | { "type": "media", action: MediaAction, } | { "type": "setSpatial", deviceId: string, mode: SpatialMode, } | { "type": "resolveChoice", requestId: number, deviceId: string | null, } | { "type": "refresh" } | { "type": "setTogglePair", pairId: string, primaryId: string, secondaryId: string, hotkey: string | null, roles: RoleSet | null, } | { "type": "removeTogglePair", pairId: string, } | { "type": "setBinding", bindingId: string, deviceId: string, hotkey: string | null, roles: RoleSet | null, } | { "type": "removeBinding", bindingId: string, } | { "type": "setFavourites", flow: Flow, deviceIds: Array<string>, } | { "type": "setDevicePrefs", deviceId: string, spatial: SpatialMode | null, alias: string | null, hidden: boolean | null, } | { "type": "setTheme", theme: ThemeKind, } | { "type": "setPreset", preset: SpringPreset, } | { "type": "setIdleStyle", style: IdleStyle, } | { "type": "setNowPlayingPill", mode: NowPlayingPill, } | { "type": "setPerformanceProfile", profile: PerformanceProfile, } | { "type": "setPinnedMonitor", displayPath: string, } | { "type": "setKnobGestures", enabled: boolean, } | { "type": "setShowDisconnected", enabled: boolean, } | { "type": "setIdleLinger", secs: number, } | { "type": "setDefaultRoles", roles: RoleSet, };
+export type Command = { "type": "switchTo", deviceId: string, roles: RoleSet, } | { "type": "switchBinding", bindingId: string, } | { "type": "togglePair", pairId: string, } | { "type": "cycleFavourites", flow: Flow, step: number, } | { "type": "setVolume", percent: number, } | { "type": "stepVolume", delta: number, } | { "type": "toggleMute" } | { "type": "toggleMicMute" } | { "type": "media", action: MediaAction, } | { "type": "setSpatial", deviceId: string, mode: SpatialMode, } | { "type": "resolveChoice", requestId: number, deviceId: string | null, } | { "type": "refresh" } | { "type": "setTogglePair", pairId: string, primaryId: string, secondaryId: string, hotkey: string | null, roles: RoleSet | null, } | { "type": "removeTogglePair", pairId: string, } | { "type": "setBinding", bindingId: string, deviceId: string, hotkey: string | null, roles: RoleSet | null, } | { "type": "removeBinding", bindingId: string, } | { "type": "setFavourites", flow: Flow, deviceIds: Array<string>, } | { "type": "setDevicePrefs", deviceId: string, spatial: SpatialMode | null, alias: string | null, hidden: boolean | null, } | { "type": "setTheme", theme: ThemeKind, } | { "type": "setPreset", preset: SpringPreset, } | { "type": "setIdleStyle", style: IdleStyle, } | { "type": "setNowPlayingPill", mode: NowPlayingPill, } | { "type": "setPerformanceProfile", profile: PerformanceProfile, } | { "type": "setPinnedMonitor", displayPath: string, } | { "type": "setKnobGestures", enabled: boolean, } | { "type": "setShowDisconnected", enabled: boolean, } | { "type": "setIdleLinger", secs: number, } | { "type": "setShowNotchHotkey", hotkey: string | null, } | { "type": "setMusicService", service: MusicServiceId, enabled: boolean, } | { "type": "setDefaultRoles", roles: RoleSet, };
 
 export type Notice = { "type": "notConnected", name: string, } | { "type": "chooseDevice", requestId: number, name: string, candidates: Array<DeviceSummary>, } | { "type": "switchFailed", name: string, failedRoles: Array<Role>, } | { "type": "spatialUnavailable", name: string, mode: SpatialMode, reason: string, } | { "type": "hotkeyConflict", bindingId: string, keys: string, } | { "type": "configReplaced", backup: string, error: string, } | { "type": "configInvalid", error: string, } | { "type": "configSaveFailed", error: string, } | { "type": "settingRejected", error: string, };
 
@@ -165,7 +175,7 @@ relinked: boolean,
 /**
  * Set when a spatial format was applied and read back.
  */
-spatialApplied: SpatialMode | null, } | { "type": "deviceArrived", device: DeviceSummary, } | { "type": "deviceLeft", device: DeviceSummary, } | { "type": "notice", notice: Notice, } | { "type": "noticesChanged", notices: Array<Notice>, } | { "type": "settingsChanged", settings: SettingsView, };
+spatialApplied: SpatialMode | null, } | { "type": "deviceArrived", device: DeviceSummary, } | { "type": "deviceLeft", device: DeviceSummary, } | { "type": "notice", notice: Notice, } | { "type": "noticesChanged", notices: Array<Notice>, } | { "type": "settingsChanged", settings: SettingsView, } | { "type": "showNotch" };
 
 export type Envelope = { revision: number, event: EngineEvent, };
 

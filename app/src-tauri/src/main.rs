@@ -9,6 +9,7 @@ mod meter;
 mod placement;
 mod session;
 mod settings;
+mod show_notch;
 mod startup;
 mod tray;
 
@@ -1331,6 +1332,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                     && let Ok(dot) = NativeDotHandle::spawn(primary)
                 {
                     engine_bridge::native_dot_snapshot(&dot, &initial);
+                    show_notch::wire_native_pill(&handle, &setup_state, &dot);
                     dot.set_standby_only(false);
                     *setup_state.native_dot.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = Some(dot);
                 }

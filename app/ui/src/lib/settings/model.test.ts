@@ -16,6 +16,8 @@ const settings: SettingsView = {
   knobGestures: false,
   showDisconnected: false,
   idleLingerSecs: 15,
+  musicServices: { spotify: true, youtubeMusic: true },
+  showNotchHotkey: null,
 };
 
 const snapshot: EngineSnapshot = {

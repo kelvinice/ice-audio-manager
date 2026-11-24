@@ -13,7 +13,7 @@ contract types, and `cargo test -p ice-core --all-features` exports them to `app
 |---|---|
 | `engine.rs` | The contract: `Engine` trait, `Command`, `EngineEvent`, `Envelope`, `EngineSnapshot`, `Notice`, `SettingsView`, `RoleSet`, `PerformanceProfile`, `SpatialMode`, `MediaAction` |
 | `engine/fake.rs` | `FakeEngine`: in-memory engine with the owner's devices, three fake Spotify tracks and stereo meter levels. Used by `--fake-engine`, UI work and tests |
-| `config.rs` | `config.toml` schema (v6: `appearance.nowPlaying` v5, `idle_linger_secs` v6), `Config`, `ConfigStore` (load/save/read), `Config::apply_setting` (every settings command), `Config::view` → `SettingsView` |
+| `config.rs` | `config.toml` schema (v7: `appearance.nowPlaying` v5, `idle_linger_secs` v6, `[music_services]` + `show_notch_hotkey` v7), `Config`, `ConfigStore` (load/save/read), `Config::apply_setting` (every settings command), `Config::view` → `SettingsView` |
 | `resolve.rs` | D-16 device identity: `DeviceRef`, `MatchMode`, `resolve`, `candidates`, `toggle`, `normalize_name` |
 | `device.rs` | `EndpointInfo`, `Flow` (render/capture), `Role`, `DeviceState`, `hardware_key_from_devnode` |
 | `event.rs` | `AudioEvent`: what COM callbacks push into a channel (device added/removed/state/default/property, volume) |
@@ -59,10 +59,11 @@ contract types, and `cargo test -p ice-core --all-features` exports them to `app
 
 ## Tests
 Inline `#[cfg(test)]` in each file. `resolve.rs` is built from the owner's real endpoints (incl. new-USB-port case, QA B3/B4).
-`config.rs` holds the migration fixtures (v2 → v6). Run: `cargo test -p ice-core --all-features`.
+`config.rs` holds the migration fixtures (v2 → v7). Run: `cargo test -p ice-core --all-features`.
 
 ## Change log
 - 2026-11-23 Claude: initial recap.
 - 2026-11-23 Claude: `Command::is_setting()`.
 - 2026-11-24 Claude: schema v5, `Appearance.now_playing` (`NowPlayingPill`: `brief` default, `while_playing`, `off`) + `Command::SetNowPlayingPill`.
 - 2026-11-24 Claude: schema v6, `idle_linger_secs` (`IDLE_LINGER_SECS` 5–600, default 15) + `Command::SetIdleLinger`; `SettingsView.idle_linger_secs`.
+- 2026-11-24 Claude: schema v7, `[music_services]` (`media::MusicServices`, `Command::SetMusicService`) and `show_notch_hotkey` (`Command::SetShowNotchHotkey`, `EngineEvent::ShowNotch`).

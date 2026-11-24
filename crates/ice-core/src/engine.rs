@@ -17,7 +17,7 @@ use ts_rs::TS;
 
 use crate::appearance::{Appearance, IdleStyle, NowPlayingPill, SpringPreset, ThemeKind};
 use crate::device::{DeviceState, Flow, Role};
-use crate::media::NowPlaying;
+use crate::media::{MusicServiceId, MusicServices, NowPlaying};
 
 /// Which default roles a switch sets (D-05, F02).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -263,6 +263,15 @@ pub enum Command {
     SetIdleLinger {
         secs: u16,
     },
+    /// D-19: the "show notch" hotkey (`None` = unbound, the default).
+    SetShowNotchHotkey {
+        hotkey: Option<String>,
+    },
+    /// D-22: show or hide one music service's launch button in the notch.
+    SetMusicService {
+        service: MusicServiceId,
+        enabled: bool,
+    },
     /// Roles used by switches that don't specify their own.
     SetDefaultRoles {
         roles: RoleSet,
@@ -290,6 +299,8 @@ impl Command {
             | Self::SetKnobGestures { .. }
             | Self::SetShowDisconnected { .. }
             | Self::SetIdleLinger { .. }
+            | Self::SetMusicService { .. }
+            | Self::SetShowNotchHotkey { .. }
             | Self::SetDefaultRoles { .. } => true,
             Self::SwitchTo { .. }
             | Self::SwitchBinding { .. }
@@ -375,6 +386,12 @@ pub struct SettingsView {
     /// Seconds before `Balanced` suspends the idle notch (`config::IDLE_LINGER_SECS`).
     #[serde(default = "default_idle_linger_secs")]
     pub idle_linger_secs: u16,
+    /// D-22 launch buttons in the notch.
+    #[serde(default)]
+    pub music_services: MusicServices,
+    /// D-19 "show notch" hotkey, if bound.
+    #[serde(default)]
+    pub show_notch_hotkey: Option<String>,
 }
 
 fn default_idle_linger_secs() -> u16 {
@@ -468,6 +485,9 @@ pub enum EngineEvent {
     SettingsChanged {
         settings: SettingsView,
     },
+    /// D-19: the "show notch" hotkey was pressed. The shell opens or closes the expanded notch (or, in `Lite`, the
+    /// tray quick-switch menu); nothing else changes.
+    ShowNotch,
 }
 
 /// One delta with its revision.
