@@ -27,7 +27,7 @@ contract types, and `cargo test -p ice-core --all-features` exports them to `app
   (subscribe **before** reading the snapshot), `art(id)` → PNG bytes of the last 8 tracks, `meter()` → `MeterSubscription`.
 - **`Command::is_setting()`:** true for the commands that edit `config.toml` (exhaustive match, so a new variant must be classified). The Settings window may only send these.
 - **`Command`:** actions (`SwitchTo`, `SwitchBinding`, `TogglePair`, `CycleFavourites`, `SetVolume`, `StepVolume`, `ToggleMute`,
-  `ToggleMicMute`, `Media`, `SetSpatial`, `ResolveChoice`, `Refresh`) and settings (`SetTogglePair`/`Remove…`, `SetBinding`/`Remove…`,
+  `ToggleMicMute`, `Media` (`PlayPause`, `Play`, `Pause`, `Next`, `Previous`, `Seek { position_ms }`), `SetSpatial`, `ResolveChoice`, `Refresh`) and settings (`SetTogglePair`/`Remove…`, `SetBinding`/`Remove…`,
   `SetFavourites`, `SetDevicePrefs`, `SetTheme`, `SetPreset`, `SetIdleStyle`, `SetNowPlayingPill`, `SetMovingBackdrop`, `SetPerformanceProfile`, `SetPinnedMonitor`,
   `SetKnobGestures`, `SetShowDisconnected`, `SetDefaultRoles`). Settings results: `SettingsChanged` or `Notice::SettingRejected`.
 - **`EngineEvent`:** `DevicesChanged`, `VolumeChanged`, `MicMuteChanged`, `MicVolumeChanged`, `MediaChanged`, `Switched`
@@ -68,3 +68,4 @@ Inline `#[cfg(test)]` in each file. `resolve.rs` is built from the owner's real 
 - 2026-11-24 Claude: schema v6, `idle_linger_secs` (`IDLE_LINGER_SECS` 5–600, default 15) + `Command::SetIdleLinger`; `SettingsView.idle_linger_secs`.
 - 2026-11-24 Claude: schema v7, `[music_services]` (`media::MusicServices`, `Command::SetMusicService`) and `show_notch_hotkey` (`Command::SetShowNotchHotkey`, `EngineEvent::ShowNotch`).
 - 2026-11-24 Gemini: schema v8 (`Appearance.moving_backdrop` default `true`, `Command::SetMovingBackdrop`), `ThemeKind::IceLight`, and `SpringPreset::Bouncy` default.
+- 2026-11-24 Gemini: `MediaAction::Seek { position_ms }` for timeline seeking.

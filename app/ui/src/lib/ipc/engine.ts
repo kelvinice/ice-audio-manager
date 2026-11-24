@@ -1,7 +1,7 @@
 // Auto-generated from the ice-core engine contract.
 // Do not edit manually.
 
-export type SpringPreset = "snappy" | "smooth" | "bouncy" | "off";
+export type SpringPreset = "bouncy" | "smooth" | "snappy" | "off";
 
 export type ThemeKind = "ice" | "ice_light" | "midnight" | "fluent" | "minimal";
 
@@ -65,7 +65,7 @@ export type MusicServiceId = "spotify" | "youtube_music";
 
 export type MusicServices = { spotify: boolean, youtubeMusic: boolean, };
 
-export type MediaAction = "playPause" | "play" | "pause" | "next" | "previous";
+export type MediaAction = "playPause" | "play" | "pause" | "next" | "previous" | { "seek": { positionMs: number, } };
 
 export type PlaybackStatus = "playing" | "paused" | "stopped" | "changing" | "opened" | "closed";
 

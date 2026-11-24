@@ -31,6 +31,7 @@ any time (D-15). Heavy work (image decode, colour extraction, device sorting) ha
 | `notch/beat.ts` | `BeatShaper`: meter frame → 14 bar targets from beats, not raw loudness (per-channel dB body level + recent peak; a new pattern per beat; centre swings, edges flick; silence = rest) plus smoothed `tempoRate` (~0.58–1.65×). `pickBars` for the 5-bar variants |
 | `notch/activities/NotchBackdrop.svelte` | V2 default 9-orb orbital lava-lamp `.art-wash` (`wash-base` + `screen` blending on dark themes, `normal` on `ice_light`, scaled smoothly by `subscribeTempo` and paused via `animation-play-state`) + opt-in V1 blurred cover & `.art-scrim` gated by `--ice-art-backdrop` |
 | `notch/activities/AlbumArtTile.svelte` | Album art / placeholder tile with crossfade and optional `radius` prop (defaults to `--ice-radius-md` / `--ice-radius-sm`; track pill passes `size={34}` `radius="16px"`) |
+| `notch/scrubber.ts` | Pure media-scrubber maths: `clampSeekPositionMs`, `pointerSeekMs`, `stepSeekMs`, and `nextSecondTickDelayMs` (aligned 1 Hz timer delay for the expanded card) |
 
 ## `src/notch/activities/` (one component per job)
 `IdlePill`, `VolumeActivity`, `SwitchActivity`, `PlugActivity`, `MicActivity`, `TrackActivity`, `ExpandedNotch` (container), `ExpandedMediaCard`,
@@ -38,7 +39,7 @@ any time (D-15). Heavy work (image decode, colour extraction, device sorting) ha
 
 **Expanded layout** (`EXPANDED_W` × `EXPANDED_H_MEDIA`/`EXPANDED_H_EMPTY` in `geometry.ts`): a main column (media or empty card, then
 volume row and device chips) beside a side rail (`NotchSideRail`: pin, mic, music services while media plays, settings). The media card holds
-only art, title/artist, transport and the scrubber. The volume bar is a click/drag slider (`set_volume`, throttled to 40 ms). There is no
+only art, title/artist, transport and an interactive seek scrubber (`ExpandedMediaCard`, pointer capture + keyboard `±5s`/`±15s`/`Home`/`End` via `MediaAction` `seek`, live 1 Hz interpolation while playing and visible). The volume bar is a click/drag slider (`set_volume`, throttled to 40 ms). There is no
 device picker in the notch: Settings → Devices chooses and orders the chips. The card heights are fixed, so changing a row's height means
 updating the constants.
 
@@ -63,7 +64,7 @@ updating the constants.
 - `npm test` lists test files explicitly in `package.json`; a new `*.test.ts` must be added there.
 
 ## Tests
-`spring.test.ts`, `scheduler.test.ts`, `visualizer.test.ts`, `devices.test.ts`, `backdrop.test.ts` (node `--test`). Visual QA: 100%/150% scaling, light/dark, both monitors ([manual-checklist](../qa/manual-checklist.md)).
+`spring.test.ts`, `scheduler.test.ts`, `scrubber.test.ts`, `visualizer.test.ts`, `devices.test.ts`, `backdrop.test.ts` (node `--test`). Visual QA: 100%/150% scaling, light/dark, both monitors ([manual-checklist](../qa/manual-checklist.md)).
 
 ## Change log
 - 2026-11-23 Claude: initial recap.
@@ -76,3 +77,4 @@ updating the constants.
 - 2026-11-24 Claude: `TrackActivity` has no transport buttons; a waveform scrubber (`VisualizerBars variant="wide"` + `spreadLevels`, accent up to the played position). Idle linger read from settings.
 - 2026-11-24 Claude: `beat.ts` `BeatShaper` replaces `BarShaper` (beat-driven, 14 independent bars, quick fall, lower rest); `spreadLevels` → `withRestShape`.
 - 2026-11-24 Gemini: D-25 9-orb lava-lamp `.art-wash` (`NotchBackdrop.svelte`, `backdrop.ts`, `--ice-ambient-period: 9s`/`13s`), sibling `.pill-shadow` in `NotchApp.svelte`, `subscribeTempo` / `BeatShaper.tempoRate`, `ice_light` theme (`adaptAccentForSurface`), `292×46` music pill (`34×34` `16px` art), and `'bouncy'` default fallback.
+- 2026-11-24 Gemini: interactive progress seeking on `ExpandedMediaCard` (`scrubber.ts`, `MediaAction` `seek`, 1 Hz playback interpolation while expanded and visible).

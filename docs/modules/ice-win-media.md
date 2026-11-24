@@ -27,7 +27,7 @@ browser or installed app is the second). No network, no sign-in.
 - **Art pipeline:** Windows' imaging API (no image crate): decode, Fant downscale to ≤ 128 px (`ART_PX`), EXIF orientation, straight alpha → PNG;
   content-hash id for `iceart://<id>`; accent via `ice_core::media::accent_for_art` / `readable_accent`.
 - The engine merges `MediaUpdate` into `snapshot.media`, emits `MediaChanged`, and keeps the last 8 PNGs for `Engine::art`.
-- Commands: `Command::Media { action }` → `media::send`.
+- Commands: `Command::Media { action }` → `media::send` (`PlayPause`, `Play`, `Pause`, `Next`, `Previous`, and `Seek { position_ms }` via `TryChangePlaybackPositionAsync` relative to `Timeline.StartTime`, clamped to `[StartTime, EndTime]`).
 
 ## Traps
 - **Never log track titles above `debug`** (privacy, code-practices §4).
@@ -42,3 +42,4 @@ Unit tests for colour maths live in `ice-core`; this module is covered by the ma
 ## Change log
 - 2026-11-23 Claude: initial recap.
 - 2026-11-24 Claude: confirm reads, duration-jump detection and a short first-read art budget (fixes a ~5 s stale title on song change).
+- 2026-11-24 Gemini: added `MediaAction::Seek { position_ms }` via `TryChangePlaybackPositionAsync` (`seek_ticks` / `clamp_seek_ticks`).

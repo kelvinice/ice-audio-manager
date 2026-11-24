@@ -144,8 +144,24 @@ pub fn send(mgr: &Manager, action: MediaAction) -> Result<bool> {
         MediaAction::Pause => s.TryPauseAsync()?,
         MediaAction::Next => s.TrySkipNextAsync()?,
         MediaAction::Previous => s.TrySkipPreviousAsync()?,
+        MediaAction::Seek { position_ms } => s.TryChangePlaybackPositionAsync(seek_ticks(&s, position_ms))?,
     };
     wait(&op, CALL_LIMIT)
+}
+
+/// Resolves a millisecond track offset into GSMTC's 100 ns timeline coordinates, anchored to `StartTime`.
+fn seek_ticks(s: &Session, position_ms: u64) -> i64 {
+    let (start, end) = s.GetTimelineProperties().ok().map_or((0, 0), |t: Timeline| {
+        let tick = |r: Result<windows::Foundation::TimeSpan>| r.map_or(0, |v| v.Duration);
+        (tick(t.StartTime()), tick(t.EndTime()))
+    });
+    clamp_seek_ticks(start, end, position_ms)
+}
+
+/// Converts a millisecond offset relative to `start` into 100 ns ticks clamped to `[start, end]`.
+fn clamp_seek_ticks(start: i64, end: i64, position_ms: u64) -> i64 {
+    let offset = i64::try_from(position_ms.saturating_mul(10_000)).unwrap_or(i64::MAX);
+    if end > start { start.saturating_add(offset).clamp(start, end) } else { offset }
 }
 
 /// Downscaled album art: PNG bytes for the UI plus its id and accent.
@@ -465,6 +481,14 @@ mod tests {
         assert_eq!(timeline_ms(0, 200_000_000, 900_000_000), (Some(20_000), Some(20_000)));
         assert_eq!(timeline_ms(0, 200_000_000, -5), (Some(0), Some(20_000)));
         assert_eq!(timeline_ms(0, 0, 5), (None, None));
+    }
+
+    #[test]
+    fn seek_ticks_are_relative_to_start_and_clamped() {
+        assert_eq!(clamp_seek_ticks(0, 200_000_000, 5_000), 50_000_000);
+        assert_eq!(clamp_seek_ticks(10_000_000, 210_000_000, 5_000), 60_000_000);
+        assert_eq!(clamp_seek_ticks(0, 200_000_000, 90_000), 200_000_000);
+        assert_eq!(clamp_seek_ticks(0, 0, 12_345), 123_450_000);
     }
 
     #[test]

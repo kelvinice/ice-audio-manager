@@ -75,13 +75,18 @@ pub enum SpatialMode {
 /// Transport control for the current media session (Spotify, browser, …).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "ts", derive(TS))]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", rename_all_fields = "camelCase")]
 pub enum MediaAction {
     PlayPause,
     Play,
     Pause,
     Next,
     Previous,
+    /// Seek to an offset from the start of the current track, in milliseconds.
+    Seek {
+        #[cfg_attr(feature = "ts", ts(type = "number"))]
+        position_ms: u64,
+    },
 }
 
 /// A device as the UI sees it.
@@ -694,6 +699,15 @@ mod tests {
         }
         eng.send(Command::Media { action: MediaAction::Previous });
         assert!(matches!(next(&rx).event, EngineEvent::MediaChanged { media: Some(ref m) } if m.title == first.title));
+        let duration = first.duration_ms.unwrap();
+        eng.send(Command::Media { action: MediaAction::Seek { position_ms: 42_000 } });
+        assert!(
+            matches!(next(&rx).event, EngineEvent::MediaChanged { media: Some(ref m) } if m.position_ms == Some(42_000))
+        );
+        eng.send(Command::Media { action: MediaAction::Seek { position_ms: duration + 10_000 } });
+        assert!(
+            matches!(next(&rx).event, EngineEvent::MediaChanged { media: Some(ref m) } if m.position_ms == Some(duration))
+        );
     }
 
     #[cfg(feature = "ts")]
@@ -702,7 +716,9 @@ mod tests {
         use ts_rs::{Config, TS};
         let cfg = Config::default();
         assert!(crate::media::NowPlaying::decl(&cfg).contains("positionMs"));
-        assert!(MediaAction::decl(&cfg).contains("\"playPause\""));
+        let media_decl = MediaAction::decl(&cfg);
+        assert!(media_decl.contains("\"playPause\""));
+        assert!(media_decl.contains("positionMs"));
         assert!(crate::meter::MeterFrame::decl(&cfg).contains("channels: Array<number>"));
     }
 

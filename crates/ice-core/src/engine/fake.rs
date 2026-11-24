@@ -338,14 +338,19 @@ impl Engine for FakeEngine {
                     MediaAction::Pause => (st.track, PlaybackStatus::Paused),
                     MediaAction::Next => (st.track + 1, status),
                     MediaAction::Previous => (st.track + FAKE_TRACKS.len() - 1, status),
+                    MediaAction::Seek { .. } => (st.track, status),
                 };
                 st.track = track % FAKE_TRACKS.len();
                 let mut media = fake_track(st.track, status);
-                if !matches!(action, MediaAction::Next | MediaAction::Previous) {
-                    media.position_ms = st.snap.media.as_ref().and_then(|m| m.position_ms);
-                } else {
-                    media.position_ms = Some(0);
-                }
+                media.position_ms = match action {
+                    MediaAction::Next | MediaAction::Previous => Some(0),
+                    MediaAction::Seek { position_ms } => {
+                        Some(media.duration_ms.map_or(position_ms, |dur| position_ms.min(dur)))
+                    }
+                    MediaAction::PlayPause | MediaAction::Play | MediaAction::Pause => {
+                        st.snap.media.as_ref().and_then(|m| m.position_ms)
+                    }
+                };
                 st.snap.media = Some(media.clone());
                 emit(&mut st, EngineEvent::MediaChanged { media: Some(media) });
             }
