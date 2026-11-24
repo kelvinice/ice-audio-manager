@@ -10,6 +10,7 @@
     romajiLitCount,
     type LyricRow,
   } from '../../lib/notch/lyrics';
+  import { fitLine } from '../../lib/notch/fitLine';
   import { toMsNumber } from '../../lib/notch/scheduler';
   import { liveMediaPositionMs } from '../../lib/notch/scrubber';
 
@@ -157,7 +158,11 @@
             style:transform={`translateY(${ladderY('pill', row.slot, hasSub)}px)`}
           >
             <div class="rung-enter">
-              <span class="rung-text">{@render lineText(row)}</span>
+              <span
+                class="rung-text"
+                class:fitted={row.slot === 0}
+                use:fitLine={{ enabled: row.slot === 0, word: row.slot === 0 ? frame.activeWordIndex : -1, key: row.key, center: false }}
+              ><span class="fit">{@render lineText(row)}</span></span>
               {@render subtitle(row.line, row.slot === 0, row.role === 'current')}
             </div>
           </div>
@@ -183,7 +188,11 @@
           onclick={() => seekTo(row)}
         >
           <span class="rung-enter">
-            <span class="rung-text">{@render lineText(row)}</span>
+            <span
+              class="rung-text"
+              class:fitted={row.slot === 0}
+              use:fitLine={{ enabled: row.slot === 0, word: row.slot === 0 ? frame.activeWordIndex : -1, key: row.key, center: true }}
+            ><span class="fit">{@render lineText(row)}</span></span>
             {@render subtitle(row.line, row.slot === 0, row.role === 'current')}
           </span>
         </button>
@@ -237,7 +246,9 @@
     position: relative;
     flex: 1;
     min-width: 0;
-    overflow: hidden;
+    /* `clip` + a small margin: the active word's 1 px lift and glow aren't shaved off at the ladder's edges. */
+    overflow: clip;
+    overflow-clip-margin: 2px;
   }
 
   .rung {
@@ -278,6 +289,44 @@
     transition:
       transform 460ms cubic-bezier(0.22, 1, 0.36, 1),
       color 320ms ease;
+  }
+
+  /* Main row: no ellipsis (it can't apply to the inline-block karaoke words, which were cut mid-character); the line
+     shrinks to fit or slides with the singing instead (`fitLine`). Vertical overflow stays visible for the lift. */
+  .rung-text.fitted {
+    overflow-x: clip;
+    overflow-y: visible;
+    text-overflow: clip;
+  }
+
+  .fit {
+    display: inline;
+  }
+
+  .rung-text.fitted > .fit {
+    display: inline-block;
+    position: relative; /* offsetParent for the word measurements */
+    white-space: nowrap;
+    transform-origin: left center;
+    transition: transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  /* Soft edges where a long line is cut while sliding. */
+  .rung-text.fade-r {
+    mask-image: linear-gradient(90deg, #000 calc(100% - 16px), transparent);
+  }
+
+  .rung-text.fade-l {
+    mask-image: linear-gradient(90deg, transparent, #000 16px);
+  }
+
+  .rung-text.fade-l.fade-r {
+    mask-image: linear-gradient(90deg, transparent, #000 16px, #000 calc(100% - 16px), transparent);
+  }
+
+  /* A fitted card line is laid out from the left; `fitLine` centres it with the transform. */
+  .card-ladder .rung-text.fitting {
+    text-align: left;
   }
 
   .lyrics-ext.pill .rung-text {
@@ -410,6 +459,7 @@
   .lyrics-ext.instant .rung,
   .lyrics-ext.instant .rung-enter,
   .lyrics-ext.instant .rung-text,
+  .lyrics-ext.instant .fit,
   .lyrics-ext.instant .word,
   .lyrics-ext.instant .subtitle-line,
   .lyrics-ext.instant .romaji-word {

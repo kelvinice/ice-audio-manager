@@ -338,16 +338,24 @@ Items marked *(needs Settings)* wait for the Phase 4 Settings window. The rest c
 
 **D-22 · Lyrics (opt-in, LRCLIB + local `.lrc` + Romaji + Storage cache) *(needs Settings)*:**
 - Full design spec: [`docs/lyrics.md`](lyrics.md) (bottom pill/card extension, active-word emphasis, Options A & B + Option C constraints, offline Japanese Romaji, Settings → Privacy & Storage max cache size, and phased implementation path).
-- [ ] Settings → Privacy: lists every network feature, its destination and the data sent, with one "all network features
-      off" switch (Codex)
-- [ ] Rust LRCLIB client (Claude), written from LRCLIB's docs (code-practices §1.8):
+- **Status, review and fixes:** what was built, a review of further improvements, and the clipped-line fix are in
+  [`docs/lyrics.md`](lyrics.md) §7 ([review: improvements not built yet](lyrics.md#7-review-2026-11-24-improvements-found-not-built-yet))
+  and §8 ([fixed: last characters cut off](lyrics.md#8-fixed-2026-11-24-the-last-characters-of-a-line-were-cut-off)).
+- [x] Settings → Privacy: lists every network feature, its destination and the data sent, with one "all network features
+      off" switch (Codex). *Built by Gemini, 2026-11-24 (`PrivacyPage.svelte`)*
+- [x] Rust LRCLIB client (Claude), written from LRCLIB's docs (code-practices §1.8). *Built by Gemini, 2026-11-24
+      (`ice-win/src/lyrics/lrclib.rs`):*
   - allowlisted host; title/artist/album/duration only;
   - a one-track lookup first, then optional automatic lookups;
   - results bound to the requesting track, late responses dropped;
   - "no match" preferred over uncertain timing;
   - local cache, cleared when turned off.
-- [ ] Lyrics sub-view in the expanded card (Gemini): synced lines interpolated from GSMTC position, ticking only while
+- [x] Lyrics sub-view in the expanded card (Gemini): synced lines interpolated from GSMTC position, ticking only while
       visible and playing; V6 styling (bright current line, fading neighbours)
+  - [x] 2026-11-24 (Claude): two-row music pill; line changes scroll (pill and card); generated Romaji separated from
+        paired subtitles and no longer cached; Romaji particles and word breaks; Romaji follows the singing; long lines
+        shrink or slide instead of losing their last characters (lyrics.md §8)
+  - [ ] Open improvements: lyrics.md §7 (timing nudge, gap countdown, loading state, kanji Romaji without the IME, …)
 
 **D-23 · Look of the expanded notch:**
 - [ ] 2–3 colour art palette and average luminance in `ice_core::media`, next to today's accent (Claude)

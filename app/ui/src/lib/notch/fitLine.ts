@@ -37,7 +37,7 @@ export function fitLineLayout(avail: number, need: number, activeEnd: number | n
   const overflow = width - room;
   const target = activeEnd === null ? 0 : activeEnd * scale - room * FOLLOW_AT;
   const shift = Math.min(overflow, Math.max(0, target));
-  return { scale, x: -shift, fadeLeft: shift > 0.5, fadeRight: shift < overflow - 0.5 };
+  return { scale, x: shift > 0 ? -shift : 0, fadeLeft: shift > 0.5, fadeRight: shift < overflow - 0.5 };
 }
 
 export interface FitParams {

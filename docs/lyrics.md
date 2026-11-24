@@ -301,8 +301,33 @@ spoken, and the Romaji sweep (above).
 | 1 | **Timing nudge per song** (e.g. −/+ 250 ms in the card, saved with the cache entry) | LRCLIB line timings are often a little early or late; today the only fix is editing an `.lrc` by hand | Medium |
 | 2 | **Gap countdown**: in an instrumental gap over ~4 s, three dots that fill toward the next line instead of a static "···" | Tells the listener the lyrics haven't stalled; the wake timer already knows when the next line starts | Small |
 | 3 | **Loading state**: a soft shimmer on the drawer while an LRCLIB lookup is in flight | §2.2 promises it; the UI shows nothing until the lookup ends | Small |
-| 4 | **Long lines**: shrink-to-fit (down to ~0.85) or one slow marquee pass instead of an ellipsis | Many J-pop lines are wider than the 292 px pill, so their end is never visible | Small–medium |
+| 4 | ~~**Long lines**: shrink-to-fit or a marquee instead of an ellipsis~~ **Done 2026-11-24** with the §8 fix: shrink to 82 %, then slide with the singing | Many J-pop lines are wider than the 292 px pill, so their end was never visible | — |
 | 5 | **Kanji Romaji without the IME** (the §4.2 fallback as planned) | PCs without the Japanese language pack show no Romaji on most Japanese lines | Medium (+1–2 MB; a crate choice under §1.8) |
 | 6 | **Romaji long vowels**: an option for macrons (`tōkyō`) or doubling (`toukyou`, today) | Readers prefer one or the other | Small (a setting) |
 | 7 | **Translation and Romaji together** when a song has both (three rows in the card) | Today a paired translation wins and generated Romaji isn't shown for that line | Small (card only) |
 | 8 | **Fake engine parity**: `--fake-engine` still strips paired subtitles when Romaji is off | It now differs from the real engine, where paired lines always show | Tiny |
+
+---
+
+## 8. Fixed (2026-11-24): the last characters of a line were cut off
+
+**Report (owner):** in the music pill, lyric lines sometimes lost the last characters of their last word.
+
+**Cause (two problems):**
+1. **Ellipsis can't apply to the karaoke line.** With word highlight on, the main line is a row of `inline-block` word
+   spans (so each word can lift and scale). `text-overflow: ellipsis` only works on inline text, so a line wider than
+   the row was cut mid-character at the edge, with no "…". It hit the pill most (292 px wide, 12 px text, often
+   long Japanese lines) and only the highlighted line, which is why it looked like "sometimes".
+2. **The active word grows past the edge.** The sung word scales to 1.07 with a glow. On the last word of a line that
+   just fits, those extra pixels were cut by `overflow: hidden`, and the 1 px lift could be shaved at the top.
+
+**Fix** (`app/ui/src/lib/notch/fitLine.ts`, `LyricsExtension.svelte`):
+- The main line **shrinks to fit**, down to 82 % (`FIT_MIN_SCALE`), keeping 4 px free at the edge for the lift
+  (`FIT_EDGE_PX`). The card re-centres a shrunk line.
+- A line still too long **slides with the singing**: the sung word's end is kept at 70 % of the row, so the last word
+  is fully visible by the time it's sung. Soft 16 px fades mark the cut edges.
+- It re-measures only when the line or the sung word changes (no loop), plus once when fonts finish loading.
+  `transform` only; instant with reduced motion.
+- The ladder uses `overflow: clip` with a 2 px clip margin, so the lift and glow aren't shaved vertically.
+- Other rows (next, previous) are plain text and keep their ellipsis.
+- Tested in `fitLine.test.ts`: fits, shrinks, slides to the very end, centres in the card.
