@@ -69,16 +69,23 @@ impl Visualizer {
     }
 }
 
-fn forward(subscription: MeterSubscription, stop: &AtomicBool, emit: impl Fn(&MeterFrame) -> tauri::Result<()>) {
+fn forward(subscription: MeterSubscription, stop: &AtomicBool, mut emit: impl FnMut(&MeterFrame) -> tauri::Result<()>) {
     while !stop.load(Ordering::Acquire) {
         match subscription.recv_timeout(METER_INTERVAL) {
-            Ok(frame) if !stop.load(Ordering::Acquire) => {
+            Ok(mut frame) => {
+                // Drain any newer queued frames so a brief UI stall never replays a backlog of stale peaks.
+                while let Ok(newer) = subscription.try_recv() {
+                    frame = newer;
+                }
+                if stop.load(Ordering::Acquire) {
+                    break;
+                }
                 if let Err(error) = emit(&frame) {
                     tracing::debug!(%error, "Notch meter receiver unavailable");
                     break;
                 }
             }
-            Ok(_) | Err(RecvTimeoutError::Disconnected) => break,
+            Err(RecvTimeoutError::Disconnected) => break,
             Err(RecvTimeoutError::Timeout) => {}
         }
     }
@@ -163,5 +170,25 @@ mod tests {
             );
             worker.join().unwrap();
         }
+    }
+
+    #[test]
+    fn coalesces_queued_frames_to_latest() {
+        let (mut sink, subscription) = ice_core::meter::channel();
+        let f1 = MeterFrame::new(0.2, vec![0.2, 0.2]);
+        let f2 = MeterFrame::new(0.5, vec![0.5, 0.5]);
+        let f3 = MeterFrame::new(0.9, vec![0.9, 0.9]);
+        sink.offer(&f1);
+        sink.offer(&f2);
+        sink.offer(&f3);
+        drop(sink);
+
+        let mut seen = Vec::new();
+        let stop = AtomicBool::new(false);
+        forward(subscription, &stop, |frame| {
+            seen.push(frame.clone());
+            Ok(())
+        });
+        assert_eq!(seen, vec![f3]);
     }
 }

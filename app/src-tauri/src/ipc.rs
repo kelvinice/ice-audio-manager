@@ -14,7 +14,7 @@ pub enum ActivityKind {
     Track,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct MonitorSummary {
     pub index: usize,
@@ -42,7 +42,7 @@ pub struct HitRect {
     pub height: f64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct NotchSnapshot {
     #[ts(type = "number")]

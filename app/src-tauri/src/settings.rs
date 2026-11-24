@@ -77,18 +77,26 @@ pub(super) fn set_launch_at_sign_in(enabled: bool) -> Result<Option<bool>, Strin
 }
 
 #[tauri::command]
-pub(super) fn get_lyrics_storage_stats(state: State<'_, Arc<SharedRuntime>>) -> ice_core::lyrics::LyricsStorageStats {
+pub(super) async fn get_lyrics_storage_stats(
+    state: State<'_, Arc<SharedRuntime>>,
+) -> Result<ice_core::lyrics::LyricsStorageStats, String> {
     let max_mb = state.engine.snapshot().settings.lyrics.cache_max_mb;
-    ice_win::lyrics::storage_stats(max_mb)
+    tauri::async_runtime::spawn_blocking(move || ice_win::lyrics::storage_stats(max_mb))
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-pub(super) fn clear_lyrics_cache(state: State<'_, Arc<SharedRuntime>>) -> ice_core::lyrics::LyricsStorageStats {
+pub(super) async fn clear_lyrics_cache(
+    state: State<'_, Arc<SharedRuntime>>,
+) -> Result<ice_core::lyrics::LyricsStorageStats, String> {
     let max_mb = state.engine.snapshot().settings.lyrics.cache_max_mb;
-    ice_win::lyrics::clear_lyrics_cache(max_mb)
+    tauri::async_runtime::spawn_blocking(move || ice_win::lyrics::clear_lyrics_cache(max_mb))
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-pub(super) fn open_lyrics_folder() -> Result<(), String> {
-    ice_win::lyrics::open_custom_folder()
+pub(super) async fn open_lyrics_folder() -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(ice_win::lyrics::open_custom_folder).await.map_err(|e| e.to_string())?
 }

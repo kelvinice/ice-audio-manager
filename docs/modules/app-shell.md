@@ -11,14 +11,14 @@ state to the UI, and exposes a small set of Tauri commands. Thin by rule: valida
 | File | What it does |
 |---|---|
 | `main.rs` | **1386 lines (over limit, split planned).** `SharedRuntime` (all shared state), `#[tauri::command]` handlers, `create_notch_window`, idle suspend/resume, cursor poll, **`--bench` benchmark harness**, `run()`/`main()` |
-| `engine_bridge.rs` | `EngineSlot` (engine or "starting" error), `start_audio` (config at `%APPDATA%\IceAudioManager\config.toml`), `retry_start` (1 s → 30 s backoff), `follow` (subscribe → snapshot → deltas, re-snapshot on gap), `project` (engine snapshot → `NotchSnapshot`), `TrackKey`, `watch` |
-| `settings.rs` | Settings window (1020×680, min 720×480, transparent over Mica, title bar follows light/dark via `WindowEvent::ThemeChanged`) and its commands: `apply_setting` (only `Command::is_setting`), `get_launch_at_sign_in`, `set_launch_at_sign_in` |
+| `engine_bridge.rs` | `EngineSlot` (engine or "starting" error), `start_audio` (config at `%APPDATA%\IceAudioManager\config.toml`), `retry_start` (1 s → 30 s backoff), `follow` (subscribe → snapshot → deltas, re-snapshot on gap), `project` (engine snapshot → `NotchSnapshot`), `TrackKey`, `watch`; guards closed-window emits (`emit_to_open`) and fast-paths `LyricsChanged` / non-waking `MediaChanged` |
+| `settings.rs` | Settings window (1020×680, min 720×480, transparent over Mica, title bar follows light/dark via `WindowEvent::ThemeChanged`) and its commands: `apply_setting` (only `Command::is_setting`), `get_launch_at_sign_in`, `set_launch_at_sign_in`, plus async `spawn_blocking` lyrics storage commands |
 | `startup.rs` | Launch at sign-in, shared by the tray and Settings; reads the registry each time (no cached copy) |
 | `ipc.rs` | `NotchSnapshot`, `NotchDelta`, `ActivityKind`, `MonitorSummary` (index, id, `display_path`, `name`, position, size, scale, Hz), `HitRect` (TS bindings generated into `app/ui/src/lib/ipc/types.ts`) and the `open_music_service` command (notch window only; runs `ice_win::music_service::open` on a blocking task) |
 | `show_notch.rs` | D-19: `show` (hotkey toggles the pinned notch, pill click opens it; Lite → tray quick-switch menu; nothing over a game), `wire_native_pill` |
 | `session.rs` | D-21.1 L3: `ice_win::session_watch` → clears the notch pin (`expanded`) on session lock or sleep |
 | `placement.rs` | `Placement` (profile, pinned monitor, coverage, `gaming`, `generation`), `watch` (fullscreen + display changes), `reconcile` (apply profile/monitor/gaming to windows and the native pill) |
-| `meter.rs` | `Visualizer`: the shell owns the `audio://meter/v1` subscription; the WebView only *requests* frames |
+| `meter.rs` | `Visualizer`: the shell owns the `audio://meter/v1` subscription and drains queued frames to the latest reading before emitting; the WebView only *requests* frames |
 | `art.rs` | `iceart://<id>` handler: engine PNGs only, no paths/queries/other methods |
 | `logging.rs` | File logs in `%LOCALAPPDATA%\IceAudioManager\logs` (`--verbose` for debug) |
 | `tray.rs`, `tray/preferences.rs` | See [app-tray](app-tray.md) |
@@ -65,3 +65,4 @@ Unit tests in `art.rs`, `engine_bridge.rs`, `ipc.rs`, `meter.rs`, `placement.rs`
 - 2026-11-24 Claude: `show_notch.rs` (D-19): the "show notch" hotkey (`EngineEvent::ShowNotch`) and the native pill click/middle click; `tray::open_quick_menu` is shared with the tray's left click.
 - 2026-11-24 Gemini: `settings.rs` default Settings window size increased from `920×640` to `1020×680`.
 - 2026-11-24 Gemini: `NOTCH_CANVAS_H` raised to `292` (for bottom lyrics extension); added Settings-only `get_lyrics_storage_stats`, `clear_lyrics_cache`, and `open_lyrics_folder` commands (`permissions/shell.toml`).
+- 2026-11-24 Gemini: `meter::forward` drains queued frames to latest, `SharedRuntime::update_and_emit` / `engine_bridge` skip unchanged `NotchSnapshot` bumps and closed-window emits (`LyricsChanged`, non-waking `MediaChanged` fast paths), and `settings.rs` lyrics storage commands run via `spawn_blocking`.

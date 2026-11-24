@@ -139,15 +139,25 @@ impl SharedRuntime {
     }
 
     fn update_and_emit(&self, app: &AppHandle, mutator: impl FnOnce(&mut NotchSnapshot)) -> NotchSnapshot {
-        let snap = {
+        let (snap, changed) = {
             let mut guard = self.snapshot.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-            guard.revision = guard.revision.saturating_add(1);
-            mutator(&mut guard);
-            guard.clone()
+            let before = guard.clone();
+            let mut after = guard.clone();
+            mutator(&mut after);
+            after.revision = before.revision;
+            if after == before {
+                (before, false)
+            } else {
+                after.revision = guard.revision.saturating_add(1);
+                *guard = after.clone();
+                (after, true)
+            }
         };
-        let delta = NotchDelta::State { snapshot: snap.clone() };
-        let _ = app.emit_to("notch", "notch://delta/v1", &delta);
-        let _ = app.emit_to("settings", "notch://delta/v1", &delta);
+        if changed {
+            let delta = NotchDelta::State { snapshot: snap.clone() };
+            emit_to_open(app, "notch", "notch://delta/v1", &delta);
+            emit_to_open(app, "settings", "notch://delta/v1", &delta);
+        }
         snap
     }
 
@@ -159,6 +169,12 @@ impl SharedRuntime {
         let idx = self.snapshot_clone().active_monitor;
         let guard = self.monitors.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         guard.get(idx).or_else(|| guard.first()).cloned()
+    }
+}
+
+pub(crate) fn emit_to_open<T: Serialize + ?Sized>(app: &AppHandle, label: &str, event: &str, payload: &T) {
+    if app.get_webview_window(label).is_some() {
+        let _ = app.emit_to(label, event, payload);
     }
 }
 

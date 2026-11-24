@@ -12,7 +12,7 @@ use ice_core::engine::{
 use ice_core::media::{NowPlaying, PlaybackStatus};
 use ice_win::audio_engine::AudioEngine;
 use ice_win::native_dot::{NativeDotHandle, NativePillTheme};
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Manager};
 
 use super::{ActivityKind, NotchSnapshot, SharedRuntime, tray};
 
@@ -248,8 +248,8 @@ fn apply_snapshot(app: &AppHandle, state: &Arc<SharedRuntime>, snapshot: &Engine
     }
     state.update_and_emit(app, |view| project(snapshot, view));
     tray::refresh_tooltip(state, snapshot);
-    let _ = app.emit_to("notch", "engine://snapshot/v1", snapshot);
-    let _ = app.emit_to("settings", "engine://snapshot/v1", snapshot);
+    super::emit_to_open(app, "notch", "engine://snapshot/v1", snapshot);
+    super::emit_to_open(app, "settings", "engine://snapshot/v1", snapshot);
 }
 
 fn apply_event(app: &AppHandle, state: &Arc<SharedRuntime>, delta: Envelope) {
@@ -262,6 +262,27 @@ fn apply_event(app: &AppHandle, state: &Arc<SharedRuntime>, delta: Envelope) {
         }
         let _ = dot.apply_envelope(&delta);
     }
+
+    // Fast paths: events that never alter NotchSnapshot, placement, or tray avoid cloning EngineSnapshot
+    // or bumping NotchSnapshot revisions while still delivering every monotonic delta to open WebViews.
+    if matches!(delta.event, EngineEvent::LyricsChanged { .. }) {
+        super::emit_to_open(app, "notch", "engine://delta/v1", &delta);
+        super::emit_to_open(app, "settings", "engine://delta/v1", &delta);
+        return;
+    }
+    let media_new_track = if let EngineEvent::MediaChanged { media } = &delta.event {
+        let mut last = state.last_track.lock().unwrap_or_else(PoisonError::into_inner);
+        let new_track = is_new_track(&mut last, media.as_ref());
+        if !new_track {
+            drop(last);
+            super::emit_to_open(app, "notch", "engine://delta/v1", &delta);
+            super::emit_to_open(app, "settings", "engine://delta/v1", &delta);
+            return;
+        }
+        true
+    } else {
+        false
+    };
 
     let snapshot = state.engine.snapshot();
     if matches!(delta.event, EngineEvent::SettingsChanged { .. }) {
@@ -280,13 +301,9 @@ fn apply_event(app: &AppHandle, state: &Arc<SharedRuntime>, delta: Envelope) {
             tray::show_notice(state, notice);
             None
         }
-        EngineEvent::MediaChanged { media } => {
-            let mut last = state.last_track.lock().unwrap_or_else(PoisonError::into_inner);
-            // Always remember the track; only wake the notch when the now-playing pill pops up at all.
-            let new_track = is_new_track(&mut last, media.as_ref());
-            (new_track && snapshot.settings.appearance.now_playing != NowPlayingPill::Off)
-                .then_some(ActivityKind::Track)
-        }
+        EngineEvent::MediaChanged { .. } => (media_new_track
+            && snapshot.settings.appearance.now_playing != NowPlayingPill::Off)
+            .then_some(ActivityKind::Track),
         EngineEvent::ShowNotch => {
             super::show_notch::show(app, state, super::show_notch::Open::Toggle);
             None
@@ -304,8 +321,8 @@ fn apply_event(app: &AppHandle, state: &Arc<SharedRuntime>, delta: Envelope) {
             || state.notch_suspended.load(Ordering::Acquire)
             || !state.notch_visible.load(Ordering::Acquire));
 
-    let _ = app.emit_to("notch", "engine://delta/v1", &delta);
-    let _ = app.emit_to("settings", "engine://delta/v1", &delta);
+    super::emit_to_open(app, "notch", "engine://delta/v1", &delta);
+    super::emit_to_open(app, "settings", "engine://delta/v1", &delta);
 
     let view = state.update_and_emit(app, |view| {
         project(&snapshot, view);
