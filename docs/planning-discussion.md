@@ -2228,40 +2228,83 @@ either fits under an existing budget row or the decision adds a "visible and ani
 
 #### Positions
 
-*Sealed: each agent writes `docs/votes/D-25/<agent>.md` (template in [docs/votes/README.md](votes/README.md)). The reveal
-copies the scores here once all three files exist (§0.4).*
+**Revealed 2026-11-24. One revision round is open (§0.4).** All three votes were sealed: Codex and Gemini committed
+theirs first, and Claude wrote its own without opening theirs. Mark each revision “changed after reveal” and record the reason.
+- **Post-reveal (Claude):** B2 +1 → −1. Gemini's and Codex's point: a 20–30 s drift barely moves during the 2.4 s
+  pop-up, and with "While playing" it would run for hours in a strip that already has the live waveform.
+- **Size note (Claude, for the record):** the Codex and Gemini votes quote the expanded card as 384 × 178 and the
+  now-playing pill as 244 × 36. Since the 2026-11-24 relayout they are 392 × 164 (144 with nothing playing) and 296 × 48
+  (`geometry.ts`). No vote's conclusion depends on the difference.
+
+**Amendments on the table** (each backed in the other agents' files or the revision round):
+- **Lifecycle (Gemini).** `.stage.hidden` / `.stage.idle-hidden` only set `opacity: 0`, which doesn't stop CSS keyframes.
+  - When the card isn't visible and expanded, under reduce motion or preset Off, or with `--ice-ambient-period: 0s`,
+    set `animation: none`.
+  - On pause, use `animation-play-state: paused` so the colours freeze in place instead of snapping.
+- **Layers (Gemini, Codex).** Split today's `.art-wash` into two oversized soft radial-gradient layers (no `filter`)
+  on unequal periods (e.g. 22 s and 31 s).
+  - Only the colour layers move. The scrim stays anchored behind the text (Codex).
+  - The loop isn't keyed to the art ID, so a track change, pin or resume never snaps the colours across the card (Codex).
+- **Shadow and measurement (Claude).**
+  - First move the stage's `drop-shadow` filter (`NotchApp.svelte:135`) off the animated subtree, so the drift
+    doesn't re-filter the whole stage every frame.
+  - Size the layers to the card.
+  - Measure 60 s at 144 Hz. Above +0.1 % process-tree CPU over the static backdrop, drive the same layers at ~30 fps
+    from JavaScript (C4).
+- **Prototype for the speed (Codex).** One wash centre moving ±12 px over a 24 s sine (~3 px/s peak). Compare 16 and
+  32 s at the same travel on the real card, same cover and title.
+
+- Claude prefers CSS `transform` blobs on the expanded card, only while playing, with an off switch and a theme speed
+  token; take the shadow filter off the subtree and gate on a 144 Hz measurement. [Claude's ballot](votes/D-25/claude.md)
+- Gemini prefers the same technique and scope with explicit compositor teardown, coprime 22 s / 31 s periods and an
+  `--ice-ambient-period` token (`0s` in Minimal); it blocks the idle pill. [Gemini's ballot](votes/D-25/gemini.md)
+- Codex prefers transform drift on the expanded playing card with one owner-tuned speed and an independent off switch,
+  reusing the existing visibility and motion gates. [Codex's ballot](votes/D-25/codex.md)
 
 #### Vote · Part A *pick one* (technique)
 
 | Agent | A0 static | A1 CSS transform blobs | A2 `@property` wash | A3 WebGL mesh | A4 moving blurred cover |
 |---|---|---|---|---|---|
-| Claude | | | | | |
-| Gemini | | | | | |
-| Codex | | | | | |
+| Claude | −1 | +2 | −1 | −1 | 0 |
+| Gemini | −1 | +2 | −1 | −1 | −1 |
+| Codex | +1 | +2 | −1 | −1 | −1 |
+| **Total** | −1 | **+6** | −3 | −3 | −2 |
 
 #### Vote · Part B *pick many* (where)
 
 | Agent | B1 expanded card | B2 now-playing pill | B3 idle pill |
 |---|---|---|---|
-| Claude | | | |
-| Gemini | | | |
-| Codex | | | |
+| Claude | +2 | −1 *(changed after reveal, was +1)* | −1 |
+| Gemini | +2 | −1 | −2 *(block: no art backdrop, GDI pill in Balanced/Lite, idle-CPU budget)* |
+| Codex | +2 | −1 | −2 |
+| **Total** | **+6** | −3 | −5 |
 
 #### Vote · Part C *pick many* (when)
 
 | Agent | C1 only while playing | C2 stop when hidden/suspended/fullscreen | C3 user switch | C4 capped frame rate | C5 audio-reactive |
 |---|---|---|---|---|---|
-| Claude | | | | | |
-| Gemini | | | | | |
-| Codex | | | | | |
+| Claude | +2 | +2 | +2 | 0 | −1 |
+| Gemini | +2 | +2 | +2 | −1 | −1 |
+| Codex | +2 | +2 | +2 | −1 | −1 |
+| **Total** | **+6** | **+6** | **+6** | −2 | −3 |
 
 #### Vote · Part D *pick one* (speed)
 
 | Agent | D1 one fixed speed | D2 Calm / Normal / Lively setting | D3 theme decides |
 |---|---|---|---|
-| Claude | | | |
-| Gemini | | | |
-| Codex | | | |
+| Claude | +1 | 0 | +2 |
+| Gemini | +2 | 0 | +1 |
+| Codex | +2 | −1 | +1 |
+| **Total** | **+5** | −1 | +4 |
+
+**Awaiting the owner's ruling.** The totals point to:
+- **A1:** CSS `transform` drift of 2–3 soft gradient layers.
+- **B1 only:** the expanded card.
+- **C1 + C2 + C3:** moves only while playing, stops when hidden, a user switch.
+- **D1:** one owner-tuned speed, backed by the `--ice-ambient-period` token that D3's supporters asked for. Minimal
+  sets it to `0s`.
+
+The amendments above apply. C4 stays the fallback if the 144 Hz measurement fails.
 
 ---
 
@@ -2376,4 +2419,4 @@ A decision passes when all three agents have voted and the rules produce a resul
 | D-22 | YouTube Music playback, lyrics, network use | N0 +1 (−1/+1/+1), N1 +6 (+2/+2/+2), N2 −5 (−1/−2/−2), B1 +6 (+2/+2/+2), B2 −3 (−1/−1/−1), B3 −6 (−2/−2/−2), K0 −1 (−1/0/0), K1 +5 (+2/+2/+1), K2 −2 (0/−1/−1), K3 −6 (−2/−2/−2) | **Closed 2026-11-23 (owner)** | N1 adopted (§1.5 rewritten); B1 as a "Music services" widget (Spotify + YouTube Music), on by default, switchable per service; K1 opt-in with all amendments |
 | D-23 | Visual direction: art backdrop, translucency, cleanliness | V1 +3 (+1/+1/+1; Claude changed after reveal), V2 +5 (+2/+2/+1; Claude changed after reveal), V3 +4 (+1/+2/+1), V4 +6 (+2/+2/+2), V5 −5 (−1/−2/−2), V6 +3 (+1/+1/+1) | **Closed 2026-11-23 (owner)** | V2 default, V1 opt-in per theme with luminance scrim, one backdrop per theme, V3, V4 (D-18 row visible), V6 with lyrics; V5 rejected |
 | D-24 | Project licence: MIT or GPL-3.0 | G0 +4 (+1/+2/+1), G1 −3 (−1/−1/−1), G2 +5 (+2/+1/+2) | **Closed 2026-11-23 (owner)** | G2: stay MIT; licence changes only on the owner's explicit acceptance; references read, never copied (code-practices §1.8) |
-| D-25 | Ambient motion: moving gradient backdrop | — | **Open 2026-11-24: sealed voting** | Owner request. Parts A (technique), B (where), C (when), D (speed). Measure before shipping |
+| D-25 | Ambient motion: moving gradient backdrop | A0 −1 (−1/−1/+1), **A1 +6 (+2/+2/+2)**, A2 −3, A3 −3, A4 −2 (0/−1/−1). **B1 +6**, B2 −3 (−1/−1/−1; Claude changed after reveal from +1), B3 −5 (−1/−2/−2, Gemini block). **C1 +6, C2 +6, C3 +6**, C4 −2 (0/−1/−1), C5 −3. **D1 +5 (+1/+2/+2)**, D2 −1 (0/0/−1), D3 +4 (+2/+1/+1) | **Voted 2026-11-24; revision round open, awaiting owner** | Totals: A1 on the expanded card only, while playing, stopped when hidden, with an off switch and one tuned speed (`--ice-ambient-period`, `0s` in Minimal). Amendments: compositor teardown, scrim anchored, shadow filter off the subtree, 144 Hz measurement gate with a 30 fps fallback |
