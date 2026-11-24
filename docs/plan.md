@@ -227,10 +227,12 @@ games on the pinned monitor. Budgets met in every profile.
         5-bar variants pick 5). Faster fall (decay ×2.4, was ×0.65), resting height 0.1 (was 0.18), peaks brighten.
         Tested with simulated 120 BPM kicks on loud and quiet tracks (`beat.test.ts`)
   - [ ] By hand: compare with Spotify on a few genres (EDM, hip-hop, acoustic, a quiet podcast) on both monitors
-  - [ ] **D-26 (open in planning-discussion.md): real bass/treble spectrum bands and bar dynamics.** The meter today gives
-        only a peak per channel (no spectrum), so the bars follow beats, not pitch. D-26 compares an upgraded multi-envelope
-        wave shaper against WASAPI loopback capture + a 14-band IIR biquad filter bank or FFT on the meter thread while
-        visible, paired with per-band adaptive gain, frequency-graded springs, and wave coupling
+  - [ ] **D-26 (accepted 2026-11-24): real bass/treble spectrum bands and bar dynamics (`A2 + B1 + B2 + B4a`, `A1` fallback)**
+    - [x] Trust & privacy rule: add §1.9 audio-stream rule in `docs/code-practices.md`, config `visualizer_spectrum` (schema v10, default `true`), `Command::SetVisualizerSpectrum`, and Settings → Privacy disclosure + meter-only fallback switch
+    - [x] `ice-core`: pure 4th-order 14-band log-spaced `f32` IIR biquad `SpectrumAnalyzer` (`45 Hz – 14 kHz`, sample-rate-aware RBJ coefficients, `reset()`), separate optional `MeterFrame.bands` participating in `MeterFrame::differs` + TS codegen (`engine.ts`)
+    - [x] `ice-win`: non-blocking shared-mode WASAPI render loopback (`AUDCLNT_STREAMFLAGS_LOOPBACK`, `≥ 100 ms` buffer) drained once per existing 30 Hz `ice-meter` tick, automatic `IAudioMeterInformation` fallback (and DRM/silent-loopback detection), filter/band state discarded on endpoint rebind or fallback
+    - [x] Notch UI (`beat.ts`, `visualizer.ts`, `VisualizerBars.svelte`): `B1` per-band AGC + pink tilt gated on audible band energy, low-band (`0–2`) beat onset accent, `A1` multi-envelope travelling-wave fallback when `bands` is absent, `B2` frequency-graded `(k, c, m)` springs, `B4a` symmetric centre-bass 5-bar badge + L→R `bass → treble` 14-bar wide scrubber, clean settle/stop on silence
+    - [ ] Host QA gates: verify Windows 11 microphone indicator stays off, steady low→high tone moves active bars and settles cleanly on silence, real-size 5-bar `A2` vs `A1` visual check, and visible CPU `< 1%` / hidden `0%`
 - [ ] Secondary QA: Chromium/Edge/Firefox media sessions, **including YouTube Music** (the website, and the app installed
       from Chrome/Edge). Owner, 2026-11-23: Spotify and YouTube Music are the supported music services (see Backlog)
 - [x] Expanded card empty state when nothing plays: a clear hint (e.g. "Nothing playing. Start Spotify or YouTube Music"),

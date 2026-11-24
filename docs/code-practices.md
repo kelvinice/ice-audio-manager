@@ -36,6 +36,16 @@ These are hard rules. A PR that breaks one is rejected, whatever else it does.
    - **Changing the licence (e.g. to GPL-3.0) happens only when the owner explicitly accepts it** for a named component, with
      the import record from D-24 (upstream revision, exact licence grant, files, upkeep cost). Until then, no GPL/AGPL code
      enters the repo.
+9. **Local-only audio-stream privacy (owner decision, 2026-11-24; D-26).** Shared-mode WASAPI render loopback
+   (`AUDCLNT_STREAMFLAGS_LOOPBACK`) is permitted solely to drive the live visualizer bars:
+   - **Active only while bars are visible** (tied to `MeterSubscription` lifetime) and while the user has not switched to
+     meter-only mode.
+   - **Reduced in memory only:** PCM samples are reduced immediately on the `ice-meter` thread to 14 scalar band levels
+     (`0.0–1.0`) and discarded — never written to disk, logged, buffered beyond the active capture packet, or sent over any
+     network.
+   - **Transparent and switchable:** disclosed on Settings → Privacy ("Reads what you hear to draw the bars; nothing leaves
+     this PC") with a switch back to peak-meter-only (`IAudioMeterInformation`) bars. Never opens a capture/microphone
+     endpoint and must leave the Windows 11 taskbar microphone privacy indicator off.
 
 ## 2. Lightweight rules
 
