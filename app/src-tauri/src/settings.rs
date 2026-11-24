@@ -75,3 +75,20 @@ pub(super) fn set_launch_at_sign_in(enabled: bool) -> Result<Option<bool>, Strin
     startup::set_enabled(enabled)?;
     Ok(startup::enabled())
 }
+
+#[tauri::command]
+pub(super) fn get_lyrics_storage_stats(state: State<'_, Arc<SharedRuntime>>) -> ice_core::lyrics::LyricsStorageStats {
+    let max_mb = state.engine.snapshot().settings.lyrics.cache_max_mb;
+    ice_win::lyrics::storage_stats(max_mb)
+}
+
+#[tauri::command]
+pub(super) fn clear_lyrics_cache(state: State<'_, Arc<SharedRuntime>>) -> ice_core::lyrics::LyricsStorageStats {
+    let max_mb = state.engine.snapshot().settings.lyrics.cache_max_mb;
+    ice_win::lyrics::clear_lyrics_cache(max_mb)
+}
+
+#[tauri::command]
+pub(super) fn open_lyrics_folder() -> Result<(), String> {
+    ice_win::lyrics::open_custom_folder()
+}

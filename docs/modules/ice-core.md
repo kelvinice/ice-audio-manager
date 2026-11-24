@@ -13,7 +13,8 @@ contract types, and `cargo test -p ice-core --all-features` exports them to `app
 |---|---|
 | `engine.rs` | The contract: `Engine` trait, `Command`, `EngineEvent`, `Envelope`, `EngineSnapshot`, `Notice`, `SettingsView`, `RoleSet`, `PerformanceProfile`, `SpatialMode`, `MediaAction` |
 | `engine/fake.rs` | `FakeEngine`: in-memory engine with the owner's devices, three fake Spotify tracks and stereo meter levels. Used by `--fake-engine`, UI work and tests |
-| `config.rs` | `config.toml` schema (v8: `appearance.nowPlaying` v5, `idle_linger_secs` v6, `[music_services]` + `show_notch_hotkey` v7, `appearance.movingBackdrop` v8), `Config`, `ConfigStore` (load/save/read), `Config::apply_setting` (every settings command), `Config::view` → `SettingsView` |
+| `config.rs` | `config.toml` schema (v9: `appearance.nowPlaying` v5, `idle_linger_secs` v6, `[music_services]` + `show_notch_hotkey` v7, `appearance.movingBackdrop` v8, `[lyrics]` + `cache_max_mb` v9), `Config`, `ConfigStore` (load/save/read), `Config::apply_setting` (every settings command), `Config::view` → `SettingsView` |
+| `lyrics.rs` | Pure synced lyrics contract (`LyricsConfig`, `LyricsDocument`, `LyricsState`, `LyricsStorageStats`, `LyricsProvider` trait), LRC/Enhanced-LRC/dual-subtitle `parse_lrc`, weighted word cadence estimator, and pure Kana → Modified Hepburn `kana_to_romaji` |
 | `resolve.rs` | D-16 device identity: `DeviceRef`, `MatchMode`, `resolve`, `candidates`, `toggle`, `normalize_name` |
 | `device.rs` | `EndpointInfo`, `Flow` (render/capture), `Role`, `DeviceState`, `hardware_key_from_devnode` |
 | `event.rs` | `AudioEvent`: what COM callbacks push into a channel (device added/removed/state/default/property, volume) |
@@ -70,3 +71,4 @@ Inline `#[cfg(test)]` in each file. `resolve.rs` is built from the owner's real 
 - 2026-11-24 Gemini: schema v8 (`Appearance.moving_backdrop` default `true`, `Command::SetMovingBackdrop`), `ThemeKind::IceLight`, and `SpringPreset::Bouncy` default.
 - 2026-11-24 Gemini: `MediaAction::Seek { position_ms }` for timeline seeking.
 - 2026-11-24 Gemini: `NowPlaying.position_updated_ms` (optional Unix ms timestamp from GSMTC `LastUpdatedTime`) for accurate live playback interpolation.
+- 2026-11-24 Gemini: schema v9 (`[lyrics]` + `cache_max_mb` 5–500 MB), `lyrics.rs` (LRC/Enhanced-LRC parser, Romaji Hepburn table, `LyricsProvider` trait), `EngineEvent::LyricsChanged`, `SetLyrics*`, and `DisableAllNetworkFeatures`.

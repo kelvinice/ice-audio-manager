@@ -1,12 +1,14 @@
 <script lang="ts">
-  import type { DeviceSummary, MediaAction, NowPlaying, SettingsView } from '../../lib/ipc/engine';
+  import type { DeviceSummary, LyricsState, MediaAction, NowPlaying, SettingsView } from '../../lib/ipc/engine';
   import type { SpringPreset } from '../../lib/ipc/types';
   import type { MusicServiceId, MusicServiceItem } from '../../lib/notch/backdrop';
+  import { hasAnyLyrics } from '../../lib/notch/lyrics';
   import { isMediaActive } from '../../lib/notch/scheduler';
   import ExpandedDeviceRow from './ExpandedDeviceRow.svelte';
   import ExpandedEmptyCard from './ExpandedEmptyCard.svelte';
   import ExpandedMediaCard from './ExpandedMediaCard.svelte';
   import ExpandedVolumeRow from './ExpandedVolumeRow.svelte';
+  import LyricsExtension from './LyricsExtension.svelte';
   import NotchSideRail from './NotchSideRail.svelte';
 
   interface Props {
@@ -21,6 +23,9 @@
     barPercent: number;
     micMuted: boolean;
     media?: NowPlaying | null;
+    lyrics?: LyricsState;
+    showLyrics?: boolean;
+    lyricsDrawerOpen?: boolean;
     instant?: boolean;
     notchVisible?: boolean;
     preset: SpringPreset;
@@ -30,6 +35,7 @@
     onSetVolume: (percent: number) => void;
     onSwitchDevice: (deviceId: string) => void;
     onToggleMicMute: () => void;
+    onToggleLyrics?: () => void;
     onMediaAction?: (action: MediaAction) => void;
     onOpenMusicService?: (service: MusicServiceId) => void;
     onOpenSettings: () => void;
@@ -47,6 +53,9 @@
     barPercent,
     micMuted,
     media = null,
+    lyrics = { status: 'disabled', trackKey: null, document: null },
+    showLyrics = false,
+    lyricsDrawerOpen = true,
     instant = false,
     notchVisible = true,
     preset,
@@ -56,56 +65,86 @@
     onSetVolume,
     onSwitchDevice,
     onToggleMicMute,
+    onToggleLyrics = () => {},
     onMediaAction = () => {},
     onOpenMusicService = () => {},
     onOpenSettings,
   }: Props = $props();
 
   const activeMedia = $derived(isMediaActive(media) ? media : null);
+  const lyricsConfig = $derived(settings?.lyrics ?? null);
+  const lyricsAvailable = $derived(hasAnyLyrics(lyrics));
 </script>
 
-<div class="expanded-card" class:stagger={!instant}>
-  <div class="main">
-    {#if activeMedia}
-      <ExpandedMediaCard media={activeMedia} {spatialBadge} {instant} {notchVisible} {preset} {onMediaAction} />
-    {:else}
-      <ExpandedEmptyCard
-        services={musicServices}
-        {activeDeviceName}
-        {spatialBadge}
-        onOpenService={onOpenMusicService}
-      />
-    {/if}
+<div class="expanded-shell" class:stagger={!instant}>
+  <div class="expanded-card">
+    <div class="main">
+      {#if activeMedia}
+        <ExpandedMediaCard media={activeMedia} {spatialBadge} {instant} {notchVisible} {preset} {onMediaAction} />
+      {:else}
+        <ExpandedEmptyCard
+          services={musicServices}
+          {activeDeviceName}
+          {spatialBadge}
+          onOpenService={onOpenMusicService}
+        />
+      {/if}
 
-    <div class="controls">
-      <ExpandedVolumeRow {volumePercent} {muted} {barPercent} {onToggleMute} {onSetVolume} />
-      <ExpandedDeviceRow {playback} {settings} {disconnected} {onSwitchDevice} />
+      <div class="controls">
+        <ExpandedVolumeRow {volumePercent} {muted} {barPercent} {onToggleMute} {onSetVolume} />
+        <ExpandedDeviceRow {playback} {settings} {disconnected} {onSwitchDevice} />
+      </div>
     </div>
+
+    <NotchSideRail
+      pinned={expanded}
+      {micMuted}
+      services={musicServices}
+      showServices={activeMedia !== null}
+      showLyricsToggle={activeMedia !== null && Boolean(lyricsConfig?.enabled && lyricsConfig?.showOnCard)}
+      lyricsOpen={lyricsDrawerOpen}
+      {lyricsAvailable}
+      onTogglePin={onToggleExpand}
+      {onToggleMicMute}
+      {onToggleLyrics}
+      onOpenService={onOpenMusicService}
+      {onOpenSettings}
+    />
   </div>
 
-  <NotchSideRail
-    pinned={expanded}
-    {micMuted}
-    services={musicServices}
-    showServices={activeMedia !== null}
-    onTogglePin={onToggleExpand}
-    {onToggleMicMute}
-    onOpenService={onOpenMusicService}
-    {onOpenSettings}
-  />
+  {#if activeMedia && showLyrics}
+    <LyricsExtension
+      {lyrics}
+      media={activeMedia}
+      mode="card"
+      wordHighlight={lyricsConfig?.wordHighlight ?? true}
+      showRomaji={lyricsConfig?.romaji ?? true}
+      {instant}
+      {notchVisible}
+      onSeek={(positionMs) => onMediaAction({ seek: { positionMs } })}
+    />
+  {/if}
 </div>
 
 <style>
-  .expanded-card {
+  .expanded-shell {
     width: 100%;
     height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .expanded-shell.stagger {
+    animation: card-reveal 220ms cubic-bezier(0.22, 1, 0.36, 1) 40ms both;
+  }
+
+  .expanded-card {
+    width: 100%;
+    flex: 1;
+    min-height: 140px;
     padding: 12px 0 12px 2px;
     display: flex;
     gap: 10px;
-  }
-
-  .expanded-card.stagger {
-    animation: card-reveal 220ms cubic-bezier(0.22, 1, 0.36, 1) 40ms both;
   }
 
   .main {

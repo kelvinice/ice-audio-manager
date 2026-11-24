@@ -529,6 +529,7 @@ impl PillState {
             EngineEvent::Notice { .. }
             | EngineEvent::NoticesChanged { .. }
             | EngineEvent::SettingsChanged { .. }
+            | EngineEvent::LyricsChanged { .. }
             | EngineEvent::ShowNotch => {}
         }
         EnvelopeOutcome::Updated

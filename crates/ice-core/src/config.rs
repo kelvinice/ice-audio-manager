@@ -15,6 +15,7 @@ use crate::engine::{
     TogglePairView,
 };
 use crate::hotkey::Chord;
+use crate::lyrics::{LYRICS_CACHE_MAX_MB, LyricsConfig};
 use crate::media::MusicServices;
 use crate::resolve::{DeviceRef, MatchMode, resolve};
 
@@ -22,7 +23,8 @@ use crate::resolve::{DeviceRef, MatchMode, resolve};
 /// v5: `appearance.nowPlaying` (how the now-playing pill behaves). v6: `idle_linger_secs` (D-21.1 L1).
 /// v7: `[music_services]` (D-22 switches) and `show_notch_hotkey` (D-19).
 /// v8: `appearance.movingBackdrop` (D-25 ambient motion on the expanded card).
-pub const SCHEMA_VERSION: u32 = 8;
+/// v9: `[lyrics]` (D-22 opt-in LRCLIB, local `.lrc`, Romaji subtitles, and `cache_max_mb`).
+pub const SCHEMA_VERSION: u32 = 9;
 
 /// Default seconds the notch WebView stays awake at idle before `Balanced` hands over to the native pill
 /// (`Instant` never does; `Lite` has no WebView).
@@ -58,6 +60,8 @@ pub struct Config {
     pub idle_linger_secs: u16,
     /// D-22: launch buttons in the notch, one switch per service.
     pub music_services: MusicServices,
+    /// D-22: synced lyrics, Privacy opt-in, Romaji subtitles, and storage cache cap.
+    pub lyrics: LyricsConfig,
     /// D-19: opens (or closes) the expanded notch; in Lite, the tray quick-switch menu. Unbound by default.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub show_notch_hotkey: Option<Chord>,
@@ -79,6 +83,7 @@ impl Default for Config {
             show_disconnected: false,
             idle_linger_secs: IDLE_LINGER_SECS_DEFAULT,
             music_services: MusicServices::default(),
+            lyrics: LyricsConfig::default(),
             show_notch_hotkey: None,
         }
     }
@@ -207,12 +212,21 @@ impl Config {
                 IDLE_LINGER_SECS.end()
             )));
         }
+        if !LYRICS_CACHE_MAX_MB.contains(&cfg.lyrics.cache_max_mb) {
+            return Err(ConfigError::Parse(format!(
+                "lyrics.cache_max_mb = {} is outside {}–{} MB",
+                cfg.lyrics.cache_max_mb,
+                LYRICS_CACHE_MAX_MB.start(),
+                LYRICS_CACHE_MAX_MB.end()
+            )));
+        }
         match cfg.schema_version {
             v if v > SCHEMA_VERSION => Err(ConfigError::TooNew(v)),
             // v0/v1 gain the default profile and an initially unassigned monitor pin, v0–v2 gain
             // `show_disconnected = false`, v0–v4 gain `appearance.nowPlaying = "brief"`, and v0–v5 gain
-            // `idle_linger_secs = 15`, v0–v6 gain both music services on, and v0–v7 gain
-            // `appearance.movingBackdrop = true`, all via serde defaults.
+            // `idle_linger_secs = 15`, v0–v6 gain both music services on, v0–v7 gain
+            // `appearance.movingBackdrop = true`, and v0–v8 gain `[lyrics]` (off by default, 50 MB cap),
+            // all via serde defaults.
             _ => Ok(Self { schema_version: SCHEMA_VERSION, ..cfg }),
         }
     }
@@ -308,6 +322,7 @@ impl Config {
             show_disconnected: self.show_disconnected,
             idle_linger_secs: self.idle_linger_secs,
             music_services: self.music_services,
+            lyrics: self.lyrics,
             show_notch_hotkey: self.show_notch_hotkey.map(|c| c.to_string()),
         }
     }
@@ -411,6 +426,33 @@ impl Config {
                 next.idle_linger_secs = *secs;
             }
             Command::SetMusicService { service, enabled } => next.music_services.set(*service, *enabled),
+            Command::SetLyricsEnabled { enabled } => next.lyrics.enabled = *enabled,
+            Command::SetLyricsOnlineLookup { enabled } => next.lyrics.online_lookup = *enabled,
+            Command::SetLyricsDisplay { show_on_pill, show_on_card, word_highlight, romaji } => {
+                if let Some(v) = show_on_pill {
+                    next.lyrics.show_on_pill = *v;
+                }
+                if let Some(v) = show_on_card {
+                    next.lyrics.show_on_card = *v;
+                }
+                if let Some(v) = word_highlight {
+                    next.lyrics.word_highlight = *v;
+                }
+                if let Some(v) = romaji {
+                    next.lyrics.romaji = *v;
+                }
+            }
+            Command::SetLyricsCacheMaxMb { max_mb } => {
+                if !LYRICS_CACHE_MAX_MB.contains(max_mb) {
+                    return Err(format!(
+                        "Choose a cache limit between {} and {} MB.",
+                        LYRICS_CACHE_MAX_MB.start(),
+                        LYRICS_CACHE_MAX_MB.end()
+                    ));
+                }
+                next.lyrics.cache_max_mb = *max_mb;
+            }
+            Command::DisableAllNetworkFeatures => next.lyrics.online_lookup = false,
             Command::SetShowNotchHotkey { hotkey } => {
                 next.show_notch_hotkey = parse_hotkey(hotkey.as_deref())?;
                 next.check_hotkeys_unique()?;
@@ -793,6 +835,28 @@ mod tests {
         assert_eq!(config.apply_setting(&set, &[]), Ok(false), "already off");
         let saved = Config::from_toml(&config.to_toml()).unwrap();
         assert!(!saved.view(&[]).appearance.moving_backdrop);
+    }
+
+    #[test]
+    fn v8_migrates_with_lyrics_off_and_validates_cache_max_mb() {
+        let v8 = "schema_version = 8\n[appearance]\nmovingBackdrop = true";
+        let mut config = Config::from_toml(v8).unwrap();
+        assert_eq!(config.schema_version, SCHEMA_VERSION);
+        let view = config.view(&[]).lyrics;
+        assert!(!view.enabled && !view.online_lookup, "D-22 privacy: lyrics and network off by default");
+        assert_eq!(view.cache_max_mb, crate::lyrics::LYRICS_CACHE_MAX_MB_DEFAULT);
+
+        assert_eq!(config.apply_setting(&Command::SetLyricsEnabled { enabled: true }, &[]), Ok(true));
+        assert_eq!(config.apply_setting(&Command::SetLyricsOnlineLookup { enabled: true }, &[]), Ok(true));
+        assert_eq!(config.apply_setting(&Command::SetLyricsCacheMaxMb { max_mb: 100 }, &[]), Ok(true));
+        assert!(config.apply_setting(&Command::SetLyricsCacheMaxMb { max_mb: 1 }, &[]).is_err());
+        assert!(config.apply_setting(&Command::SetLyricsCacheMaxMb { max_mb: 999 }, &[]).is_err());
+        assert_eq!(config.apply_setting(&Command::DisableAllNetworkFeatures, &[]), Ok(true));
+        let saved = Config::from_toml(&config.to_toml()).unwrap();
+        assert!(saved.lyrics.enabled);
+        assert!(!saved.lyrics.online_lookup, "master kill switch turns off online lookup");
+        assert_eq!(saved.lyrics.cache_max_mb, 100);
+        assert!(matches!(Config::from_toml("[lyrics]\ncacheMaxMb = 2"), Err(ConfigError::Parse(_))));
     }
 
     #[test]

@@ -14,7 +14,9 @@
   import DevicesPage from './pages/DevicesPage.svelte';
   import GeneralPage from './pages/GeneralPage.svelte';
   import NotchPage from './pages/NotchPage.svelte';
+  import PrivacyPage from './pages/PrivacyPage.svelte';
   import ShortcutsPage from './pages/ShortcutsPage.svelte';
+  import StoragePage from './pages/StoragePage.svelte';
 
   interface Props {
     client: SettingsClient;
@@ -22,7 +24,7 @@
 
   let { client }: Props = $props();
 
-  type PageId = 'general' | 'devices' | 'shortcuts' | 'notch' | 'activities' | 'appearance' | 'about';
+  type PageId = 'general' | 'devices' | 'shortcuts' | 'notch' | 'activities' | 'appearance' | 'privacy' | 'storage' | 'about';
   const PAGES: { id: PageId; title: string; icon: IconName | 'notch' }[] = [
     { id: 'general', title: 'General', icon: 'settings' },
     { id: 'devices', title: 'Devices', icon: 'speakers' },
@@ -30,6 +32,8 @@
     { id: 'notch', title: 'Notch', icon: 'notch' },
     { id: 'activities', title: 'Activities', icon: 'music' },
     { id: 'appearance', title: 'Appearance', icon: 'color' },
+    { id: 'privacy', title: 'Privacy', icon: 'shield' },
+    { id: 'storage', title: 'Storage', icon: 'storage' },
     { id: 'about', title: 'About', icon: 'info' },
   ];
   const STORAGE_KEY = 'ice-settings-page';
@@ -186,6 +190,10 @@
               <ActivitiesPage {client} />
             {:else if page === 'appearance'}
               <AppearancePage {client} />
+            {:else if page === 'privacy'}
+              <PrivacyPage {client} />
+            {:else if page === 'storage'}
+              <StoragePage {client} />
             {:else}
               <AboutPage version={client.version} />
             {/if}

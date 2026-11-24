@@ -10,8 +10,12 @@
     /** Services sit here only while media plays; the empty card shows them as labelled chips instead. */
     services: MusicServiceItem[];
     showServices: boolean;
+    showLyricsToggle?: boolean;
+    lyricsOpen?: boolean;
+    lyricsAvailable?: boolean;
     onTogglePin: () => void;
     onToggleMicMute: () => void;
+    onToggleLyrics?: () => void;
     onOpenService: (service: MusicServiceId) => void;
     onOpenSettings: () => void;
   }
@@ -21,8 +25,12 @@
     micMuted,
     services,
     showServices,
+    showLyricsToggle = false,
+    lyricsOpen = false,
+    lyricsAvailable = false,
     onTogglePin,
     onToggleMicMute,
+    onToggleLyrics = () => {},
     onOpenService,
     onOpenSettings,
   }: Props = $props();
@@ -58,9 +66,26 @@
     <MusicServicesWidget {services} variant="rail" {onOpenService} />
   {/if}
 
-  <button class="rail-btn" type="button" title="Settings" aria-label="Open Settings" onclick={onOpenSettings}>
-    <DeviceIcon kind="settings" size={13} />
-  </button>
+  <div class="group">
+    {#if showLyricsToggle}
+      <button
+        class="rail-btn"
+        class:on={lyricsOpen && lyricsAvailable}
+        class:dim={!lyricsAvailable}
+        type="button"
+        title={lyricsAvailable ? (lyricsOpen ? 'Hide lyrics' : 'Show lyrics') : 'No lyrics available'}
+        aria-label={lyricsOpen ? 'Hide lyrics' : 'Show lyrics'}
+        aria-pressed={lyricsOpen && lyricsAvailable}
+        disabled={!lyricsAvailable}
+        onclick={onToggleLyrics}
+      >
+        <DeviceIcon kind="lyrics" size={13} />
+      </button>
+    {/if}
+    <button class="rail-btn" type="button" title="Settings" aria-label="Open Settings" onclick={onOpenSettings}>
+      <DeviceIcon kind="settings" size={13} />
+    </button>
+  </div>
 </nav>
 
 <style>
@@ -111,5 +136,10 @@
   .rail-btn.danger {
     background: color-mix(in srgb, var(--ice-danger) 16%, transparent);
     color: var(--ice-danger);
+  }
+
+  .rail-btn.dim {
+    opacity: 0.4;
+    cursor: default;
   }
 </style>

@@ -10,6 +10,7 @@ pub mod device;
 pub mod engine;
 pub mod event;
 pub mod hotkey;
+pub mod lyrics;
 pub mod media;
 pub mod meter;
 pub mod resolve;

@@ -45,6 +45,10 @@
   --ice-control-border: rgba(255, 255, 255, 0.08);
   --ice-play-bg: rgba(237, 241, 247, 0.94);
   --ice-play-fg: #0e1116;
+  --ice-lyric-active: #ffffff;
+  --ice-lyric-muted: rgba(237, 241, 247, 0.48);
+  --ice-lyric-sub: rgba(237, 241, 247, 0.68);
+  --ice-lyric-glow: color-mix(in srgb, var(--ice-active-accent, var(--ice-accent)) 42%, transparent);
 }
 
 /* Themes match any element (not only :root) so Settings → Appearance can preview each one side by side. */
@@ -78,6 +82,10 @@
   --ice-control-border: rgba(17, 22, 31, 0.1);
   --ice-play-bg: #11161f;
   --ice-play-fg: #f6f7f9;
+  --ice-lyric-active: #0b1220;
+  --ice-lyric-muted: rgba(17, 22, 31, 0.46);
+  --ice-lyric-sub: rgba(17, 22, 31, 0.68);
+  --ice-lyric-glow: color-mix(in srgb, var(--ice-active-accent, var(--ice-accent)) 28%, transparent);
 }
 
 [data-theme='midnight'] {
@@ -133,6 +141,7 @@
   --ice-control-border: var(--ice-border);
   --ice-play-bg: var(--ice-accent-soft);
   --ice-play-fg: var(--ice-accent-strong);
+  --ice-lyric-glow: transparent;
 }
 
 *,

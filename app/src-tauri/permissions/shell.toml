@@ -24,5 +24,8 @@ commands.allow = ["report_settings_ready"]
 
 [[permission]]
 identifier = "settings-controls"
-description = "Read engine state, change settings and launch at sign-in from the Settings window."
-commands.allow = ["get_engine_snapshot", "apply_setting", "get_launch_at_sign_in", "set_launch_at_sign_in"]
+description = "Read engine state, change settings, manage lyrics storage and launch at sign-in from the Settings window."
+commands.allow = [
+  "get_engine_snapshot", "apply_setting", "get_launch_at_sign_in", "set_launch_at_sign_in",
+  "get_lyrics_storage_stats", "clear_lyrics_cache", "open_lyrics_folder",
+]

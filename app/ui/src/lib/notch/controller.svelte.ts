@@ -11,13 +11,17 @@ import {
   type MusicServiceId,
 } from './backdrop';
 import {
+  CARD_LYRICS_H,
   computeClipPath,
   computeHitRect,
   deriveBenchOverride,
   effectivePreset,
+  PILL_LYRICS_H,
+  PILL_LYRICS_SUB_H,
   resolveRimStroke,
   targetGeometry,
 } from './geometry';
+import { hasSubtitleLines, shouldShowCardLyrics, shouldShowPillLyrics } from './lyrics';
 import {
   DEFAULT_IDLE_MODE,
   formatRgbCss,
@@ -40,6 +44,7 @@ export class NotchController {
   private benchOverride = $state<ActivityView | null>(null);
   private hoverExpanded = $state(false);
   private pointerInside = $state(false);
+  lyricsCardOpen = $state(true);
   pillSize = $state({ w: 116, h: 28, r: 14, vol: 40 });
 
   private hoverTimer: number | null = null;
@@ -147,6 +152,35 @@ export class NotchController {
   private readonly clipMetrics = $derived(computeClipPath(this.pillSize));
   readonly insetLeft = $derived(this.clipMetrics.insetLeft);
   readonly clipPath = $derived(this.clipMetrics.clipPath);
+  readonly showPillLyrics = $derived(
+    !this.isExpanded &&
+      this.activeView.kind === 'track' &&
+      shouldShowPillLyrics(
+        this.engineState.settings?.lyrics,
+        this.engineState.lyrics,
+        isMediaActive(this.activeView.media),
+      ),
+  );
+  readonly showCardLyrics = $derived(
+    this.isExpanded &&
+      shouldShowCardLyrics(
+        this.engineState.settings?.lyrics,
+        this.engineState.lyrics,
+        isMediaActive(this.engineState.media),
+        this.lyricsCardOpen,
+      ),
+  );
+  private computeLyricsExtraH(view: ActivityView, expandedNow: boolean, hasMedia: boolean): number {
+    const cfg = this.engineState.settings?.lyrics;
+    if (expandedNow) {
+      return shouldShowCardLyrics(cfg, this.engineState.lyrics, hasMedia, this.lyricsCardOpen) ? CARD_LYRICS_H : 0;
+    }
+    if (view.kind === 'track' && shouldShowPillLyrics(cfg, this.engineState.lyrics, isMediaActive(view.media))) {
+      const hasSub = hasSubtitleLines(this.engineState.lyrics.document, cfg?.romaji ?? true);
+      return hasSub ? PILL_LYRICS_SUB_H : PILL_LYRICS_H;
+    }
+    return 0;
+  }
   readonly targetBox = $derived(
     targetGeometry(
       this.activeView,
@@ -155,6 +189,7 @@ export class NotchController {
       this.idleMode,
       isMediaActive(this.engineState.media),
       this.engineState.volume?.percent ?? this.notchSnapshot?.volumePercent ?? 40,
+      this.computeLyricsExtraH(this.activeView, this.isExpanded, isMediaActive(this.engineState.media)),
     ),
   );
   readonly rimStroke = $derived(resolveRimStroke(this.activeView, this.isExpanded, this.effectiveMicMuted));
@@ -213,13 +248,15 @@ export class NotchController {
     const expandedNow = (snap?.expanded ?? false) || this.hoverExpanded;
     const micMutedNow = this.engineState.micMuted ?? snap?.micMuted ?? false;
     const fallbackVol = this.engineState.volume?.percent ?? snap?.volumePercent ?? 40;
+    const hasMedia = isMediaActive(this.engineState.media);
     const target = targetGeometry(
       view,
       expandedNow,
       micMutedNow,
       this.idleMode,
-      isMediaActive(this.engineState.media),
+      hasMedia,
       fallbackVol,
+      this.computeLyricsExtraH(view, expandedNow, hasMedia),
     );
 
     if (instantMove || preset === 'off' || paused) {
@@ -310,8 +347,14 @@ export class NotchController {
       // Play/pause flips the "while playing" pill; restart the idle linger so Balanced suspends only once it's idle.
       this.scheduler.markInteraction(Date.now());
     }
-    // `settingsChanged`: the now-playing mode (or idle style) can change what the idle notch shows.
-    if (res.wokeActivity || type === 'devicesChanged' || type === 'mediaChanged' || type === 'settingsChanged') {
+    // `settingsChanged` / `lyricsChanged`: idle mode or bottom lyrics extension can change the capsule height.
+    if (
+      res.wokeActivity ||
+      type === 'devicesChanged' ||
+      type === 'mediaChanged' ||
+      type === 'lyricsChanged' ||
+      type === 'settingsChanged'
+    ) {
       this.benchOverride = null;
       this.syncGeometry(false);
       this.scheduleNextTick();
@@ -487,6 +530,11 @@ export class NotchController {
   }
 
   toggleExpand = (): void => void invoke('toggle_expand');
+  toggleLyricsCard = (): void => {
+    this.lyricsCardOpen = !this.lyricsCardOpen;
+    this.scheduler.markInteraction(Date.now());
+    this.syncGeometry(false);
+  };
   toggleMute = (): void => void invoke('toggle_mute');
   setVolume = (percent: number): void => {
     this.scheduler.markInteraction(Date.now());

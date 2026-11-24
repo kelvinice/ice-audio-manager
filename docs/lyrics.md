@@ -1,6 +1,6 @@
 # Synced Lyrics, Romaji Subtitles & Storage Cache Design
 
-> **Status:** Design spec (review before implementation) · **Related decisions:** D-22 (Lyrics & Privacy), D-23 V6 (Lyrics styling), D-15 (WebView optional), §1.5 (Zero silent network), §1.8 (MIT / clean-room).
+> **Status:** Implemented (Slices 1–5) · **Related decisions:** D-22 (Lyrics & Privacy), D-23 V6 (Lyrics styling), D-15 (WebView optional), §1.5 (Zero silent network), §1.8 (MIT / clean-room).
 
 ---
 

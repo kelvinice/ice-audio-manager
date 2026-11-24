@@ -9,6 +9,7 @@ use super::{
 };
 use crate::config::Config;
 use crate::device::EndpointInfo;
+use crate::lyrics::{LyricsDocument, LyricsSource, LyricsState, LyricsStatus, parse_lrc, track_key};
 use crate::media::{ArtInfo, NowPlaying, PlaybackStatus, Rgb};
 use crate::meter::{METER_INTERVAL, MeterFrame, MeterSubscription};
 
@@ -27,6 +28,50 @@ fn now_unix_ms() -> u64 {
         .ok()
         .and_then(|d| u64::try_from(d.as_millis()).ok())
         .unwrap_or(0)
+}
+
+/// Sample LRC per fake track so `--fake-engine` can preview synced lyrics, word emphasis, and JP Romaji.
+const FAKE_LYRICS: [&str; 3] = [
+    "[00:00.00]Three, two, one, feel the spark alive\n[00:50.00]<00:50.00>This <00:50.70>joy <00:51.40>is <00:52.00>electric <00:53.00>tonight\n[00:55.00]You've got a higher power lifting every beat\n[01:02.00]Shining through the static in the dark",
+    "[00:00.00]無敵の笑顔で荒らすメディア\n[00:00.00]Muteki no egao de arasu media\n[00:50.00]知りたいその秘密ミステリアス\n[00:50.00]Shiritai sono himitsu misteriasu\n[00:56.00]抜けてるとこさえ彼女のエリア\n[00:56.00]Nuketeru toko sae kanojo no eria",
+    "[00:00.00]I didn't want to be the one to forget\n[00:50.00]I thought of everything I'd never regret\n[00:57.00]And we will never be alone again",
+];
+
+fn fake_lyrics_state(st: &State) -> LyricsState {
+    if !st.config.lyrics.enabled {
+        return LyricsState { status: LyricsStatus::Disabled, track_key: None, document: None };
+    }
+    let Some(media) = &st.snap.media else {
+        return LyricsState { status: LyricsStatus::Idle, track_key: None, document: None };
+    };
+    let key = track_key(&media.app_id, &media.title, &media.artist, &media.album);
+    let raw = FAKE_LYRICS[st.track % FAKE_LYRICS.len()];
+    let (sync_kind, mut lines) = parse_lrc(raw, media.duration_ms);
+    if !st.config.lyrics.romaji {
+        for line in &mut lines {
+            line.subtitle = None;
+        }
+    }
+    LyricsState {
+        status: LyricsStatus::Ready,
+        track_key: Some(key.clone()),
+        document: Some(LyricsDocument {
+            track_key: key,
+            source: LyricsSource::Local,
+            sync_kind,
+            instrumental: false,
+            lines,
+            plain_text: None,
+        }),
+    }
+}
+
+fn sync_fake_lyrics(st: &mut State) {
+    let next = fake_lyrics_state(st);
+    if st.snap.lyrics != next {
+        st.snap.lyrics = next.clone();
+        emit(st, EngineEvent::LyricsChanged { lyrics: next });
+    }
 }
 
 fn fake_track(i: usize, status: PlaybackStatus) -> NowPlaying {
@@ -122,6 +167,7 @@ impl FakeEngine {
             notices: Vec::new(),
             settings: super::SettingsView::default(),
             media: Some(fake_track(0, PlaybackStatus::Paused)),
+            lyrics: LyricsState::default(),
         };
         let mut config = Config::default();
         let eps = endpoints(&snap);
@@ -327,6 +373,11 @@ impl Engine for FakeEngine {
             | Command::SetShowDisconnected { .. }
             | Command::SetIdleLinger { .. }
             | Command::SetMusicService { .. }
+            | Command::SetLyricsEnabled { .. }
+            | Command::SetLyricsOnlineLookup { .. }
+            | Command::SetLyricsDisplay { .. }
+            | Command::SetLyricsCacheMaxMb { .. }
+            | Command::DisableAllNetworkFeatures
             | Command::SetShowNotchHotkey { .. }
             | Command::SetDefaultRoles { .. } => {
                 let eps = endpoints(&st.snap);
@@ -334,6 +385,7 @@ impl Engine for FakeEngine {
                     Ok(true) => {
                         refresh_settings(&mut st);
                         sync_disconnected(&mut st);
+                        sync_fake_lyrics(&mut st);
                     }
                     Ok(false) => {}
                     Err(error) => emit(&mut st, EngineEvent::Notice { notice: Notice::SettingRejected { error } }),
@@ -362,6 +414,7 @@ impl Engine for FakeEngine {
                 };
                 st.snap.media = Some(media.clone());
                 emit(&mut st, EngineEvent::MediaChanged { media: Some(media) });
+                sync_fake_lyrics(&mut st);
             }
             Command::ResolveChoice { .. } | Command::Refresh => emit_devices(&mut st),
         }

@@ -293,7 +293,8 @@ fn apply_event(app: &AppHandle, state: &Arc<SharedRuntime>, delta: Envelope) {
         }
         EngineEvent::DevicesChanged { .. }
         | EngineEvent::NoticesChanged { .. }
-        | EngineEvent::SettingsChanged { .. } => None,
+        | EngineEvent::SettingsChanged { .. }
+        | EngineEvent::LyricsChanged { .. } => None,
     };
 
     let needs_webview = activity.is_some() && !state.bench_mode && state.placement().allows_webview();

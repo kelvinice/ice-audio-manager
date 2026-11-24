@@ -1,6 +1,6 @@
 // Live engine state for the Settings window. Rust stays the single source of truth (code-practices §3): every
 // change goes out as a settings `Command`, and the page re-renders from the `SettingsChanged` that comes back.
-import type { Command, EngineSnapshot, Envelope, Notice } from '../ipc/engine.ts';
+import type { Command, EngineSnapshot, Envelope, LyricsStorageStats, Notice } from '../ipc/engine.ts';
 import type { NotchDelta, NotchSnapshot } from '../ipc/types.ts';
 import { applyEnvelope } from './model.ts';
 
@@ -21,6 +21,7 @@ export class SettingsClient {
   engine = $state<EngineSnapshot | null>(null);
   notch = $state<NotchSnapshot | null>(null);
   launchAtSignIn = $state<boolean | null>(null);
+  lyricsStorage = $state<LyricsStorageStats | null>(null);
   version = $state<string | null>(null);
   banner = $state<Banner | null>(null);
   saved = $state(false);
@@ -80,6 +81,31 @@ export class SettingsClient {
       this.flashSaved();
     } catch (error) {
       this.banner = { tone: 'error', title: 'Couldn’t change launch at sign-in', text: String(error) };
+    }
+  }
+
+  async refreshLyricsStorage(): Promise<void> {
+    try {
+      this.lyricsStorage = await this.backend.invoke<LyricsStorageStats>('get_lyrics_storage_stats');
+    } catch (error) {
+      this.banner = { tone: 'warning', title: 'Couldn’t read lyrics storage', text: String(error) };
+    }
+  }
+
+  async clearLyricsCache(): Promise<void> {
+    try {
+      this.lyricsStorage = await this.backend.invoke<LyricsStorageStats>('clear_lyrics_cache');
+      this.flashSaved();
+    } catch (error) {
+      this.banner = { tone: 'error', title: 'Couldn’t clear lyrics cache', text: String(error) };
+    }
+  }
+
+  async openLyricsFolder(): Promise<void> {
+    try {
+      await this.backend.invoke('open_lyrics_folder');
+    } catch (error) {
+      this.banner = { tone: 'error', title: 'Couldn’t open lyrics folder', text: String(error) };
     }
   }
 

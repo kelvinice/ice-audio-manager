@@ -10,7 +10,7 @@ any time (D-15). Heavy work (image decode, colour extraction, device sorting) ha
 ## Entry points
 | File | What it does |
 |---|---|
-| `index.html` → `src/notch/main.ts` → `notch/NotchApp.svelte` | The notch: a 440×210 transparent canvas holding a sibling `.pill-shadow` + one `.pill-clip` container (≥ 24 px margin so the drop shadow isn't clipped) |
+| `index.html` → `src/notch/main.ts` → `notch/NotchApp.svelte` | The notch: a 440×292 transparent canvas holding a sibling `.pill-shadow` + one `.pill-clip` container (≥ 24 px margin even with bottom lyrics extension) |
 | `settings.html` → `src/settings/main.ts` | Settings window: see [app-ui-settings](app-ui-settings.md) |
 | `src/themes/base.css` | All `--ice-*` tokens (documented in [theming.md](../theming.md): every new token must be added there) |
 
@@ -32,6 +32,8 @@ any time (D-15). Heavy work (image decode, colour extraction, device sorting) ha
 | `notch/activities/NotchBackdrop.svelte` | V2 default 9-orb orbital lava-lamp `.art-wash` (`wash-base` + `screen` blending on dark themes, `normal` on `ice_light`, scaled smoothly by `subscribeTempo` and paused via `animation-play-state`) + opt-in V1 blurred cover & `.art-scrim` gated by `--ice-art-backdrop` |
 | `notch/activities/AlbumArtTile.svelte` | Album art / placeholder tile with crossfade and optional `radius` prop (defaults to `--ice-radius-md` / `--ice-radius-sm`; track pill passes `size={34}` `radius="16px"`) |
 | `notch/scrubber.ts` | Pure media-scrubber maths: `clampSeekPositionMs`, `liveMediaPositionMs` (extrapolates from `positionUpdatedMs`), `pointerSeekMs`, `stepSeekMs`, and `nextSecondTickDelayMs` (aligned 1 Hz timer delay for the expanded card) |
+| `notch/lyrics.ts` | Pure lyrics frame resolver (`resolveLyricFrame`, `shouldShowPillLyrics`, `shouldShowCardLyrics`): active line, neighbour lines, active word index, and next boundary wake delay |
+| `notch/activities/LyricsExtension.svelte` | Seamless bottom extension under the compact music pill (1 active line + Romaji/subtitle) and expanded card (3-line focus band, click-to-seek, active-word lift/glow via `--ice-lyric-*` tokens, plain fallback) |
 
 ## `src/notch/activities/` (one component per job)
 `IdlePill`, `VolumeActivity`, `SwitchActivity`, `PlugActivity`, `MicActivity`, `TrackActivity`, `ExpandedNotch` (container), `ExpandedMediaCard`,
@@ -79,3 +81,4 @@ updating the constants.
 - 2026-11-24 Gemini: D-25 9-orb lava-lamp `.art-wash` (`NotchBackdrop.svelte`, `backdrop.ts`, `--ice-ambient-period: 9s`/`13s`), sibling `.pill-shadow` in `NotchApp.svelte`, `subscribeTempo` / `BeatShaper.tempoRate`, `ice_light` theme (`adaptAccentForSurface`), `292×46` music pill (`34×34` `16px` art), and `'bouncy'` default fallback.
 - 2026-11-24 Gemini: interactive progress seeking on `ExpandedMediaCard` (`scrubber.ts`, `MediaAction` `seek`, 1 Hz playback interpolation while expanded and visible).
 - 2026-11-24 Gemini: smooth 1 Hz playback timecode ticking using GSMTC `positionUpdatedMs` (`liveMediaPositionMs`) in `ExpandedMediaCard` and `TrackActivity`.
+- 2026-11-24 Gemini: bottom lyrics extension (`LyricsExtension.svelte`, `lyrics.ts`, `--ice-lyric-*` tokens, `CANVAS_H = 292`) for both compact music pill and expanded card with active-word emphasis, Romaji/paired subtitles, and side-rail toggle.

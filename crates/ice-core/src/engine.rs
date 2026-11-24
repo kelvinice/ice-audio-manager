@@ -17,6 +17,7 @@ use ts_rs::TS;
 
 use crate::appearance::{Appearance, IdleStyle, NowPlayingPill, SpringPreset, ThemeKind};
 use crate::device::{DeviceState, Flow, Role};
+use crate::lyrics::{LyricsConfig, LyricsState};
 use crate::media::{MusicServiceId, MusicServices, NowPlaying};
 
 /// Which default roles a switch sets (D-05, F02).
@@ -152,6 +153,9 @@ pub struct EngineSnapshot {
     /// What's playing (Windows' current media session), `None` when nothing is.
     #[serde(default)]
     pub media: Option<NowPlaying>,
+    /// Synced lyrics state for the current track (disabled by default; D-22).
+    #[serde(default)]
+    pub lyrics: LyricsState,
 }
 
 /// What the tray, hotkeys and UI ask the engine to do.
@@ -281,6 +285,27 @@ pub enum Command {
         service: MusicServiceId,
         enabled: bool,
     },
+    /// D-22: master toggle for showing synced lyrics on the notch.
+    SetLyricsEnabled {
+        enabled: bool,
+    },
+    /// D-22 Privacy opt-in: allow Rust-only LRCLIB lookups (`https://lrclib.net`).
+    SetLyricsOnlineLookup {
+        enabled: bool,
+    },
+    /// D-22: patch lyrics display preferences (`None` leaves a flag unchanged).
+    SetLyricsDisplay {
+        show_on_pill: Option<bool>,
+        show_on_card: Option<bool>,
+        word_highlight: Option<bool>,
+        romaji: Option<bool>,
+    },
+    /// D-22 Storage: set maximum managed lyrics disk cache size in MiB (`5..=500`).
+    SetLyricsCacheMaxMb {
+        max_mb: u16,
+    },
+    /// D-22 Privacy master kill switch: turns off all optional network features at once.
+    DisableAllNetworkFeatures,
     /// Roles used by switches that don't specify their own.
     SetDefaultRoles {
         roles: RoleSet,
@@ -310,6 +335,11 @@ impl Command {
             | Self::SetShowDisconnected { .. }
             | Self::SetIdleLinger { .. }
             | Self::SetMusicService { .. }
+            | Self::SetLyricsEnabled { .. }
+            | Self::SetLyricsOnlineLookup { .. }
+            | Self::SetLyricsDisplay { .. }
+            | Self::SetLyricsCacheMaxMb { .. }
+            | Self::DisableAllNetworkFeatures
             | Self::SetShowNotchHotkey { .. }
             | Self::SetDefaultRoles { .. } => true,
             Self::SwitchTo { .. }
@@ -399,6 +429,9 @@ pub struct SettingsView {
     /// D-22 launch buttons in the notch.
     #[serde(default)]
     pub music_services: MusicServices,
+    /// D-22 synced lyrics, Privacy opt-in, Romaji, and Storage cache ceiling.
+    #[serde(default)]
+    pub lyrics: LyricsConfig,
     /// D-19 "show notch" hotkey, if bound.
     #[serde(default)]
     pub show_notch_hotkey: Option<String>,
@@ -466,6 +499,10 @@ pub enum EngineEvent {
     /// Album art bytes: `Engine::art(art.id)` (the app serves them as `iceart://<id>`).
     MediaChanged {
         media: Option<NowPlaying>,
+    },
+    /// Synced lyrics for the active track changed (loading, ready, not found, or disabled).
+    LyricsChanged {
+        lyrics: LyricsState,
     },
     /// A switch the user asked for completed and was confirmed by re-reading the defaults.
     Switched {

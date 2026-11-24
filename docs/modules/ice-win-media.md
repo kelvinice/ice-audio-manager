@@ -12,6 +12,7 @@ browser or installed app is the second). No network, no sign-in.
 |---|---|
 | `media.rs` | Stateless WinRT reads: `manager`, `now_playing`, `sessions`, `send(action)`, `current_art`, `read` (track + art), `refresh_playback` (status/timeline); `MediaWatcher` + `MediaSignal` forward GSMTC events to a non-blocking sink; art pipeline |
 | `media_service.rs` | `MediaService`: the `ice-media` thread; coalesces signals, reads once per burst, returns `MediaUpdate` to the engine |
+| `lyrics.rs`, `lyrics/{cache,lrclib,romaji}.rs` | `LyricsService` (`ice-lyrics` MTA thread): Option B local `.lrc` overrides (`%LOCALAPPDATA%\IceAudioManager\lyrics\custom\`) & bounded LRU disk cache (`cache_max_mb`), Option A opt-in WinHTTP LRCLIB (`https://lrclib.net`) client, and offline Japanese → Romaji via Windows MS-IME `IFELanguage::GetJMorphResult` + `kana_to_romaji` |
 
 ## How it works
 - **Event-driven, no polling.** `MediaWatcher` forwards session / properties / playback / timeline events. `media_service` sets bits in a
@@ -44,3 +45,4 @@ Unit tests for colour maths live in `ice-core`; this module is covered by the ma
 - 2026-11-24 Claude: confirm reads, duration-jump detection and a short first-read art budget (fixes a ~5 s stale title on song change).
 - 2026-11-24 Gemini: added `MediaAction::Seek { position_ms }` via `TryChangePlaybackPositionAsync` (`seek_ticks` / `clamp_seek_ticks`).
 - 2026-11-24 Gemini: `refresh_playback` now populates `NowPlaying.position_updated_ms` from GSMTC `TimelineProperties.LastUpdatedTime` (with stale-resume guard).
+- 2026-11-24 Gemini: added `lyrics/` (`LyricsService` on `ice-lyrics` thread, Option B local `.lrc` + LRU disk cache, Option A opt-in WinHTTP LRCLIB client, and offline MS-IME `IFELanguage` Romaji).

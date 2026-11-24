@@ -4,6 +4,7 @@
   import { CANVAS_H, CANVAS_W, TOP_PAD } from '../lib/notch/geometry';
   import ExpandedNotch from './activities/ExpandedNotch.svelte';
   import IdlePill from './activities/IdlePill.svelte';
+  import LyricsExtension from './activities/LyricsExtension.svelte';
   import MicActivity from './activities/MicActivity.svelte';
   import NotchBackdrop from './activities/NotchBackdrop.svelte';
   import PlugActivity from './activities/PlugActivity.svelte';
@@ -81,12 +82,27 @@
           {:else if ctrl.activeView.kind === 'mic'}
             <MicActivity activity={ctrl.activeView} instant={ctrl.isInstant} />
           {:else if ctrl.activeView.kind === 'track'}
-            <TrackActivity
-              activity={ctrl.activeView}
-              instant={ctrl.isInstant}
-              preset={ctrl.notchSnapshot.preset}
-              notchVisible={ctrl.isNotchVisible}
-            />
+            <div class="track-with-lyrics">
+              <div class="track-head">
+                <TrackActivity
+                  activity={ctrl.activeView}
+                  instant={ctrl.isInstant}
+                  preset={ctrl.notchSnapshot.preset}
+                  notchVisible={ctrl.isNotchVisible}
+                />
+              </div>
+              {#if ctrl.showPillLyrics}
+                <LyricsExtension
+                  lyrics={ctrl.engineState.lyrics}
+                  media={ctrl.activeView.media}
+                  mode="pill"
+                  wordHighlight={ctrl.engineState.settings?.lyrics.wordHighlight ?? true}
+                  showRomaji={ctrl.engineState.settings?.lyrics.romaji ?? true}
+                  instant={ctrl.isInstant}
+                  notchVisible={ctrl.isNotchVisible}
+                />
+              {/if}
+            </div>
           {:else}
             <IdlePill
               deviceLabel={ctrl.effectiveDeviceShort}
@@ -113,6 +129,9 @@
             barPercent={ctrl.pillSize.vol}
             micMuted={ctrl.effectiveMicMuted}
             media={ctrl.engineState.media}
+            lyrics={ctrl.engineState.lyrics}
+            showLyrics={ctrl.showCardLyrics}
+            lyricsDrawerOpen={ctrl.lyricsCardOpen}
             instant={ctrl.isInstant}
             notchVisible={ctrl.isNotchVisible}
             preset={ctrl.notchSnapshot.preset}
@@ -122,6 +141,7 @@
             onSetVolume={ctrl.setVolume}
             onSwitchDevice={ctrl.switchDevice}
             onToggleMicMute={ctrl.toggleMicMute}
+            onToggleLyrics={ctrl.toggleLyricsCard}
             onMediaAction={(action) => ctrl.sendMediaAction(action)}
             onOpenMusicService={ctrl.openMusicService}
             onOpenSettings={ctrl.openSettings}
@@ -158,6 +178,22 @@
   .stage.hidden {
     opacity: 0;
     pointer-events: none;
+  }
+
+  .track-with-lyrics {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  .track-head {
+    width: 100%;
+    height: 46px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
   }
 
   .stage.idle-hidden .pill-shadow,

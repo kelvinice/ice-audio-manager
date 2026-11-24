@@ -1432,6 +1432,8 @@ name = "ice-win"
 version = "0.0.1"
 dependencies = [
  "ice-core",
+ "serde",
+ "serde_json",
  "tracing",
  "webview2-com",
  "windows",

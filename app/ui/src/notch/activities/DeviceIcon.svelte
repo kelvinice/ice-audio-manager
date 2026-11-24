@@ -18,6 +18,7 @@
     | 'spotify'
     | 'youtube-music'
     | 'pin'
+    | 'lyrics'
     | 'settings';
 
   interface Props {
@@ -111,6 +112,10 @@
     <path d="M6.8 5.6L11 8l-4.2 2.4V5.6Z" fill="currentColor" />
   {:else if resolved === 'pin'}
     <path d="M5.5 2.5h5L9.8 7l1.7 1.8v1H8.7v3.7L8 14.5l-.7-1V9.8H4.5v-1L6.2 7 5.5 2.5Z" />
+  {:else if resolved === 'lyrics'}
+    <path d="M3 4.2h10M3 7.8h7.2M3 11.4h5.2" />
+    <path d="M12.5 11.6V7.4l2-.5" />
+    <circle cx="11.4" cy="11.8" r="1.2" />
   {:else if resolved === 'settings'}
     <path d="M2.5 4.8h5.8M11.7 4.8h1.8M2.5 11.2h1.8M7.7 11.2h5.8" />
     <circle cx="10" cy="4.8" r="1.7" />

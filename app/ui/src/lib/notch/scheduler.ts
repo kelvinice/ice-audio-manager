@@ -4,6 +4,7 @@ import type {
   EngineEvent,
   EngineSnapshot,
   Envelope,
+  LyricsState,
   Notice,
   NowPlaying,
   NowPlayingPill,
@@ -87,6 +88,7 @@ export interface NotchSchedulerState {
   notices: Notice[];
   settings: SettingsView | null;
   media: NowPlaying | null;
+  lyrics: LyricsState;
   activeDevice: DeviceSummary | null;
   targetDevice: DeviceSummary | null;
   activeMic: DeviceSummary | null;
@@ -268,6 +270,7 @@ export class NotchActivityScheduler {
       notices: [],
       settings: null,
       media: null,
+      lyrics: { status: 'disabled', trackKey: null, document: null },
       activeDevice: null,
       targetDevice: null,
       activeMic: null,
@@ -295,6 +298,7 @@ export class NotchActivityScheduler {
       notices: snapshot.notices,
       settings: snapshot.settings,
       media: snapshot.media,
+      lyrics: snapshot.lyrics ?? { status: 'disabled', trackKey: null, document: null },
       activeDevice,
       targetDevice,
       activeMic,
@@ -517,6 +521,9 @@ export class NotchActivityScheduler {
         return { status: 'applied', wokeActivity: false };
       }
 
+      case 'lyricsChanged':
+        this.state.lyrics = ev.lyrics;
+        return { status: 'applied', wokeActivity: false };
       case 'mediaChanged': {
         const prev = this.state.media;
         const next = ev.media;

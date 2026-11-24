@@ -17,6 +17,7 @@ const settings: SettingsView = {
   showDisconnected: false,
   idleLingerSecs: 15,
   musicServices: { spotify: true, youtubeMusic: true },
+  lyrics: { enabled: false, onlineLookup: false, showOnPill: true, showOnCard: true, wordHighlight: true, romaji: true, cacheMaxMb: 50 },
   showNotchHotkey: null,
 };
 
@@ -31,6 +32,7 @@ const snapshot: EngineSnapshot = {
   notices: [],
   settings,
   media: null,
+  lyrics: { status: 'disabled', trackKey: null, document: null },
 };
 
 const settingsChanged = (revision: number): Envelope => ({

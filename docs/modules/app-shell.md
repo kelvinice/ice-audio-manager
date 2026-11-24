@@ -64,3 +64,4 @@ Unit tests in `art.rs`, `engine_bridge.rs`, `ipc.rs`, `meter.rs`, `placement.rs`
 - 2026-11-24 Claude: `session.rs` clears the notch pin on session lock or sleep (`ice_win::session_watch`).
 - 2026-11-24 Claude: `show_notch.rs` (D-19): the "show notch" hotkey (`EngineEvent::ShowNotch`) and the native pill click/middle click; `tray::open_quick_menu` is shared with the tray's left click.
 - 2026-11-24 Gemini: `settings.rs` default Settings window size increased from `920×640` to `1020×680`.
+- 2026-11-24 Gemini: `NOTCH_CANVAS_H` raised to `292` (for bottom lyrics extension); added Settings-only `get_lyrics_storage_stats`, `clear_lyrics_cache`, and `open_lyrics_folder` commands (`permissions/shell.toml`).

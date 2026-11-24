@@ -2,16 +2,20 @@ import type { HitRect, NotchSnapshot, SpringPreset } from '../ipc/types.ts';
 import { DEFAULT_IDLE_MODE, type ActivityView, type IdleMode } from './scheduler.ts';
 
 // Twin: `NOTCH_CANVAS_W`/`NOTCH_CANVAS_H` in app/src-tauri/src/main.rs. The canvas keeps ≥ 24 px around the expanded
-// pill so `--ice-drop-shadow` is never clipped by the window edge.
+// pill (+ bottom lyrics extension) so `--ice-drop-shadow` is never clipped by the window edge.
 export const CANVAS_W = 440;
-export const CANVAS_H = 210;
+export const CANVAS_H = 292;
 export const TOP_PAD = 6;
 
-/** Expanded card: media block + volume + devices beside a side rail (pin, mic, services, settings). */
+/** Expanded card: media block + volume + devices beside a side rail (pin, mic, services, lyrics, settings). */
 export const EXPANDED_W = 392;
 export const EXPANDED_H_MEDIA = 164;
 export const EXPANDED_H_EMPTY = 144;
 export const EXPANDED_R = 24;
+/** Attached bottom lyrics extension heights for compact music pill and expanded card (`docs/lyrics.md`). */
+export const PILL_LYRICS_H = 34;
+export const PILL_LYRICS_SUB_H = 48;
+export const CARD_LYRICS_H = 82;
 
 export interface PillBox {
   w: number;
@@ -32,10 +36,16 @@ export function targetGeometry(
   idleModeNow: IdleMode = DEFAULT_IDLE_MODE,
   hasMedia = false,
   fallbackVolume = 40,
+  lyricsExtraH = 0,
 ): PillBox {
   const vol = view.kind === 'volume' ? view.percent : fallbackVolume;
   if (expandedNow) {
-    return { w: EXPANDED_W, h: hasMedia ? EXPANDED_H_MEDIA : EXPANDED_H_EMPTY, r: EXPANDED_R, vol };
+    return {
+      w: EXPANDED_W,
+      h: (hasMedia ? EXPANDED_H_MEDIA : EXPANDED_H_EMPTY) + (hasMedia ? lyricsExtraH : 0),
+      r: EXPANDED_R,
+      vol,
+    };
   }
   switch (view.kind) {
     case 'volume':
@@ -47,7 +57,7 @@ export function targetGeometry(
     case 'mic':
       return { w: 204, h: 38, r: 19, vol };
     case 'track':
-      return { w: 292, h: 46, r: 23, vol };
+      return { w: 292, h: 46 + lyricsExtraH, r: lyricsExtraH > 0 ? 22 : 23, vol };
     case 'idle':
     default:
       return idleGeometry(idleModeNow, hasMedia, micMutedNow, vol);

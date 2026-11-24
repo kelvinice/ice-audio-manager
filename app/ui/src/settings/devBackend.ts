@@ -38,6 +38,7 @@ function initialSnapshot(): EngineSnapshot {
     micVolume: 80,
     notices: [],
     media: null,
+    lyrics: { status: 'disabled', trackKey: null, document: null },
     settings: {
       appearance: { theme: 'ice', preset: 'bouncy', idleStyle: 'mini_pill', nowPlaying: 'brief', movingBackdrop: true },
       performanceProfile: 'instant',
@@ -60,6 +61,15 @@ function initialSnapshot(): EngineSnapshot {
       showDisconnected: false,
       idleLingerSecs: 15,
       musicServices: { spotify: true, youtubeMusic: true },
+      lyrics: {
+        enabled: false,
+        onlineLookup: false,
+        showOnPill: true,
+        showOnCard: true,
+        wordHighlight: true,
+        romaji: true,
+        cacheMaxMb: 50,
+      },
       showNotchHotkey: null,
     },
   };
@@ -105,6 +115,19 @@ function applyCommand(s: EngineSnapshot, c: Command): void {
     case 'setShowDisconnected': st.showDisconnected = c.enabled; break;
     case 'setIdleLinger': st.idleLingerSecs = c.secs; break;
     case 'setMusicService': st.musicServices = { ...st.musicServices, [c.service === 'spotify' ? 'spotify' : 'youtubeMusic']: c.enabled }; break;
+    case 'setLyricsEnabled': st.lyrics = { ...st.lyrics, enabled: c.enabled }; break;
+    case 'setLyricsOnlineLookup': st.lyrics = { ...st.lyrics, onlineLookup: c.enabled }; break;
+    case 'setLyricsDisplay':
+      st.lyrics = {
+        ...st.lyrics,
+        showOnPill: c.showOnPill ?? st.lyrics.showOnPill,
+        showOnCard: c.showOnCard ?? st.lyrics.showOnCard,
+        wordHighlight: c.wordHighlight ?? st.lyrics.wordHighlight,
+        romaji: c.romaji ?? st.lyrics.romaji,
+      };
+      break;
+    case 'setLyricsCacheMaxMb': st.lyrics = { ...st.lyrics, cacheMaxMb: c.maxMb }; break;
+    case 'disableAllNetworkFeatures': st.lyrics = { ...st.lyrics, onlineLookup: false }; break;
     case 'setShowNotchHotkey': st.showNotchHotkey = c.hotkey; break;
     case 'setDefaultRoles': st.defaultRoles = c.roles; break;
     case 'setFavourites': st.favouritesPlayback = c.deviceIds.map(ref); break;
@@ -145,6 +168,24 @@ export function createDevBackend(): Backend {
         case 'get_launch_at_sign_in': return launch as T;
         case 'plugin:app|version': return '0.0.1 (preview)' as T;
         case 'set_launch_at_sign_in': launch = Boolean(args.enabled); return launch as T;
+        case 'get_lyrics_storage_stats':
+          return {
+            cacheBytes: 1_842_000,
+            cacheFiles: 38,
+            customFiles: 2,
+            cacheMaxMb: snapshot.settings.lyrics.cacheMaxMb,
+            customDir: '%LOCALAPPDATA%\\IceAudioManager\\lyrics\\custom',
+          } as T;
+        case 'clear_lyrics_cache':
+          return {
+            cacheBytes: 0,
+            cacheFiles: 0,
+            customFiles: 2,
+            cacheMaxMb: snapshot.settings.lyrics.cacheMaxMb,
+            customDir: '%LOCALAPPDATA%\\IceAudioManager\\lyrics\\custom',
+          } as T;
+        case 'open_lyrics_folder':
+          return undefined as T;
         case 'apply_setting': {
           const c = args.command as Command;
           if (c.type === 'setBinding' && c.hotkey === 'Ctrl+Alt+F12') {

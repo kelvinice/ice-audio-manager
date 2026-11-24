@@ -84,6 +84,11 @@ impl Worker {
             | Command::SetShowDisconnected { .. }
             | Command::SetIdleLinger { .. }
             | Command::SetMusicService { .. }
+            | Command::SetLyricsEnabled { .. }
+            | Command::SetLyricsOnlineLookup { .. }
+            | Command::SetLyricsDisplay { .. }
+            | Command::SetLyricsCacheMaxMb { .. }
+            | Command::DisableAllNetworkFeatures
             | Command::SetShowNotchHotkey { .. }
             | Command::SetDefaultRoles { .. } => self.edit_settings(&command),
         }

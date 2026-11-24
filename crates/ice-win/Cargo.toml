@@ -8,6 +8,8 @@ publish.workspace = true
 
 [dependencies]
 ice-core.workspace = true
+serde.workspace = true
+serde_json.workspace = true
 tracing.workspace = true
 webview2-com = { workspace = true, optional = true }
 windows-core.workspace = true
@@ -19,6 +21,7 @@ features = [
     "Win32_Devices_Display",
     "Win32_Graphics_Dwm",
     "Win32_Graphics_Gdi",
+    "Win32_Networking_WinHttp",
     "Win32_UI_Accessibility",
     "Win32_Security",
     "Win32_Storage_FileSystem",

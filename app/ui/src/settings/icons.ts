@@ -33,6 +33,8 @@ export const GLYPHS = {
   globe: '',
   page: '',
   music: '',
+  storage: '',
+  lyrics: '',
 } as const;
 
 export type IconName = keyof typeof GLYPHS;

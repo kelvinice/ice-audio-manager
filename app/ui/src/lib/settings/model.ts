@@ -38,6 +38,9 @@ export function applyEnvelope(snapshot: EngineSnapshot, envelope: Envelope): Env
     case 'mediaChanged':
       next.media = event.media;
       break;
+    case 'lyricsChanged':
+      next.lyrics = event.lyrics;
+      break;
     case 'noticesChanged':
       next.notices = event.notices;
       break;

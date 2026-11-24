@@ -20,6 +20,7 @@ use ice_core::engine::{
 };
 use ice_core::event::AudioEvent;
 use ice_core::hotkey::Chord;
+use ice_core::lyrics::LyricsState;
 use ice_core::resolve::{self, DeviceRef, Resolution, ToggleAction, normalize_name};
 use windows::Win32::Media::Audio::IMMDevice;
 
@@ -27,6 +28,7 @@ use crate::com::ComGuard;
 use crate::endpoints::Endpoints;
 use crate::file_watch::DirWatch;
 use crate::hotkeys::HotkeyService;
+use crate::lyrics::LyricsService;
 use crate::media_service::{MediaService, MediaUpdate};
 use crate::meter::MeterHub;
 use crate::spatial::{self, SpatialFormat};
@@ -64,6 +66,8 @@ enum Msg {
     ConfigChanged,
     /// A finished now-playing read from the `ice-media` thread.
     Media(Box<MediaUpdate>),
+    /// Updated synced lyrics state from the `ice-lyrics` thread.
+    Lyrics(Box<LyricsState>),
     Quit,
 }
 
@@ -224,6 +228,8 @@ struct Worker {
     knob_at: Option<Instant>,
     /// Now playing (GSMTC) on its own thread; `None` if it couldn't start.
     media: Option<MediaService>,
+    /// Synced lyrics lookup / local `.lrc` / Romaji worker on its own thread.
+    lyrics: Option<LyricsService>,
     // Must drop last: every COM object above is released before COM is uninitialised.
     _com: ComGuard,
 }
@@ -282,6 +288,12 @@ impl Worker {
         })
         .inspect_err(|e| tracing::warn!(error = %e, "media thread failed to start; now playing disabled"))
         .ok();
+        let lyrics_tx = engine_tx.clone();
+        let lyrics = LyricsService::start(config.lyrics, move |state| {
+            let _ = lyrics_tx.send(Msg::Lyrics(Box::new(state)));
+        })
+        .inspect_err(|e| tracing::warn!(error = %e, "lyrics thread failed to start; lyrics disabled"))
+        .ok();
         let mut w = Self {
             eps,
             endpoints: Vec::new(),
@@ -310,6 +322,7 @@ impl Worker {
             knob_first: 0,
             knob_at: None,
             media,
+            lyrics,
             _com: com,
         };
         w.refresh(false);
@@ -346,6 +359,7 @@ impl Worker {
                 Msg::Hotkey(id) => self.hotkey(id),
                 Msg::ConfigChanged => self.reload_at = Some(Instant::now() + RELOAD_DEBOUNCE),
                 Msg::Media(u) => self.on_media(*u),
+                Msg::Lyrics(state) => self.on_lyrics(*state),
             }
         }
     }
@@ -409,7 +423,22 @@ impl Worker {
             changed
         };
         if changed {
+            if let Some(lyrics) = &self.lyrics {
+                lyrics.update_track(u.media.clone());
+            }
             self.emit(EngineEvent::MediaChanged { media: u.media });
+        }
+    }
+
+    fn on_lyrics(&mut self, state: LyricsState) {
+        let changed = {
+            let mut sh = lock(&self.shared);
+            let changed = sh.snapshot.lyrics != state;
+            sh.snapshot.lyrics = state.clone();
+            changed
+        };
+        if changed {
+            self.emit(EngineEvent::LyricsChanged { lyrics: state });
         }
     }
 

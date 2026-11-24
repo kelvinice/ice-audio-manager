@@ -65,6 +65,52 @@ export type MusicServiceId = "spotify" | "youtube_music";
 
 export type MusicServices = { spotify: boolean, youtubeMusic: boolean, };
 
+export type LyricsConfig = {
+/**
+ * Master toggle for displaying lyrics on the notch (off by default).
+ */
+enabled: boolean,
+/**
+ * Option A (LRCLIB `https://lrclib.net`): strictly opt-in from Settings → Privacy (§1.5).
+ */
+onlineLookup: boolean,
+/**
+ * Attach the compact bottom lyrics extension under the music pill.
+ */
+showOnPill: boolean,
+/**
+ * Attach the 3-line bottom lyrics extension under the expanded card.
+ */
+showOnCard: boolean,
+/**
+ * Highlight the active word across each synced line (Enhanced LRC or weighted phrase cadence).
+ */
+wordHighlight: boolean,
+/**
+ * Generate an offline Romaji subtitle line underneath Japanese lyric lines.
+ */
+romaji: boolean,
+/**
+ * Maximum managed lyrics cache size on disk, in MiB ([`LYRICS_CACHE_MAX_MB`]).
+ */
+cacheMaxMb: number, };
+
+export type LyricsSource = "local" | "cache" | "lrclib";
+
+export type LyricsSyncKind = "word" | "line" | "plain";
+
+export type LyricsStatus = "disabled" | "idle" | "loading" | "ready" | "notFound";
+
+export type LyricWord = { startMs: number, endMs: number, text: string, };
+
+export type LyricLine = { startMs: number, endMs: number | null, text: string, subtitle: string | null, words: Array<LyricWord>, };
+
+export type LyricsDocument = { trackKey: string, source: LyricsSource, syncKind: LyricsSyncKind, instrumental: boolean, lines: Array<LyricLine>, plainText: string | null, };
+
+export type LyricsState = { status: LyricsStatus, trackKey: string | null, document: LyricsDocument | null, };
+
+export type LyricsStorageStats = { cacheBytes: number, cacheFiles: number, customFiles: number, cacheMaxMb: number, customDir: string, };
+
 export type MediaAction = "playPause" | "play" | "pause" | "next" | "previous" | { "seek": { positionMs: number, } };
 
 export type PlaybackStatus = "playing" | "paused" | "stopped" | "changing" | "opened" | "closed";
@@ -124,6 +170,10 @@ idleLingerSecs: number,
  */
 musicServices: MusicServices,
 /**
+ * D-22 synced lyrics, Privacy opt-in, Romaji, and Storage cache ceiling.
+ */
+lyrics: LyricsConfig,
+/**
  * D-19 "show notch" hotkey, if bound.
  */
 showNotchHotkey: string | null, };
@@ -166,9 +216,13 @@ settings: SettingsView,
 /**
  * What's playing (Windows' current media session), `None` when nothing is.
  */
-media: NowPlaying | null, };
+media: NowPlaying | null,
+/**
+ * Synced lyrics state for the current track (disabled by default; D-22).
+ */
+lyrics: LyricsState, };
 
-export type Command = { "type": "switchTo", deviceId: string, roles: RoleSet, } | { "type": "switchBinding", bindingId: string, } | { "type": "togglePair", pairId: string, } | { "type": "cycleFavourites", flow: Flow, step: number, } | { "type": "setVolume", percent: number, } | { "type": "stepVolume", delta: number, } | { "type": "toggleMute" } | { "type": "toggleMicMute" } | { "type": "media", action: MediaAction, } | { "type": "setSpatial", deviceId: string, mode: SpatialMode, } | { "type": "resolveChoice", requestId: number, deviceId: string | null, } | { "type": "refresh" } | { "type": "setTogglePair", pairId: string, primaryId: string, secondaryId: string, hotkey: string | null, roles: RoleSet | null, } | { "type": "removeTogglePair", pairId: string, } | { "type": "setBinding", bindingId: string, deviceId: string, hotkey: string | null, roles: RoleSet | null, } | { "type": "removeBinding", bindingId: string, } | { "type": "setFavourites", flow: Flow, deviceIds: Array<string>, } | { "type": "setDevicePrefs", deviceId: string, spatial: SpatialMode | null, alias: string | null, hidden: boolean | null, } | { "type": "setTheme", theme: ThemeKind, } | { "type": "setPreset", preset: SpringPreset, } | { "type": "setIdleStyle", style: IdleStyle, } | { "type": "setNowPlayingPill", mode: NowPlayingPill, } | { "type": "setMovingBackdrop", enabled: boolean, } | { "type": "setPerformanceProfile", profile: PerformanceProfile, } | { "type": "setPinnedMonitor", displayPath: string, } | { "type": "setKnobGestures", enabled: boolean, } | { "type": "setShowDisconnected", enabled: boolean, } | { "type": "setIdleLinger", secs: number, } | { "type": "setShowNotchHotkey", hotkey: string | null, } | { "type": "setMusicService", service: MusicServiceId, enabled: boolean, } | { "type": "setDefaultRoles", roles: RoleSet, };
+export type Command = { "type": "switchTo", deviceId: string, roles: RoleSet, } | { "type": "switchBinding", bindingId: string, } | { "type": "togglePair", pairId: string, } | { "type": "cycleFavourites", flow: Flow, step: number, } | { "type": "setVolume", percent: number, } | { "type": "stepVolume", delta: number, } | { "type": "toggleMute" } | { "type": "toggleMicMute" } | { "type": "media", action: MediaAction, } | { "type": "setSpatial", deviceId: string, mode: SpatialMode, } | { "type": "resolveChoice", requestId: number, deviceId: string | null, } | { "type": "refresh" } | { "type": "setTogglePair", pairId: string, primaryId: string, secondaryId: string, hotkey: string | null, roles: RoleSet | null, } | { "type": "removeTogglePair", pairId: string, } | { "type": "setBinding", bindingId: string, deviceId: string, hotkey: string | null, roles: RoleSet | null, } | { "type": "removeBinding", bindingId: string, } | { "type": "setFavourites", flow: Flow, deviceIds: Array<string>, } | { "type": "setDevicePrefs", deviceId: string, spatial: SpatialMode | null, alias: string | null, hidden: boolean | null, } | { "type": "setTheme", theme: ThemeKind, } | { "type": "setPreset", preset: SpringPreset, } | { "type": "setIdleStyle", style: IdleStyle, } | { "type": "setNowPlayingPill", mode: NowPlayingPill, } | { "type": "setMovingBackdrop", enabled: boolean, } | { "type": "setPerformanceProfile", profile: PerformanceProfile, } | { "type": "setPinnedMonitor", displayPath: string, } | { "type": "setKnobGestures", enabled: boolean, } | { "type": "setShowDisconnected", enabled: boolean, } | { "type": "setIdleLinger", secs: number, } | { "type": "setShowNotchHotkey", hotkey: string | null, } | { "type": "setMusicService", service: MusicServiceId, enabled: boolean, } | { "type": "setLyricsEnabled", enabled: boolean, } | { "type": "setLyricsOnlineLookup", enabled: boolean, } | { "type": "setLyricsDisplay", showOnPill: boolean | null, showOnCard: boolean | null, wordHighlight: boolean | null, romaji: boolean | null, } | { "type": "setLyricsCacheMaxMb", maxMb: number, } | { "type": "disableAllNetworkFeatures" } | { "type": "setDefaultRoles", roles: RoleSet, };
 
 export type Notice = { "type": "notConnected", name: string, } | { "type": "chooseDevice", requestId: number, name: string, candidates: Array<DeviceSummary>, } | { "type": "switchFailed", name: string, failedRoles: Array<Role>, } | { "type": "spatialUnavailable", name: string, mode: SpatialMode, reason: string, } | { "type": "hotkeyConflict", bindingId: string, keys: string, } | { "type": "configReplaced", backup: string, error: string, } | { "type": "configInvalid", error: string, } | { "type": "configSaveFailed", error: string, } | { "type": "settingRejected", error: string, };
 
@@ -176,7 +230,7 @@ export type EngineEvent = { "type": "devicesChanged", playback: Array<DeviceSumm
 /**
  * Mirrors `EngineSnapshot::disconnected` (empty while the setting is off).
  */
-disconnected: Array<DeviceSummary>, } | { "type": "volumeChanged", volume: VolumeState, } | { "type": "micMuteChanged", muted: boolean, } | { "type": "micVolumeChanged", percent: number, } | { "type": "mediaChanged", media: NowPlaying | null, } | { "type": "switched", device: DeviceSummary, roles: RoleSet,
+disconnected: Array<DeviceSummary>, } | { "type": "volumeChanged", volume: VolumeState, } | { "type": "micMuteChanged", muted: boolean, } | { "type": "micVolumeChanged", percent: number, } | { "type": "mediaChanged", media: NowPlaying | null, } | { "type": "lyricsChanged", lyrics: LyricsState, } | { "type": "switched", device: DeviceSummary, roles: RoleSet,
 /**
  * The binding followed the device to a new endpoint ID (shown as a caption, one notice).
  */

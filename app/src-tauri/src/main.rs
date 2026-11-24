@@ -34,7 +34,7 @@ use crate::ipc::{ActivityKind, HitRect, MonitorSummary, NotchDelta, NotchSnapsho
 // Twin: `CANVAS_W`/`CANVAS_H` in app/ui/src/lib/notch/geometry.ts. The margin around the expanded pill leaves room
 // for its drop shadow; a tighter canvas clips the shadow at the window edge.
 const NOTCH_CANVAS_W: i32 = 440;
-const NOTCH_CANVAS_H: i32 = 210;
+const NOTCH_CANVAS_H: i32 = 292;
 const NOTCH_TOP_OFFSET: i32 = 0;
 
 struct SharedRuntime {
@@ -1311,6 +1311,9 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             settings::apply_setting,
             settings::get_launch_at_sign_in,
             settings::set_launch_at_sign_in,
+            settings::get_lyrics_storage_stats,
+            settings::clear_lyrics_cache,
+            settings::open_lyrics_folder,
         ])
         .setup(move |app| {
             let handle = app.handle().clone();
