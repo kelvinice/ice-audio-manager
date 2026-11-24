@@ -19,7 +19,7 @@ contract types, and `cargo test -p ice-core --all-features` exports them to `app
 | `device.rs` | `EndpointInfo`, `Flow` (render/capture), `Role`, `DeviceState`, `hardware_key_from_devnode` |
 | `event.rs` | `AudioEvent`: what COM callbacks push into a channel (device added/removed/state/default/property, volume) |
 | `hotkey.rs` | `Chord`, `Mods`, `ChordError`: parse and display chords like `Ctrl+Alt+F12` (no Windows calls) |
-| `appearance.rs` | `Appearance { theme, preset, idle_style, notch_style, now_playing, moving_backdrop }` with `ThemeKind` (`Ice` default, `IceLight`, `Midnight`, `Fluent`, `Minimal`), `SpringPreset` (`Bouncy` default), `IdleStyle`, `NotchStyle` (`Floating` default, `Nook`), `NowPlayingPill` (shared by tray, WebView, native pill) |
+| `appearance.rs` | `Appearance { theme, preset, idle_style, notch_style, now_playing, moving_backdrop }` with `ThemeKind` (`Ice` default, `IceLight`, `Midnight`, `Fluent`, `Minimal`), `SpringPreset` (`Bouncy` default), `IdleStyle`, `NotchStyle` (`Nook` default, `Floating`), `NowPlayingPill` (`WhilePlaying` default, `Brief`, `Off`; shared by tray, WebView, native pill) |
 | `media.rs` | `NowPlaying`, `ArtInfo`, `PlaybackStatus`, `MusicServiceId` (Spotify, YouTube Music), `Rgb`, dominant colour, `readable_accent` (WCAG AA ≥ 4.5:1 on `ICE_SURFACE`), `art_id`/`content_id` |
 | `meter.rs` | `MeterFrame { peak, channels, bands? }`, `SPECTRUM_BANDS = 14`, `channel()` → (`MeterSink`, `MeterSubscription`), `METER_INTERVAL` = 33 ms |
 | `spectrum.rs` | Pure 14-band log-spaced 4th-order IIR biquad `SpectrumAnalyzer` (`45 Hz – 14 kHz`, sample-rate-aware RBJ coefficients, `reset()`), zero external DSP crates |
@@ -76,3 +76,4 @@ Inline `#[cfg(test)]` in each file. `resolve.rs` is built from the owner's real 
 - 2026-11-24 Claude: `LyricLine.romaji` (generated, separate from the source's paired `subtitle`, never cached); `segmented_kana_to_romaji` (は/へ particles as wa/e).
 - 2026-11-24 Gemini: D-26 schema v10 (`visualizer_spectrum`, default `true`, `Command::SetVisualizerSpectrum`), optional `MeterFrame.bands` participating in `differs`, and pure 4th-order 14-band `spectrum.rs` (`SpectrumAnalyzer`).
 - 2026-11-24 Gemini: schema v11 (`NotchStyle`: `Floating` default, `Nook`; `Appearance.notch_style`, `Command::SetNotchStyle`).
+- 2026-11-24 Gemini: updated defaults to `NotchStyle::Nook` and `NowPlayingPill::WhilePlaying`.

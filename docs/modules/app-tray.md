@@ -11,7 +11,7 @@ the Phase 4 Settings window exists. It only builds menus from `EngineSnapshot` a
 | File | What it does |
 |---|---|
 | `tray.rs` | `build`, `close`, `refresh_tooltip`, `show_notice`; menu construction (`quick_menu`, `append_devices`), menu-id ↔ `Command` mapping (`COMMAND_PREFIX` = `audio/`, `CHOICE_PREFIX` = `choice/`), `Prompts` (pending device pickers and feedback), `notify` balloons |
-| `tray/preferences.rs` | "Show in notch" check item per playback device (= favourite, via `SetFavourites`, order kept), `edit_favourite` (re-reads favourites at click time because a reload may have reordered them), `appearance_menus` (`Theme` incl. `Ice Light`, `Notch style` `Floating`/`Edge Nook`, `Animation` with `Bouncy` first, `Idle notch`, `Now playing pill`), `choices` |
+| `tray/preferences.rs` | "Show in notch" check item per playback device (= favourite, via `SetFavourites`, order kept), `edit_favourite` (re-reads favourites at click time because a reload may have reordered them), `appearance_menus` (`Theme` incl. `Ice Light`, `Notch style` `Edge Nook`/`Floating`, `Animation` with `Bouncy` first, `Idle notch`, `Now playing pill` with `While playing` default), `choices` |
 
 ## What the menu offers
 Playback devices (switch; per-device **Show in notch**, spatial sound submenu with `SPATIAL_OPTIONS`) · playback volume line · recording devices ·
@@ -42,3 +42,4 @@ Unit tests in `tray.rs` and `preferences.rs` cover id round-trips and favourite 
 - 2026-11-24 Claude: left click goes through `open_quick_menu` (also used by the native pill and the show-notch hotkey in Lite).
 - 2026-11-24 Gemini: `tray/preferences.rs` adds `Ice Light` to the `Theme` submenu and puts `Bouncy` first in `Animation`.
 - 2026-11-24 Gemini: added `Notch style` (`Floating (default)` / `Edge Nook`) submenu to `appearance_menus`.
+- 2026-11-24 Gemini: updated tray default labels and ordering to `Edge Nook (default)` and `While playing (default)`.
