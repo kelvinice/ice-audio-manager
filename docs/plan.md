@@ -4,6 +4,8 @@
 > [planning-discussion.md](planning-discussion.md)). Stack: **Rust + Tauri 2 + Svelte 5, TOML + CSS** (D-01 to D-04).
 > D-15 (memory policy), D-16 (device identity) and D-17 (spatial sound) were also signed off on 2026-11-22.
 > The owner deferred the first public release to [Phase 6](#phase-6-hardening-and-first-public-release).
+> **Priority (owner, 2026-11-25): Edge Nook first.** Edge Nook is the default style and gets polish and QA first; Floating-only
+> work waits until Edge is stable (see [Edge Nook track](#edge-nook-track-priority-from-2026-11-25)).
 > Coding rules live in [code-practices.md](code-practices.md). **How each module works: [docs/modules/](modules/README.md)** (read first, update with every PR).
 
 ## Guiding constraints
@@ -286,7 +288,9 @@ Runs between Phase 3 and Phase 4. Item 1 is a bug fix that comes first. D-21 Par
       (`r=14`) and `36×18` (`r=9`) tokens. Wiring `IdleContent` follows Claude's merge.*
 - [ ] Side-by-side visual QA of the native and WebView idle pills (all states, light/dark, 100 %/150 %, both monitors)
 
-**D-20 · placement (owner ruling: both methods, drag & snap by default):**
+**D-20 · placement (owner ruling: both methods, drag & snap by default):** *Deferred to after Edge Nook is stable
+(owner, 2026-11-25). Edge Nook is flush with the top edge, so drag & snap, bottom anchors and R1 only apply to Floating.
+`anchor_rect` stays useful for Edge (top-left / top-centre / top-right) and can land first.*
 - [ ] `ice_core::anchor_rect(anchor, work_area, size)` and six anchors (top/bottom × left/centre/right), unit-tested with
       taskbar positions and DPI (Claude). It replaces both copies of the top-centre math (`overlay_win`, `native_dot`)
 - [ ] Config (Claude, schema bump + migration test): `notch.anchor` (default top-centre) and `notch.placement`
@@ -427,6 +431,42 @@ to the static native pill. Done by Claude; module docs: [app-ui-notch](modules/a
 - [ ] Phase 6: measure Instant idle with the WebView awake (expected ≈ 77 MB private WS from Phase 0.2, inside the ≤ 100 MB
       target) and the cursor poll's idle CPU, which now runs for as long as Instant shows the notch. D-21.1 L2
       (event-driven hit-testing) would remove that poll
+
+---
+
+## Edge Nook track (priority from 2026-11-25)
+
+Owner, 2026-11-25: **Edge Nook is the priority; Floating follows once Edge is stable.** "Stable" = the Edge exit
+criteria below pass on both monitors. Items come from Claude's review of the Edge layout (2026-11-25).
+
+**Done:**
+- [x] Lyrics in the Edge column (Claude, 2026-11-25; [lyrics.md §8 follow-up](lyrics.md#8-fixed-2026-11-24-the-last-characters-of-a-line-were-cut-off)):
+      the `fitLine` CSS had been dropped by Svelte (no fades, long centred lines lost their first characters) and the
+      active word's lift was clipped at the row edge. Fixed for pill, card and nook. In the nook, the current line now
+      **wraps** (balanced, ≤ 3 rows) instead of shrinking or sliding, and the rows are placed around its measured height
+
+**Open, fixes (Edge-specific, do first):**
+- [ ] **Hover intent at the top edge.** The nook sits where the cursor goes for browser tabs and title bars, and the
+      120 ms hover delay (`controller.svelte.ts` `onPointerEnter`) opens a 572 × 206 card over them on a pass-through.
+      Proposal: a per-style dwell (`NotchStyleStrategy.hoverIntentMs`, e.g. 220 ms for Edge) that restarts while the pointer
+      is still moving fast. Needs the owner's feel check
+- [ ] **Startup hit rect** in `main.rs` (`116 + 16 × 30` for Nook) is a hand copy of the idle geometry + ear; replace with
+      the UI's first `report_hit_rect` or a `// Twin:` constant
+- [ ] **Hit rect vs ears:** `nookStyleStrategy.computeHitRect` is a rectangle that includes the transparent area under the
+      concave ears. Clicks there land on the notch instead of the app below. Narrow it by the ear radius or wait for L2
+- [ ] Side-by-side visual QA of the native and WebView **nook** idle silhouettes (ears, rim, 100 % / 150 %, both monitors)
+
+**Open, polish:**
+- [ ] Top bar: the device name repeats the active device chip below. Proposal: show the media source or the spatial badge
+      there, or drop it and give the actions more room
+- [ ] Nook subtitle/Romaji line: wrap it like the current line (today it ends in "…" in the 238 px column)
+- [ ] Compact activities on the nook (volume, switch, mic, track): check that ears + `padding-top` keep text clear of the
+      bezel on both monitors; screenshot set for the QA checklist
+- [ ] D-19 `IdleContent` (Claude) lands for both pills, checked on the nook silhouette first
+
+**Edge exit criteria:** every activity and the expanded card pass visual QA in Edge Nook on the 144 Hz and 75 Hz monitors
+at 100 % / 150 %, light/dark desktops, all 4 themes; no accidental opens when reaching for browser tabs; the native and
+WebView idle silhouettes match. Then Floating work resumes (D-20 drag & snap, bottom anchors, R1).
 
 ---
 
