@@ -23,9 +23,11 @@ export interface ArtInfoWithPalette extends ArtInfo {
 export interface ArtBackdropStyle {
   hasArt: boolean;
   artId: string | null;
+  washBaseCss: string;
   washPrimaryCss: string;
   washSecondaryCss: string;
-  washTertiaryCss: string | null;
+  washTertiaryCss: string;
+  washQuaternaryCss: string;
   scrimTopCss: string;
   scrimBottomCss: string;
   coverLuminance: number;
@@ -155,11 +157,17 @@ export function adaptAccentForSurface(rgb: Rgb, isLightTheme: boolean): Rgb {
   return candidate;
 }
 
-/** Derives a distinct secondary gradient stop (+52° hue shift) when `ArtInfo` provides a single accent. */
-export function deriveSecondaryStop(primary: Rgb): Rgb {
+function deriveHueVariant(primary: Rgb, hueShiftDeg: number, satFloor: number, lightScale: number): Rgb {
   const [h, s, l] = rgbToHsl(primary);
+  if (s < 0.08) return hslToRgb(205 + hueShiftDeg, 0.34, clamp(l * lightScale, 0.28, 0.62));
+  return hslToRgb(h + hueShiftDeg, clamp(Math.max(s, satFloor), satFloor, 0.92), clamp(l * lightScale, 0.26, 0.62));
+}
+
+/** Derives a distinct secondary gradient stop (+28° warm shift) when `ArtInfo` provides a single accent. */
+export function deriveSecondaryStop(primary: Rgb): Rgb {
+  const [, s] = rgbToHsl(primary);
   if (s < 0.08) return DEFAULT_SECONDARY_RGB;
-  return hslToRgb(h + 52, clamp(Math.max(s, 0.48), 0.48, 0.9), clamp(l * 0.85, 0.26, 0.58));
+  return deriveHueVariant(primary, 28, 0.48, 0.88);
 }
 
 function tuneWashColor(rgb: Rgb, isLightTheme: boolean): Rgb {
@@ -211,12 +219,16 @@ export function computeArtBackdrop(
   isLightTheme = false,
 ): ArtBackdropStyle {
   if (!art) {
+    const baseA = formatRgbGlowCss(DEFAULT_RGB, isLightTheme ? 0.08 : 0.11) ?? 'rgba(107, 197, 255, 0.11)';
+    const baseB = formatRgbGlowCss(DEFAULT_SECONDARY_RGB, isLightTheme ? 0.06 : 0.08) ?? 'rgba(88, 118, 226, 0.08)';
     return {
       hasArt: false,
       artId: null,
+      washBaseCss: `linear-gradient(125deg, ${baseA} 0%, ${baseB} 100%)`,
       washPrimaryCss: formatRgbGlowCss(DEFAULT_RGB, isLightTheme ? 0.24 : 0.28) ?? 'rgba(107, 197, 255, 0.28)',
       washSecondaryCss: formatRgbGlowCss(DEFAULT_SECONDARY_RGB, isLightTheme ? 0.18 : 0.22) ?? 'rgba(88, 118, 226, 0.22)',
-      washTertiaryCss: null,
+      washTertiaryCss: formatRgbGlowCss(deriveHueVariant(DEFAULT_RGB, -48, 0.45, 0.9), isLightTheme ? 0.16 : 0.18) ?? 'rgba(72, 196, 184, 0.18)',
+      washQuaternaryCss: formatRgbGlowCss(deriveHueVariant(DEFAULT_RGB, 115, 0.42, 0.88), isLightTheme ? 0.14 : 0.16) ?? 'rgba(196, 118, 226, 0.16)',
       scrimTopCss: isLightTheme ? 'rgba(246, 247, 249, 0.74)' : 'rgba(12, 15, 20, 0.56)',
       scrimBottomCss: isLightTheme ? 'rgba(240, 243, 248, 0.90)' : 'rgba(10, 13, 18, 0.84)',
       coverLuminance: 0.1,
@@ -225,10 +237,12 @@ export function computeArtBackdrop(
 
   const rawPrimary = art.palette?.[0] ?? art.accent ?? DEFAULT_RGB;
   const rawSecondary = art.palette?.[1] ?? art.secondary ?? deriveSecondaryStop(rawPrimary);
-  const rawTertiary = art.palette?.[2] ?? null;
+  const rawTertiary = art.palette?.[2] ?? deriveHueVariant(rawPrimary, -34, 0.48, 0.9);
+  const rawQuaternary = art.palette?.[3] ?? deriveHueVariant(rawPrimary, -62, 0.46, 0.84);
   const primary = tuneWashColor(rawPrimary, isLightTheme);
   const secondary = tuneWashColor(rawSecondary, isLightTheme);
-  const tertiary = rawTertiary ? tuneWashColor(rawTertiary, isLightTheme) : null;
+  const tertiary = tuneWashColor(rawTertiary, isLightTheme);
+  const quaternary = tuneWashColor(rawQuaternary, isLightTheme);
   const coverLuminance = clamp(
     typeof art.luminance === 'number' && Number.isFinite(art.luminance)
       ? art.luminance
@@ -240,15 +254,21 @@ export function computeArtBackdrop(
   const scrimRgb = isLightTheme ? LIGHT_SCRIM_RGB : DARK_SCRIM_RGB;
   const scrimBotRgb = isLightTheme ? { r: 240, g: 243, b: 248 } : { r: 10, g: 13, b: 18 };
   const primaryAlpha = isLightTheme ? 0.34 : 0.44;
-  const secondaryAlpha = isLightTheme ? 0.28 : 0.36;
-  const tertiaryAlpha = isLightTheme ? 0.24 : 0.30;
+  const secondaryAlpha = isLightTheme ? 0.28 : 0.38;
+  const tertiaryAlpha = isLightTheme ? 0.26 : 0.34;
+  const quaternaryAlpha = isLightTheme ? 0.22 : 0.28;
+  const baseStart = formatRgbGlowCss(primary, isLightTheme ? 0.11 : 0.14) ?? 'rgba(107, 197, 255, 0.14)';
+  const baseMid = formatRgbGlowCss(tertiary, isLightTheme ? 0.08 : 0.10) ?? 'rgba(72, 196, 184, 0.10)';
+  const baseEnd = formatRgbGlowCss(secondary, isLightTheme ? 0.10 : 0.12) ?? 'rgba(88, 118, 226, 0.12)';
 
   return {
     hasArt: true,
     artId: art.id,
+    washBaseCss: `linear-gradient(125deg, ${baseStart} 0%, ${baseMid} 52%, ${baseEnd} 100%)`,
     washPrimaryCss: formatRgbGlowCss(primary, primaryAlpha) ?? 'rgba(107, 197, 255, 0.44)',
-    washSecondaryCss: formatRgbGlowCss(secondary, secondaryAlpha) ?? 'rgba(88, 118, 226, 0.36)',
-    washTertiaryCss: tertiary ? formatRgbGlowCss(tertiary, tertiaryAlpha) : null,
+    washSecondaryCss: formatRgbGlowCss(secondary, secondaryAlpha) ?? 'rgba(88, 118, 226, 0.38)',
+    washTertiaryCss: formatRgbGlowCss(tertiary, tertiaryAlpha) ?? 'rgba(72, 196, 184, 0.34)',
+    washQuaternaryCss: formatRgbGlowCss(quaternary, quaternaryAlpha) ?? 'rgba(196, 118, 226, 0.28)',
     scrimTopCss: `rgba(${scrimRgb.r}, ${scrimRgb.g}, ${scrimRgb.b}, ${top.toFixed(3)})`,
     scrimBottomCss: `rgba(${scrimBotRgb.r}, ${scrimBotRgb.g}, ${scrimBotRgb.b}, ${bottom.toFixed(3)})`,
     coverLuminance,

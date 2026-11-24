@@ -37,6 +37,12 @@ const ONSET_FULL_DB = 6;
 /** Onset strength that starts a new beat pattern; the next needs the onset to drop below half of it first. */
 const BEAT_ONSET = 0.3;
 const MAX_DT_S = 0.25;
+const DEFAULT_BPM = 110;
+const MIN_IBI_MS = 240;
+const MAX_IBI_MS = 1300;
+const TEMPO_EMA_ALPHA = 0.24;
+const MIN_TEMPO_RATE = 0.58;
+const MAX_TEMPO_RATE = 1.65;
 
 function clamp01(v: number): number {
   return Number.isFinite(v) ? Math.max(0, Math.min(1, v)) : 0;
@@ -100,9 +106,16 @@ export class BeatShaper {
   private beat = 0;
   private armed = true;
   private lastMs: number | null = null;
+  private lastBeatMs: number | null = null;
+  private smoothedBpm = DEFAULT_BPM;
 
   constructor(count = BEAT_BAR_COUNT) {
     this.count = Math.max(1, Math.round(count));
+  }
+
+  /** Smoothed animation speed multiplier (~0.58× slow ballads .. ~1.65× fast beats, 1.0 at ~110 BPM). */
+  get tempoRate(): number {
+    return Math.max(MIN_TEMPO_RATE, Math.min(MAX_TEMPO_RATE, this.smoothedBpm / DEFAULT_BPM));
   }
 
   reset(): void {
@@ -110,6 +123,8 @@ export class BeatShaper {
     this.right.reset();
     this.armed = true;
     this.lastMs = null;
+    this.lastBeatMs = null;
+    this.smoothedBpm = DEFAULT_BPM;
   }
 
   shape(frame: MeterFrame, nowMs: number, out: number[] = []): number[] {
@@ -129,6 +144,16 @@ export class BeatShaper {
     if (onset >= BEAT_ONSET && this.armed) {
       this.beat += 1;
       this.armed = false;
+      if (this.lastBeatMs !== null) {
+        const ibi = nowMs - this.lastBeatMs;
+        if (ibi >= MIN_IBI_MS && ibi <= MAX_IBI_MS) {
+          let bpm = 60_000 / ibi;
+          while (bpm > 165) bpm /= 2;
+          while (bpm < 65) bpm *= 2;
+          this.smoothedBpm += (bpm - this.smoothedBpm) * TEMPO_EMA_ALPHA;
+        }
+      }
+      this.lastBeatMs = nowMs;
     } else if (onset < BEAT_ONSET / 2) {
       this.armed = true;
     }

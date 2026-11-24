@@ -239,6 +239,9 @@ class VisualizerController {
   private readonly targets = new Array<number>(BANK_BAR_COUNT).fill(0);
   private readonly levelsBuffer = new Array<number>(BANK_BAR_COUNT).fill(0);
   private readonly listeners = new Set<LevelListener>();
+  private readonly tempoListeners = new Set<(rate: number) => void>();
+  private lastEmittedTempo = 1;
+  private lastTempoEmitMs = 0;
   private activeCount = 0;
   private rafId: number | null = null;
   private lastTs = 0;
@@ -316,6 +319,7 @@ class VisualizerController {
       this.stopMock();
       this.bank.snapSilence();
       this.beat.reset();
+      this.emitTempo(1, 0, true);
       this.emitValues();
       void this.sendVisualizerHint(false);
       return;
@@ -412,12 +416,33 @@ class VisualizerController {
   }
 
   private pushFrame(frame: MeterFrame): void {
-    const moving = this.bank.setTargets(this.beat.shape(frame, performance.now(), this.targets));
+    const now = performance.now();
+    const moving = this.bank.setTargets(this.beat.shape(frame, now, this.targets));
+    this.emitTempo(this.beat.tempoRate, now, false);
     this.emitValues();
     if (moving && this.isVisibleAndActive()) {
       this.ensureRaf();
     } else if (!moving) {
       this.stopRaf();
+    }
+  }
+
+  subscribeTempo(onTempo: (rate: number) => void): () => void {
+    this.tempoListeners.add(onTempo);
+    onTempo(this.lastEmittedTempo);
+    return () => {
+      this.tempoListeners.delete(onTempo);
+    };
+  }
+
+  private emitTempo(rate: number, nowMs: number, force: boolean): void {
+    if (!force && (Math.abs(rate - this.lastEmittedTempo) < 0.06 || nowMs - this.lastTempoEmitMs < 600)) {
+      return;
+    }
+    this.lastEmittedTempo = rate;
+    this.lastTempoEmitMs = nowMs;
+    for (const listener of this.tempoListeners) {
+      listener(rate);
     }
   }
 
@@ -461,4 +486,9 @@ export function subscribeVisualizer(
   initial: VisualizerSubscriptionOptions,
 ): VisualizerHandle {
   return sharedController.subscribe(onLevels, initial);
+}
+
+/** Subscribes to smoothed beat-tempo speed multipliers (~0.58–1.65×) from the active meter stream without starting a new stream. */
+export function subscribeTempo(onTempo: (rate: number) => void): () => void {
+  return sharedController.subscribeTempo(onTempo);
 }

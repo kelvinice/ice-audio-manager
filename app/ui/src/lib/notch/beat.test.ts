@@ -67,3 +67,17 @@ test('pickBars takes independent bars evenly, and beatHash is deterministic', ()
   assert.equal(beatHash(3, 4), beatHash(3, 4));
   assert.ok(beatHash(3, 4) >= 0 && beatHash(3, 4) < 1);
 });
+
+test('tempoRate tracks slow vs fast beat intervals smoothly', () => {
+  const slow = new BeatShaper();
+  // 26 frames * 33ms = 858ms per beat (~70 BPM)
+  const slowFrames = Array.from({ length: 220 }, (_, i) => frame(i % 26 === 0 ? 0.92 : 0.35));
+  run(slow, slowFrames);
+  assert.ok(slow.tempoRate < 0.82, `slow beats should slow tempoRate, got ${slow.tempoRate.toFixed(2)}`);
+
+  const fast = new BeatShaper();
+  // 12 frames * 33ms = 396ms per beat (~151 BPM)
+  const fastFrames = Array.from({ length: 220 }, (_, i) => frame(i % 12 === 0 ? 0.92 : 0.35));
+  run(fast, fastFrames);
+  assert.ok(fast.tempoRate > 1.22, `fast beats should speed up tempoRate, got ${fast.tempoRate.toFixed(2)}`);
+});

@@ -9,6 +9,7 @@
     previousArt?: ArtInfo | null;
     crossfadeKey?: number;
     size?: number;
+    radius?: string;
     instant?: boolean;
   }
 
@@ -17,6 +18,7 @@
     previousArt = null,
     crossfadeKey = 0,
     size = 32,
+    radius,
     instant = false,
   }: Props = $props();
 
@@ -63,7 +65,7 @@
   style:height={`${size}px`}
   style:--tile-accent={accentCss}
   style:--prev-tile-accent={prevAccentCss}
-  style:--art-radius={size >= 48 ? 'var(--ice-radius-md)' : 'var(--ice-radius-sm)'}
+  style:--art-radius={radius ?? (size >= 48 ? 'var(--ice-radius-md)' : 'var(--ice-radius-sm)')}
   aria-hidden="true"
 >
   {#key instant ? 0 : crossfadeKey}

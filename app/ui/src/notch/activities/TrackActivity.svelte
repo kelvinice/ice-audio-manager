@@ -56,7 +56,8 @@
     art={activity.media.art}
     previousArt={activity.previousArt}
     crossfadeKey={activity.trackSeq}
-    size={32}
+    size={34}
+    radius="16px"
     {instant}
   />
 
@@ -83,11 +84,13 @@
 
 <style>
   .track-row {
-    width: 100%;
+    width: calc(100% + 8px);
     height: 100%;
+    margin-left: -6px;
+    margin-right: -2px;
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 9px;
     white-space: nowrap;
   }
 
@@ -95,7 +98,7 @@
     position: relative;
     flex: 1;
     min-width: 0;
-    height: 32px;
+    height: 34px;
     display: flex;
     align-items: center;
     overflow: hidden;
@@ -124,6 +127,7 @@
   .track-title {
     font-size: 12px;
     font-weight: 600;
+    letter-spacing: -0.01em;
     line-height: 1.2;
     color: var(--ice-fg);
     overflow: hidden;
@@ -131,7 +135,7 @@
   }
 
   .track-artist {
-    font-size: 10px;
+    font-size: 10.5px;
     font-weight: 500;
     line-height: 1.2;
     color: var(--ice-fg-muted);
@@ -143,7 +147,7 @@
     flex-shrink: 0;
     display: flex;
     align-items: center;
-    padding-right: 2px;
+    padding-right: 4px;
     transition: opacity 240ms ease;
   }
 

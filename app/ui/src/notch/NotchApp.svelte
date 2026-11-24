@@ -46,9 +46,11 @@
       class="pill-surface"
       style:--ice-active-accent={ctrl.activeAccentCss}
       style:--ice-active-glow={ctrl.activeGlowCss}
+      style:--ice-active-wash-base={ctrl.artBackdrop.washBaseCss}
       style:--ice-active-wash-primary={ctrl.artBackdrop.washPrimaryCss}
       style:--ice-active-wash-secondary={ctrl.artBackdrop.washSecondaryCss}
-      style:--ice-active-wash-tertiary={ctrl.artBackdrop.washTertiaryCss ?? 'transparent'}
+      style:--ice-active-wash-tertiary={ctrl.artBackdrop.washTertiaryCss}
+      style:--ice-active-wash-quaternary={ctrl.artBackdrop.washQuaternaryCss}
       style:--ice-active-scrim-top={ctrl.artBackdrop.scrimTopCss}
       style:--ice-active-scrim-bottom={ctrl.artBackdrop.scrimBottomCss}
     >
@@ -57,7 +59,7 @@
         hasArt={ctrl.hasBackdropArt}
         instant={ctrl.isInstant}
         ambientState={ctrl.ambientMotionState}
-        hasTertiary={Boolean(ctrl.artBackdrop.washTertiaryCss)}
+        compactPill={!ctrl.isExpanded}
         boxW={ctrl.targetBox.w}
         boxH={ctrl.targetBox.h}
         topPad={TOP_PAD}

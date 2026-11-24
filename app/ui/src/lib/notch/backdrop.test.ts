@@ -54,6 +54,8 @@ test('computeArtBackdrop derives 2-stop gradient washes and keeps WCAG AA scrim 
   assert.equal(darkBackdrop.hasArt, true);
   assert.equal(darkBackdrop.artId, 'art-dark');
   assert.notEqual(darkBackdrop.washPrimaryCss, darkBackdrop.washSecondaryCss);
+  assert.notEqual(darkBackdrop.washTertiaryCss, darkBackdrop.washQuaternaryCss);
+  assert.ok(darkBackdrop.washBaseCss.startsWith('linear-gradient('), 'provides subtle base wash gradient');
 
   // Pure white / bright cover raises the top & bottom scrim so muted fg (#98a4b8) stays >= 4.5:1 WCAG AA.
   const brightArt: ArtInfoWithPalette = {

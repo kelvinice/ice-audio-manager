@@ -47,7 +47,7 @@ export function targetGeometry(
     case 'mic':
       return { w: 204, h: 38, r: 19, vol };
     case 'track':
-      return { w: 296, h: 48, r: 24, vol };
+      return { w: 292, h: 46, r: 23, vol };
     case 'idle':
     default:
       return idleGeometry(idleModeNow, hasMedia, micMutedNow, vol);
