@@ -19,7 +19,8 @@
     | 'youtube-music'
     | 'pin'
     | 'lyrics'
-    | 'settings';
+    | 'settings'
+    | 'moon';
 
   interface Props {
     kind?: IconKind;
@@ -116,6 +117,8 @@
     <path d="M3 4.2h10M3 7.8h7.2M3 11.4h5.2" />
     <path d="M12.5 11.6V7.4l2-.5" />
     <circle cx="11.4" cy="11.8" r="1.2" />
+  {:else if resolved === 'moon'}
+    <path d="M13 9.6A5.4 5.4 0 0 1 6.4 3a5.4 5.4 0 1 0 6.6 6.6Z" />
   {:else if resolved === 'settings'}
     <path d="M2.5 4.8h5.8M11.7 4.8h1.8M2.5 11.2h1.8M7.7 11.2h5.8" />
     <circle cx="10" cy="4.8" r="1.7" />

@@ -554,6 +554,11 @@ export class NotchController {
     }
   }
 
+  /** D-27: the notch's moon button. The shell saves the setting and unpins the card; waking is in the tray/Settings. */
+  hibernate = (): void => {
+    void invoke('set_hibernate', { enabled: true });
+  };
+
   onPointerEnter = (): void => {
     if (this.isHibernating) return;
     this.clearTimers();

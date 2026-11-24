@@ -302,6 +302,19 @@ fn toggle_expand(app: AppHandle, state: State<'_, Arc<SharedRuntime>>) {
     });
 }
 
+/// D-27: the notch's hibernate button. Only this one setting is open to the notch window (least privilege); it also
+/// unpins the card so waking later doesn't pop it open.
+#[tauri::command]
+fn set_hibernate(enabled: bool, app: AppHandle, state: State<'_, Arc<SharedRuntime>>) {
+    state.engine.send(Command::SetHibernate { enabled });
+    if enabled && state.snapshot_clone().expanded {
+        state.update_and_emit(&app, |s| {
+            s.expanded = false;
+            s.event_seq = s.event_seq.saturating_add(1);
+        });
+    }
+}
+
 #[tauri::command]
 fn request_idle_suspend(app: AppHandle, state: State<'_, Arc<SharedRuntime>>) {
     if state.bench_mode || !state.placement().suspends_on_idle() {
@@ -1333,6 +1346,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             adjust_volume,
             set_volume,
             toggle_mute,
+            set_hibernate,
             toggle_mic_mute,
             trigger_switch,
             switch_to_device,

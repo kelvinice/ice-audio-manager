@@ -37,7 +37,7 @@ any time (D-15). Heavy work (image decode, colour extraction, device sorting) ha
 | `notch/activities/LyricsExtension.svelte` | Seamless bottom extension under the compact music pill (1 active line + Romaji/subtitle) and expanded card (3-line focus band, click-to-seek, active-word lift/glow via `--ice-lyric-*` tokens, plain fallback) |
 
 ## `src/notch/activities/` (one component per job)
-`IdlePill`, `VolumeActivity`, `SwitchActivity`, `PlugActivity`, `MicActivity`, `TrackActivity`, `ExpandedNotch` (`Floating` container), `NookExpandedNotch` (`Edge Nook` flush top-edge split container), `ExpandedMediaCard`,
+`IdlePill`, `VolumeActivity`, `SwitchActivity`, `PlugActivity`, `MicActivity`, `TrackActivity`, `ExpandedNotch` (`Floating` container), `NookExpandedNotch` (`Edge Nook` flush top-edge split container, composed of `NookToolbar` + `NookMediaPanel`), `ExpandedMediaCard`,
 `ExpandedEmptyCard`, `MediaScrubber`, `ExpandedVolumeRow`, `ExpandedDeviceRow`, `NotchSideRail`, `MusicServicesWidget`, `AlbumArtTile`, `NotchBackdrop`, `VisualizerBars`, `DeviceIcon`.
 
 **Expanded layout** (`EXPANDED_W` × `EXPANDED_H_MEDIA`/`EXPANDED_H_EMPTY` in `geometry.ts`): a main column (media or empty card, then
@@ -94,3 +94,4 @@ updating the constants.
 - 2026-11-24 Gemini: fixed `NookExpandedNotch.svelte` `onOpenMusicService` prop forwarding, adjusted Edge Nook expanded heights (`206`/`166`, `LADDER.nook.inner = 152`), and switched notch fallbacks to `nook` and `while_playing`.
 - 2026-11-25 Claude: lyrics `fitLine` rules made `:global` (Svelte had dropped them: no fades, long centred card/nook lines lost their first characters); fitted row bleeds 4 px / 3 px (`FIT_BLEED_X_PX`) so the active word's lift isn't clipped, ladder clip margin 4 px; card main row stretches (short lines no longer shrink 2 %). Edge Nook current line wraps (balanced, ≤ 3 rows, `LADDER.nook.mainMax`) and rows are placed by `nookLadderY` from a `ResizeObserver` on the current row.
 - 2026-11-25 Claude: D-27 hibernate: `controller.isHibernating` forces the idle view, no expansion/hover/wheel, `plainGeometryContext` (+ test) for a constant shape and `NO_HIT_RECT`; `PlainNotch.svelte` (mic dot only), no backdrop/shadow/rim, `--ice-hibernate-*` tokens.
+- 2026-11-25 Claude: Edge Nook card refresh: `NookToolbar` (service launchers + one capsule of toggles incl. the D-27 hibernate moon → `set_hibernate`), `NookMediaPanel` (64 px cover, scrubber in the meta column, transport centred under it, 32 px play), header names the player via `mediaSource.ts` (+ test; the device stays as the chip), fading lyrics divider; `moon` icon; `NookExpandedNotch` 451 → ~230 lines.

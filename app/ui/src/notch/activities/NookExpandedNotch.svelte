@@ -3,16 +3,15 @@
   import type { SpringPreset } from '../../lib/ipc/types';
   import type { MusicServiceId, MusicServiceItem } from '../../lib/notch/backdrop';
   import { hasAnyLyrics } from '../../lib/notch/lyrics';
+  import { mediaSource } from '../../lib/notch/mediaSource';
   import { isMediaActive } from '../../lib/notch/scheduler';
-  import AlbumArtTile from './AlbumArtTile.svelte';
   import DeviceIcon from './DeviceIcon.svelte';
   import ExpandedDeviceRow from './ExpandedDeviceRow.svelte';
   import ExpandedEmptyCard from './ExpandedEmptyCard.svelte';
   import ExpandedVolumeRow from './ExpandedVolumeRow.svelte';
   import LyricsExtension from './LyricsExtension.svelte';
-  import MediaScrubber from './MediaScrubber.svelte';
-  import MusicServicesWidget from './MusicServicesWidget.svelte';
-  import VisualizerBars from './VisualizerBars.svelte';
+  import NookMediaPanel from './NookMediaPanel.svelte';
+  import NookToolbar from './NookToolbar.svelte';
 
   interface Props {
     playback: DeviceSummary[];
@@ -42,6 +41,7 @@
     onMediaAction?: (action: MediaAction) => void;
     onOpenMusicService?: (service: MusicServiceId) => void;
     onOpenSettings: () => void;
+    onHibernate?: () => void;
   }
 
   let {
@@ -72,113 +72,52 @@
     onMediaAction = () => {},
     onOpenMusicService = () => {},
     onOpenSettings,
+    onHibernate = () => {},
   }: Props = $props();
 
   const activeMedia = $derived(isMediaActive(media) ? media : null);
-  const isPlaying = $derived(activeMedia?.status === 'playing');
   const lyricsConfig = $derived(settings?.lyrics ?? null);
-  const lyricsAvailable = $derived(hasAnyLyrics(lyrics));
   const showLyricsToggle = $derived(Boolean(activeMedia && lyricsConfig?.enabled && lyricsConfig?.showOnCard));
+  // The header names the player; the device already shows as the highlighted chip (and in the empty card).
+  const source = $derived(activeMedia ? mediaSource(activeMedia.appId) : null);
+  const paused = $derived(activeMedia !== null && activeMedia.status !== 'playing');
 </script>
 
 <div class="nook-shell" class:stagger={!instant}>
   <header class="nook-top">
     <div class="nook-status">
-      <span class="device-chip" title={activeDeviceName}>{activeDeviceName}</span>
+      {#if source}
+        <span class="source" class:paused title={activeMedia?.appId}>
+          <DeviceIcon kind={source.icon} size={12} />
+          <span class="source-name">{source.label}</span>
+          {#if paused}<span class="source-state">· Paused</span>{/if}
+        </span>
+      {/if}
       {#if spatialBadge}
         <span class="spatial-badge">{spatialBadge}</span>
       {/if}
     </div>
-    <nav class="top-actions" aria-label="Edge Nook quick actions">
-      {#if activeMedia && musicServices.length > 0}
-        <div class="svc-strip">
-          <MusicServicesWidget services={musicServices} variant="rail" onOpenService={onOpenMusicService} />
-        </div>
-      {/if}
-      {#if showLyricsToggle}
-        <button
-          class="top-btn"
-          class:on={lyricsDrawerOpen && lyricsAvailable}
-          type="button"
-          title={lyricsAvailable ? (lyricsDrawerOpen ? 'Hide lyrics' : 'Show lyrics') : 'No lyrics for this song'}
-          aria-label={lyricsDrawerOpen ? 'Hide lyrics' : 'Show lyrics'}
-          aria-pressed={lyricsDrawerOpen && lyricsAvailable}
-          disabled={!lyricsAvailable}
-          onclick={onToggleLyrics}
-        >
-          <DeviceIcon kind="lyrics" size={12} />
-        </button>
-      {/if}
-      <button
-        class="top-btn"
-        class:danger={micMuted}
-        type="button"
-        title={micMuted ? 'Microphone is off: turn on' : 'Microphone is on: turn off'}
-        aria-label={micMuted ? 'Unmute microphone' : 'Mute microphone'}
-        aria-pressed={micMuted}
-        onclick={onToggleMicMute}
-      >
-        <DeviceIcon kind={micMuted ? 'mic-muted' : 'mic'} size={12} />
-      </button>
-      <button
-        class="top-btn"
-        class:on={expanded}
-        type="button"
-        title={expanded ? 'Unpin notch' : 'Pin notch open'}
-        aria-label={expanded ? 'Unpin notch' : 'Pin notch open'}
-        aria-pressed={expanded}
-        onclick={onToggleExpand}
-      >
-        <DeviceIcon kind="pin" size={12} />
-      </button>
-      <button class="top-btn" type="button" title="Settings" aria-label="Open Settings" onclick={onOpenSettings}>
-        <DeviceIcon kind="settings" size={12} />
-      </button>
-    </nav>
+    <NookToolbar
+      services={musicServices}
+      showServices={Boolean(activeMedia)}
+      {showLyricsToggle}
+      lyricsOn={lyricsDrawerOpen}
+      lyricsAvailable={hasAnyLyrics(lyrics)}
+      {micMuted}
+      pinned={expanded}
+      onOpenService={onOpenMusicService}
+      {onToggleLyrics}
+      {onToggleMicMute}
+      {onHibernate}
+      onTogglePin={onToggleExpand}
+      {onOpenSettings}
+    />
   </header>
 
-  <div class="nook-body" class:split={Boolean(activeMedia && showLyrics)}>
+  <div class="nook-body">
     <div class="left-pane">
       {#if activeMedia}
-        <div class="nook-media">
-          <div class="media-head">
-            <AlbumArtTile art={activeMedia.art} size={46} {instant} />
-            <div class="media-meta">
-              <div class="title-row">
-                <span class="media-title">{activeMedia.title || 'Unknown track'}</span>
-                {#if isPlaying}
-                  <VisualizerBars active={isPlaying && notchVisible} {preset} {instant} variant="expanded" />
-                {/if}
-              </div>
-              <span class="media-artist">{activeMedia.artist || 'Unknown artist'}</span>
-            </div>
-          </div>
-
-          <MediaScrubber
-            media={activeMedia}
-            {notchVisible}
-            {instant}
-            showRemaining
-            onSeek={(positionMs) => onMediaAction({ seek: { positionMs } })}
-          />
-
-          <div class="transport-center" role="group" aria-label="Media transport">
-            <button class="t-btn" type="button" aria-label="Previous track" onclick={() => onMediaAction('previous')}>
-              <DeviceIcon kind="prev" size={13} />
-            </button>
-            <button
-              class="t-btn t-play"
-              type="button"
-              aria-label={isPlaying ? 'Pause' : 'Play'}
-              onclick={() => onMediaAction('playPause')}
-            >
-              <DeviceIcon kind={isPlaying ? 'pause' : 'play'} size={13} />
-            </button>
-            <button class="t-btn" type="button" aria-label="Next track" onclick={() => onMediaAction('next')}>
-              <DeviceIcon kind="next" size={13} />
-            </button>
-          </div>
-        </div>
+        <NookMediaPanel media={activeMedia} {notchVisible} {instant} {preset} {onMediaAction} />
       {:else}
         <ExpandedEmptyCard
           services={musicServices}
@@ -215,7 +154,7 @@
   .nook-shell {
     width: 100%;
     height: 100%;
-    padding: 8px 6px 12px;
+    padding: 6px 6px 10px;
     display: flex;
     flex-direction: column;
     gap: 6px;
@@ -226,7 +165,7 @@
   }
 
   .nook-top {
-    height: 22px;
+    height: 28px;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -241,13 +180,29 @@
     gap: 6px;
   }
 
-  .device-chip {
+  .source {
     min-width: 0;
-    font-size: 10.5px;
-    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--ice-active-accent, var(--ice-accent));
+  }
+
+  .source.paused {
     color: var(--ice-fg-muted);
+  }
+
+  .source-name {
     overflow: hidden;
     text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .source-state {
+    font-weight: 500;
+    color: var(--ice-fg-muted);
     white-space: nowrap;
   }
 
@@ -260,59 +215,6 @@
     font-weight: 600;
     color: var(--ice-accent-strong);
     flex-shrink: 0;
-  }
-
-  .top-actions {
-    display: flex;
-    align-items: center;
-    gap: 3px;
-    flex-shrink: 0;
-  }
-
-  .svc-strip :global(.services.rail) {
-    flex-direction: row;
-    gap: 2px;
-  }
-
-  .top-btn {
-    appearance: none;
-    width: 22px;
-    height: 22px;
-    padding: 0;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border: 1px solid transparent;
-    border-radius: var(--ice-radius-pill);
-    background: transparent;
-    color: var(--ice-fg-muted);
-    cursor: pointer;
-    transition: background-color 120ms ease, color 120ms ease;
-  }
-
-  .top-btn:hover {
-    background: var(--ice-control-bg-hover);
-    color: var(--ice-fg);
-  }
-
-  .top-btn.on {
-    border-color: var(--ice-accent);
-    background: var(--ice-control-bg-active);
-    color: var(--ice-accent-strong);
-  }
-
-  .top-btn.danger {
-    background: color-mix(in srgb, var(--ice-danger) 16%, transparent);
-    color: var(--ice-danger);
-  }
-
-  .top-btn:disabled {
-    opacity: 0.4;
-    cursor: default;
-  }
-
-  .top-btn:disabled:hover {
-    background: transparent;
   }
 
   .nook-body {
@@ -331,111 +233,30 @@
     gap: 6px;
   }
 
-  .nook-media {
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
-  }
-
-  .media-head {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    height: 46px;
-  }
-
-  .media-meta {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
-
-  .title-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .media-title {
-    flex: 1;
-    min-width: 0;
-    font-size: 13px;
-    font-weight: 600;
-    letter-spacing: -0.01em;
-    color: var(--ice-fg);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .media-artist {
-    font-size: 11px;
-    font-weight: 500;
-    color: var(--ice-fg-muted);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .transport-center {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 14px;
-    height: 26px;
-  }
-
-  .t-btn {
-    appearance: none;
-    width: 26px;
-    height: 26px;
-    padding: 0;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border: none;
-    border-radius: var(--ice-radius-pill);
-    background: transparent;
-    color: var(--ice-fg);
-    cursor: pointer;
-    transition: background-color 120ms ease, transform 120ms ease;
-  }
-
-  .t-btn:hover {
-    background: var(--ice-control-bg-hover);
-  }
-
-  .t-btn:active {
-    transform: scale(0.92);
-  }
-
-  .t-play {
-    width: 26px;
-    height: 26px;
-    background: var(--ice-play-bg);
-    color: var(--ice-play-fg);
-  }
-
-  .t-play:hover {
-    background: var(--ice-play-bg);
-    filter: brightness(1.08);
-  }
-
   .controls {
     display: flex;
     flex-direction: column;
     gap: 5px;
   }
 
+  /* A soft divider that fades out at both ends instead of a hard full-height rule. */
   .right-lyrics {
+    position: relative;
     width: 238px;
     flex-shrink: 0;
-    border-left: 1px solid var(--ice-control-border);
     padding-left: 12px;
     display: flex;
     align-items: center;
+  }
+
+  .right-lyrics::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 10%;
+    bottom: 10%;
+    width: 1px;
+    background: linear-gradient(180deg, transparent, var(--ice-control-border) 25%, var(--ice-control-border) 75%, transparent);
   }
 
   @keyframes nook-reveal {

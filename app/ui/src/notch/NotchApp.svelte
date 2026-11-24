@@ -155,6 +155,7 @@
             onMediaAction={(action) => ctrl.sendMediaAction(action)}
             onOpenMusicService={ctrl.openMusicService}
             onOpenSettings={ctrl.openSettings}
+            onHibernate={ctrl.hibernate}
           />
         {:else if ctrl.notchSnapshot && ctrl.isExpanded}
           <ExpandedNotch
