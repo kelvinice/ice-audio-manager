@@ -18,10 +18,17 @@ const NEGATIVE_TTL_MS: u64 = 24 * 60 * 60 * 1000;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CachedRecord {
+    /// [`CACHE_FORMAT`] the record was written with; older records are dropped and looked up again.
+    #[serde(default)]
+    pub format: u32,
     pub accessed_ms: u64,
     pub not_found_at_ms: Option<u64>,
     pub document: Option<LyricsDocument>,
 }
+
+/// Format 2 (2026-11-24): generated Romaji moved from `subtitle` to `LyricLine::romaji` and is no longer cached.
+/// Format 0/1 records mixed generated Romaji into `subtitle`, indistinguishable from a source's paired lines.
+pub const CACHE_FORMAT: u32 = 2;
 
 /// Outcome of checking the managed disk cache.
 #[derive(Debug, Clone)]
@@ -135,6 +142,10 @@ pub fn read_cache(root: &Path, query: &TrackQuery) -> CacheLookup {
         let _ = fs::remove_file(&path);
         return CacheLookup::Miss;
     };
+    if record.format != CACHE_FORMAT {
+        let _ = fs::remove_file(&path);
+        return CacheLookup::Miss;
+    }
     let now = now_unix_ms();
     if let Some(missed_at) = record.not_found_at_ms {
         if now.saturating_sub(missed_at) < NEGATIVE_TTL_MS {
@@ -160,8 +171,19 @@ pub fn write_cache(root: &Path, query: &TrackQuery, doc: Option<&LyricsDocument>
         return;
     }
     let now = now_unix_ms();
-    let record =
-        CachedRecord { accessed_ms: now, not_found_at_ms: doc.is_none().then_some(now), document: doc.cloned() };
+    // Generated Romaji is per-PC output, not source data: strip it so the cache only holds what the source sent.
+    let document = doc.cloned().map(|mut d| {
+        for line in &mut d.lines {
+            line.romaji = None;
+        }
+        d
+    });
+    let record = CachedRecord {
+        format: CACHE_FORMAT,
+        accessed_ms: now,
+        not_found_at_ms: doc.is_none().then_some(now),
+        document,
+    };
     let Ok(bytes) = serde_json::to_vec(&record) else { return };
     if (bytes.len() as u64) > MAX_ENTRY_BYTES {
         return;
@@ -319,6 +341,36 @@ mod tests {
     }
 
     #[test]
+    fn cache_keeps_paired_subtitles_drops_generated_romaji_and_old_formats() {
+        let root = temp_root("romaji");
+        let q = query("YOASOBI", "Idol");
+        let (sync_kind, mut lines) =
+            ice_core::lyrics::parse_lrc("[00:01.00]無敵\n[00:01.00]Invincible\n[00:03.00]笑顔", None);
+        lines[1].romaji = Some("egao".into());
+        let doc = LyricsDocument {
+            track_key: "k".into(),
+            source: LyricsSource::Lrclib,
+            sync_kind,
+            instrumental: false,
+            lines,
+            plain_text: None,
+        };
+        write_cache(&root, &q, Some(&doc), 50);
+        let CacheLookup::Hit(read) = read_cache(&root, &q) else { panic!("expected a cache hit") };
+        assert_eq!(read.lines[0].subtitle.as_deref(), Some("Invincible"), "source's paired line is kept");
+        assert_eq!(read.lines[1].romaji, None, "generated Romaji is never cached");
+
+        // A record from before format 2 (Romaji mixed into `subtitle`) is dropped and looked up again.
+        let path = cache_entry_path(&root, &q);
+        let mut old: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        old.as_object_mut().unwrap().remove("format");
+        fs::write(&path, serde_json::to_vec(&old).unwrap()).unwrap();
+        assert!(matches!(read_cache(&root, &q), CacheLookup::Miss));
+        assert!(!path.exists());
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
     fn cache_round_trips_negative_hits_and_clears_without_touching_custom() {
         let root = temp_root("cache");
         let cdir = ensure_custom_dir(&root).unwrap();
@@ -359,6 +411,7 @@ mod tests {
         let payload = "x".repeat(600 * 1024); // ~600 KB raw string split across several entries
         for i in 0..10u64 {
             let rec = CachedRecord {
+                format: CACHE_FORMAT,
                 accessed_ms: 1_000 + i * 100,
                 not_found_at_ms: None,
                 document: Some(LyricsDocument {

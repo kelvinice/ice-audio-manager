@@ -113,8 +113,14 @@ pub struct LyricLine {
     #[cfg_attr(feature = "ts", ts(type = "number | null"))]
     pub end_ms: Option<u64>,
     pub text: String,
+    /// A paired line from the lyrics source itself (same timestamp in the `.lrc`): a translation or the source's
+    /// own Romaji. Shown whenever present.
     #[serde(default)]
     pub subtitle: Option<String>,
+    /// Romaji generated on this PC (`ice_win::lyrics::romaji`) for Japanese lines without a `subtitle`. Shown only
+    /// while `LyricsConfig::romaji` is on, and never written to the disk cache, so generator fixes reach every song.
+    #[serde(default)]
+    pub romaji: Option<String>,
     #[serde(default)]
     pub words: Vec<LyricWord>,
 }
@@ -294,7 +300,7 @@ pub fn parse_lrc(lrc: &str, duration_ms: Option<u64>) -> (LyricsSyncKind, Vec<Ly
             last.subtitle = Some(text);
             continue;
         }
-        lines.push(LyricLine { start_ms, end_ms: None, text, subtitle: None, words });
+        lines.push(LyricLine { start_ms, end_ms: None, text, subtitle: None, romaji: None, words });
     }
 
     // Fill end_ms from the next line (or track duration), finalize word end bounds, and estimate cadence.
@@ -630,6 +636,23 @@ pub fn kana_to_romaji(input: &str) -> String {
     out.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
+/// Romaji for kana already split into words (the Windows IME's word breaks, space-separated). A word that is
+/// only the particle は or へ is read as it's pronounced, "wa" / "e" (watashi wa, not watashi ha), as lyric Romaji
+/// is usually written; を stays "wo". Unsegmented kana can't tell particles apart, so use [`kana_to_romaji`] there.
+#[must_use]
+pub fn segmented_kana_to_romaji(spaced_kana: &str) -> String {
+    spaced_kana
+        .split_whitespace()
+        .map(|word| match word {
+            "は" | "ハ" => "wa".to_string(),
+            "へ" | "ヘ" => "e".to_string(),
+            _ => kana_to_romaji(word),
+        })
+        .filter(|w| !w.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 fn katakana_to_hiragana(c: char) -> char {
     if ('\u{30A1}'..='\u{30F6}').contains(&c) { char::from_u32(c as u32 - 0x60).unwrap_or(c) } else { c }
 }
@@ -822,6 +845,15 @@ mod tests {
         assert_eq!(kana_to_romaji("むてき の えがお で あらす メディア"), "muteki no egao de arasu media");
         assert_eq!(kana_to_romaji("ちょっと まって コーヒー"), "chotto matte koohii");
         assert_eq!(kana_to_romaji("しんあい"), "shin'ai");
+    }
+
+    #[test]
+    fn segmented_kana_reads_particles_as_pronounced() {
+        assert_eq!(segmented_kana_to_romaji("わたし は がっこう へ いく"), "watashi wa gakkou e iku");
+        assert_eq!(segmented_kana_to_romaji("きみ を まもる"), "kimi wo mamoru");
+        // Inside a word, は/へ keep their normal reading.
+        assert_eq!(segmented_kana_to_romaji("はな へや"), "hana heya");
+        assert_eq!(segmented_kana_to_romaji("  "), "");
         assert!(contains_japanese("アイドル"));
         assert!(!contains_kanji("アイドル"));
         assert!(contains_kanji("無敵の笑顔"));

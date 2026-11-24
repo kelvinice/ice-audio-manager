@@ -30,8 +30,9 @@ Instead of a detached floating window or cramped overlay, lyrics appear as a **s
 │  [Art]  Idol                                  ||||||||||| │  ← 46 px music pill
 │         YOASOBI                                           │
 ├───────────────────────────────────────────────────────────┤  ← subtle hairline
-│  ♪  無敵の笑顔で荒らすメディア                            │  ← active line (word highlight)
-│     muteki no egao de arasu media                         │  ← optional muted Romaji / subtitle
+│  ♪  無敵の笑顔で荒らすメディア                            │  ← current line (word highlight)
+│     muteki no egao de arasu media                         │  ← optional Romaji / paired subtitle
+│     知りたいその秘密ミステリアス                          │  ← next line (smaller, dimmed)
 ╰───────────────────────────────────────────────────────────╯
 ```
 
@@ -39,7 +40,13 @@ Instead of a detached floating window or cramped overlay, lyrics appear as a **s
   gap, the first row previews the upcoming line and the second row shows the one after it (`LyricFrame.followingLine`).
   A Romaji/subtitle row sits between them when present.
 - **Geometry:** Extends cleanly downward from `292×46` (`r = 23`) to `292×88` (two rows, `PILL_LYRICS_H` 42) or `292×102` (with Romaji/subtitle, `PILL_LYRICS_SUB_H` 56) while synced lyrics are available and `show_on_pill` is enabled. Collapses seamlessly back to `292×46` during instrumental intros/outros or when no synced lyrics match.
-- **Line transition:** Outgoing line glides upward (`translateY(-6px)`, `opacity: 0`) while incoming line settles in (`translateY(6px) → 0`), using compositor-only `transform`/`opacity` (instant swap when `systemReduceMotion` or preset `off`).
+- **Line change = a scroll, not a swap (2026-11-24, pill and card):** every visible line is one element keyed by the
+  line (`lyricRows` in `lib/notch/lyrics.ts`) placed in a slot (`ladderY`). When the song moves on, the next line's
+  element glides up into the main row and grows and brightens (`scale 0.875 → 1`), the old line glides up and fades
+  out, and only the newly revealed line fades in from below. Its Romaji/subtitle fades in as it reaches the main row.
+  460 ms ease-out, compositor-only `transform`/`opacity`, run only at line changes (no loop); instant with
+  `systemReduceMotion` or preset `off`. The card keeps the line before the previous one just above view so its top
+  line scrolls out instead of popping.
 
 ### 2.2 Expanded Card + Bottom Extension (`expanded` mode)
 
@@ -97,7 +104,7 @@ Added to `app/ui/src/themes/base.css` and documented in [`docs/theming.md`](them
 
 ## 3. Lyrics Providers (Options A & B Implemented; Option C Documented)
 
-### Option A — Opt-in LRCLIB (`https://lrclib.net`) *(To Implement)*
+### Option A — Opt-in LRCLIB (`https://lrclib.net`) *(implemented)*
 
 - **Gate:** Disabled by default (`lyrics.online_lookup = false`). Requires explicit opt-in in `Settings → Privacy`.
 - **Host allowlist:** Hardcoded `https://lrclib.net` only, called exclusively from Rust (`crates/ice-win`).
@@ -107,7 +114,7 @@ Added to `app/ui/src/themes/base.css` and documented in [`docs/theming.md`](them
   3. **Etiquette & resilience:** Send identifying `User-Agent: IceAudioManager/<ver> (+https://github.com/...)`, respect `Retry-After` on HTTP `429`/`503`, bound requests with a short timeout (e.g. `4 s`), and bind every in-flight lookup to a monotonic `TrackKey` generation so late responses after skipping tracks are dropped.
 - **Data sent:** Only `title`, `artist`, `album`, and `duration` from GSMTC. Never sends IP trackers, machine IDs, or listening history beyond the single lookup, and never logs track titles above `debug`.
 
-### Option B — Local `.lrc` Overrides & Managed Disk Cache *(To Implement)*
+### Option B — Local `.lrc` Overrides & Managed Disk Cache *(implemented)*
 
 Works **100 % offline** and always runs **before** Option A:
 
@@ -149,6 +156,12 @@ Many community `.lrc` files (both on LRCLIB and local Option B files) include tw
 
 The LRC parser automatically groups same-timestamp pairs (within `≤ 20 ms`) into `{ text, subtitle }`, rendering the second line cleanly as `--ice-lyric-sub` underneath the primary line.
 
+**Paired lines vs generated Romaji (2026-11-24).** `LyricLine.subtitle` is only ever the source's own paired line, and
+it always shows. Romaji generated on this PC lives in `LyricLine.romaji`, shows only while the Romaji setting is on,
+and is **never written to the disk cache** (`cache::write_cache` strips it; cache records carry `format: 2`, and
+older records, which mixed generated Romaji into `subtitle`, are dropped and looked up again). Before this, turning
+Romaji off also hid paired translations, and Romaji generator fixes never reached already-cached songs.
+
 ### 4.2 Offline Japanese → Romaji Subtitles
 
 When `lyrics.romaji` is enabled and a lyric line contains Hiragana, Katakana, or Kanji **and** does not already have a paired subtitle:
@@ -156,9 +169,19 @@ When `lyrics.romaji` is enabled and a lyric line contains Hiragana, Katakana, or
 1. **Primary (0 MB binary overhead): Windows MS-IME (`IFELanguage::GetJMorphResult`) in `crates/ice-win`**
    - Calls Windows' built-in Japanese morphological analyzer via COM on the dedicated MTA worker thread (strictly wrapped in RAII + `// SAFETY:`).
    - Produces accurate context-aware Kana readings and natural word/clause boundaries (`むてき の えがお で あらす めでぃあ`), which a tiny pure-Rust Hepburn table in `ice-core` converts to clean Romaji (`muteki no egao de arasu media`).
+   - **Kana-only lines go through it too** (2026-11-24), for its word breaks: without them a kana line came out as one
+     unspaced word (`kiminonamaewa`).
+   - **Particles read as spoken** (`segmented_kana_to_romaji`, 2026-11-24): a word that is only は or へ becomes
+     **wa** / **e** (`watashi wa`, not `watashi ha`); を stays `wo`. Only possible on segmented kana.
 2. **Automatic Fallback (works on every Windows PC): Pure-Rust MIT transliterator**
-   - When the Windows Japanese language pack / IME is not installed, falls back transparently to a lightweight MIT-compatible pure-Rust crate (`kakasi` or `wana_kana` + compact Kanji reading map, ~1–2 MB) so Japanese songs still show readable Romaji out of the box.
-3. **Caching:** Generated Romaji subtitles are saved inside the track's cached lyrics record so transliteration runs **once per song**, never per frame or per playback tick.
+   - *Planned, not built.* When the Windows Japanese language pack / IME is not installed, falls back transparently to a lightweight MIT-compatible pure-Rust crate (`kakasi` or `wana_kana` + compact Kanji reading map, ~1–2 MB) so Japanese songs still show readable Romaji out of the box.
+   - **As built:** without the IME, kana converts directly with the Hepburn table (unspaced) and **lines with kanji get
+     no Romaji**. See §7 item 5.
+3. **When it runs:** once per song load, after the lyrics are found (local, cache or LRCLIB), never per frame. It is
+   not cached (see §4.1), so it re-runs on each load of a song; one IME pass per line is cheap.
+4. **Romaji follows the singing** (2026-11-24): under the current line, generated Romaji words light up in step with
+   the karaoke highlight (`romajiLitCount`: the sung share of the line's words mapped onto the Romaji's words, since the
+   two word splits differ). Paired subtitles (often translations) stay static.
 4. **Optional future upgrade (Translation & High-Accuracy Dictionaries):**
    - Full Japanese → English machine translation requires either large local models (300 MB–2 GB+, outside our lightweight footprint) or a separate opt-in translation endpoint; this stays a separate future Privacy decision.
    - Similarly, a full morphological IPADIC/UniDic dictionary (`lindera`, ~15–30 MB) can be offered later as an optional on-demand download managed inside `Settings → Storage`.
@@ -264,3 +287,22 @@ Build in **five clean, reviewable vertical slices** (each with unit tests, `git 
 1. Run full `build check` (`tsc`, Node unit tests, Vite build, `cargo fmt`, `cargo clippy -D warnings`, `cargo test --workspace`).
 2. Manual QA with Spotify (English + Japanese tracks, pause/resume/seek/skip, local `.lrc` override, cache eviction at `10 MB`, `Privacy` off = zero network requests, light & dark modes, 100 % & 150 % DPI, `systemReduceMotion`).
 3. Update `docs/theming.md` and affected `docs/modules/*.md` docs in the same PR.
+
+---
+
+## 7. Review (2026-11-24): improvements found, not built yet
+
+From a pass over this plan and the implementation. Built in the same pass: the scrolling line change, the two-row pill,
+separate `romaji`/`subtitle` fields with a cache format bump, IME word breaks for kana-only lines, particles as
+spoken, and the Romaji sweep (above).
+
+| # | Improvement | Why | Size |
+|---|---|---|---|
+| 1 | **Timing nudge per song** (e.g. −/+ 250 ms in the card, saved with the cache entry) | LRCLIB line timings are often a little early or late; today the only fix is editing an `.lrc` by hand | Medium |
+| 2 | **Gap countdown**: in an instrumental gap over ~4 s, three dots that fill toward the next line instead of a static "···" | Tells the listener the lyrics haven't stalled; the wake timer already knows when the next line starts | Small |
+| 3 | **Loading state**: a soft shimmer on the drawer while an LRCLIB lookup is in flight | §2.2 promises it; the UI shows nothing until the lookup ends | Small |
+| 4 | **Long lines**: shrink-to-fit (down to ~0.85) or one slow marquee pass instead of an ellipsis | Many J-pop lines are wider than the 292 px pill, so their end is never visible | Small–medium |
+| 5 | **Kanji Romaji without the IME** (the §4.2 fallback as planned) | PCs without the Japanese language pack show no Romaji on most Japanese lines | Medium (+1–2 MB; a crate choice under §1.8) |
+| 6 | **Romaji long vowels**: an option for macrons (`tōkyō`) or doubling (`toukyou`, today) | Readers prefer one or the other | Small (a setting) |
+| 7 | **Translation and Romaji together** when a song has both (three rows in the card) | Today a paired translation wins and generated Romaji isn't shown for that line | Small (card only) |
+| 8 | **Fake engine parity**: `--fake-engine` still strips paired subtitles when Romaji is off | It now differs from the real engine, where paired lines always show | Tiny |

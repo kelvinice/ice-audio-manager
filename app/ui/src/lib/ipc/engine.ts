@@ -103,7 +103,17 @@ export type LyricsStatus = "disabled" | "idle" | "loading" | "ready" | "notFound
 
 export type LyricWord = { startMs: number, endMs: number, text: string, };
 
-export type LyricLine = { startMs: number, endMs: number | null, text: string, subtitle: string | null, words: Array<LyricWord>, };
+export type LyricLine = { startMs: number, endMs: number | null, text: string,
+/**
+ * A paired line from the lyrics source itself (same timestamp in the `.lrc`): a translation or the source's
+ * own Romaji. Shown whenever present.
+ */
+subtitle: string | null,
+/**
+ * Romaji generated on this PC (`ice_win::lyrics::romaji`) for Japanese lines without a `subtitle`. Shown only
+ * while `LyricsConfig::romaji` is on, and never written to the disk cache, so generator fixes reach every song.
+ */
+romaji: string | null, words: Array<LyricWord>, };
 
 export type LyricsDocument = { trackKey: string, source: LyricsSource, syncKind: LyricsSyncKind, instrumental: boolean, lines: Array<LyricLine>, plainText: string | null, };
 

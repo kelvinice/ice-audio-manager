@@ -3,7 +3,7 @@
 
 use std::ffi::c_void;
 
-use ice_core::lyrics::{contains_japanese, contains_kanji, kana_to_romaji};
+use ice_core::lyrics::{contains_japanese, contains_kanji, kana_to_romaji, segmented_kana_to_romaji};
 use windows::Win32::System::Com::{CLSCTX_INPROC_SERVER, CLSIDFromProgID, CoCreateInstance, CoTaskMemFree};
 use windows::core::{GUID, HRESULT, HSTRING, IUnknown, Interface, PCWSTR};
 
@@ -92,13 +92,20 @@ impl JapaneseRomaji {
         if !contains_japanese(line) {
             return None;
         }
-        if !contains_kanji(line) {
-            let rom = kana_to_romaji(line);
-            return (!rom.is_empty() && rom != line.trim()).then_some(rom);
+        // The IME's word breaks space the words and let particles read as spoken (は → wa). Kana-only lines go
+        // through it too: on their own they'd come out as one unspaced word ("kiminonamaewa").
+        if let Some(kana) = self.kanji_to_spaced_kana(line) {
+            let rom = segmented_kana_to_romaji(&kana);
+            if !rom.is_empty() && !contains_kanji(&rom) {
+                return Some(rom);
+            }
         }
-        let kana = self.kanji_to_spaced_kana(line)?;
-        let rom = kana_to_romaji(&kana);
-        (!rom.is_empty() && !contains_kanji(&rom)).then_some(rom)
+        // Without the Japanese IME: kana converts directly (unspaced); kanji can't be read.
+        if contains_kanji(line) {
+            return None;
+        }
+        let rom = kana_to_romaji(line);
+        (!rom.is_empty() && rom != line.trim()).then_some(rom)
     }
 
     fn kanji_to_spaced_kana(&self, text: &str) -> Option<String> {

@@ -326,13 +326,10 @@ fn active_track_query(m: &NowPlaying) -> Option<TrackQuery> {
     })
 }
 
+/// Fills `LyricLine::romaji` (never `subtitle`, which is the source's own paired line) once per loaded song.
+/// The cache never stores it (`cache::write_cache`), so it's regenerated on load and generator fixes apply everywhere.
 fn apply_romaji(doc: &mut LyricsDocument, enabled: bool, romaji: &JapaneseRomaji) {
-    if !enabled {
-        return;
-    }
     for line in &mut doc.lines {
-        if line.subtitle.is_none() {
-            line.subtitle = romaji.line_to_romaji(&line.text);
-        }
+        line.romaji = (enabled && line.subtitle.is_none()).then(|| romaji.line_to_romaji(&line.text)).flatten();
     }
 }

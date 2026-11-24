@@ -1,6 +1,15 @@
 <script lang="ts">
-  import type { LyricsState, NowPlaying } from '../../lib/ipc/engine';
-  import { resolveLyricFrame } from '../../lib/notch/lyrics';
+  import type { LyricLine, LyricsState, NowPlaying } from '../../lib/ipc/engine';
+  import {
+    hasSubtitleLines,
+    ladderY,
+    LADDER,
+    lineSubtitle,
+    lyricRows,
+    resolveLyricFrame,
+    romajiLitCount,
+    type LyricRow,
+  } from '../../lib/notch/lyrics';
   import { toMsNumber } from '../../lib/notch/scheduler';
   import { liveMediaPositionMs } from '../../lib/notch/scrubber';
 
@@ -71,49 +80,88 @@
     };
   });
 
-  const activeLine = $derived(frame.activeLine ?? (mode === 'pill' ? frame.nextLine : null));
-  // Pill second row: the next line; while the first row already previews it (intro or a gap), the one after.
-  const pillNextLine = $derived(frame.activeLine ? frame.nextLine : frame.followingLine);
-  const activeSubtitle = $derived(showRomaji ? (activeLine?.subtitle ?? null) : null);
+  // Ladder layout (2026-11-24): each visible line is one element keyed by the line, placed in a slot. When the song
+  // moves on, the next line's element glides up into the main row (growing and brightening), the old main line
+  // glides up and out, and only the newly revealed line fades in. `transform`/`opacity` only; instant with reduced motion.
+  const rows = $derived(lyricRows(frame, mode));
+  const hasSub = $derived(hasSubtitleLines(doc, showRomaji));
+  const ladderHeight = $derived(
+    mode === 'pill' ? ladderY('pill', 1, hasSub) + LADDER.pill.row : LADDER.card.inner,
+  );
   const highlightActiveWords = $derived(
     wordHighlight && !instant && frame.activeLine !== null && frame.activeLine.words.length > 0,
   );
   const useWordSpaces = $derived(
-    Boolean(frame.activeLine && !/[\u3040-\u30ff\u4e00-\u9fff]/.test(frame.activeLine.text)),
+    Boolean(frame.activeLine && !/[぀-ヿ一-鿿]/.test(frame.activeLine.text)),
   );
+
+  /** Hidden rows sit above the view: the pill shows slots 0–1, the card -1 to 1. */
+  function hiddenSlot(slot: number): boolean {
+    return mode === 'pill' ? slot < 0 : slot < -1;
+  }
+
+  function romajiWords(text: string): string[] {
+    return text.split(/\s+/).filter(Boolean);
+  }
+
+  function seekTo(row: LyricRow): void {
+    if (row.line && !hiddenSlot(row.slot)) onSeek(row.line.startMs);
+  }
 </script>
+
+{#snippet lineText(row: LyricRow)}
+  {#if row.role === 'current' && highlightActiveWords && row.line}
+    {#each row.line.words as word, idx (idx)}
+      <span
+        class="word"
+        class:active={idx === frame.activeWordIndex}
+        class:sung={idx < frame.activeWordIndex}
+        class:upcoming={idx > frame.activeWordIndex}
+        class:spaced={useWordSpaces && idx + 1 < row.line.words.length}
+      >{word.text}</span>
+    {/each}
+  {:else}
+    {row.line?.text ?? '···'}
+  {/if}
+{/snippet}
+
+{#snippet subtitle(line: LyricLine | null, isMain: boolean, isCurrent: boolean)}
+  {@const sub = lineSubtitle(line, showRomaji)}
+  {#if sub}
+    <span class="subtitle-line" class:shown={isMain}>
+      {#if isCurrent && sub.generatedRomaji && highlightActiveWords && line}
+        <!-- Romaji lights up as the line is sung, in step with the karaoke highlight above. -->
+        {@const words = romajiWords(sub.text)}
+        {@const lit = romajiLitCount(words.length, frame.activeWordIndex, line.words.length)}
+        {#each words as w, i (i)}
+          <span class="romaji-word" class:lit={i < lit}>{w}</span>{i + 1 < words.length ? ' ' : ''}
+        {/each}
+      {:else}
+        {sub.text}
+      {/if}
+    </span>
+  {/if}
+{/snippet}
 
 <div class="lyrics-ext" class:pill={mode === 'pill'} class:card={mode === 'card'} class:instant>
   {#if mode === 'pill'}
     <div class="pill-inner">
       <span class="note-dot" class:playing={isPlaying} aria-hidden="true">♪</span>
-      <div class="pill-lines">
-        {#key frame.activeIndex}
-          <div class="line-wrap" class:animate-in={!instant}>
-            <div class="primary-line" class:upcoming={frame.activeLine === null}>
-              {#if highlightActiveWords && frame.activeLine}
-                {#each frame.activeLine.words as word, idx (idx)}
-                  <span
-                    class="word"
-                    class:active={idx === frame.activeWordIndex}
-                    class:sung={idx < frame.activeWordIndex}
-                    class:upcoming={idx > frame.activeWordIndex}
-                    class:spaced={useWordSpaces && idx + 1 < frame.activeLine.words.length}
-                  >{word.text}</span>
-                {/each}
-              {:else}
-                {activeLine?.text ?? '···'}
-              {/if}
-            </div>
-            {#if activeSubtitle}
-              <div class="subtitle-line">{activeSubtitle}</div>
-            {/if}
-            <!-- Second row (owner, 2026-11-24): the line that comes next, dimmed. It slides up into the first row. -->
-            <div class="next-line" aria-label={pillNextLine ? `Next: ${pillNextLine.text}` : undefined}>
-              {pillNextLine?.text ?? ''}
+      <div class="ladder" style:height={`${ladderHeight}px`} aria-live="off">
+        {#each rows as row (row.key)}
+          <div
+            class="rung"
+            class:main={row.slot === 0}
+            class:upcoming={row.role === 'upcoming'}
+            class:hidden={hiddenSlot(row.slot)}
+            style:transform={`translateY(${ladderY('pill', row.slot, hasSub)}px)`}
+          >
+            <div class="rung-enter">
+              <span class="rung-text">{@render lineText(row)}</span>
+              {@render subtitle(row.line, row.slot === 0, row.role === 'current')}
             </div>
           </div>
-        {/key}
+        {/each}
       </div>
     </div>
   {:else if isPlain && doc?.plainText}
@@ -121,53 +169,25 @@
       {doc.plainText}
     </div>
   {:else}
-    <div class="card-lines" aria-label="Synced lyrics">
-      <button
-        class="ctx-line prev"
-        type="button"
-        disabled={!frame.prevLine}
-        onclick={() => frame.prevLine && onSeek(frame.prevLine.startMs)}
-      >
-        {frame.prevLine?.text ?? ''}
-      </button>
-
-      {#key frame.activeIndex}
+    <div class="ladder card-ladder" style:height={`${ladderHeight}px`} aria-label="Synced lyrics">
+      {#each rows as row (row.key)}
         <button
-          class="active-block"
-          class:animate-in={!instant}
+          class="rung"
+          class:main={row.slot === 0}
+          class:gap={row.role === 'gap'}
+          class:hidden={hiddenSlot(row.slot)}
           type="button"
-          disabled={!frame.activeLine}
-          onclick={() => frame.activeLine && onSeek(frame.activeLine.startMs)}
+          tabindex={hiddenSlot(row.slot) ? -1 : 0}
+          disabled={!row.line}
+          style:transform={`translateY(${ladderY('card', row.slot, hasSub)}px)`}
+          onclick={() => seekTo(row)}
         >
-          <span class="primary-line" class:upcoming={frame.activeLine === null}>
-            {#if highlightActiveWords && frame.activeLine}
-              {#each frame.activeLine.words as word, idx (idx)}
-                <span
-                  class="word"
-                  class:active={idx === frame.activeWordIndex}
-                  class:sung={idx < frame.activeWordIndex}
-                  class:upcoming={idx > frame.activeWordIndex}
-                  class:spaced={useWordSpaces && idx + 1 < frame.activeLine.words.length}
-                >{word.text}</span>
-              {/each}
-            {:else}
-              {frame.activeLine?.text ?? '···'}
-            {/if}
+          <span class="rung-enter">
+            <span class="rung-text">{@render lineText(row)}</span>
+            {@render subtitle(row.line, row.slot === 0, row.role === 'current')}
           </span>
-          {#if showRomaji && frame.activeLine?.subtitle}
-            <span class="subtitle-line">{frame.activeLine.subtitle}</span>
-          {/if}
         </button>
-      {/key}
-
-      <button
-        class="ctx-line next"
-        type="button"
-        disabled={!frame.nextLine}
-        onclick={() => frame.nextLine && onSeek(frame.nextLine.startMs)}
-      >
-        {frame.nextLine?.text ?? ''}
-      </button>
+      {/each}
     </div>
   {/if}
 </div>
@@ -193,7 +213,7 @@
     min-width: 0;
   }
 
-  /* Aligned with the first (current) row, not centred between the two. */
+  /* Aligned with the main row, not centred between the two. */
   .note-dot {
     font-size: 11px;
     line-height: 16px;
@@ -206,113 +226,116 @@
     opacity: 1;
   }
 
-  .pill-lines {
-    flex: 1;
-    min-width: 0;
-    overflow: hidden;
-  }
-
-  .line-wrap {
-    display: flex;
-    flex-direction: column;
-    gap: 1px;
-    min-width: 0;
-  }
-
-  /* Fixed height even when there's no next line, so the pill never jumps (PILL_LYRICS_H in geometry.ts). */
-  .next-line {
-    height: 15px;
-    margin-top: 1px;
-    font-size: 10.5px;
-    font-weight: 500;
-    line-height: 15px;
-    color: var(--ice-lyric-muted);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
   .lyrics-ext.card {
     height: 82px;
     padding: 6px 8px 8px;
     mask-image: linear-gradient(180deg, transparent 0%, #000 14%, #000 86%, transparent 100%);
   }
 
-  .card-lines {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 3px;
+  /* ---- Ladder: rows in absolute slots (heights twin `LADDER` in lyrics.ts). ---- */
+  .ladder {
+    position: relative;
+    flex: 1;
     min-width: 0;
-    width: 100%;
-  }
-
-  .ctx-line,
-  .active-block {
-    appearance: none;
-    border: none;
-    background: transparent;
-    padding: 0 4px;
-    margin: 0;
-    width: 100%;
-    min-width: 0;
-    font-family: inherit;
-    text-align: center;
-    cursor: pointer;
-    transition: opacity 160ms ease, color 160ms ease;
-  }
-
-  .ctx-line:disabled,
-  .active-block:disabled {
-    cursor: default;
-  }
-
-  .ctx-line {
-    height: 15px;
-    font-size: 10.5px;
-    font-weight: 500;
-    line-height: 15px;
-    color: var(--ice-lyric-muted);
-    white-space: nowrap;
     overflow: hidden;
-    text-overflow: ellipsis;
   }
 
-  .ctx-line:not(:disabled):hover {
-    color: var(--ice-fg);
+  .rung {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    min-width: 0;
+    transition:
+      transform 460ms cubic-bezier(0.22, 1, 0.36, 1),
+      opacity 320ms ease;
   }
 
-  .active-block {
+  .rung.hidden {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  /* New lines fade up into their slot; lines already on screen glide instead (they keep their element). */
+  .rung-enter {
     display: flex;
     flex-direction: column;
-    align-items: center;
     gap: 1px;
+    min-width: 0;
+    animation: lyric-enter 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
   }
 
-  .primary-line {
+  .rung-text {
     display: block;
     max-width: 100%;
-    font-size: 12px;
     font-weight: 600;
-    line-height: 16px;
     letter-spacing: -0.01em;
     color: var(--ice-lyric-active);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    transform-origin: left center;
+    transition:
+      transform 460ms cubic-bezier(0.22, 1, 0.36, 1),
+      color 320ms ease;
   }
 
-  .lyrics-ext.card .primary-line {
-    font-size: 13px;
-    line-height: 18px;
+  .lyrics-ext.pill .rung-text {
+    font-size: 12px;
+    line-height: 16px;
   }
 
-  .primary-line.upcoming {
+  /* Rows outside the main slot are smaller and dim; moving into it grows and brightens them. */
+  .rung:not(.main) .rung-text {
+    transform: scale(0.875);
     color: var(--ice-lyric-muted);
     font-weight: 500;
   }
 
+  .rung.upcoming .rung-text {
+    color: var(--ice-lyric-muted);
+    font-weight: 500;
+  }
+
+  /* Card: centred, larger main line, clickable rows. */
+  .card-ladder .rung {
+    appearance: none;
+    border: none;
+    background: transparent;
+    padding: 0 4px;
+    margin: 0;
+    font-family: inherit;
+    text-align: center;
+    cursor: pointer;
+  }
+
+  .card-ladder .rung:disabled {
+    cursor: default;
+  }
+
+  .card-ladder .rung-enter {
+    align-items: center;
+  }
+
+  .card-ladder .rung-text {
+    font-size: 13px;
+    line-height: 18px;
+    transform-origin: center center;
+  }
+
+  .card-ladder .rung:not(.main) .rung-text {
+    transform: scale(0.81);
+  }
+
+  .card-ladder .rung:not(.main):not(:disabled):hover .rung-text {
+    color: var(--ice-fg);
+  }
+
+  .card-ladder .rung.gap .rung-text {
+    color: var(--ice-lyric-muted);
+  }
+
+  /* ---- Karaoke words (current line) ---- */
   .word {
     display: inline-block;
     transform-origin: center bottom;
@@ -344,6 +367,7 @@
     transform: translateY(0) scale(1);
   }
 
+  /* ---- Subtitle / Romaji: only under the main row; fades in as a line moves into it ---- */
   .subtitle-line {
     display: block;
     max-width: 100%;
@@ -354,6 +378,22 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    opacity: 0;
+    transition: opacity 320ms ease;
+  }
+
+  .subtitle-line.shown {
+    opacity: 1;
+  }
+
+  /* Generated Romaji: unsung words dimmer, sung words lit, following the karaoke line above. */
+  .romaji-word {
+    color: var(--ice-lyric-muted);
+    transition: color 200ms ease;
+  }
+
+  .romaji-word.lit {
+    color: var(--ice-lyric-sub);
   }
 
   .plain-scroll {
@@ -367,21 +407,20 @@
     text-align: center;
   }
 
-  .animate-in {
-    animation: lyric-rise 220ms cubic-bezier(0.22, 1, 0.36, 1);
-  }
-
+  .lyrics-ext.instant .rung,
+  .lyrics-ext.instant .rung-enter,
+  .lyrics-ext.instant .rung-text,
   .lyrics-ext.instant .word,
-  .lyrics-ext.instant .ctx-line,
-  .lyrics-ext.instant .active-block {
+  .lyrics-ext.instant .subtitle-line,
+  .lyrics-ext.instant .romaji-word {
     transition: none;
     animation: none;
   }
 
-  @keyframes lyric-rise {
+  @keyframes lyric-enter {
     from {
       opacity: 0;
-      transform: translateY(5px);
+      transform: translateY(6px);
     }
     to {
       opacity: 1;

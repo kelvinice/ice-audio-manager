@@ -72,3 +72,4 @@ Inline `#[cfg(test)]` in each file. `resolve.rs` is built from the owner's real 
 - 2026-11-24 Gemini: `MediaAction::Seek { position_ms }` for timeline seeking.
 - 2026-11-24 Gemini: `NowPlaying.position_updated_ms` (optional Unix ms timestamp from GSMTC `LastUpdatedTime`) for accurate live playback interpolation.
 - 2026-11-24 Gemini: schema v9 (`[lyrics]` + `cache_max_mb` 5–500 MB), `lyrics.rs` (LRC/Enhanced-LRC parser, Romaji Hepburn table, `LyricsProvider` trait), `EngineEvent::LyricsChanged`, `SetLyrics*`, and `DisableAllNetworkFeatures`.
+- 2026-11-24 Claude: `LyricLine.romaji` (generated, separate from the source's paired `subtitle`, never cached); `segmented_kana_to_romaji` (は/へ particles as wa/e).
