@@ -20,7 +20,7 @@
 | Metric | Target | Hard limit | How measured |
 |---|---|---|---|
 | Idle CPU (no activity) | ~0.0% | < 0.2% avg over 60 s | Release build, 60 s sample after settling |
-| Idle RAM, default profile (whole process tree, Settings closed) | **≤ 100 MB** (owner, Q-06) | **150 MB** (owner allowance, D-15) | Private Bytes summed over the host + all app-owned WebView2 processes (dedicated user-data folder, `GetProcessInfos`) |
+| Idle RAM, default profile (whole process tree, Settings closed) | **≤ 100 MB** (owner, Q-06) | **150 MB** (owner allowance, D-15) | Private Bytes summed over the host + all app-owned WebView2 processes (dedicated user-data folder, `GetProcessInfos`). Since 2026-11-24 the default (`Instant`) keeps the WebView awake at idle |
 | Idle RAM, `Balanced` profile (WebView released, native dot) | < 30 MB | < 40 MB | Same |
 | RAM, `Lite` / gaming mode | < 25 MB | < 40 MB | Same, while a fullscreen game runs |
 | Event → first visible feedback | < 1 frame (native dot reacts) | 50 ms | Log timestamps + screen capture |
@@ -152,7 +152,8 @@ replugging the dongle in a different USB port, power-cycling the headset, restar
 **Status (2026-11-23):** Phase 2 is feature-complete and visually QA'd in `main`.
 
 - [x] Notch window: **exactly one** transparent window, moved between monitors (`overlay_win::move_top_center`), DPI-aware
-- [x] **Performance profiles (D-15.1):** `Instant` (WebView warm, `TrySuspend` when idle) · `Balanced` (created on demand, suspends) ·
+- [x] **Performance profiles (D-15.1):** `Instant` (WebView warm **and awake at idle**: it never falls back to the native pill,
+      owner 2026-11-24, see "Notch refresh") · `Balanced` (created on demand, `TrySuspend` when idle) ·
       `Lite` (no notch WebView; native dot + tray only). Saved in config (schema v2), chosen from the tray
 - [x] **Native idle dot/pill** drawn when the WebView is suspended/released: live volume %, mute, mic volume and theme colours (Gemini)
 - [x] **Gaming mode:** automatic while a fullscreen app covers the notch's monitor (`FullscreenWatcher`, event-driven); the WebView
@@ -205,7 +206,8 @@ games on the pinned monitor. Budgets met in every profile.
 - [x] Activities: **Track change** and compact **Now playing** idle state (Gemini, against the fake engine)
 - [x] Expanded notch: media card (art, title, artist, scrubber, prev/play/next) (Gemini, against the fake engine). Real-engine data
       now comes from the real engine too
-- [ ] Visualizer: `IAudioMeterInformation` peaks at ≤ 30 Hz, subscribed **only while visible**, rendered as 4–6 bars with fast-attack/slow-decay springs
+- [x] Visualizer: `IAudioMeterInformation` peaks at ≤ 30 Hz, subscribed **only while visible**, rendered as 4–6 bars with fast-attack/slow-decay springs
+      (CPU while visible/hidden is re-measured in the Phase 6 testing pass)
   - [x] Engine (Claude, `phase-3/meter-api` + `phase-3/meter-engine`): `Engine::meter()` returns a `MeterSubscription` of
         `MeterFrame { peak, channels }` (0.0–1.0, `engine.ts`). Levels bypass the snapshot and revisions. Only visible changes are
         sent, silence once. The `ice-meter` thread runs only while a subscription is alive and re-binds on default-device changes.
@@ -216,10 +218,13 @@ games on the pinned monitor. Budgets met in every profile.
         gaming mode, and Lite. A new document must request frames again.
   - [x] Notch (Gemini): 4–6 bars from `channels` (fall back to `peak`), fast-attack/slow-decay springs, no animation loop
         once frames stop and the bars have settled
+  - [x] Bars look fix (Claude, 2026-11-24): `BarShaper` (centre-out ripple + auto-gain, so loud music no longer pins every bar
+        at the top), a taller centre contour, `clip-path` instead of `scaleY` (round caps stay round), whole-pixel width/gap
 - [ ] Secondary QA: Chromium/Edge/Firefox media sessions, **including YouTube Music** (the website, and the app installed
       from Chrome/Edge). Owner, 2026-11-23: Spotify and YouTube Music are the supported music services (see Backlog)
-- [ ] Expanded card empty state when nothing plays: a clear hint (e.g. "Nothing playing. Start Spotify or YouTube Music"),
-      not a blank card (NotchBox reference, D-20 review)
+- [x] Expanded card empty state when nothing plays: a clear hint (e.g. "Nothing playing. Start Spotify or YouTube Music"),
+      not a blank card (NotchBox reference, D-20 review). *`ExpandedEmptyCard`: "Nothing playing", the current device, and
+      labelled Spotify / YouTube Music launch buttons*
 - [ ] **D-18 (accepted 2026-11-23): owner-picked notch devices, preferences out of the notch**
   - [x] Tray (Codex, finished by Claude): a **"Show in notch"** check item per playback device (= favourite, via `SetFavourites`, in order), and the
         submenus **Theme**, **Animation** and **Idle notch** next to Performance profile / Pinned monitor. These three are now
@@ -228,8 +233,9 @@ games on the pinned monitor. Budgets met in every profile.
         favourites keeps a disconnected favourite in its place (`SavedDevice.savedId`)
   - [x] Notch (Gemini): the device row lists `settings.favouritesPlayback` in order. The current default is shown first if it isn't a
         favourite. With no favourites: current device + the other side of the toggle pair and no picker button (owner, 2026-11-23: favourites are set from the tray's "Show in notch"), never
-        "all devices". Alias-aware chips wide enough to read, at most 4–5, then "More…". Remove the theme, spring, idle-style and
-        monitor pickers from the expanded card
+        "all devices". Alias-aware chips wide enough to read, at most 4. Remove the theme, spring, idle-style and
+        monitor pickers from the expanded card. *Owner, 2026-11-24: no "More…" button or in-notch picker either; Settings →
+        Devices is the only place to choose and order them (the notch's `set_notch_devices` command was removed)*
   - [x] Settings → Devices: reorderable list (Phase 4; Claude, `phase-4/settings-window`)
 
 **Exit criteria:** track changes animate within 300 ms of the event. Visualizer costs < 1% CPU while visible and 0% while hidden.
@@ -254,7 +260,7 @@ Runs between Phase 3 and Phase 4. Item 1 is a bug fix that comes first. D-21 Par
 - [ ] Shell wiring (Codex): pill click wakes and expands the notch; in Lite, a click opens the tray quick-switch menu
 - [ ] "Show notch" hotkey, unbound by default (Claude: binding + engine; Codex: tray/Settings entry)
 - [x] Native pill renderer (Gemini): spike GDI glyphs into the existing DIB first, then Direct2D/DirectWrite only if needed.
-      Its RAM budget in every idle profile (Instant suspended ≤ 15 MB WS, Lite, Balanced < 30/40 MB) is checked in the
+      Its RAM budget in every idle profile where it shows (Lite, Balanced < 30/40 MB; Instant no longer suspends) is checked in the
       Phase 6 testing pass. Size and
       radius come from the same tokens as the WebView pill. *GDI (`native_dot/glyphs.rs`, zero D2D/DWrite DLLs) passed
       every 60 s idle gate: Lite `1.69 MB` WS, Balanced `3.82 MB` WS, Instant suspended `8.58 MB` WS; matched `116×28`
@@ -287,6 +293,8 @@ Runs between Phase 3 and Phase 4. Item 1 is a bug fix that comes first. D-21 Par
   - If it can't follow the springs cleanly, narrow when the poll runs instead.
 - [ ] L3 · Session pin on the expanded notch: "keep open until unpinned" (Gemini UI, Codex shell). It shows a pin mark and
       clears on session lock or sleep. Gaming mode still releases it
+  - [x] Pin button with an on state in the notch side rail (`toggle_expand`); gaming mode resets `expanded`
+  - [ ] Clear the pin on session lock and sleep (shell)
 - [ ] L6 · Live cost readout in Settings → General: RAM and CPU of the process tree, sampled only while that page is open
       (Codex, via `ice_win::proc_metrics`)
 
@@ -298,7 +306,8 @@ Items marked *(needs Settings)* wait for the Phase 4 Settings window. The rest c
 
 **D-22 · Music services widget (owner: enabled by default):**
 - [x] "Music services" widget in the expanded notch and the empty "nothing playing" state (Gemini UI).
-  - Quick-launch buttons (`MusicServicesWidget.svelte`, `backdrop.ts#resolveMusicServices`) for Spotify and YouTube Music in the expanded footer and empty state (`open_music_service` invoke wired gracefully).
+  - Quick-launch buttons (`MusicServicesWidget.svelte`, `backdrop.ts#resolveMusicServices`) for Spotify and YouTube Music: icons
+    in the side rail while media plays, labelled buttons in the empty state (`open_music_service`).
 - [x] Shell side (Codex): find and launch the installed Spotify / YouTube Music web apps; fall back to the URL.
 - [ ] One switch per service in Settings → Activities (Spotify, YouTube Music), both on by default; config fields with defaults
       (Claude) *(the switches need Settings; the config can land first)*
@@ -321,7 +330,32 @@ Items marked *(needs Settings)* wait for the Phase 4 Settings window. The rest c
       luminance-clamped scrim (`--ice-scrim`). Ice/Midnight/Fluent/Minimal each get one treatment; reads `art.palette` +
       `art.luminance` when present and derives a 2nd wash stop + luminance from `art.accent` in the meantime. New tokens in `docs/theming.md`
 - [x] V3 translucent controls and V4 cleanliness pass on the 384×178 card, keeping D-18's device row visible. Before/after
-      screenshots verified at `100%` and `150%` across light/dark desktops and all 4 themes (Gemini)
+      screenshots verified at `100%` and `150%` across light/dark desktops and all 4 themes (Gemini). *Superseded by the
+      2026-11-24 relayout below*
+
+---
+
+## Notch refresh (owner request, 2026-11-24)
+
+The owner found the expanded card cluttered, the shadow broken, the visualizer bars ugly, and `Instant` sometimes falling back
+to the static native pill. Done by Claude; module docs: [app-ui-notch](modules/app-ui-notch.md), [app-shell](modules/app-shell.md).
+
+- [x] **Relayout** (`ExpandedNotch`, 392 × 164, or 392 × 144 with nothing playing): main column = media card (58 px art, title,
+      artist, transport, scrubber) + volume row + device chips; a **side rail** (`NotchSideRail`) holds Pin, Mic, Spotify /
+      YouTube Music (while media plays) and Settings, so the player stays clean
+- [x] **Volume bar is a slider:** click or drag (`set_volume` → `Command::SetVolume`, throttled to 40 ms), arrow keys; the −/+ buttons are gone
+- [x] **"More…" and the in-notch device picker removed** (Settings → Devices owns favourites and order)
+- [x] **Shadow fix:** the 420 × 190 canvas left 6 px under the expanded card for an 8 px offset + 18 px blur shadow, so the
+      window edge cut it. Canvas is now 440 × 210 (twin constants in `geometry.ts` and `main.rs`) and `--ice-drop-shadow` is
+      `0 6px 16px`; the rule is in `theming.md`
+- [x] **Instant never falls back to the native pill:** `Placement::suspends_on_idle` (Balanced only) gates `request_idle_suspend`
+      in the shell and the UI; switching to Instant wakes a suspended notch; switching away re-arms the idle linger
+- [x] **Visualizer bars** (see Phase 3)
+- [x] New tokens/icons: `--ice-radius-md` (12 px), `settings` icon
+- [ ] Visual QA of the new card on both monitors at 100 % / 150 %, light/dark desktops, all 4 themes (owner)
+- [ ] Phase 6: measure Instant idle with the WebView awake (expected ≈ 77 MB private WS from Phase 0.2, inside the ≤ 100 MB
+      target) and the cursor poll's idle CPU, which now runs for as long as Instant shows the notch. D-21.1 L2
+      (event-driven hit-testing) would remove that poll
 
 ---
 

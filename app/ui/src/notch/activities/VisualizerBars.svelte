@@ -25,7 +25,7 @@
   }: Props = $props();
 
   const barEls: Array<HTMLSpanElement | undefined> = [];
-  const lastTransforms: string[] = [];
+  const lastClips: string[] = [];
   const lastOpacities: string[] = [];
   let available = $state(true);
   let handle: VisualizerHandle | null = null;
@@ -33,7 +33,7 @@
   function applyLevels(levels: ReadonlyArray<number>, nextAvailable: boolean): void {
     available = nextAvailable;
     if (!nextAvailable) {
-      lastTransforms.length = 0;
+      lastClips.length = 0;
       lastOpacities.length = 0;
       return;
     }
@@ -41,12 +41,14 @@
       const el = barEls[i];
       if (!el) continue;
       const level = levels[i] ?? 0;
-      const nextTransform = `scaleY(${barScaleY(level).toFixed(4)})`;
-      if (lastTransforms[i] !== nextTransform) {
-        lastTransforms[i] = nextTransform;
-        el.style.transform = nextTransform;
+      // Clip a full-height bar from both ends instead of `scaleY`, which squashed the round caps into blocks.
+      const insetPct = ((1 - barScaleY(level)) * 50).toFixed(2);
+      const nextClip = `inset(${insetPct}% 0 ${insetPct}% 0 round 999px)`;
+      if (lastClips[i] !== nextClip) {
+        lastClips[i] = nextClip;
+        el.style.clipPath = nextClip;
       }
-      const nextOpacity = (0.65 + 0.35 * level).toFixed(3);
+      const nextOpacity = (0.72 + 0.28 * level).toFixed(2);
       if (lastOpacities[i] !== nextOpacity) {
         lastOpacities[i] = nextOpacity;
         el.style.opacity = nextOpacity;
@@ -81,13 +83,13 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 1.5px;
+    /* Whole-pixel width and gap stay crisp at 100 % and 150 % scaling (fractional sizes blurred into blocks). */
+    gap: 2px;
     height: 12px;
     flex-shrink: 0;
   }
 
   .visualizer-bars.expanded {
-    gap: 2px;
     height: 16px;
     padding: 0 2px;
   }
@@ -97,13 +99,8 @@
     height: 100%;
     border-radius: var(--ice-radius-pill);
     background: var(--ice-active-accent, var(--ice-accent));
-    transform-origin: center center;
-    transform: scaleY(0.18);
-    opacity: 0.65;
-    will-change: transform, opacity;
-  }
-
-  .visualizer-bars.expanded .bar {
-    width: 2.5px;
+    /* Resting = MIN_BAR_SCALE (0.18): clip 41 % from each end. */
+    clip-path: inset(41% 0 41% 0 round 999px);
+    opacity: 0.72;
   }
 </style>

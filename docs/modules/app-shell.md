@@ -26,7 +26,7 @@ state to the UI, and exposes a small set of Tauri commands. Thin by rule: valida
 - **Events to the WebView:** `engine://snapshot/v1`, `engine://delta/v1` (raw `Envelope`), `notch://delta/v1` (shell's own `NotchSnapshot`, monotonic `revision`),
   `audio://meter/v1` (`MeterFrame`). Sent with `emit_to("notch"|"settings", …)`.
 - **Commands (UI → shell):** `get_notch_snapshot`, `get_engine_snapshot`, `report_hit_rect`, `report_first_paint`, `report_settings_ready`, `report_event_rendered`,
-  `adjust_volume`, `toggle_mute`, `toggle_mic_mute`, `trigger_switch`, `switch_to_device`, `set_notch_devices`, `media_command`, `toggle_expand`,
+  `adjust_volume`, `set_volume`, `toggle_mute`, `toggle_mic_mute`, `trigger_switch`, `switch_to_device`, `media_command`, `toggle_expand`,
   `request_idle_suspend`, `open_settings`, `set_visualizer`, `apply_setting`, `get_launch_at_sign_in`, `set_launch_at_sign_in` (Settings window only, permission `settings-controls`), `open_music_service`. A new command also needs a
   permission in `permissions/shell.toml` and a capability entry.
 - **Flags:** `--fake-engine` (FakeEngine), `--start-minimized`, `--show-notch`, `--verbose`, `--bench` (+ `--sample-secs`, `--out`).
@@ -34,10 +34,11 @@ state to the UI, and exposes a small set of Tauri commands. Thin by rule: valida
 ## How it works
 - **Startup:** single-instance guard → logging → `EngineSlot` (real engine retried in the background; tray stays up with "Starting Windows audio…") →
   `SharedRuntime` → tray → native pill → `placement::watch` → `engine_bridge::watch` → notch window created on demand.
-- **Performance profiles (D-15.1):** `Instant` keeps the WebView warm and `TrySuspend`s when idle; `Balanced` creates it on demand;
+- **Performance profiles (D-15.1):** `Instant` keeps the WebView warm and awake at idle (it never hands over to the native pill;
+  owner request 2026-11-24, `Placement::suspends_on_idle`); `Balanced` creates it on demand and `TrySuspend`s when idle;
   `Lite` never creates it (native pill + tray only). `Placement::allows_webview()` is the single gate; gaming mode releases the WebView and a
   `generation` guard stops late events from re-creating it.
-- **Idle suspend:** UI calls `request_idle_suspend` after its linger; the shell hides the notch, shows the native pill, suspends the WebView and bumps `suspend_gen`.
+- **Idle suspend (Balanced only):** UI calls `request_idle_suspend` after its linger; the shell hides the notch, shows the native pill, suspends the WebView and bumps `suspend_gen`.
   A wake (`pending_wake_seq`) resumes it and re-sends the snapshot. A recreated/woken WebView rebuilds from the snapshot, never replaying expired activities.
 - **Native pill:** `NativePillSubscription`/`native_dot_snapshot` keep it in sync from the same engine stream; pill input events (`PillInput`) wake or expand the notch.
 - **Cursor poll:** bounded (≤ 30 Hz), runs only while the cursor is near the pill, toggles click-through. D-21.1 L2 plans to replace it with event-driven hit-testing.
@@ -55,3 +56,6 @@ Unit tests in `art.rs`, `engine_bridge.rs`, `ipc.rs`, `meter.rs`, `placement.rs`
 ## Change log
 - 2026-11-23 Claude: initial recap.
 - 2026-11-23 Claude: Settings window moved to `settings.rs` (resizable, Mica, live theme) with `apply_setting` + launch-at-sign-in commands; `startup.rs`; `MonitorSummary` gains display path, name and position.
+- 2026-11-24 Claude: `Instant` no longer idle-suspends (`Placement::suspends_on_idle`); switching to Instant wakes a suspended notch; `set_volume` command;
+  notch canvas 440×210 (was 420×190) so the drop shadow isn't clipped.
+- 2026-11-24 Claude: removed `set_notch_devices` (the notch has no device picker; Settings uses `apply_setting`).

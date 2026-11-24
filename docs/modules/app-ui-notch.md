@@ -10,7 +10,7 @@ any time (D-15). Heavy work (image decode, colour extraction, device sorting) ha
 ## Entry points
 | File | What it does |
 |---|---|
-| `index.html` → `src/notch/main.ts` → `notch/NotchApp.svelte` | The notch: a 420×190 transparent canvas holding one clipped pill |
+| `index.html` → `src/notch/main.ts` → `notch/NotchApp.svelte` | The notch: a 440×210 transparent canvas holding one clipped pill (≥ 24 px margin so the drop shadow isn't clipped) |
 | `settings.html` → `src/settings/main.ts` | Settings window: see [app-ui-settings](app-ui-settings.md) |
 | `src/themes/base.css` | All `--ice-*` tokens (documented in [theming.md](../theming.md): every new token must be added there) |
 
@@ -26,11 +26,17 @@ any time (D-15). Heavy work (image decode, colour extraction, device sorting) ha
 | `notch/geometry.ts` | Canvas/pill sizes (twin of the native pill constants), `targetGeometry`, `computeHitRect`, `computeClipPath`, `resolveRimStroke` |
 | `notch/devices.ts` | `buildNotchDeviceRow`: favourites in order, current default first, max 4 chips (D-18); `toggleFavouriteDeviceIds` |
 | `notch/backdrop.ts` | D-23 backdrop maths (WCAG luminance/contrast, gradient stops, scrim) and `resolveMusicServices` (D-22 quick-launch items) |
-| `notch/visualizer.ts` | `VisualizerBank`, `mapFrameToBars`, `subscribeVisualizer`: 4–6 bars from `MeterFrame.channels` with attack/decay springs, loop stops when settled |
+| `notch/visualizer.ts` | `VisualizerBank`, `mapFrameToBars`, `BarShaper`, `subscribeVisualizer`: 4–6 bars from `MeterFrame.channels`; `BarShaper` adds a centre-out ripple and auto-gain, then attack/decay springs; loop stops when settled. Bars render with `clip-path` (not `scaleY`) so caps stay round |
 
 ## `src/notch/activities/` (one component per job)
 `IdlePill`, `VolumeActivity`, `SwitchActivity`, `PlugActivity`, `MicActivity`, `TrackActivity`, `ExpandedNotch` (container), `ExpandedMediaCard`,
-`ExpandedDeviceRow`, `MusicServicesWidget`, `AlbumArtTile`, `NotchBackdrop`, `VisualizerBars`, `DeviceIcon`.
+`ExpandedEmptyCard`, `ExpandedVolumeRow`, `ExpandedDeviceRow`, `NotchSideRail`, `MusicServicesWidget`, `AlbumArtTile`, `NotchBackdrop`, `VisualizerBars`, `DeviceIcon`.
+
+**Expanded layout** (`EXPANDED_W` × `EXPANDED_H_MEDIA`/`EXPANDED_H_EMPTY` in `geometry.ts`): a main column (media or empty card, then
+volume row and device chips) beside a side rail (`NotchSideRail`: pin, mic, music services while media plays, settings). The media card holds
+only art, title/artist, transport and the scrubber. The volume bar is a click/drag slider (`set_volume`, throttled to 40 ms). There is no
+device picker in the notch: Settings → Devices chooses and orders the chips. The card heights are fixed, so changing a row's height means
+updating the constants.
 
 ## How it works
 - **Wake protocol:** on load, register listeners first, buffer deltas, fetch `get_engine_snapshot` + `get_notch_snapshot`, apply only newer revisions,
@@ -39,7 +45,7 @@ any time (D-15). Heavy work (image decode, colour extraction, device sorting) ha
   expanded, suspended, monitors, system reduce-motion). The controller merges them; the scheduler decides what activity shows.
 - **Animation:** springs only, animating `transform`/`opacity`/`filter`/`clip-path`; the pill morph drives an SVG `<rect rx ry>` plus `clip-path: inset(… round …)`,
   never `width/height`. No loop while hidden or settled. Reduce motion (Windows flag via the shell) or preset `off` = instant, no fade.
-- **After idle linger** (`IDLE_SUSPEND_LINGER_MS` = 15 s today; D-21.1 L1 moves it to config) the UI calls `request_idle_suspend`; the shell suspends or releases the WebView.
+- **After idle linger** (`IDLE_SUSPEND_LINGER_MS` = 15 s today; D-21.1 L1 moves it to config) the UI calls `request_idle_suspend` (Balanced only; Instant stays awake, so the notch never drops back to the static native pill); the shell suspends or releases the WebView.
 - **Reports to shell:** `report_hit_rect` (click-through area), `report_first_paint`, `report_event_rendered`. Visualizer: `set_visualizer({ active })`, frames on `audio://meter/v1`.
 - Album art via `iceart://<id>`; accent/glow from `art.accent`.
 
@@ -57,3 +63,6 @@ any time (D-15). Heavy work (image decode, colour extraction, device sorting) ha
 - 2026-11-23 Claude: initial recap.
 - 2026-11-23 Claude: `NotchDeviceRowModel.pickerLabel` is `'More…' | null`; the "Choose devices…" button is gone (no favourites = current device + toggle partner only).
 - 2026-11-23 Claude: theme blocks in `base.css` use `[data-theme='…']` (any element) so Settings can preview themes; Settings moved to its own doc.
+- 2026-11-24 Claude: expanded relayout with a side rail (pin, mic, services, settings), draggable volume bar, `--ice-radius-md`; canvas 440×210 and a
+  smaller `--ice-drop-shadow` so the shadow isn't clipped; Instant no longer requests idle suspend.
+- 2026-11-24 Claude: "More…" and the in-notch picker removed (`NotchDeviceRowModel` is just `chips`); visualizer `BarShaper` + `clip-path` bars.

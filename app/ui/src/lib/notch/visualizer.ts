@@ -13,8 +13,16 @@ const IS_DEV = Boolean(import.meta.env && import.meta.env.DEV);
 
 const PERCEPTUAL_GAMMA = 0.42;
 const STEREO_CENTER_PEAK_BLEND = 0.35;
-const CONTOUR_BASE = 0.82;
-const CONTOUR_ARCH = 0.18;
+// A visible hill (centre taller than the edges) instead of a flat block of equal bars.
+const CONTOUR_BASE = 0.62;
+const CONTOUR_ARCH = 0.38;
+
+// `BarShaper` dynamics, per meter frame (~21 frames/s after the engine's change filter), not per display frame.
+const SHAPER_MEAN_ALPHA = 0.08;
+const SHAPER_CEIL_DECAY = 0.97;
+const SHAPER_FLOOR_RATIO = 0.6;
+const SHAPER_MIN_SPAN = 0.25;
+const SHAPER_RAW_MIX = 0.25;
 
 // Multipliers applied to config SPRING_PRESETS for audio meter dynamics (fast attack, slow decay).
 const ATTACK_STIFFNESS_MULT = 4.5;
@@ -92,6 +100,57 @@ export function mapFrameToBars(
   return out;
 }
 
+/**
+ * Turns per-frame bar targets into lively bars. The meter only gives L/R peaks, so without this every bar moves
+ * together and loud (compressed) music pins them all at the top:
+ * - **ripple:** the centre bar shows the newest frame, each bar further out one frame older, so motion travels outward;
+ * - **auto-gain:** levels are expanded around a slow running mean and ceiling, so transients move the bars at any loudness.
+ * Silence passes straight through and resets the history.
+ */
+export class BarShaper {
+  private history: number[][] = [];
+  private mean = 0;
+  private ceil = 0;
+  private readonly count: number;
+
+  constructor(count = DEFAULT_BAR_COUNT) {
+    this.count = Math.max(MIN_BAR_COUNT, Math.min(MAX_BAR_COUNT, Math.round(count)));
+  }
+
+  reset(): void {
+    this.history = [];
+    this.mean = 0;
+    this.ceil = 0;
+  }
+
+  shape(mapped: ReadonlyArray<number>): number[] {
+    const out = new Array<number>(this.count).fill(0);
+    if (mapped.every((v) => v <= 0)) {
+      this.history = [];
+      return out;
+    }
+    const depth = Math.ceil(this.count / 2);
+    this.history.unshift(Array.from({ length: this.count }, (_, i) => clamp01(mapped[i] ?? 0)));
+    if (this.history.length > depth) this.history.length = depth;
+
+    const frameMean = mapped.reduce((sum, v) => sum + clamp01(v), 0) / mapped.length;
+    this.mean = this.mean === 0 ? frameMean : this.mean + (frameMean - this.mean) * SHAPER_MEAN_ALPHA;
+    this.ceil = Math.max(frameMean, this.ceil * SHAPER_CEIL_DECAY);
+    const floor = this.mean * SHAPER_FLOOR_RATIO;
+    const span = Math.max(SHAPER_MIN_SPAN, this.ceil - floor);
+
+    const center = (this.count - 1) / 2;
+    for (let i = 0; i < this.count; i += 1) {
+      const age = Math.min(this.history.length - 1, Math.floor(Math.abs(i - center)));
+      const level = this.history[age][i];
+      if (level <= 0) continue;
+      const expanded = clamp01((level - floor) / span);
+      out[i] = clamp01(SHAPER_RAW_MIX * level + (1 - SHAPER_RAW_MIX) * expanded);
+    }
+    return out;
+  }
+}
+
 export function deriveVisualizerSpringParams(
   preset: SpringPresetId,
   phase: 'attack' | 'decay',
@@ -139,11 +198,18 @@ export class VisualizerBank {
     }
   }
 
+  get barCount(): number {
+    return this.springs.length;
+  }
+
   setFrame(frame: MeterFrame | null | undefined): boolean {
-    const targets = mapFrameToBars(frame, this.springs.length);
+    return this.setTargets(mapFrameToBars(frame, this.springs.length));
+  }
+
+  setTargets(targets: ReadonlyArray<number>): boolean {
     for (let i = 0; i < this.springs.length; i += 1) {
       const spring = this.springs[i];
-      const nextTarget = targets[i];
+      const nextTarget = clamp01(targets[i] ?? 0);
       const changed =
         Math.abs(nextTarget - spring.target) >= BAR_SPRING_PRECISION ||
         (nextTarget === 0 && spring.target !== 0);
@@ -206,6 +272,7 @@ type LevelListener = (levels: number[], available: boolean) => void;
 
 class VisualizerController {
   private readonly bank = new VisualizerBank(DEFAULT_BAR_COUNT);
+  private readonly shaper = new BarShaper(DEFAULT_BAR_COUNT);
   private readonly levelsBuffer = new Array<number>(DEFAULT_BAR_COUNT).fill(0);
   private readonly listeners = new Set<LevelListener>();
   private activeCount = 0;
@@ -284,6 +351,7 @@ class VisualizerController {
       this.stopRaf();
       this.stopMock();
       this.bank.snapSilence();
+      this.shaper.reset();
       this.emitValues();
       void this.sendVisualizerHint(false);
       return;
@@ -380,7 +448,7 @@ class VisualizerController {
   }
 
   private pushFrame(frame: MeterFrame): void {
-    const moving = this.bank.setFrame(frame);
+    const moving = this.bank.setTargets(this.shaper.shape(mapFrameToBars(frame, this.bank.barCount)));
     this.emitValues();
     if (moving && this.isVisibleAndActive()) {
       this.ensureRaf();

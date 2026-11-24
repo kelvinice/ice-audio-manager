@@ -3,6 +3,7 @@ import test from 'node:test';
 import type { MeterFrame } from '../ipc/engine.ts';
 import { SPRING_PRESETS } from '../motion/spring.ts';
 import {
+  BarShaper,
   barScaleY,
   DEFAULT_BAR_COUNT,
   deriveVisualizerSpringParams,
@@ -145,6 +146,28 @@ test('visualizer springs are derived from config presets and remain frame-rate i
   for (let i = 0; i < 5; i += 1) {
     assert.ok(Math.abs(exact75.values()[i] - exact144.values()[i]) < 1e-8);
   }
+});
+
+test('BarShaper ripples outward from the centre and keeps loud music from pinning every bar', () => {
+  const shaper = new BarShaper(5);
+  const loud: MeterFrame = { peak: 0.92, channels: [0.9, 0.92] };
+  const quiet: MeterFrame = { peak: 0.3, channels: [0.3, 0.3] };
+
+  // Sustained loud, compressed music: the hill shape survives instead of a flat block at the top.
+  let bars: number[] = [];
+  for (let i = 0; i < 40; i += 1) bars = shaper.shape(mapFrameToBars(loud, 5));
+  assert.ok(bars[2] > bars[0] + 0.1, `centre should stand above the edges, got ${bars}`);
+  assert.ok(bars.some((v) => v < 0.9), `bars shouldn't all be pinned, got ${bars}`);
+
+  // A dip reaches the centre first; outer bars still show the older, louder frame.
+  const dip = shaper.shape(mapFrameToBars(quiet, 5));
+  assert.ok(dip[2] < dip[1], `centre reacts first: ${dip}`);
+  assert.ok(dip[0] > dip[2], `edges still show the louder frame: ${dip}`);
+
+  // Silence passes straight through and clears the ripple history.
+  assert.deepEqual(shaper.shape(mapFrameToBars({ peak: 0, channels: [] }, 5)), [0, 0, 0, 0, 0]);
+  const fresh = shaper.shape(mapFrameToBars(quiet, 5));
+  assert.ok(fresh.every((v) => v >= 0 && v <= 1));
 });
 
 test('reduce motion / off preset jumps immediately with zero animation frames', () => {

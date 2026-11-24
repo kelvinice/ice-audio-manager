@@ -4,182 +4,89 @@
 
   interface Props {
     services: MusicServiceItem[];
-    variant: 'empty' | 'compact';
-    activeDeviceName?: string;
-    spatialBadge?: string | null;
-    expanded?: boolean;
+    /** `launch`: labelled chips in the empty card. `rail`: icon-only buttons in the side rail. */
+    variant: 'launch' | 'rail';
     onOpenService: (service: MusicServiceId) => void;
-    onToggleExpand?: () => void;
   }
 
-  let {
-    services,
-    variant,
-    activeDeviceName = '',
-    spatialBadge = null,
-    expanded = false,
-    onOpenService,
-    onToggleExpand = () => {},
-  }: Props = $props();
+  let { services, variant, onOpenService }: Props = $props();
 </script>
 
-{#if variant === 'empty'}
-  <div class="empty-music-card">
-    <div class="empty-top">
-      <div class="empty-tile" aria-hidden="true">
-        <DeviceIcon kind="music" size={16} />
-      </div>
-      <div class="empty-meta">
-        <span class="empty-title">Nothing playing</span>
-        <span class="empty-sub">
-          {activeDeviceName || 'Ready'}
-          {#if spatialBadge}
-            <span class="spatial-inline">· {spatialBadge}</span>
-          {/if}
-        </span>
-      </div>
-      <button class="svc-chip pin-btn" class:primary={expanded} type="button" onclick={onToggleExpand}>
-        <DeviceIcon kind="pin" size={10} />
-        <span>{expanded ? 'Pinned' : 'Pin'}</span>
-      </button>
-    </div>
-
-    {#if services.length > 0}
-      <div class="empty-launch" role="group" aria-label="Music services">
-        <span class="launch-label">Play on</span>
-        <div class="launch-chips">
-          {#each services as svc (svc.id)}
-            <button
-              class="svc-chip launch-chip"
-              class:primary={svc.active}
-              type="button"
-              onclick={() => onOpenService(svc.id)}
-            >
-              <DeviceIcon kind={svc.id === 'spotify' ? 'spotify' : 'youtube-music'} size={11} />
-              <span>{svc.label}</span>
-            </button>
-          {/each}
-        </div>
-      </div>
-    {/if}
-  </div>
-{:else if services.length > 0}
-  <div class="compact-launch" role="group" aria-label="Music services">
+{#if services.length > 0}
+  <div class="services" class:rail={variant === 'rail'} role="group" aria-label="Music services">
     {#each services as svc (svc.id)}
       <button
-        class="svc-chip compact-chip"
-        class:primary={svc.active}
+        class="svc"
+        class:active={svc.active}
         type="button"
         title={`Open ${svc.label}`}
+        aria-label={`Open ${svc.label}`}
         onclick={() => onOpenService(svc.id)}
       >
-        <DeviceIcon kind={svc.id === 'spotify' ? 'spotify' : 'youtube-music'} size={11} />
-        <span>{svc.shortLabel}</span>
+        <DeviceIcon kind={svc.id === 'spotify' ? 'spotify' : 'youtube-music'} size={variant === 'rail' ? 14 : 12} />
+        {#if variant === 'launch'}
+          <span>{svc.label}</span>
+        {/if}
       </button>
     {/each}
   </div>
 {/if}
 
 <style>
-  .empty-music-card {
+  .services {
     display: flex;
-    flex-direction: column;
+    align-items: center;
     gap: 6px;
   }
 
-  .empty-top,
-  .empty-launch,
-  .launch-chips,
-  .compact-launch {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-  }
-
-  .empty-top {
-    gap: 8px;
-  }
-
-  .empty-launch {
-    justify-content: space-between;
-  }
-
-  .empty-tile {
-    width: 34px;
-    height: 34px;
-    border-radius: var(--ice-radius-sm);
-    background: var(--ice-control-bg);
-    border: 1px solid var(--ice-control-border);
-    color: var(--ice-accent-strong);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-  }
-
-  .empty-meta {
-    flex: 1;
-    min-width: 0;
-    display: flex;
+  .services.rail {
     flex-direction: column;
-    gap: 1px;
-    white-space: nowrap;
+    gap: 2px;
   }
 
-  .empty-title {
-    font-size: 13px;
-    font-weight: 600;
-    line-height: 1.2;
-    color: var(--ice-fg);
-  }
-
-  .empty-sub {
-    font-size: 10.5px;
-    font-weight: 500;
-    line-height: 1.2;
-    color: var(--ice-fg-muted);
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .spatial-inline {
-    color: var(--ice-accent-strong);
-  }
-
-  .launch-label {
-    font-size: 10px;
-    font-weight: 500;
-    color: var(--ice-fg-muted);
-    flex-shrink: 0;
-  }
-
-  .svc-chip {
+  .svc {
     appearance: none;
     display: inline-flex;
     align-items: center;
-    gap: 4px;
+    justify-content: center;
+    gap: 5px;
+    height: 24px;
+    padding: 0 10px 0 8px;
     border: 1px solid var(--ice-control-border);
+    border-radius: var(--ice-radius-pill);
     background: var(--ice-control-bg);
     color: var(--ice-fg);
-    border-radius: var(--ice-radius-pill);
-    padding: 3px 8px;
-    font-size: 10px;
-    font-weight: 500;
     font-family: inherit;
-    cursor: pointer;
+    font-size: 10.5px;
+    font-weight: 500;
     white-space: nowrap;
+    cursor: pointer;
+    transition: background-color 120ms ease, color 120ms ease;
   }
 
-  .svc-chip:hover {
+  .svc:hover {
     background: var(--ice-control-bg-hover);
   }
 
-  .compact-chip {
-    padding: 3px 7px;
+  .rail .svc {
+    width: 24px;
+    padding: 0;
+    border-color: transparent;
+    background: transparent;
     color: var(--ice-fg-muted);
   }
 
-  .svc-chip.primary {
+  .rail .svc:hover {
+    background: var(--ice-control-bg-hover);
+    color: var(--ice-fg);
+  }
+
+  .svc.active,
+  .rail .svc.active {
+    color: var(--ice-accent-strong);
+  }
+
+  .services:not(.rail) .svc.active {
     border-color: var(--ice-accent);
     background: var(--ice-control-bg-active);
     color: var(--ice-fg);

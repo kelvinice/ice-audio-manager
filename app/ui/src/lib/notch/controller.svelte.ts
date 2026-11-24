@@ -50,6 +50,10 @@ export class NotchController {
     (this.notchSnapshot?.systemReduceMotion ?? false) || (this.notchSnapshot?.preset ?? 'smooth') === 'off',
   );
   readonly isSuspended = $derived(this.notchSnapshot?.suspended ?? false);
+  /** Twin: `Placement::suspends_on_idle` in app/src-tauri/src/placement.rs. */
+  private get suspendsOnIdle(): boolean {
+    return this.engineState.settings?.performanceProfile === 'balanced';
+  }
   readonly isNotchVisible = $derived(!(this.notchSnapshot?.hiddenForBench ?? false) && !this.isSuspended);
   readonly activeView = $derived<ActivityView>(this.benchOverride ?? this.engineState.activity);
 
@@ -147,7 +151,8 @@ export class NotchController {
       this.engineState = { ...this.scheduler.state };
       if (outcome.dismissedToIdle) this.syncGeometry(false);
       if (outcome.shouldRequestSuspend && !nowSnap.hiddenForBench && !nowSnap.suspended) {
-        void invoke('request_idle_suspend');
+        // Instant keeps the WebView notch awake; only Balanced hands over to the native pill (shell checks too).
+        if (this.suspendsOnIdle) void invoke('request_idle_suspend');
         return;
       }
       this.scheduleNextTick();
@@ -217,10 +222,19 @@ export class NotchController {
 
   private applyEngineSnapshot(snapshot: EngineSnapshot): void {
     if (snapshot.revision < this.scheduler.state.revision) return;
+    const prevProfile = this.engineState.settings?.performanceProfile;
     this.scheduler.applySnapshot(snapshot, Date.now());
     this.engineState = { ...this.scheduler.state };
+    this.rearmLingerOnProfileChange(prevProfile);
     this.syncGeometry(true);
     this.scheduleNextTick();
+  }
+
+  /** A profile switch (e.g. Instant → Balanced) restarts the idle linger so the new policy applies without an event. */
+  private rearmLingerOnProfileChange(prevProfile: string | undefined): void {
+    const next = this.engineState.settings?.performanceProfile;
+    if (prevProfile === undefined || next === undefined || prevProfile === next) return;
+    this.scheduler.markInteraction(Date.now());
   }
 
   private async resnapshotEngine(): Promise<void> {
@@ -242,7 +256,12 @@ export class NotchController {
     }
     if (res.status === 'ignored_stale') return;
 
+    const prevProfile = this.engineState.settings?.performanceProfile;
     this.engineState = { ...this.scheduler.state };
+    if (prevProfile !== this.engineState.settings?.performanceProfile) {
+      this.rearmLingerOnProfileChange(prevProfile);
+      this.scheduleNextTick();
+    }
     if (res.wokeActivity || delta.event.type === 'devicesChanged' || delta.event.type === 'mediaChanged') {
       this.benchOverride = null;
       this.syncGeometry(false);
@@ -420,9 +439,11 @@ export class NotchController {
 
   toggleExpand = (): void => void invoke('toggle_expand');
   toggleMute = (): void => void invoke('toggle_mute');
-  adjustVolume = (delta: number): void => void invoke('adjust_volume', { delta });
+  setVolume = (percent: number): void => {
+    this.scheduler.markInteraction(Date.now());
+    void invoke('set_volume', { percent: Math.max(0, Math.min(100, Math.round(percent))) });
+  };
   switchDevice = (deviceId: string): void => void invoke('switch_to_device', { deviceId });
-  setNotchDevices = (deviceIds: string[]): void => void invoke('set_notch_devices', { deviceIds });
   toggleMicMute = (): void => void invoke('toggle_mic_mute');
   openSettings = (): void => void invoke('open_settings');
   openMusicService = (service: MusicServiceId): void => {

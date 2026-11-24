@@ -13,10 +13,9 @@ export interface NotchDeviceChip {
   disconnected: boolean;
 }
 
+/** The notch has no device picker: favourites and their order are set in Settings → Devices (owner, 2026-11-24). */
 export interface NotchDeviceRowModel {
   chips: NotchDeviceChip[];
-  /** `null` = no picker button: with no favourites the row is just the current device and its toggle partner. */
-  pickerLabel: 'More…' | null;
 }
 
 function sameId(a: string | null | undefined, b: string | null | undefined): boolean {
@@ -124,7 +123,7 @@ export function buildNotchDeviceRow(
     if (currentDefault && !chips.some((c) => sameId(c.id, currentDefault.id))) {
       chips.unshift(connectedChip(currentDefault, settings));
     }
-    return { chips: chips.slice(0, limit), pickerLabel: 'More…' };
+    return { chips: chips.slice(0, limit) };
   }
 
   const chips: NotchDeviceChip[] = [];
@@ -142,7 +141,7 @@ export function buildNotchDeviceRow(
           : pair.secondary;
     pushSavedEntry(chips, partner, playback, settings, disconnected);
   }
-  return { chips: chips.slice(0, limit), pickerLabel: null };
+  return { chips: chips.slice(0, limit) };
 }
 
 export function isDeviceFavourite(

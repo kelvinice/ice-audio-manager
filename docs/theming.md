@@ -29,8 +29,9 @@ All `--ice-*` variables are defined with their `Ice` defaults in CSS `:root`. An
 | `--ice-border` | Surface | `rgba(107, 197, 255, 0.22)` | No | Inner hairline border around pill and cards |
 | `--ice-rim` | Surface | `rgba(154, 214, 255, 0.45)` | Yes | 1 px specular rim highlight around the notch capsule |
 | `--ice-shadow` | Surface | `0 10px 28px rgba(0, 0, 0, 0.48), 0 2px 8px rgba(0, 0, 0, 0.32)` | No | Box shadow beneath Settings / card elements |
-| `--ice-drop-shadow` | Surface | `0 8px 18px rgba(0, 0, 0, 0.45)` | No | Composited `drop-shadow(...)` filter under the floating notch stage |
+| `--ice-drop-shadow` | Surface | `0 6px 16px rgba(0, 0, 0, 0.42)` | No | Composited `drop-shadow(...)` filter under the floating notch stage. Offset + blur must stay inside the canvas margin (≥ 24 px around the expanded pill, `geometry.ts`) or the window edge clips it |
 | `--ice-radius` | Surface | `22px` | No | Expanded card corner radius (compact pills compute capsule radii dynamically) |
+| `--ice-radius-md` | Surface | `12px` | No | Large tiles: expanded album art and the empty-state music tile |
 | `--ice-radius-sm` | Surface | `8px` | No | Small control, chip, and mini button corner radius |
 | `--ice-radius-pill` | Surface | `999px` | No | Full-capsule radius for tracks, status dots, and spatial/status badges |
 | `--ice-fg` | Typography | `#edf1f7` | Yes | Primary text, icons, and volume `%` readout |

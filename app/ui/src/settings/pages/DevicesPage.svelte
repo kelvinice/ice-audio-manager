@@ -42,7 +42,7 @@
 
 <Section
   title="Quick switch in the notch"
-  description={`The expanded notch shows these as one-click switches, in this order. The first ${MAX_VISIBLE_DEVICE_CHIPS} fit. Star a device below to add it.`}
+  description={`The expanded notch shows these as one-click switches, in this order. The first ${MAX_VISIBLE_DEVICE_CHIPS} fit; this list is the only place to change them. Star a device below to add it.`}
 >
   {#if favourites.length === 0}
     <div class="empty">
@@ -59,7 +59,7 @@
           <span class="name">
             {favLabel(fav)}
             {#if !device}<span class="muted">Not connected</span>
-            {:else if index >= MAX_VISIBLE_DEVICE_CHIPS}<span class="muted">Under “More…”</span>{/if}
+            {:else if index >= MAX_VISIBLE_DEVICE_CHIPS}<span class="muted">Not shown in the notch (move it up to show it)</span>{/if}
           </span>
           <span class="actions">
             <button type="button" class="icon-btn" aria-label={`Move ${favLabel(fav)} up`} disabled={index === 0} onclick={() => move(index, -1)}>

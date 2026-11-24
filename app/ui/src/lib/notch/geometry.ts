@@ -1,9 +1,17 @@
 import type { HitRect, NotchSnapshot, SpringPreset } from '../ipc/types.ts';
 import { DEFAULT_IDLE_MODE, type ActivityView, type IdleMode } from './scheduler.ts';
 
-export const CANVAS_W = 420;
-export const CANVAS_H = 190;
+// Twin: `NOTCH_CANVAS_W`/`NOTCH_CANVAS_H` in app/src-tauri/src/main.rs. The canvas keeps ≥ 24 px around the expanded
+// pill so `--ice-drop-shadow` is never clipped by the window edge.
+export const CANVAS_W = 440;
+export const CANVAS_H = 210;
 export const TOP_PAD = 6;
+
+/** Expanded card: media block + volume + devices beside a side rail (pin, mic, services, settings). */
+export const EXPANDED_W = 392;
+export const EXPANDED_H_MEDIA = 164;
+export const EXPANDED_H_EMPTY = 144;
+export const EXPANDED_R = 24;
 
 export interface PillBox {
   w: number;
@@ -27,7 +35,7 @@ export function targetGeometry(
 ): PillBox {
   const vol = view.kind === 'volume' ? view.percent : fallbackVolume;
   if (expandedNow) {
-    return { w: 384, h: 178, r: 22, vol };
+    return { w: EXPANDED_W, h: hasMedia ? EXPANDED_H_MEDIA : EXPANDED_H_EMPTY, r: EXPANDED_R, vol };
   }
   switch (view.kind) {
     case 'volume':

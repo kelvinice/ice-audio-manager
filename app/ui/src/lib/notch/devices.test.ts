@@ -58,7 +58,6 @@ test('buildNotchDeviceRow follows favourites order, uses playback alias name, an
   });
 
   const row = buildNotchDeviceRow(playback, settings);
-  assert.equal(row.pickerLabel, 'More…');
   assert.deepEqual(
     row.chips.map((c) => [c.id, c.label, c.isCurrent, c.disconnected]),
     [
@@ -129,14 +128,12 @@ test('no favourites falls back to current device + togglePairs[0] partner and no
   });
 
   const row = buildNotchDeviceRow(playback, settings);
-  assert.equal(row.pickerLabel, null);
   assert.deepEqual(
     row.chips.map((c) => c.id),
     ['arctis', 'realtek'],
   );
 
   const noPair = buildNotchDeviceRow(playback, baseSettings({ favouritesPlayback: [], togglePairs: [] }));
-  assert.equal(noPair.pickerLabel, null);
   assert.deepEqual(
     noPair.chips.map((c) => c.id),
     ['arctis'],
@@ -154,7 +151,6 @@ test('caps visible chips at 4 and preserves disconnected savedId order when togg
   const favs = playback.map((d) => saved(d.name, d.id, d.id));
   const row = buildNotchDeviceRow(playback, baseSettings({ favouritesPlayback: favs }));
   assert.equal(row.chips.length, 4);
-  assert.equal(row.pickerLabel, 'More…');
 
   const mixedFavs = [
     saved('Arctis', 'saved-arctis', 'live-arctis'),
