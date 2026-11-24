@@ -13,12 +13,12 @@ contract types, and `cargo test -p ice-core --all-features` exports them to `app
 |---|---|
 | `engine.rs` | The contract: `Engine` trait, `Command`, `EngineEvent`, `Envelope`, `EngineSnapshot`, `Notice`, `SettingsView`, `RoleSet`, `PerformanceProfile`, `SpatialMode`, `MediaAction` |
 | `engine/fake.rs` | `FakeEngine`: in-memory engine with the owner's devices, three fake Spotify tracks and stereo meter levels. Used by `--fake-engine`, UI work and tests |
-| `config.rs` | `config.toml` schema (v7: `appearance.nowPlaying` v5, `idle_linger_secs` v6, `[music_services]` + `show_notch_hotkey` v7), `Config`, `ConfigStore` (load/save/read), `Config::apply_setting` (every settings command), `Config::view` → `SettingsView` |
+| `config.rs` | `config.toml` schema (v8: `appearance.nowPlaying` v5, `idle_linger_secs` v6, `[music_services]` + `show_notch_hotkey` v7, `appearance.movingBackdrop` v8), `Config`, `ConfigStore` (load/save/read), `Config::apply_setting` (every settings command), `Config::view` → `SettingsView` |
 | `resolve.rs` | D-16 device identity: `DeviceRef`, `MatchMode`, `resolve`, `candidates`, `toggle`, `normalize_name` |
 | `device.rs` | `EndpointInfo`, `Flow` (render/capture), `Role`, `DeviceState`, `hardware_key_from_devnode` |
 | `event.rs` | `AudioEvent`: what COM callbacks push into a channel (device added/removed/state/default/property, volume) |
 | `hotkey.rs` | `Chord`, `Mods`, `ChordError`: parse and display chords like `Ctrl+Alt+F12` (no Windows calls) |
-| `appearance.rs` | `Appearance { theme, preset, idle_style }` with `ThemeKind`, `SpringPreset`, `IdleStyle` (shared by tray, WebView, native pill) |
+| `appearance.rs` | `Appearance { theme, preset, idle_style, now_playing, moving_backdrop }` with `ThemeKind` (`Ice` default, `IceLight`, `Midnight`, `Fluent`, `Minimal`), `SpringPreset` (`Bouncy` default), `IdleStyle`, `NowPlayingPill` (shared by tray, WebView, native pill) |
 | `media.rs` | `NowPlaying`, `ArtInfo`, `PlaybackStatus`, `MusicServiceId` (Spotify, YouTube Music), `Rgb`, dominant colour, `readable_accent` (WCAG AA ≥ 4.5:1 on `ICE_SURFACE`), `art_id`/`content_id` |
 | `meter.rs` | `MeterFrame { peak, channels }`, `channel()` → (`MeterSink`, `MeterSubscription`), `METER_INTERVAL` = 33 ms |
 
@@ -28,7 +28,7 @@ contract types, and `cargo test -p ice-core --all-features` exports them to `app
 - **`Command::is_setting()`:** true for the commands that edit `config.toml` (exhaustive match, so a new variant must be classified). The Settings window may only send these.
 - **`Command`:** actions (`SwitchTo`, `SwitchBinding`, `TogglePair`, `CycleFavourites`, `SetVolume`, `StepVolume`, `ToggleMute`,
   `ToggleMicMute`, `Media`, `SetSpatial`, `ResolveChoice`, `Refresh`) and settings (`SetTogglePair`/`Remove…`, `SetBinding`/`Remove…`,
-  `SetFavourites`, `SetDevicePrefs`, `SetTheme`, `SetPreset`, `SetIdleStyle`, `SetPerformanceProfile`, `SetPinnedMonitor`,
+  `SetFavourites`, `SetDevicePrefs`, `SetTheme`, `SetPreset`, `SetIdleStyle`, `SetNowPlayingPill`, `SetMovingBackdrop`, `SetPerformanceProfile`, `SetPinnedMonitor`,
   `SetKnobGestures`, `SetShowDisconnected`, `SetDefaultRoles`). Settings results: `SettingsChanged` or `Notice::SettingRejected`.
 - **`EngineEvent`:** `DevicesChanged`, `VolumeChanged`, `MicMuteChanged`, `MicVolumeChanged`, `MediaChanged`, `Switched`
   (`relinked`, `spatial_applied`), `DeviceArrived`, `DeviceLeft`, `Notice`, `NoticesChanged`, `SettingsChanged`.
@@ -59,7 +59,7 @@ contract types, and `cargo test -p ice-core --all-features` exports them to `app
 
 ## Tests
 Inline `#[cfg(test)]` in each file. `resolve.rs` is built from the owner's real endpoints (incl. new-USB-port case, QA B3/B4).
-`config.rs` holds the migration fixtures (v2 → v7). Run: `cargo test -p ice-core --all-features`.
+`config.rs` holds the migration fixtures (v2 → v8). Run: `cargo test -p ice-core --all-features`.
 
 ## Change log
 - 2026-11-23 Claude: initial recap.
@@ -67,3 +67,4 @@ Inline `#[cfg(test)]` in each file. `resolve.rs` is built from the owner's real 
 - 2026-11-24 Claude: schema v5, `Appearance.now_playing` (`NowPlayingPill`: `brief` default, `while_playing`, `off`) + `Command::SetNowPlayingPill`.
 - 2026-11-24 Claude: schema v6, `idle_linger_secs` (`IDLE_LINGER_SECS` 5–600, default 15) + `Command::SetIdleLinger`; `SettingsView.idle_linger_secs`.
 - 2026-11-24 Claude: schema v7, `[music_services]` (`media::MusicServices`, `Command::SetMusicService`) and `show_notch_hotkey` (`Command::SetShowNotchHotkey`, `EngineEvent::ShowNotch`).
+- 2026-11-24 Gemini: schema v8 (`Appearance.moving_backdrop` default `true`, `Command::SetMovingBackdrop`), `ThemeKind::IceLight`, and `SpringPreset::Bouncy` default.

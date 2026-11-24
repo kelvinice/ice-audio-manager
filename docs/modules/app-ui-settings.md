@@ -30,7 +30,7 @@ created when opened and destroyed when closed (shell: `app/src-tauri/src/setting
 | Devices | Notch order (up/down/remove); per device: star, alias, spatial, hide; hidden list → Show | `SetFavourites`; `SetDevicePrefs` |
 | Shortcuts | Toggle pairs, device shortcuts (devices, chord, roles, remove); knob gestures | `SetTogglePair`/`RemoveTogglePair`; `SetBinding`/`RemoveBinding`; `SetKnobGestures` |
 | Notch | Idle style; pinned display | `SetIdleStyle`; `SetPinnedMonitor` (display path) |
-| Appearance | Theme; animation preset | `SetTheme`; `SetPreset` |
+| Appearance | Theme (`Ice`, `Ice Light`, `Midnight`, `Fluent`, `Minimal`); animation preset (`Bouncy` first with `Default` badge); Background → `Moving background` toggle | `SetTheme`; `SetPreset`; `SetMovingBackdrop` |
 | About | Version, trust promises | `plugin:app|version` |
 
 ## How it works
@@ -59,3 +59,4 @@ created when opened and destroyed when closed (shell: `app/src-tauri/src/setting
 ## Change log
 - 2026-11-23 Claude: Settings window built (General, Devices, Shortcuts, Notch, Appearance, About).
 - 2026-11-24 Claude: Activities page (Spotify / YouTube Music switches, D-22); Shortcuts → Notch ("show notch" hotkey, D-19); General → "Sleep the notch after" (Balanced); Notch → "Now playing pill".
+- 2026-11-24 Gemini: `AppearancePage` adds `Ice Light` theme card, puts `Bouncy` leftmost with `Default` badge, and adds `Background → Moving background` (`SetMovingBackdrop`).

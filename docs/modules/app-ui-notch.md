@@ -10,7 +10,7 @@ any time (D-15). Heavy work (image decode, colour extraction, device sorting) ha
 ## Entry points
 | File | What it does |
 |---|---|
-| `index.html` → `src/notch/main.ts` → `notch/NotchApp.svelte` | The notch: a 440×210 transparent canvas holding one clipped pill (≥ 24 px margin so the drop shadow isn't clipped) |
+| `index.html` → `src/notch/main.ts` → `notch/NotchApp.svelte` | The notch: a 440×210 transparent canvas holding a sibling `.pill-shadow` + one `.pill-clip` container (≥ 24 px margin so the drop shadow isn't clipped) |
 | `settings.html` → `src/settings/main.ts` | Settings window: see [app-ui-settings](app-ui-settings.md) |
 | `src/themes/base.css` | All `--ice-*` tokens (documented in [theming.md](../theming.md): every new token must be added there) |
 
@@ -24,11 +24,13 @@ any time (D-15). Heavy work (image decode, colour extraction, device sorting) ha
 | `notch/scheduler.ts` | `NotchActivityScheduler` + `ActivityView` (`idle`, `volume`, `switch`, `plug`, `mic`, `track`): priorities, durations, merge rules (plug+switch within 1.5 s), snapshot sync and monotonic envelope handling (`NeedsResnapshot` on gap); `nowPlaying: off` creates no track pop-up. **621 lines, over the limit (split planned)** |
 | `notch/nowPlaying.ts` | `resolveDisplayedView`: with `appearance.nowPlaying = while_playing` the idle notch shows the track pill while media plays (state-derived, no timer; reuses `lastTrackSeq` so it doesn't re-animate) |
 | `notch/controller.svelte.ts` | `NotchController` (`createNotchController`): listens to `engine://*` and `notch://delta/v1`, owns springs, hover intent, wheel/aux-click, timers, calls Tauri commands |
-| `notch/geometry.ts` | Canvas/pill sizes (twin of the native pill constants), `targetGeometry`, `computeHitRect`, `computeClipPath`, `resolveRimStroke` |
+| `notch/geometry.ts` | Canvas/pill sizes (twin of the native pill constants, incl. `292×46` track pill), `effectivePreset` (`'bouncy'` fallback), `targetGeometry`, `computeHitRect`, `computeClipPath`, `resolveRimStroke` |
 | `notch/devices.ts` | `buildNotchDeviceRow`: favourites in order, current default first, max 4 chips (D-18); `toggleFavouriteDeviceIds` |
-| `notch/backdrop.ts` | D-23 backdrop maths (WCAG luminance/contrast, gradient stops, scrim) and `resolveMusicServices` (D-22 quick-launch items) |
-| `notch/visualizer.ts` | `VisualizerBank` (14 springs: fast attack, quick fall), `subscribeVisualizer` (one shared bank; loop stops when settled), `withRestShape` (wide waveform's low resting line), `mapFrameToBars` (legacy mapping, tests). Bars render with `clip-path` (not `scaleY`) so caps stay round |
-| `notch/beat.ts` | `BeatShaper`: meter frame → 14 bar targets from beats, not raw loudness (per-channel dB body level + recent peak; a new pattern per beat; centre swings, edges flick; silence = rest). `pickBars` for the 5-bar variants. The meter has no spectrum, so this is beat feel, not pitch |
+| `notch/backdrop.ts` | D-23/D-25 backdrop maths: `resolveAmbientMotionState`, `adaptAccentForSurface` (for `ice_light`), `computeArtBackdrop` (5-stop hue-shifted wash + `washBaseCss` + luminance-clamped scrim) and `resolveMusicServices` (D-22 quick-launch items) |
+| `notch/visualizer.ts` | `VisualizerBank` (14 springs: fast attack, quick fall), `subscribeVisualizer` / `subscribeTempo` (one shared bank + tempo listener; loop stops when settled), `withRestShape` (wide waveform's low resting line), `mapFrameToBars` (legacy mapping, tests). Bars render with `clip-path` (not `scaleY`) so caps stay round |
+| `notch/beat.ts` | `BeatShaper`: meter frame → 14 bar targets from beats, not raw loudness (per-channel dB body level + recent peak; a new pattern per beat; centre swings, edges flick; silence = rest) plus smoothed `tempoRate` (~0.58–1.65×). `pickBars` for the 5-bar variants |
+| `notch/activities/NotchBackdrop.svelte` | V2 default 9-orb orbital lava-lamp `.art-wash` (`wash-base` + `screen` blending on dark themes, `normal` on `ice_light`, scaled smoothly by `subscribeTempo` and paused via `animation-play-state`) + opt-in V1 blurred cover & `.art-scrim` gated by `--ice-art-backdrop` |
+| `notch/activities/AlbumArtTile.svelte` | Album art / placeholder tile with crossfade and optional `radius` prop (defaults to `--ice-radius-md` / `--ice-radius-sm`; track pill passes `size={34}` `radius="16px"`) |
 
 ## `src/notch/activities/` (one component per job)
 `IdlePill`, `VolumeActivity`, `SwitchActivity`, `PlugActivity`, `MicActivity`, `TrackActivity`, `ExpandedNotch` (container), `ExpandedMediaCard`,
@@ -45,8 +47,10 @@ updating the constants.
   re-snapshot on a gap. A recreated WebView never replays expired activities (`scheduler.syncSnapshot`).
 - **Two state streams:** the engine's (`EngineSnapshot`/`Envelope`: devices, volume, media, settings) and the shell's `NotchSnapshot` (idle style,
   expanded, suspended, monitors, system reduce-motion). The controller merges them; the scheduler decides what activity shows.
-- **Animation:** springs only, animating `transform`/`opacity`/`filter`/`clip-path`; the pill morph drives an SVG `<rect rx ry>` plus `clip-path: inset(… round …)`,
-  never `width/height`. No loop while hidden or settled. Reduce motion (Windows flag via the shell) or preset `off` = instant, no fade.
+- **Animation & backdrop:** springs only, animating `transform`/`opacity`/`filter`/`clip-path`; the pill morph drives an SVG `<rect rx ry>` plus `clip-path: inset(… round …)`,
+  never `width/height`. Drop shadow (`--ice-drop-shadow`) sits on a sibling `.pill-shadow` outside `.pill-clip` so ambient backdrop layers do not get re-filtered each frame.
+  `NotchBackdrop` runs D-25 9-orb lava-lamp `transform` keyframes (`--ice-ambient-period`: `9s`, `13s` on `midnight`; disabled on `minimal`) only while visible and playing on the expanded card or music pill, scaled by beat cadence via `subscribeTempo` and frozen on pause (`ambient-paused`).
+  No loop while hidden or settled. Reduce motion (Windows flag via the shell) or preset `off` = instant, no fade. Includes five built-in `--ice-*` themes (`ice`, `ice_light`, `midnight`, `fluent`, `minimal`).
 - **After idle linger** (`settings.idleLingerSecs`, config `idle_linger_secs`, default 15 s) the UI calls `request_idle_suspend` (Balanced only; Instant stays awake, so the notch never drops back to the static native pill); the shell suspends or releases the WebView.
 - **Reports to shell:** `report_hit_rect` (click-through area), `report_first_paint`, `report_event_rendered`. Visualizer: `set_visualizer({ active })`, frames on `audio://meter/v1`.
 - Album art via `iceart://<id>`; accent/glow from `art.accent`.
@@ -71,3 +75,4 @@ updating the constants.
 - 2026-11-24 Claude: "Now playing pill" setting (`nowPlaying.ts`, Settings → Notch, tray); Balanced only idle-suspends when the shown view is idle.
 - 2026-11-24 Claude: `TrackActivity` has no transport buttons; a waveform scrubber (`VisualizerBars variant="wide"` + `spreadLevels`, accent up to the played position). Idle linger read from settings.
 - 2026-11-24 Claude: `beat.ts` `BeatShaper` replaces `BarShaper` (beat-driven, 14 independent bars, quick fall, lower rest); `spreadLevels` → `withRestShape`.
+- 2026-11-24 Gemini: D-25 9-orb lava-lamp `.art-wash` (`NotchBackdrop.svelte`, `backdrop.ts`, `--ice-ambient-period: 9s`/`13s`), sibling `.pill-shadow` in `NotchApp.svelte`, `subscribeTempo` / `BeatShaper.tempoRate`, `ice_light` theme (`adaptAccentForSurface`), `292×46` music pill (`34×34` `16px` art), and `'bouncy'` default fallback.

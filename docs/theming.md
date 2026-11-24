@@ -46,8 +46,8 @@ All `--ice-*` variables are defined with their `Ice` defaults in CSS `:root`. An
 | `--ice-active-glow` | Dynamic Runtime | `var(--ice-accent-glow)` *(album-art glow while media is active)* | No | Dynamic radial ambient glow tinted from the active track's album art |
 | `--ice-art-backdrop` | Art Backdrop (D-23) | `0` *(set e.g. `0.85` to enable blurred art image)* | No | Opacity of enlarged blurred album-art backdrop (`V1` opt-in; `V2` gradient wash stays default) |
 | `--ice-art-blur` | Art Backdrop (D-23) | `28px` | No | Gaussian blur radius applied to `.art-blur-img` when `--ice-art-backdrop > 0` |
-| `--ice-art-wash` | Art Backdrop (D-23) | `1` | No | Opacity multiplier for the 2-stop art-derived radial gradient wash (`V2` default) |
-| `--ice-ambient-period` | Art Backdrop (D-25) | `12s` | No | Primary cycle period for the expanded card's ambient wash drift (secondary/tertiary layers run at coprime `1.43×`/`1.79×` periods); `0s` disables motion (`minimal`) |
+| `--ice-art-wash` | Art Backdrop (D-23) | `1` | No | Opacity multiplier for the 5-stop / 9-orb art-derived radial gradient wash (`V2` default) |
+| `--ice-ambient-period` | Art Backdrop (D-25) | `9s` | No | Primary cycle period for the 9-orb lava-lamp ambient wash (individual orbs run at coprime multipliers `0.48×`–`1.54×`, tempo-scaled via `subscribeTempo`); `0s` disables motion (`minimal`) |
 | `--ice-scrim` | Art Backdrop (D-23) | `linear-gradient(160deg, var(--ice-active-scrim-top, rgba(12, 15, 20, 0.56)) 0%, var(--ice-active-scrim-bottom, rgba(10, 13, 18, 0.84)) 100%)` | No | Luminance-clamped protective gradient scrim over V1 blurred covers (`--ice-art-backdrop > 0`), holding `--ice-fg` / `--ice-fg-muted` contrast at `≥ 4.5:1` WCAG AA without dimming V2 gradient washes |
 | `--ice-control-bg` | Translucent Controls (D-23) | `rgba(255, 255, 255, 0.09)` | No | Low-alpha button and chip fill over expanded-card backdrops (`var(--ice-surface)` in `minimal`) |
 | `--ice-control-bg-hover` | Translucent Controls (D-23) | `rgba(255, 255, 255, 0.15)` | No | Hover fill for translucent controls |
@@ -128,10 +128,10 @@ Five built-in themes ship out of the box (selected via config / Settings `Appear
 
 | Theme ID | Character | Override Deltas vs. `Ice` |
 | --- | --- | --- |
-| **`ice`** *(default)* | Translucent obsidian-ice pill with 2-stop art wash (`V2`) and translucent controls (`V3`) | Base defaults in §2 (`--ice-art-backdrop: 0`, `--ice-art-wash: 1`, `--ice-ambient-period: 12s`) |
-| **`ice_light`** | Frosted snow-glass light pill using the portfolio light palette, soft pastel art wash, and deep ocean accents | `--ice-bg: rgba(246, 247, 249, 0.94)` · `--ice-surface: rgba(255, 255, 255, 0.96)` · `--ice-fg: #11161f` · `--ice-fg-muted: #4b5668` · `--ice-accent: #026aa2` · `--ice-art-wash: 0.85` · `--ice-ambient-period: 12s` · `--ice-play-bg: #11161f` · `--ice-play-fg: #f6f7f9` |
-| **`midnight`** | Near-pure-black OLED look with darker scrim preserving deep black backdrop | `--ice-bg: rgba(0, 0, 0, 0.96)` · `--ice-surface: rgba(12, 12, 14, 0.96)` · `--ice-rim: rgba(255, 255, 255, 0.24)` · `--ice-art-wash: 0.65` · `--ice-ambient-period: 16s` · `--ice-scrim: linear-gradient(160deg, rgba(0, 0, 0, 0.76) 0%, rgba(0, 0, 0, 0.94) 100%)` |
-| **`fluent`** | Neutral Windows 11 Dark-grey chrome with softer tonal wash (`V2`) | `--ice-bg: rgba(24, 24, 27, 0.93)` · `--ice-surface: rgba(36, 36, 40, 0.94)` · `--ice-rim: rgba(107, 197, 255, 0.35)` · `--ice-art-wash: 0.85` · `--ice-ambient-period: 12s` · tonal zinc `--ice-scrim` |
+| **`ice`** *(default)* | Translucent obsidian-ice pill with 9-orb art wash (`V2`) and translucent controls (`V3`) | Base defaults in §2 (`--ice-art-backdrop: 0`, `--ice-art-wash: 1`, `--ice-ambient-period: 9s`) |
+| **`ice_light`** | Frosted snow-glass light pill using the portfolio light palette, soft pastel art wash, and deep ocean accents | `--ice-bg: rgba(246, 247, 249, 0.94)` · `--ice-surface: rgba(255, 255, 255, 0.96)` · `--ice-fg: #11161f` · `--ice-fg-muted: #4b5668` · `--ice-accent: #026aa2` · `--ice-art-wash: 0.85` · `--ice-ambient-period: 9s` · `--ice-play-bg: #11161f` · `--ice-play-fg: #f6f7f9` |
+| **`midnight`** | Near-pure-black OLED look with darker scrim preserving deep black backdrop | `--ice-bg: rgba(0, 0, 0, 0.96)` · `--ice-surface: rgba(12, 12, 14, 0.96)` · `--ice-rim: rgba(255, 255, 255, 0.24)` · `--ice-art-wash: 0.65` · `--ice-ambient-period: 13s` · `--ice-scrim: linear-gradient(160deg, rgba(0, 0, 0, 0.76) 0%, rgba(0, 0, 0, 0.94) 100%)` |
+| **`fluent`** | Neutral Windows 11 Dark-grey chrome with softer tonal wash (`V2`) | `--ice-bg: rgba(24, 24, 27, 0.93)` · `--ice-surface: rgba(36, 36, 40, 0.94)` · `--ice-rim: rgba(107, 197, 255, 0.35)` · `--ice-art-wash: 0.85` · `--ice-ambient-period: 9s` · tonal zinc `--ice-scrim` |
 | **`minimal`** | Solid opaque slate with zero art backdrop, zero glow, and bordered solid controls | `--ice-bg: rgb(18, 22, 29)` · `--ice-surface: rgb(26, 32, 42)` · `--ice-rim: transparent` · `--ice-art-backdrop: 0` · `--ice-art-wash: 0` · `--ice-ambient-period: 0s` · `--ice-scrim: none` · `--ice-control-bg: var(--ice-surface)` · `--ice-control-border: var(--ice-border)` |
 
 ---
@@ -199,5 +199,5 @@ Save this file as `%APPDATA%\IceAudioManager\themes\arctic-mint.css`:
 ## 8. Contributor Checklist (`code-practices.md` §5)
 
 - Svelte components must **only reference `--ice-*` custom properties** — never hardcode literal hex/rgba colours or corner radii in `.svelte` `<style>` blocks.
-- Keep native pill constants in `crates/ice-win/src/native_dot.rs` (`NativePillTheme::ice()`, `midnight()`, `fluent()`, `minimal()`) synchronized with `base.css`.
+- Keep native pill constants in `crates/ice-win/src/native_dot.rs` (`NativePillTheme::ice()`, `ice_light()`, `midnight()`, `fluent()`, `minimal()`) synchronized with `base.css`.
 - Whenever a new `--ice-*` variable is added to `base.css`, document its name, default, category, and native-pill sync behaviour in this file in the same PR.

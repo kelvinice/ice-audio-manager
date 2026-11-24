@@ -12,7 +12,7 @@ state to the UI, and exposes a small set of Tauri commands. Thin by rule: valida
 |---|---|
 | `main.rs` | **1386 lines (over limit, split planned).** `SharedRuntime` (all shared state), `#[tauri::command]` handlers, `create_notch_window`, idle suspend/resume, cursor poll, **`--bench` benchmark harness**, `run()`/`main()` |
 | `engine_bridge.rs` | `EngineSlot` (engine or "starting" error), `start_audio` (config at `%APPDATA%\IceAudioManager\config.toml`), `retry_start` (1 s → 30 s backoff), `follow` (subscribe → snapshot → deltas, re-snapshot on gap), `project` (engine snapshot → `NotchSnapshot`), `TrackKey`, `watch` |
-| `settings.rs` | Settings window (920×640, min 720×480, transparent over Mica, title bar follows light/dark via `WindowEvent::ThemeChanged`) and its commands: `apply_setting` (only `Command::is_setting`), `get_launch_at_sign_in`, `set_launch_at_sign_in` |
+| `settings.rs` | Settings window (1020×680, min 720×480, transparent over Mica, title bar follows light/dark via `WindowEvent::ThemeChanged`) and its commands: `apply_setting` (only `Command::is_setting`), `get_launch_at_sign_in`, `set_launch_at_sign_in` |
 | `startup.rs` | Launch at sign-in, shared by the tray and Settings; reads the registry each time (no cached copy) |
 | `ipc.rs` | `NotchSnapshot`, `NotchDelta`, `ActivityKind`, `MonitorSummary` (index, id, `display_path`, `name`, position, size, scale, Hz), `HitRect` (TS bindings generated into `app/ui/src/lib/ipc/types.ts`) and the `open_music_service` command (notch window only; runs `ice_win::music_service::open` on a blocking task) |
 | `show_notch.rs` | D-19: `show` (hotkey toggles the pinned notch, pill click opens it; Lite → tray quick-switch menu; nothing over a game), `wire_native_pill` |
@@ -63,3 +63,4 @@ Unit tests in `art.rs`, `engine_bridge.rs`, `ipc.rs`, `meter.rs`, `placement.rs`
 - 2026-11-24 Claude: removed `set_notch_devices` (the notch has no device picker; Settings uses `apply_setting`).
 - 2026-11-24 Claude: `session.rs` clears the notch pin on session lock or sleep (`ice_win::session_watch`).
 - 2026-11-24 Claude: `show_notch.rs` (D-19): the "show notch" hotkey (`EngineEvent::ShowNotch`) and the native pill click/middle click; `tray::open_quick_menu` is shared with the tray's left click.
+- 2026-11-24 Gemini: `settings.rs` default Settings window size increased from `920×640` to `1020×680`.

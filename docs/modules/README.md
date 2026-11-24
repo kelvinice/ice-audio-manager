@@ -51,7 +51,7 @@ app/ui (Svelte, presentation)  ◄─ Tauri events/commands ─►  app/src-taur
 ```
 
 Rules that matter for every module: only `ice-win` has `unsafe`; `ice-core` never depends on Windows or Tauri; the core,
-tray, hotkeys and native pill must work with **no WebView alive** (D-15). Full rules: [code-practices](../code-practices.md).
+tray, hotkeys and native pill must work with **no WebView alive** (D-15). Quick guide: [AGENT.md](../../AGENT.md) · Full rules: [code-practices](../code-practices.md).
 
 ## Commands
 

@@ -18,7 +18,7 @@ profile **with no WebView alive** (D-15 / D-15.1). It is the answer to "the WebV
   `show_volume`, `show_mic_mute`, `show_state`, `set_standby_only`, `set_activity_timeout`, `set_input_handler`, `set_hover_open(delay)`, `is_visible`.
 - State sync: `apply_snapshot` / `apply_envelope` → `EnvelopeOutcome::{Updated, IgnoredStale, NeedsResnapshot}` (same revision protocol as the UI),
   or `subscribe_engine(engine)` → `NativePillSubscription` (own thread; `stop`/`join`).
-- Theme: `NativePillTheme` built from `BuiltinTheme` + `from_css_overrides` so it follows the same `--ice-*` tokens as the WebView.
+- Theme: `NativePillTheme` built from `BuiltinTheme` (`Ice`, `IceLight`, `Midnight`, `Fluent`, `Minimal`) + `from_css_overrides` so it follows the same `--ice-*` tokens as the WebView (`ice_light()` mirrors the snow palette).
 
 ## How it works
 - Draws premultiplied BGRA into a DIB and presents with `UpdateLayeredWindow`; sizes `116×28` (r=14) and `36×18` (r=9) match the WebView pill tokens.
@@ -38,3 +38,4 @@ Unit tests in the file cover state and envelope handling and frame rasterisation
 ## Change log
 - 2026-11-23 Claude: initial recap.
 - 2026-11-23 Claude: window class now has an arrow cursor (`hCursor`); the hit-testable pill had none and could show a stale busy cursor on hover.
+- 2026-11-24 Gemini: added `BuiltinTheme::IceLight` and `NativePillTheme::ice_light()` for `Ice Light` native pill parity.
