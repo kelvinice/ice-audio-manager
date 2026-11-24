@@ -13,13 +13,13 @@ contract types, and `cargo test -p ice-core --all-features` exports them to `app
 |---|---|
 | `engine.rs` | The contract: `Engine` trait, `Command`, `EngineEvent`, `Envelope`, `EngineSnapshot`, `Notice`, `SettingsView`, `RoleSet`, `PerformanceProfile`, `SpatialMode`, `MediaAction` |
 | `engine/fake.rs` | `FakeEngine`: in-memory engine with the owner's devices, three fake Spotify tracks and stereo meter levels. Used by `--fake-engine`, UI work and tests |
-| `config.rs` | `config.toml` schema (v10: `appearance.nowPlaying` v5, `idle_linger_secs` v6, `[music_services]` + `show_notch_hotkey` v7, `appearance.movingBackdrop` v8, `[lyrics]` + `cache_max_mb` v9, `visualizer_spectrum` v10), `Config`, `ConfigStore` (load/save/read), `Config::apply_setting` (every settings command), `Config::view` → `SettingsView` |
+| `config.rs` | `config.toml` schema (v11: `appearance.nowPlaying` v5, `idle_linger_secs` v6, `[music_services]` + `show_notch_hotkey` v7, `appearance.movingBackdrop` v8, `[lyrics]` + `cache_max_mb` v9, `visualizer_spectrum` v10, `appearance.notchStyle` v11), `Config`, `ConfigStore` (load/save/read), `Config::apply_setting` (every settings command), `Config::view` → `SettingsView` |
 | `lyrics.rs` | Pure synced lyrics contract (`LyricsConfig`, `LyricsDocument`, `LyricsState`, `LyricsStorageStats`, `LyricsProvider` trait), LRC/Enhanced-LRC/dual-subtitle `parse_lrc`, weighted word cadence estimator, and pure Kana → Modified Hepburn `kana_to_romaji` |
 | `resolve.rs` | D-16 device identity: `DeviceRef`, `MatchMode`, `resolve`, `candidates`, `toggle`, `normalize_name` |
 | `device.rs` | `EndpointInfo`, `Flow` (render/capture), `Role`, `DeviceState`, `hardware_key_from_devnode` |
 | `event.rs` | `AudioEvent`: what COM callbacks push into a channel (device added/removed/state/default/property, volume) |
 | `hotkey.rs` | `Chord`, `Mods`, `ChordError`: parse and display chords like `Ctrl+Alt+F12` (no Windows calls) |
-| `appearance.rs` | `Appearance { theme, preset, idle_style, now_playing, moving_backdrop }` with `ThemeKind` (`Ice` default, `IceLight`, `Midnight`, `Fluent`, `Minimal`), `SpringPreset` (`Bouncy` default), `IdleStyle`, `NowPlayingPill` (shared by tray, WebView, native pill) |
+| `appearance.rs` | `Appearance { theme, preset, idle_style, notch_style, now_playing, moving_backdrop }` with `ThemeKind` (`Ice` default, `IceLight`, `Midnight`, `Fluent`, `Minimal`), `SpringPreset` (`Bouncy` default), `IdleStyle`, `NotchStyle` (`Floating` default, `Nook`), `NowPlayingPill` (shared by tray, WebView, native pill) |
 | `media.rs` | `NowPlaying`, `ArtInfo`, `PlaybackStatus`, `MusicServiceId` (Spotify, YouTube Music), `Rgb`, dominant colour, `readable_accent` (WCAG AA ≥ 4.5:1 on `ICE_SURFACE`), `art_id`/`content_id` |
 | `meter.rs` | `MeterFrame { peak, channels, bands? }`, `SPECTRUM_BANDS = 14`, `channel()` → (`MeterSink`, `MeterSubscription`), `METER_INTERVAL` = 33 ms |
 | `spectrum.rs` | Pure 14-band log-spaced 4th-order IIR biquad `SpectrumAnalyzer` (`45 Hz – 14 kHz`, sample-rate-aware RBJ coefficients, `reset()`), zero external DSP crates |
@@ -30,7 +30,7 @@ contract types, and `cargo test -p ice-core --all-features` exports them to `app
 - **`Command::is_setting()`:** true for the commands that edit `config.toml` (exhaustive match, so a new variant must be classified). The Settings window may only send these.
 - **`Command`:** actions (`SwitchTo`, `SwitchBinding`, `TogglePair`, `CycleFavourites`, `SetVolume`, `StepVolume`, `ToggleMute`,
   `ToggleMicMute`, `Media` (`PlayPause`, `Play`, `Pause`, `Next`, `Previous`, `Seek { position_ms }`), `SetSpatial`, `ResolveChoice`, `Refresh`) and settings (`SetTogglePair`/`Remove…`, `SetBinding`/`Remove…`,
-  `SetFavourites`, `SetDevicePrefs`, `SetTheme`, `SetPreset`, `SetIdleStyle`, `SetNowPlayingPill`, `SetMovingBackdrop`, `SetPerformanceProfile`, `SetPinnedMonitor`,
+  `SetFavourites`, `SetDevicePrefs`, `SetTheme`, `SetPreset`, `SetIdleStyle`, `SetNotchStyle`, `SetNowPlayingPill`, `SetMovingBackdrop`, `SetPerformanceProfile`, `SetPinnedMonitor`,
   `SetKnobGestures`, `SetShowDisconnected`, `SetDefaultRoles`). Settings results: `SettingsChanged` or `Notice::SettingRejected`.
 - **`EngineEvent`:** `DevicesChanged`, `VolumeChanged`, `MicMuteChanged`, `MicVolumeChanged`, `MediaChanged`, `Switched`
   (`relinked`, `spatial_applied`), `DeviceArrived`, `DeviceLeft`, `Notice`, `NoticesChanged`, `SettingsChanged`.
@@ -75,3 +75,4 @@ Inline `#[cfg(test)]` in each file. `resolve.rs` is built from the owner's real 
 - 2026-11-24 Gemini: schema v9 (`[lyrics]` + `cache_max_mb` 5–500 MB), `lyrics.rs` (LRC/Enhanced-LRC parser, Romaji Hepburn table, `LyricsProvider` trait), `EngineEvent::LyricsChanged`, `SetLyrics*`, and `DisableAllNetworkFeatures`.
 - 2026-11-24 Claude: `LyricLine.romaji` (generated, separate from the source's paired `subtitle`, never cached); `segmented_kana_to_romaji` (は/へ particles as wa/e).
 - 2026-11-24 Gemini: D-26 schema v10 (`visualizer_spectrum`, default `true`, `Command::SetVisualizerSpectrum`), optional `MeterFrame.bands` participating in `differs`, and pure 4th-order 14-band `spectrum.rs` (`SpectrumAnalyzer`).
+- 2026-11-24 Gemini: schema v11 (`NotchStyle`: `Floating` default, `Nook`; `Appearance.notch_style`, `Command::SetNotchStyle`).

@@ -14,14 +14,14 @@ profile **with no WebView alive** (D-15 / D-15.1). It is the answer to "the WebV
 | `native_dot/input.rs` | Mouse input as plain window messages: click-first, pressed state paints in one frame; `PillInput::{Click, MiddleClick, HoverOpen}`, `set_input_handler` |
 
 ## Public surface
-- `NativeDotHandle::spawn(monitor)`, `show_idle`, `hide`, `set_idle_style(IdleStyle)`, `move_to_monitor`, `set_theme`, `pulse_activity(progress, accent)`,
+- `NativeDotHandle::spawn(monitor)`, `show_idle`, `hide`, `set_idle_style(IdleStyle)`, `set_notch_style(NotchStyle)`, `move_to_monitor`, `set_theme`, `pulse_activity(progress, accent)`,
   `show_volume`, `show_mic_mute`, `show_state`, `set_standby_only`, `set_activity_timeout`, `set_input_handler`, `set_hover_open(delay)`, `is_visible`.
 - State sync: `apply_snapshot` / `apply_envelope` → `EnvelopeOutcome::{Updated, IgnoredStale, NeedsResnapshot}` (same revision protocol as the UI),
   or `subscribe_engine(engine)` → `NativePillSubscription` (own thread; `stop`/`join`).
 - Theme: `NativePillTheme` built from `BuiltinTheme` (`Ice`, `IceLight`, `Midnight`, `Fluent`, `Minimal`) + `from_css_overrides` so it follows the same `--ice-*` tokens as the WebView (`ice_light()` mirrors the snow palette).
 
 ## How it works
-- Draws premultiplied BGRA into a DIB and presents with `UpdateLayeredWindow`; sizes `116×28` (r=14) and `36×18` (r=9) match the WebView pill tokens.
+- Draws premultiplied BGRA into a DIB and presents with `UpdateLayeredWindow`; sizes `116×28` (r=14) and `36×18` (r=9) match the WebView pill tokens in `Floating`, while `NotchStyle::Nook` (`frame_metrics`, `sd_nook_notch`) docks flush at `y = 0` with concave top ears (`6`/`8` px) and `+2 px` body height.
 - Event-driven: a timer exists only while an activity is showing (stop = activity timeout), no cursor poll (input arrives as messages).
 - The wheel is **deliberately not handled** until Windows' "scroll inactive windows" setting is tested both ways (D-19).
 - Twin logic: volume %, mute/mic glyph choice and theme mapping mirror the WebView (`app/ui`). Each copy carries a `// Twin:` comment (§11.1).
@@ -30,7 +30,7 @@ profile **with no WebView alive** (D-15 / D-15.1). It is the answer to "the WebV
 ## Traps
 - Never put logic here the app needs elsewhere; the shell reaches it through `SharedRuntime.native_dot`.
 - Known bug fixed in plan D-19: the "MIC OFF" idle label was unreachable while volume was known (`if let Some(v) = state.volume … else if mic_muted`).
-- Pill size/radius constants (`IDLE_W`, …) have a TS twin in `app/ui/src/lib/notch/geometry.ts`; change both.
+- Pill size/radius constants (`IDLE_W`, …) and `frame_metrics` have a TS twin in `app/ui/src/lib/notch/{geometry,notchStyle}.ts`; change both.
 
 ## Tests
 Unit tests in the file cover state and envelope handling and frame rasterisation; `cargo test -p ice-win real_click -- --ignored` is the by-hand focus check (QA F4).
@@ -39,3 +39,4 @@ Unit tests in the file cover state and envelope handling and frame rasterisation
 - 2026-11-23 Claude: initial recap.
 - 2026-11-23 Claude: window class now has an arrow cursor (`hCursor`); the hit-testable pill had none and could show a stale busy cursor on hover.
 - 2026-11-24 Gemini: added `BuiltinTheme::IceLight` and `NativePillTheme::ice_light()` for `Ice Light` native pill parity.
+- 2026-11-24 Gemini: added `NotchStyle::Nook` flush top-edge rendering (`frame_metrics`, `sd_nook_notch`, `set_notch_style`) matching WebView Edge Nook.

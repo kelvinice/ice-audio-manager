@@ -66,3 +66,4 @@ Unit tests in `art.rs`, `engine_bridge.rs`, `ipc.rs`, `meter.rs`, `placement.rs`
 - 2026-11-24 Gemini: `settings.rs` default Settings window size increased from `920×640` to `1020×680`.
 - 2026-11-24 Gemini: `NOTCH_CANVAS_H` raised to `292` (for bottom lyrics extension); added Settings-only `get_lyrics_storage_stats`, `clear_lyrics_cache`, and `open_lyrics_folder` commands (`permissions/shell.toml`).
 - 2026-11-24 Gemini: `meter::forward` drains queued frames to latest, `SharedRuntime::update_and_emit` / `engine_bridge` skip unchanged `NotchSnapshot` bumps and closed-window emits (`LyricsChanged`, non-waking `MediaChanged` fast paths), and `settings.rs` lyrics storage commands run via `spawn_blocking`.
+- 2026-11-24 Gemini: `NOTCH_CANVAS_W` raised to `648` for Edge Nook side-by-side layout + concave ears, `NotchSnapshot.notch_style`, and `engine_bridge` `native_dot.set_notch_style` sync.

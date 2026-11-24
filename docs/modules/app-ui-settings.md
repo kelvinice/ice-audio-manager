@@ -29,7 +29,7 @@ created when opened and destroyed when closed (shell: `app/src-tauri/src/setting
 | General | Launch at sign-in; performance profile; default roles; show disconnected | `set_launch_at_sign_in`; `SetPerformanceProfile`; `SetDefaultRoles`; `SetShowDisconnected` |
 | Devices | Notch order (up/down/remove); per device: star, alias, spatial, hide; hidden list → Show | `SetFavourites`; `SetDevicePrefs` |
 | Shortcuts | Toggle pairs, device shortcuts (devices, chord, roles, remove); knob gestures | `SetTogglePair`/`RemoveTogglePair`; `SetBinding`/`RemoveBinding`; `SetKnobGestures` |
-| Notch | Idle style; pinned display | `SetIdleStyle`; `SetPinnedMonitor` (display path) |
+| Notch | Notch style (`Floating` vs `Edge Nook`); idle style; now playing pill; pinned display | `SetNotchStyle`; `SetIdleStyle`; `SetNowPlayingPill`; `SetPinnedMonitor` (display path) |
 | Appearance | Theme (`Ice`, `Ice Light`, `Midnight`, `Fluent`, `Minimal`); animation preset (`Bouncy` first with `Default` badge); Background → `Moving background` toggle | `SetTheme`; `SetPreset`; `SetMovingBackdrop` |
 | Activities | Music services (`Spotify`, `YouTube Music`); Synced lyrics display (`Show synced lyrics`, pill/card extensions, active word highlight, Japanese Romaji) | `SetMusicService`; `SetLyricsEnabled`; `SetLyricsDisplay` |
 | Privacy | Master network off switch; opt-in LRCLIB (`lrclib.net`) disclosure & toggle; local audio loopback spectrum visualizer disclosure & meter-only fallback switch | `DisableAllNetworkFeatures`; `SetLyricsOnlineLookup`; `SetVisualizerSpectrum` |
@@ -65,3 +65,4 @@ created when opened and destroyed when closed (shell: `app/src-tauri/src/setting
 - 2026-11-24 Gemini: `AppearancePage` adds `Ice Light` theme card, puts `Bouncy` leftmost with `Default` badge, and adds `Background → Moving background` (`SetMovingBackdrop`).
 - 2026-11-24 Gemini: added `PrivacyPage` (D-22 network transparency + LRCLIB opt-in), `StoragePage` (lyrics cache usage, `cache_max_mb` selector, clear cache, local `.lrc` folder), and synced lyrics display controls on `ActivitiesPage`.
 - 2026-11-24 Gemini: D-26 `PrivacyPage` "Local audio analysis" section with loopback spectrum disclosure and meter-only fallback switch (`SetVisualizerSpectrum`).
+- 2026-11-24 Gemini: added "Notch style" (`Floating` / `Edge Nook`) choice group on `NotchPage` and flush concave-ear silhouette support in `NotchPreview`.

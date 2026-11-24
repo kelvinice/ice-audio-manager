@@ -10,7 +10,7 @@ any time (D-15). Heavy work (image decode, colour extraction, device sorting) ha
 ## Entry points
 | File | What it does |
 |---|---|
-| `index.html` → `src/notch/main.ts` → `notch/NotchApp.svelte` | The notch: a 440×292 transparent canvas holding a sibling `.pill-shadow` + one `.pill-clip` container (≥ 24 px margin even with bottom lyrics extension) |
+| `index.html` → `src/notch/main.ts` → `notch/NotchApp.svelte` | The notch: a 648×292 transparent canvas holding a sibling `.pill-shadow` + one `.pill-clip` container (≥ 24 px margin around Floating & Edge Nook split layouts) |
 | `settings.html` → `src/settings/main.ts` | Settings window: see [app-ui-settings](app-ui-settings.md) |
 | `src/themes/base.css` | All `--ice-*` tokens (documented in [theming.md](../theming.md): every new token must be added there) |
 
@@ -24,7 +24,8 @@ any time (D-15). Heavy work (image decode, colour extraction, device sorting) ha
 | `notch/scheduler.ts` | `NotchActivityScheduler` + `ActivityView` (`idle`, `volume`, `switch`, `plug`, `mic`, `track`): priorities, durations, merge rules (plug+switch within 1.5 s), snapshot sync and monotonic envelope handling (`NeedsResnapshot` on gap); `nowPlaying: off` creates no track pop-up. **621 lines, over the limit (split planned)** |
 | `notch/nowPlaying.ts` | `resolveDisplayedView`: with `appearance.nowPlaying = while_playing` the idle notch shows the track pill while media plays (state-derived, no timer; reuses `lastTrackSeq` so it doesn't re-animate) |
 | `notch/controller.svelte.ts` | `NotchController` (`createNotchController`): listens to `engine://*` and `notch://delta/v1`, owns springs, unified optimistic seek (`effectiveMedia`), hover intent, wheel/aux-click, timers, calls Tauri commands (deduped `report_hit_rect`) |
-| `notch/geometry.ts` | Canvas/pill sizes (twin of the native pill constants, incl. `292×46` track pill), `effectivePreset` (`'bouncy'` fallback), `targetGeometry`, `computeHitRect`, `computeClipPath`, `resolveRimStroke` |
+| `notch/geometry.ts` | Canvas/pill sizes (`648×292`, twin of native pill constants, incl. `292×46` track pill), `effectivePreset` (`'bouncy'` fallback), `targetGeometry`, `idleGeometry`, `computeHitRect`, `computeClipPath`, `resolveRimStroke` |
+| `notch/notchStyle.ts` | Strategy pattern (`NotchStyleStrategy`: `floatingStyleStrategy` vs `nookStyleStrategy`), SVG concave-ear `buildNookFillPath` / `buildNookRimPath`, surface shape & hit-rect calculation |
 | `notch/devices.ts` | `buildNotchDeviceRow`: favourites in order, current default first, max 4 chips (D-18); `toggleFavouriteDeviceIds` |
 | `notch/backdrop.ts` | D-23/D-25 backdrop maths: `resolveAmbientMotionState`, `adaptAccentForSurface` (for `ice_light`), `computeArtBackdrop` (5-stop hue-shifted wash + `washBaseCss` + luminance-clamped scrim) and `resolveMusicServices` (D-22 quick-launch items) |
 | `notch/visualizer.ts` | `VisualizerBank` (14 frequency-graded `(k, c, m)` springs: heavier bass → snappier treble, fast attack, quick fall), `subscribeVisualizer` / `subscribeTempo` (one shared bank + tempo listener; rAF-coalesced DOM writes; loop stops when settled; 400 ms stop-grace across visible transitions), `withRestShape` (wide waveform's low resting line), `mapFrameToBars` (legacy mapping, tests). Bars render with `clip-path` (not `scaleY`) so caps stay round |
@@ -36,8 +37,8 @@ any time (D-15). Heavy work (image decode, colour extraction, device sorting) ha
 | `notch/activities/LyricsExtension.svelte` | Seamless bottom extension under the compact music pill (1 active line + Romaji/subtitle) and expanded card (3-line focus band, click-to-seek, active-word lift/glow via `--ice-lyric-*` tokens, plain fallback) |
 
 ## `src/notch/activities/` (one component per job)
-`IdlePill`, `VolumeActivity`, `SwitchActivity`, `PlugActivity`, `MicActivity`, `TrackActivity`, `ExpandedNotch` (container), `ExpandedMediaCard`,
-`ExpandedEmptyCard`, `ExpandedVolumeRow`, `ExpandedDeviceRow`, `NotchSideRail`, `MusicServicesWidget`, `AlbumArtTile`, `NotchBackdrop`, `VisualizerBars`, `DeviceIcon`.
+`IdlePill`, `VolumeActivity`, `SwitchActivity`, `PlugActivity`, `MicActivity`, `TrackActivity`, `ExpandedNotch` (`Floating` container), `NookExpandedNotch` (`Edge Nook` flush top-edge split container), `ExpandedMediaCard`,
+`ExpandedEmptyCard`, `MediaScrubber`, `ExpandedVolumeRow`, `ExpandedDeviceRow`, `NotchSideRail`, `MusicServicesWidget`, `AlbumArtTile`, `NotchBackdrop`, `VisualizerBars`, `DeviceIcon`.
 
 **Expanded layout** (`EXPANDED_W` × `EXPANDED_H_MEDIA`/`EXPANDED_H_EMPTY` in `geometry.ts`): a main column (media or empty card, then
 volume row and device chips) beside a side rail (`NotchSideRail`: pin, mic, music services while media plays, settings). The media card holds
@@ -87,3 +88,4 @@ updating the constants.
 - 2026-11-24 Claude: `fitLine.ts` (+ test): the main lyric line shrinks to fit (≥ 82 %) or slides with the singing instead of losing its last characters (ellipsis can't apply to inline-block karaoke words); ladder `overflow: clip` + 2 px margin.
 - 2026-11-24 Gemini: D-26 spectrum `BeatShaper` (`A2 + B1` audible-gated per-band AGC/pink tilt + low-band beat accent; `A1` travelling-wave fallback), `B2` frequency-graded springs (`visualizer.ts`), and `B4a` symmetric centre-bass 5-bar badge (`pickBadgeBars` in `VisualizerBars.svelte`).
 - 2026-11-24 Gemini: unified optimistic seek overlay (`NotchController.effectiveMedia` + `scrubber.ts`), `visualizer.ts` rAF-coalesced writes & 400 ms visible stop-grace, `fitLine.ts` cached per-line word measurements, and `report_hit_rect` dedup.
+- 2026-11-24 Gemini: added `Edge Nook` (`NotchStyle::Nook`) strategy layer (`notchStyle.ts`), extracted `MediaScrubber.svelte`, `NookExpandedNotch.svelte` 2-column media/lyrics split + concave-ear SVG clip/rim, and `CANVAS_W = 648`.
