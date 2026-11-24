@@ -74,7 +74,9 @@
         {/if}
       </div>
     {/key}
-    <!-- Unkeyed wash & scrim keep drift phase smooth across track changes and pin/pause transitions. -->
+    <!-- V1 scrim stays anchored behind the wash and only activates when V1 blur (`--ice-art-backdrop > 0`) is enabled. -->
+    <div class="art-scrim"></div>
+    <!-- Unkeyed wash keeps drift phase smooth across track changes and pin/pause transitions. -->
     <div
       class="art-wash"
       class:ambient-active={ambientState !== 'stopped'}
@@ -89,7 +91,6 @@
         <div class="wash-blob wash-blob-c"></div>
       {/if}
     </div>
-    <div class="art-scrim"></div>
   {:else}
     <div class="accent-glow" class:instant></div>
   {/if}
@@ -147,38 +148,38 @@
   }
 
   .wash-blob-a {
-    left: -18%;
-    top: -32%;
-    width: 94%;
-    height: 124%;
+    left: -12%;
+    top: -24%;
+    width: 66%;
+    height: 112%;
     background: radial-gradient(
       closest-side,
       var(--ice-active-wash-primary, var(--ice-accent-glow)) 0%,
-      transparent 78%
+      transparent 76%
     );
   }
 
   .wash-blob-b {
-    right: -16%;
-    bottom: -30%;
-    width: 88%;
-    height: 118%;
+    right: -12%;
+    bottom: -26%;
+    width: 64%;
+    height: 108%;
     background: radial-gradient(
       closest-side,
       var(--ice-active-wash-secondary, transparent) 0%,
-      transparent 80%
+      transparent 78%
     );
   }
 
   .wash-blob-c {
-    left: 16%;
-    bottom: -24%;
-    width: 78%;
-    height: 106%;
+    left: 20%;
+    top: -10%;
+    width: 58%;
+    height: 96%;
     background: radial-gradient(
       closest-side,
       var(--ice-active-wash-tertiary, transparent) 0%,
-      transparent 80%
+      transparent 78%
     );
   }
 
@@ -187,15 +188,15 @@
   }
 
   .art-wash.ambient-active .wash-blob-a {
-    animation: wash-drift-a var(--ice-ambient-period, 22s) ease-in-out infinite alternate;
+    animation: wash-drift-a var(--ice-ambient-period, 12s) ease-in-out infinite alternate;
   }
 
   .art-wash.ambient-active .wash-blob-b {
-    animation: wash-drift-b calc(var(--ice-ambient-period, 22s) * 1.41) ease-in-out infinite alternate;
+    animation: wash-drift-b calc(var(--ice-ambient-period, 12s) * 1.43) ease-in-out infinite alternate;
   }
 
   .art-wash.ambient-active .wash-blob-c {
-    animation: wash-drift-c calc(var(--ice-ambient-period, 22s) * 1.73) ease-in-out infinite alternate;
+    animation: wash-drift-c calc(var(--ice-ambient-period, 12s) * 1.79) ease-in-out infinite alternate;
   }
 
   .art-wash.ambient-paused .wash-blob {
@@ -207,9 +208,10 @@
     will-change: auto;
   }
 
-  /* Luminance-clamped dark scrim protecting `--ice-fg` and `--ice-fg-muted` contrast. */
+  /* Luminance-clamped V1 scrim protecting text contrast when `--ice-art-backdrop > 0`. */
   .art-scrim {
     background: var(--ice-scrim, none);
+    opacity: clamp(0, calc(var(--ice-art-backdrop, 0) * 100), 1);
   }
 
   .accent-glow {
@@ -239,28 +241,34 @@
 
   @keyframes wash-drift-a {
     0% {
-      transform: translate3d(-12px, -8px, 0) scale(0.96);
+      transform: translate3d(-18px, -12px, 0) scale(0.94);
+    }
+    50% {
+      transform: translate3d(52px, 22px, 0) scale(1.08);
     }
     100% {
-      transform: translate3d(24px, 14px, 0) scale(1.06);
+      transform: translate3d(114px, -6px, 0) scale(0.98);
     }
   }
 
   @keyframes wash-drift-b {
     0% {
-      transform: translate3d(14px, 10px, 0) scale(1.05);
+      transform: translate3d(18px, 14px, 0) scale(1.06);
+    }
+    50% {
+      transform: translate3d(-56px, -22px, 0) scale(0.95);
     }
     100% {
-      transform: translate3d(-22px, -14px, 0) scale(0.95);
+      transform: translate3d(-112px, 8px, 0) scale(1.08);
     }
   }
 
   @keyframes wash-drift-c {
     0% {
-      transform: translate3d(-10px, 8px, 0) scale(0.97);
+      transform: translate3d(-34px, 10px, 0) scale(0.95);
     }
     100% {
-      transform: translate3d(16px, -12px, 0) scale(1.07);
+      transform: translate3d(46px, -16px, 0) scale(1.08);
     }
   }
 </style>

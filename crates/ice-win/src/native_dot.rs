@@ -103,6 +103,7 @@ impl Rgba {
 pub enum BuiltinTheme {
     #[default]
     Ice,
+    IceLight,
     Midnight,
     Fluent,
     Minimal,
@@ -133,6 +134,7 @@ impl NativePillTheme {
     pub const fn builtin(kind: ThemeKind) -> Self {
         match kind {
             ThemeKind::Ice => Self::ice(),
+            ThemeKind::IceLight => Self::ice_light(),
             ThemeKind::Midnight => Self::midnight(),
             ThemeKind::Fluent => Self::fluent(),
             ThemeKind::Minimal => Self::minimal(),
@@ -151,6 +153,21 @@ impl NativePillTheme {
             accent: Rgba::new(107, 197, 255, 255),
             ok: Rgba::new(74, 222, 128, 255),
             danger: Rgba::new(240, 113, 72, 255),
+        }
+    }
+
+    /// Portfolio-seeded frosted snow `Ice Light` theme.
+    #[must_use]
+    pub const fn ice_light() -> Self {
+        Self {
+            bg: Rgba::new(246, 247, 249, 240),
+            surface: Rgba::new(255, 255, 255, 245),
+            rim: Rgba::new(2, 106, 162, 87),
+            fg: Rgba::new(17, 22, 31, 255),
+            fg_muted: Rgba::new(75, 86, 104, 255),
+            accent: Rgba::new(2, 106, 162, 255),
+            ok: Rgba::new(21, 128, 61, 255),
+            danger: Rgba::new(201, 70, 36, 255),
         }
     }
 
@@ -187,11 +204,12 @@ impl NativePillTheme {
         }
     }
 
-    /// Resolves one of the four bundled themes.
+    /// Resolves one of the bundled themes.
     #[must_use]
     pub const fn from_builtin(theme: BuiltinTheme) -> Self {
         match theme {
             BuiltinTheme::Ice => Self::ice(),
+            BuiltinTheme::IceLight => Self::ice_light(),
             BuiltinTheme::Midnight => Self::midnight(),
             BuiltinTheme::Fluent => Self::fluent(),
             BuiltinTheme::Minimal => Self::minimal(),

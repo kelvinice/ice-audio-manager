@@ -4,6 +4,7 @@ import type { EngineSnapshot, Envelope, MediaAction } from '../ipc/engine';
 import type { NotchDelta, NotchSnapshot } from '../ipc/types';
 import { SpringGroup } from '../motion/spring.svelte';
 import {
+  adaptAccentForSurface,
   computeArtBackdrop,
   resolveAmbientMotionState,
   resolveMusicServices,
@@ -101,14 +102,20 @@ export class NotchController {
   readonly displayedMedia = $derived(
     this.activeView.kind === 'track' ? this.activeView.media : this.engineState.media,
   );
+  readonly isLightTheme = $derived(
+    (this.notchSnapshot?.theme ?? this.engineState.settings?.appearance.theme ?? 'ice') === 'ice_light',
+  );
   readonly activeAccentCss = $derived(
-    isMediaActive(this.displayedMedia)
-      ? (formatRgbCss(this.displayedMedia.art?.accent) ?? 'var(--ice-accent)')
+    isMediaActive(this.displayedMedia) && this.displayedMedia.art?.accent
+      ? (formatRgbCss(adaptAccentForSurface(this.displayedMedia.art.accent, this.isLightTheme)) ?? 'var(--ice-accent)')
       : 'var(--ice-accent)',
   );
   readonly activeGlowCss = $derived(
-    isMediaActive(this.displayedMedia)
-      ? (formatRgbGlowCss(this.displayedMedia.art?.accent, 0.24) ?? 'var(--ice-accent-glow)')
+    isMediaActive(this.displayedMedia) && this.displayedMedia.art?.accent
+      ? (formatRgbGlowCss(
+          adaptAccentForSurface(this.displayedMedia.art.accent, this.isLightTheme),
+          this.isLightTheme ? 0.22 : 0.24,
+        ) ?? 'var(--ice-accent-glow)')
       : 'var(--ice-accent-glow)',
   );
   readonly hasBackdropArt = $derived(
@@ -117,7 +124,7 @@ export class NotchController {
       && (this.isExpanded || this.activeView.kind === 'track'),
   );
   readonly artBackdrop = $derived(
-    computeArtBackdrop(this.hasBackdropArt ? this.displayedMedia?.art : null),
+    computeArtBackdrop(this.hasBackdropArt ? this.displayedMedia?.art : null, this.isLightTheme),
   );
   readonly movingBackdropEnabled = $derived(
     this.engineState.settings?.appearance.movingBackdrop ?? true,

@@ -84,6 +84,7 @@ pub(super) fn appearance_menus(
             SetTheme { theme: current.theme },
             &[
                 ("Ice", SetTheme { theme: ThemeKind::Ice }),
+                ("Ice Light", SetTheme { theme: ThemeKind::IceLight }),
                 ("Midnight", SetTheme { theme: ThemeKind::Midnight }),
                 ("Fluent", SetTheme { theme: ThemeKind::Fluent }),
                 ("Minimal", SetTheme { theme: ThemeKind::Minimal }),

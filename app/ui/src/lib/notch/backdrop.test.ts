@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { NowPlaying, Rgb, SettingsView } from '../ipc/engine.ts';
 import {
+  adaptAccentForSurface,
   compositeOver,
   computeArtBackdrop,
   contrastRatio,
@@ -78,6 +79,26 @@ test('computeArtBackdrop derives 2-stop gradient washes and keeps WCAG AA scrim 
     contrastRatio(mutedFg, compositedSurface) >= 4.5,
     `muted foreground contrast over clamped bright cover should be >= 4.5, got ${contrastRatio(mutedFg, compositedSurface).toFixed(2)}`,
   );
+
+  // V2 wash blobs over dark Ice surface keep muted text >= 4.5:1 even when derived from a bright cover.
+  const darkBase: Rgb = { r: 14, g: 17, b: 22 };
+  const brightWash = parseRgba(brightBackdrop.washPrimaryCss);
+  const compositedWash = compositeOver(brightWash.rgb, brightWash.alpha, darkBase);
+  assert.ok(
+    contrastRatio(mutedFg, compositedWash) >= 4.5,
+    `muted foreground over dark V2 wash should stay >= 4.5, got ${contrastRatio(mutedFg, compositedWash).toFixed(2)}`,
+  );
+
+  // Ice Light theme adapts pastel accents and uses a frosted light scrim for dark covers.
+  const lightBase: Rgb = { r: 246, g: 247, b: 249 };
+  const darkMuted: Rgb = { r: 75, g: 86, b: 104 };
+  const lightDarkCover = computeArtBackdrop(darkArt, true);
+  const lightScrim = parseRgba(lightDarkCover.scrimTopCss);
+  assert.ok(lightScrim.rgb.r > 230, 'light theme uses a frosted light scrim');
+  assert.ok(contrastRatio(darkMuted, compositeOver(lightScrim.rgb, lightScrim.alpha, { r: 12, g: 15, b: 20 })) >= 4.5);
+
+  const adapted = adaptAccentForSurface({ r: 253, g: 230, b: 138 }, true);
+  assert.ok(contrastRatio(adapted, lightBase) >= 4.0, 'light theme deepens pastel accents for readable controls');
 });
 
 test('resolveMusicServices enables Spotify and YouTube Music by default and tracks active playback app', () => {

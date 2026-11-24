@@ -20,6 +20,7 @@
 
   const themes: { value: ThemeKind; label: string; description: string; badge?: string }[] = [
     { value: 'ice', label: 'Ice', badge: 'Default', description: 'Frosted glass with a cool blue glow.' },
+    { value: 'ice_light', label: 'Ice Light', description: 'Frosted snow glass with deep ocean accents.' },
     { value: 'midnight', label: 'Midnight', description: 'True black with a quiet white rim.' },
     { value: 'fluent', label: 'Fluent', description: 'Windows 11’s neutral greys.' },
     { value: 'minimal', label: 'Minimal', description: 'A solid surface. No glow.' },

@@ -33,7 +33,7 @@
   --ice-art-backdrop: 0;
   --ice-art-blur: 28px;
   --ice-art-wash: 1;
-  --ice-ambient-period: 22s;
+  --ice-ambient-period: 12s;
   --ice-scrim: linear-gradient(
     160deg,
     var(--ice-active-scrim-top, rgba(12, 15, 20, 0.56)) 0%,
@@ -48,14 +48,46 @@
 }
 
 /* Themes match any element (not only :root) so Settings → Appearance can preview each one side by side. */
+[data-theme='ice_light'] {
+  --ice-bg: rgba(246, 247, 249, 0.94);
+  --ice-surface: rgba(255, 255, 255, 0.96);
+  --ice-track: rgba(17, 22, 31, 0.13);
+  --ice-border: rgba(2, 106, 162, 0.22);
+  --ice-rim: rgba(2, 106, 162, 0.34);
+  --ice-shadow: 0 10px 26px rgba(15, 23, 42, 0.14), 0 2px 6px rgba(15, 23, 42, 0.08);
+  --ice-drop-shadow: 0 6px 18px rgba(15, 23, 42, 0.18);
+  --ice-fg: #11161f;
+  --ice-fg-muted: #4b5668;
+  --ice-accent: #026aa2;
+  --ice-accent-strong: #015580;
+  --ice-accent-soft: #e6f3fb;
+  --ice-accent-glow: rgba(2, 106, 162, 0.22);
+  --ice-ok: #15803d;
+  --ice-warn: #b45309;
+  --ice-danger: #c94624;
+  --ice-art-wash: 0.85;
+  --ice-ambient-period: 12s;
+  --ice-scrim: linear-gradient(
+    160deg,
+    var(--ice-active-scrim-top, rgba(246, 247, 249, 0.72)) 0%,
+    var(--ice-active-scrim-bottom, rgba(240, 243, 248, 0.90)) 100%
+  );
+  --ice-control-bg: rgba(17, 22, 31, 0.06);
+  --ice-control-bg-hover: rgba(17, 22, 31, 0.11);
+  --ice-control-bg-active: rgba(2, 106, 162, 0.14);
+  --ice-control-border: rgba(17, 22, 31, 0.1);
+  --ice-play-bg: #11161f;
+  --ice-play-fg: #f6f7f9;
+}
+
 [data-theme='midnight'] {
   --ice-bg: rgba(0, 0, 0, 0.96);
   --ice-surface: rgba(12, 12, 14, 0.96);
   --ice-border: rgba(255, 255, 255, 0.14);
   --ice-rim: rgba(255, 255, 255, 0.24);
   --ice-accent-glow: rgba(255, 255, 255, 0.12);
-  --ice-art-wash: 0.55;
-  --ice-ambient-period: 28s;
+  --ice-art-wash: 0.65;
+  --ice-ambient-period: 16s;
   --ice-scrim: linear-gradient(160deg, rgba(0, 0, 0, 0.76) 0%, rgba(0, 0, 0, 0.94) 100%);
   --ice-control-bg: rgba(255, 255, 255, 0.08);
   --ice-control-bg-hover: rgba(255, 255, 255, 0.14);
@@ -69,8 +101,8 @@
   --ice-border: rgba(255, 255, 255, 0.12);
   --ice-rim: rgba(107, 197, 255, 0.35);
   --ice-accent-glow: rgba(107, 197, 255, 0.2);
-  --ice-art-wash: 0.78;
-  --ice-ambient-period: 22s;
+  --ice-art-wash: 0.85;
+  --ice-ambient-period: 12s;
   --ice-scrim: linear-gradient(
     160deg,
     var(--ice-active-scrim-top, rgba(24, 24, 27, 0.62)) 0%,

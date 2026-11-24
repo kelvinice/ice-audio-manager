@@ -21,6 +21,7 @@ pub enum SpringPreset {
 pub enum ThemeKind {
     #[default]
     Ice,
+    IceLight,
     Midnight,
     Fluent,
     Minimal,

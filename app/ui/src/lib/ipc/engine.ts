@@ -3,7 +3,7 @@
 
 export type SpringPreset = "snappy" | "smooth" | "bouncy" | "off";
 
-export type ThemeKind = "ice" | "midnight" | "fluent" | "minimal";
+export type ThemeKind = "ice" | "ice_light" | "midnight" | "fluent" | "minimal";
 
 export type IdleStyle = "dot" | "mini_pill" | "hidden";
 

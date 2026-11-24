@@ -56,10 +56,13 @@ export function resolveAmbientMotionState(input: AmbientMotionInput): AmbientMot
 }
 
 const DEFAULT_RGB: Rgb = { r: 107, g: 197, b: 255 };
-const DEFAULT_SECONDARY_RGB: Rgb = { r: 58, g: 132, b: 199 };
+const DEFAULT_SECONDARY_RGB: Rgb = { r: 88, g: 118, b: 226 };
 const DARK_SCRIM_RGB: Rgb = { r: 12, g: 15, b: 20 };
+const LIGHT_SCRIM_RGB: Rgb = { r: 246, g: 247, b: 249 };
 const LIGHT_FG_RGB: Rgb = { r: 237, g: 241, b: 247 };
 const MUTED_FG_RGB: Rgb = { r: 152, g: 164, b: 184 };
+const DARK_INK_RGB: Rgb = { r: 17, g: 22, b: 31 };
+const DARK_MUTED_RGB: Rgb = { r: 75, g: 86, b: 104 };
 
 function clamp(v: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, v));
@@ -138,20 +141,56 @@ function hslToRgb(h: number, s: number, l: number): Rgb {
   };
 }
 
-/** Derives a warm/cool secondary gradient stop when `ArtInfo` provides a single accent. */
+/** Adapts an album-art accent for readability on light themes (`ice_light`) while keeping dark themes untouched. */
+export function adaptAccentForSurface(rgb: Rgb, isLightTheme: boolean): Rgb {
+  if (!isLightTheme) return rgb;
+  const [h, s, l] = rgbToHsl(rgb);
+  let targetL = clamp(Math.min(l, 0.42), 0.22, 0.42);
+  const targetS = s < 0.08 ? 0.08 : clamp(Math.max(s, 0.58), 0.58, 0.88);
+  let candidate = hslToRgb(h, targetS, targetL);
+  while (targetL > 0.16 && contrastRatio(candidate, LIGHT_SCRIM_RGB) < 4.0) {
+    targetL = Math.max(0.16, targetL - 0.03);
+    candidate = hslToRgb(h, targetS, targetL);
+  }
+  return candidate;
+}
+
+/** Derives a distinct secondary gradient stop (+52° hue shift) when `ArtInfo` provides a single accent. */
 export function deriveSecondaryStop(primary: Rgb): Rgb {
   const [h, s, l] = rgbToHsl(primary);
   if (s < 0.08) return DEFAULT_SECONDARY_RGB;
-  return hslToRgb(h + 28, clamp(s * 0.9, 0.25, 0.85), clamp(l * 0.72, 0.18, 0.56));
+  return hslToRgb(h + 52, clamp(Math.max(s, 0.48), 0.48, 0.9), clamp(l * 0.85, 0.26, 0.58));
 }
 
-function scrimAlphasForLuminance(lum: number): { top: number; bottom: number } {
+function tuneWashColor(rgb: Rgb, isLightTheme: boolean): Rgb {
+  const [h, s, l] = rgbToHsl(rgb);
+  if (isLightTheme) {
+    return hslToRgb(h, s < 0.08 ? 0.16 : clamp(Math.max(s, 0.52), 0.52, 0.85), clamp(l, 0.56, 0.72));
+  }
+  // Keep dark-theme wash blobs vivid but below L=0.44 so moving blobs stay clearly visible while preserving >= 4.5:1 muted text contrast.
+  return hslToRgb(h, s < 0.08 ? 0.18 : clamp(Math.max(s, 0.58), 0.58, 0.92), clamp(l, 0.32, 0.44));
+}
+
+function scrimAlphasForLuminance(lum: number, isLightTheme: boolean): { top: number; bottom: number } {
   const l = clamp(lum, 0, 1);
-  // Bright/white covers raise the dark scrim so `--ice-fg` and `--ice-fg-muted` hold WCAG AA (>= 4.5:1).
+  if (isLightTheme) {
+    // Dark covers raise the frosted light scrim so dark ink (`#11161f` / `#4b5668`) holds WCAG AA (>= 4.5:1) over V1 blur.
+    let top = clamp(0.68 + (1 - l) * 0.22, 0.68, 0.92);
+    let bottom = clamp(0.84 + (1 - l) * 0.12, 0.84, 0.96);
+    const coverRef: Rgb = { r: Math.round(l * 255), g: Math.round(l * 255), b: Math.round(l * 255) };
+    while (top < 0.94 && contrastRatio(DARK_MUTED_RGB, compositeOver(LIGHT_SCRIM_RGB, top, coverRef)) < 4.5) {
+      top = Number((top + 0.02).toFixed(3));
+    }
+    while (bottom < 0.96 && contrastRatio(DARK_INK_RGB, compositeOver(LIGHT_SCRIM_RGB, bottom, coverRef)) < 7.0) {
+      bottom = Number((bottom + 0.02).toFixed(3));
+    }
+    return { top, bottom };
+  }
+
+  // Bright/white covers raise the dark scrim so `--ice-fg` and `--ice-fg-muted` hold WCAG AA (>= 4.5:1) over V1 blur.
   let top = clamp(0.52 + l * 0.30, 0.52, 0.82);
   let bottom = clamp(0.80 + l * 0.14, 0.80, 0.94);
 
-  // Even against pure white blurred art beneath `--ice-art-backdrop: 0.85`, verify muted text meets >= 4.5:1.
   const coverRef: Rgb = {
     r: Math.round(l * 255),
     g: Math.round(l * 255),
@@ -166,41 +205,52 @@ function scrimAlphasForLuminance(lum: number): { top: number; bottom: number } {
   return { top, bottom };
 }
 
-/** Computes D-23 V2 gradient stops and V1 luminance-clamped scrim CSS variables from `art`. */
-export function computeArtBackdrop(art: ArtInfoWithPalette | null | undefined): ArtBackdropStyle {
+/** Computes D-23/D-25 V2 gradient stops and V1 luminance-clamped scrim CSS variables from `art`. */
+export function computeArtBackdrop(
+  art: ArtInfoWithPalette | null | undefined,
+  isLightTheme = false,
+): ArtBackdropStyle {
   if (!art) {
     return {
       hasArt: false,
       artId: null,
-      washPrimaryCss: formatRgbGlowCss(DEFAULT_RGB, 0.28) ?? 'rgba(107, 197, 255, 0.28)',
-      washSecondaryCss: formatRgbGlowCss(DEFAULT_SECONDARY_RGB, 0.2) ?? 'rgba(58, 132, 199, 0.2)',
+      washPrimaryCss: formatRgbGlowCss(DEFAULT_RGB, isLightTheme ? 0.24 : 0.28) ?? 'rgba(107, 197, 255, 0.28)',
+      washSecondaryCss: formatRgbGlowCss(DEFAULT_SECONDARY_RGB, isLightTheme ? 0.18 : 0.22) ?? 'rgba(88, 118, 226, 0.22)',
       washTertiaryCss: null,
-      scrimTopCss: 'rgba(12, 15, 20, 0.56)',
-      scrimBottomCss: 'rgba(10, 13, 18, 0.84)',
+      scrimTopCss: isLightTheme ? 'rgba(246, 247, 249, 0.74)' : 'rgba(12, 15, 20, 0.56)',
+      scrimBottomCss: isLightTheme ? 'rgba(240, 243, 248, 0.90)' : 'rgba(10, 13, 18, 0.84)',
       coverLuminance: 0.1,
     };
   }
 
-  const primary = art.palette?.[0] ?? art.accent ?? DEFAULT_RGB;
-  const secondary = art.palette?.[1] ?? art.secondary ?? deriveSecondaryStop(primary);
-  const tertiary = art.palette?.[2] ?? null;
+  const rawPrimary = art.palette?.[0] ?? art.accent ?? DEFAULT_RGB;
+  const rawSecondary = art.palette?.[1] ?? art.secondary ?? deriveSecondaryStop(rawPrimary);
+  const rawTertiary = art.palette?.[2] ?? null;
+  const primary = tuneWashColor(rawPrimary, isLightTheme);
+  const secondary = tuneWashColor(rawSecondary, isLightTheme);
+  const tertiary = rawTertiary ? tuneWashColor(rawTertiary, isLightTheme) : null;
   const coverLuminance = clamp(
     typeof art.luminance === 'number' && Number.isFinite(art.luminance)
       ? art.luminance
-      : relativeLuminance(primary),
+      : relativeLuminance(rawPrimary),
     0,
     1,
   );
-  const { top, bottom } = scrimAlphasForLuminance(coverLuminance);
+  const { top, bottom } = scrimAlphasForLuminance(coverLuminance, isLightTheme);
+  const scrimRgb = isLightTheme ? LIGHT_SCRIM_RGB : DARK_SCRIM_RGB;
+  const scrimBotRgb = isLightTheme ? { r: 240, g: 243, b: 248 } : { r: 10, g: 13, b: 18 };
+  const primaryAlpha = isLightTheme ? 0.34 : 0.44;
+  const secondaryAlpha = isLightTheme ? 0.28 : 0.36;
+  const tertiaryAlpha = isLightTheme ? 0.24 : 0.30;
 
   return {
     hasArt: true,
     artId: art.id,
-    washPrimaryCss: formatRgbGlowCss(primary, 0.42) ?? 'rgba(107, 197, 255, 0.42)',
-    washSecondaryCss: formatRgbGlowCss(secondary, 0.3) ?? 'rgba(58, 132, 199, 0.3)',
-    washTertiaryCss: tertiary ? formatRgbGlowCss(tertiary, 0.26) : null,
-    scrimTopCss: `rgba(12, 15, 20, ${top.toFixed(3)})`,
-    scrimBottomCss: `rgba(10, 13, 18, ${bottom.toFixed(3)})`,
+    washPrimaryCss: formatRgbGlowCss(primary, primaryAlpha) ?? 'rgba(107, 197, 255, 0.44)',
+    washSecondaryCss: formatRgbGlowCss(secondary, secondaryAlpha) ?? 'rgba(88, 118, 226, 0.36)',
+    washTertiaryCss: tertiary ? formatRgbGlowCss(tertiary, tertiaryAlpha) : null,
+    scrimTopCss: `rgba(${scrimRgb.r}, ${scrimRgb.g}, ${scrimRgb.b}, ${top.toFixed(3)})`,
+    scrimBottomCss: `rgba(${scrimBotRgb.r}, ${scrimBotRgb.g}, ${scrimBotRgb.b}, ${bottom.toFixed(3)})`,
     coverLuminance,
   };
 }
