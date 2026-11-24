@@ -10,6 +10,7 @@ import {
   MIN_BAR_SCALE,
   perceptualLevel,
   SILENT_THRESHOLD,
+  VISUALIZER_STOP_GRACE_MS,
   withRestShape,
   VisualizerBank,
   WIDE_BAR_COUNT,
@@ -191,4 +192,5 @@ test('D-26 B2 grades spring physics from heavier bass (bar 0) to snappier treble
   const offTreble = deriveVisualizerSpringParams('off', 'decay', WIDE_BAR_COUNT - 1, WIDE_BAR_COUNT);
   assert.equal(offBass.instant, true);
   assert.equal(offTreble.instant, true);
+  assert.ok(VISUALIZER_STOP_GRACE_MS >= 250 && VISUALIZER_STOP_GRACE_MS <= 1000);
 });

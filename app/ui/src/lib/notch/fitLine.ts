@@ -50,36 +50,100 @@ export interface FitParams {
   center: boolean;
 }
 
+interface CachedMeasures {
+  key: string;
+  enabled: boolean;
+  avail: number;
+  need: number;
+  wordEnds: number[];
+}
+
+export function fitLayoutsEqual(a: FitLayout | null, b: FitLayout): boolean {
+  return (
+    a !== null &&
+    Math.abs(a.scale - b.scale) < 1e-4 &&
+    Math.abs(a.x - b.x) < 0.05 &&
+    a.fadeLeft === b.fadeLeft &&
+    a.fadeRight === b.fadeRight
+  );
+}
+
 /**
- * Svelte action on `.rung-text`; its first child `.fit` holds the line. Sets the fit transform and the
- * `fade-l`/`fade-r` classes. Runs on line or word changes only (no loop), plus once when web fonts settle.
+ * Svelte action on `.rung-text`; its first child `.fit` holds the line. Measures word positions once per line/font
+ * settle so word-highlight updates avoid synchronous layout reflows, and skips DOM writes when layout is unchanged.
  */
 export function fitLine(node: HTMLElement, initial: FitParams) {
   let params = initial;
-  const apply = () => {
+  let cache: CachedMeasures | null = null;
+  let lastLayout: FitLayout | null = null;
+  let destroyed = false;
+
+  const measure = () => {
     const inner = node.firstElementChild as HTMLElement | null;
-    if (!inner) return;
-    if (!params.enabled) {
-      inner.style.transform = '';
-      node.classList.remove('fade-l', 'fade-r', 'fitting');
+    if (!inner || !params.enabled) {
+      cache = null;
       return;
     }
     const words = inner.querySelectorAll<HTMLElement>('.word');
-    const active = params.word >= 0 ? (words[params.word] ?? null) : null;
-    const activeEnd = active ? active.offsetLeft + active.offsetWidth : words.length > 0 ? 0 : null;
-    const layout = fitLineLayout(node.clientWidth, inner.offsetWidth, activeEnd, params.center);
+    const wordEnds = new Array<number>(words.length);
+    for (let i = 0; i < words.length; i += 1) {
+      const w = words[i];
+      wordEnds[i] = w.offsetLeft + w.offsetWidth;
+    }
+    cache = {
+      key: params.key,
+      enabled: params.enabled,
+      avail: node.clientWidth,
+      need: inner.offsetWidth,
+      wordEnds,
+    };
+  };
+
+  const apply = (remeasure: boolean) => {
+    if (destroyed) return;
+    const inner = node.firstElementChild as HTMLElement | null;
+    if (!inner) return;
+    if (!params.enabled) {
+      cache = null;
+      if (lastLayout !== null) {
+        lastLayout = null;
+        inner.style.transform = '';
+        node.classList.remove('fade-l', 'fade-r', 'fitting');
+      }
+      return;
+    }
+    if (remeasure || !cache || cache.key !== params.key || cache.enabled !== params.enabled) {
+      measure();
+    }
+    if (!cache) return;
+    const activeEnd =
+      params.word >= 0 && params.word < cache.wordEnds.length
+        ? cache.wordEnds[params.word]
+        : cache.wordEnds.length > 0
+          ? 0
+          : null;
+    const layout = fitLineLayout(cache.avail, cache.need, activeEnd, params.center);
+    if (fitLayoutsEqual(lastLayout, layout)) return;
+    lastLayout = layout;
     const fitting = layout.scale < 1 || layout.x !== 0;
     inner.style.transform = fitting ? `translateX(${layout.x.toFixed(1)}px) scale(${layout.scale.toFixed(3)})` : '';
     node.classList.toggle('fitting', fitting);
     node.classList.toggle('fade-l', layout.fadeLeft);
     node.classList.toggle('fade-r', layout.fadeRight);
   };
-  apply();
-  void document.fonts?.ready.then(apply);
+
+  apply(true);
+  void document.fonts?.ready.then(() => {
+    if (!destroyed) apply(true);
+  });
   return {
     update(next: FitParams) {
+      const remeasure = next.key !== params.key || next.enabled !== params.enabled || next.center !== params.center;
       params = next;
-      apply();
+      apply(remeasure);
+    },
+    destroy() {
+      destroyed = true;
     },
   };
 }

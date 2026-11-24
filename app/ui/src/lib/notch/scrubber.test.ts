@@ -1,10 +1,14 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  applyOptimisticSeek,
   clampSeekPositionMs,
   liveMediaPositionMs,
+  mediaTrackKey,
   nextSecondTickDelayMs,
+  OPTIMISTIC_SEEK_HOLD_MS,
   pointerSeekMs,
+  shouldClearOptimisticSeek,
   stepSeekMs,
 } from './scrubber.ts';
 
@@ -73,4 +77,37 @@ test('nextSecondTickDelayMs computes aligned whole-second tick delays', () => {
   assert.equal(nextSecondTickDelayMs(0), 1025);
   assert.equal(nextSecondTickDelayMs(250), 775);
   assert.equal(nextSecondTickDelayMs(980), 200);
+});
+
+test('optimistic seek projects position immediately and clears on track change, expiry, or confirmation', () => {
+  const t0 = 1_700_000_000_000;
+  const base = {
+    appId: 'Spotify.exe',
+    title: 'Song A',
+    artist: 'Artist',
+    album: 'Album',
+    status: 'playing' as const,
+    positionMs: 10_000n,
+    durationMs: 180_000n,
+    positionUpdatedMs: t0,
+    art: null,
+  };
+  const pending = {
+    trackKey: mediaTrackKey(base),
+    targetMs: 90_000,
+    setAtEpochMs: t0,
+    untilEpochMs: t0 + OPTIMISTIC_SEEK_HOLD_MS,
+  };
+
+  // Before confirmation or expiry, applied overlay overrides position and timestamp.
+  const projected = applyOptimisticSeek(base, pending, t0 + 400);
+  assert.equal(projected?.positionMs, 90_000n);
+  assert.equal(projected?.positionUpdatedMs, t0);
+  assert.equal(shouldClearOptimisticSeek(pending, base, t0 + 400), false);
+
+  // Confirming near target clears pending; different track or timeout also clears pending.
+  assert.equal(shouldClearOptimisticSeek(pending, { ...base, positionMs: 91_200n, positionUpdatedMs: t0 + 500 }, t0 + 500), true);
+  assert.equal(shouldClearOptimisticSeek(pending, { ...base, title: 'Song B' }, t0 + 200), true);
+  assert.equal(shouldClearOptimisticSeek(pending, base, t0 + OPTIMISTIC_SEEK_HOLD_MS), true);
+  assert.equal(applyOptimisticSeek({ ...base, title: 'Song B' }, pending, t0 + 200)?.positionMs, 10_000n);
 });

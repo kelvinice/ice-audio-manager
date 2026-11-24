@@ -1,7 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import type { EngineSnapshot, Envelope, MediaAction } from '../ipc/engine';
-import type { NotchDelta, NotchSnapshot } from '../ipc/types';
+import type { HitRect, NotchDelta, NotchSnapshot } from '../ipc/types';
 import { SpringGroup } from '../motion/spring.svelte';
 import {
   adaptAccentForSurface,
@@ -31,8 +31,17 @@ import {
   NotchActivityScheduler,
   nowPlayingMode,
   shortDeviceName,
+  toMsNumber,
   type ActivityView,
 } from './scheduler';
+import {
+  applyOptimisticSeek,
+  clampSeekPositionMs,
+  mediaTrackKey,
+  OPTIMISTIC_SEEK_HOLD_MS,
+  shouldClearOptimisticSeek,
+  type OptimisticSeek,
+} from './scrubber';
 import { resolveDisplayedView } from './nowPlaying';
 
 export class NotchController {
@@ -50,6 +59,9 @@ export class NotchController {
   private hoverTimer: number | null = null;
   private leaveTimer: number | null = null;
   private activityTimer: number | null = null;
+  private optimisticSeek = $state<OptimisticSeek | null>(null);
+  private optimisticSeekTimer: number | null = null;
+  private lastHitRect: HitRect | null = null;
   private lastReportedSeq = 0;
   private resnapshotting = false;
 
@@ -104,8 +116,11 @@ export class NotchController {
       ? formatSpatialBadge(this.engineState.activeDevice.spatial)
       : (this.notchSnapshot?.spatialBadge ?? null),
   );
+  readonly effectiveMedia = $derived(
+    applyOptimisticSeek(this.engineState.media, this.optimisticSeek, Date.now()),
+  );
   readonly displayedMedia = $derived(
-    this.activeView.kind === 'track' ? this.activeView.media : this.engineState.media,
+    this.activeView.kind === 'track' ? this.activeView.media : this.effectiveMedia,
   );
   readonly isLightTheme = $derived(
     (this.notchSnapshot?.theme ?? this.engineState.settings?.appearance.theme ?? 'ice') === 'ice_light',
@@ -264,7 +279,17 @@ export class NotchController {
     } else {
       this.springs.setTargets(target);
     }
-    void invoke('report_hit_rect', { rect: computeHitRect(target) });
+    const nextRect = computeHitRect(target);
+    if (
+      !this.lastHitRect ||
+      this.lastHitRect.x !== nextRect.x ||
+      this.lastHitRect.y !== nextRect.y ||
+      this.lastHitRect.width !== nextRect.width ||
+      this.lastHitRect.height !== nextRect.height
+    ) {
+      this.lastHitRect = nextRect;
+      void invoke('report_hit_rect', { rect: nextRect });
+    }
   }
 
   private acknowledgeRenderedSeq(seq: number): void {
@@ -305,6 +330,9 @@ export class NotchController {
     const prevProfile = this.engineState.settings?.performanceProfile;
     this.scheduler.applySnapshot(snapshot, Date.now());
     this.engineState = { ...this.scheduler.state };
+    if (this.optimisticSeek && shouldClearOptimisticSeek(this.optimisticSeek, this.engineState.media, Date.now())) {
+      this.clearOptimisticSeek();
+    }
     this.rearmLingerOnProfileChange(prevProfile);
     this.syncGeometry(true);
     this.scheduleNextTick();
@@ -329,6 +357,7 @@ export class NotchController {
   }
 
   private applyEngineEnvelope(delta: Envelope): void {
+    const prevMedia = this.engineState.media;
     const res = this.scheduler.applyEnvelope(delta, Date.now());
     if (res.status === 'needs_resnapshot') {
       void this.resnapshotEngine();
@@ -343,6 +372,17 @@ export class NotchController {
       this.scheduleNextTick();
     }
     const type = delta.event.type;
+    if (type === 'mediaChanged' && this.optimisticSeek) {
+      const next = this.engineState.media;
+      const trackChanged = !next || mediaTrackKey(next) !== this.optimisticSeek.trackKey;
+      const timelineMoved =
+        toMsNumber(next?.positionMs) !== toMsNumber(prevMedia?.positionMs) ||
+        toMsNumber(next?.positionUpdatedMs) !== toMsNumber(prevMedia?.positionUpdatedMs) ||
+        next?.status !== prevMedia?.status;
+      if ((trackChanged || timelineMoved) && shouldClearOptimisticSeek(this.optimisticSeek, next, Date.now())) {
+        this.clearOptimisticSeek();
+      }
+    }
     if (type === 'mediaChanged' && nowPlayingMode(this.engineState.settings) === 'while_playing') {
       // Play/pause flips the "while playing" pill; restart the idle linger so Balanced suspends only once it's idle.
       this.scheduler.markInteraction(Date.now());
@@ -421,6 +461,7 @@ export class NotchController {
       this.springs.dispose();
       this.clearTimers();
       this.clearActivityTimer();
+      this.clearOptimisticSeek();
       void unlistenNotch.then((fn) => fn());
       void unlistenEngine.then((fn) => fn());
       void unlistenEngineSnap.then((fn) => fn());
@@ -523,9 +564,44 @@ export class NotchController {
     }
   };
 
+  private clearOptimisticSeek(): void {
+    this.optimisticSeek = null;
+    if (this.optimisticSeekTimer !== null) {
+      clearTimeout(this.optimisticSeekTimer);
+      this.optimisticSeekTimer = null;
+    }
+  }
+
   sendMediaAction(action: MediaAction): void {
     this.scheduler.markInteraction(Date.now());
     this.scheduleNextTick();
+    if (typeof action === 'object' && 'seek' in action) {
+      const media = this.engineState.media;
+      const dur = toMsNumber(media?.durationMs);
+      const clamped =
+        dur !== null && dur > 0
+          ? clampSeekPositionMs(action.seek.positionMs, dur)
+          : Math.max(0, Math.round(action.seek.positionMs));
+      if (media) {
+        const now = Date.now();
+        this.clearOptimisticSeek();
+        this.optimisticSeek = {
+          trackKey: mediaTrackKey(media),
+          targetMs: clamped,
+          setAtEpochMs: now,
+          untilEpochMs: now + OPTIMISTIC_SEEK_HOLD_MS,
+        };
+        this.optimisticSeekTimer = window.setTimeout(() => {
+          this.optimisticSeekTimer = null;
+          this.optimisticSeek = null;
+        }, OPTIMISTIC_SEEK_HOLD_MS);
+      }
+      void invoke('media_command', { action: { seek: { positionMs: clamped } } }).catch(() => {});
+      return;
+    }
+    if (action === 'next' || action === 'previous') {
+      this.clearOptimisticSeek();
+    }
     void invoke('media_command', { action }).catch(() => {});
   }
 

@@ -94,7 +94,7 @@
               {#if ctrl.showPillLyrics}
                 <LyricsExtension
                   lyrics={ctrl.engineState.lyrics}
-                  media={ctrl.activeView.media}
+                  media={ctrl.effectiveMedia ?? ctrl.activeView.media}
                   mode="pill"
                   wordHighlight={ctrl.engineState.settings?.lyrics.wordHighlight ?? true}
                   showRomaji={ctrl.engineState.settings?.lyrics.romaji ?? true}
@@ -109,7 +109,7 @@
               volumePercent={ctrl.effectiveVolumePercent}
               muted={ctrl.effectiveVolumeMuted}
               micMuted={ctrl.effectiveMicMuted}
-              media={ctrl.engineState.media}
+              media={ctrl.effectiveMedia}
               idleMode={ctrl.idleMode}
               preset={ctrl.notchSnapshot.preset}
               instant={ctrl.isInstant}
@@ -128,7 +128,7 @@
             muted={ctrl.effectiveVolumeMuted}
             barPercent={ctrl.pillSize.vol}
             micMuted={ctrl.effectiveMicMuted}
-            media={ctrl.engineState.media}
+            media={ctrl.effectiveMedia}
             lyrics={ctrl.engineState.lyrics}
             showLyrics={ctrl.showCardLyrics}
             lyricsDrawerOpen={ctrl.lyricsCardOpen}

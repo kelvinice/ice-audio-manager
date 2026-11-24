@@ -10,6 +10,8 @@ export const SILENT_THRESHOLD = 0.001;
 export const MIN_BAR_SCALE = 0.1;
 export const BAR_SPRING_PRECISION = 0.004;
 export const MOCK_METER_INTERVAL_MS = 33;
+/** Visible view transitions (pill ↔ expanded, brief song change) keep loopback warm briefly. */
+export const VISUALIZER_STOP_GRACE_MS = 400;
 
 const IS_DEV = Boolean(import.meta.env && import.meta.env.DEV);
 
@@ -275,6 +277,7 @@ class VisualizerController {
   private requestInFlight = false;
   private streamGen = 0;
   private syncQueued = false;
+  private stopGraceTimer: number | null = null;
   private listenerReady: Promise<void> | null = null;
   private visibilityBound = false;
 
@@ -333,20 +336,44 @@ class VisualizerController {
     });
   }
 
+  private clearStopGrace(): void {
+    if (this.stopGraceTimer !== null && typeof window !== 'undefined') {
+      window.clearTimeout(this.stopGraceTimer);
+      this.stopGraceTimer = null;
+    }
+  }
+
+  private stopBackendStream(): void {
+    this.streamGen += 1;
+    this.requestInFlight = false;
+    void this.sendVisualizerHint(false);
+  }
+
   private syncNow(): void {
     if (!this.isVisibleAndActive()) {
-      this.streamGen += 1;
-      this.requestInFlight = false;
       this.stopRaf();
       this.stopMock();
       this.bank.snapSilence();
       this.beat.reset();
       this.emitTempo(1, 0, true);
       this.emitValues();
-      void this.sendVisualizerHint(false);
+
+      const docHidden = typeof document !== 'undefined' && document.hidden;
+      if (docHidden || typeof window === 'undefined') {
+        this.clearStopGrace();
+        this.stopBackendStream();
+      } else if (this.stopGraceTimer === null && (this.backendRequested || this.requestInFlight)) {
+        this.stopGraceTimer = window.setTimeout(() => {
+          this.stopGraceTimer = null;
+          if (!this.isVisibleAndActive()) {
+            this.stopBackendStream();
+          }
+        }, VISUALIZER_STOP_GRACE_MS);
+      }
       return;
     }
 
+    this.clearStopGrace();
     this.ensureListener();
     if (this.backendRequested || this.requestInFlight) return;
     const gen = ++this.streamGen;
@@ -441,11 +468,11 @@ class VisualizerController {
     const now = performance.now();
     const moving = this.bank.setTargets(this.beat.shape(frame, now, this.targets));
     this.emitTempo(this.beat.tempoRate, now, false);
-    this.emitValues();
     if (moving && this.isVisibleAndActive()) {
       this.ensureRaf();
-    } else if (!moving) {
+    } else {
       this.stopRaf();
+      this.emitValues();
     }
   }
 

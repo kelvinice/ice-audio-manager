@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { FIT_EDGE_PX, FIT_MIN_SCALE, fitLineLayout } from './fitLine.ts';
+import { FIT_EDGE_PX, FIT_MIN_SCALE, fitLineLayout, fitLayoutsEqual } from './fitLine.ts';
 
 test('a line that fits keeps room for the active word lift', () => {
   assert.deepEqual(fitLineLayout(200, 180, 180), { scale: 1, x: 0, fadeLeft: false, fadeRight: false });
@@ -38,4 +38,13 @@ test('the card centres a shrunk line', () => {
   const l = fitLineLayout(200, 210, 0, true);
   const width = 210 * l.scale;
   assert.ok(Math.abs(l.x - (200 - FIT_EDGE_PX - width) / 2) < 1e-9);
+});
+
+test('fitLayoutsEqual detects unchanged layouts to avoid redundant DOM writes', () => {
+  const a = fitLineLayout(200, 180, 100);
+  const b = fitLineLayout(200, 180, 120);
+  const c = fitLineLayout(200, 400, 250);
+  assert.equal(fitLayoutsEqual(null, a), false);
+  assert.equal(fitLayoutsEqual(a, b), true);
+  assert.equal(fitLayoutsEqual(a, c), false);
 });

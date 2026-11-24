@@ -47,6 +47,52 @@ export function stepSeekMs(
   return clampSeekPositionMs(currentMs + deltaMs, durationMs);
 }
 
+export const OPTIMISTIC_SEEK_HOLD_MS = 1_500;
+const SEEK_CONFIRM_TOLERANCE_MS = 3_500;
+
+export interface OptimisticSeek {
+  trackKey: string;
+  targetMs: number;
+  setAtEpochMs: number;
+  untilEpochMs: number;
+}
+
+export function mediaTrackKey(media: Pick<NowPlaying, 'appId' | 'title' | 'artist' | 'album'>): string {
+  return `${media.appId}\0${media.title}\0${media.artist}\0${media.album}`;
+}
+
+export function shouldClearOptimisticSeek(
+  pending: OptimisticSeek | null,
+  media: NowPlaying | null | undefined,
+  nowEpochMs: number,
+): boolean {
+  if (!pending || !media) return true;
+  if (mediaTrackKey(media) !== pending.trackKey) return true;
+  if (nowEpochMs >= pending.untilEpochMs) return true;
+  const expected =
+    pending.targetMs + (media.status === 'playing' ? Math.max(0, nowEpochMs - pending.setAtEpochMs) : 0);
+  const reported = liveMediaPositionMs(media, nowEpochMs, pending.setAtEpochMs);
+  return Math.abs(reported - expected) <= SEEK_CONFIRM_TOLERANCE_MS;
+}
+
+export function applyOptimisticSeek(
+  media: NowPlaying | null | undefined,
+  pending: OptimisticSeek | null,
+  nowEpochMs: number,
+): NowPlaying | null {
+  if (!media) return null;
+  if (!pending || mediaTrackKey(media) !== pending.trackKey || nowEpochMs >= pending.untilEpochMs) {
+    return media;
+  }
+  const dur = toMsNumber(media.durationMs);
+  const clamped = dur !== null && dur > 0 ? clampSeekPositionMs(pending.targetMs, dur) : Math.max(0, Math.round(pending.targetMs));
+  return {
+    ...media,
+    positionMs: BigInt(clamped),
+    positionUpdatedMs: pending.setAtEpochMs,
+  };
+}
+
 export function nextSecondTickDelayMs(elapsedMs: number): number {
   const safe = Number.isFinite(elapsedMs) && elapsedMs >= 0 ? elapsedMs : 0;
   const rem = 1000 - (safe % 1000);

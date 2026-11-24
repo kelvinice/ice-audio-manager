@@ -42,15 +42,14 @@
 
   const SEEK_STEP_MS = 5_000;
   const SEEK_PAGE_MS = 15_000;
-  const SEEK_HOLD_MS = 1_500;
 
   let trackEl = $state<HTMLDivElement | null>(null);
   let dragMs = $state<number | null>(null);
   let nowEpochMs = $state(Date.now());
   let fallbackAnchorMs = $state(Date.now());
-  let pendingSeek = $state<{ targetMs: number; setAtEpochMs: number; untilEpochMs: number } | null>(null);
   let lastTrackKey = '';
   let lastRawPos: number | null = null;
+  let lastRawUpdated: number | null = null;
   let lastStatus: NowPlaying['status'] | null = null;
 
   const isPlaying = $derived(media.status === 'playing');
@@ -68,39 +67,26 @@
     if (key !== lastTrackKey) {
       lastTrackKey = key;
       lastRawPos = incomingPos;
+      lastRawUpdated = incomingUpdated;
       lastStatus = status;
       fallbackAnchorMs = now;
-      pendingSeek = null;
       dragMs = null;
       nowEpochMs = now;
       return;
     }
 
-    if (incomingPos !== lastRawPos || status !== lastStatus) {
+    if (incomingPos !== lastRawPos || incomingUpdated !== lastRawUpdated || status !== lastStatus) {
       lastRawPos = incomingPos;
+      lastRawUpdated = incomingUpdated;
       lastStatus = status;
       if (incomingUpdated === null) {
         fallbackAnchorMs = now;
-      }
-      if (pendingSeek) {
-        const expected =
-          pendingSeek.targetMs + (status === 'playing' ? Math.max(0, now - pendingSeek.setAtEpochMs) : 0);
-        const reported = liveMediaPositionMs(media, now, fallbackAnchorMs);
-        if (now >= pendingSeek.untilEpochMs || Math.abs(reported - expected) <= 3500) {
-          pendingSeek = null;
-        }
       }
       nowEpochMs = now;
     }
   });
 
-  const liveElapsedMs = $derived.by(() => {
-    if (pendingSeek && nowEpochMs < pendingSeek.untilEpochMs) {
-      const raw = pendingSeek.targetMs + (isPlaying ? Math.max(0, nowEpochMs - pendingSeek.setAtEpochMs) : 0);
-      return canSeek ? clampSeekPositionMs(raw, durationMs) : Math.max(0, Math.round(raw));
-    }
-    return liveMediaPositionMs(media, nowEpochMs, fallbackAnchorMs);
-  });
+  const liveElapsedMs = $derived(liveMediaPositionMs(media, nowEpochMs, fallbackAnchorMs));
 
   $effect(() => {
     if (!isPlaying || !canSeek || !notchVisible || dragMs !== null) return;
@@ -108,16 +94,10 @@
     let timerId: number | null = null;
     const schedule = () => {
       const now = Date.now();
-      const activePending = pendingSeek && now < pendingSeek.untilEpochMs ? pendingSeek : null;
-      const current = activePending
-        ? clampSeekPositionMs(activePending.targetMs + Math.max(0, now - activePending.setAtEpochMs), durationMs)
-        : liveMediaPositionMs(media, now, fallbackAnchorMs);
+      const current = liveMediaPositionMs(media, now, fallbackAnchorMs);
       if (durationMs !== null && current >= durationMs) return;
       timerId = window.setTimeout(() => {
         nowEpochMs = Date.now();
-        if (pendingSeek && nowEpochMs >= pendingSeek.untilEpochMs) {
-          pendingSeek = null;
-        }
         schedule();
       }, nextSecondTickDelayMs(current));
     };
@@ -136,9 +116,7 @@
 
   function seekTo(positionMs: number): void {
     const clamped = clampSeekPositionMs(positionMs, durationMs);
-    const now = Date.now();
-    nowEpochMs = now;
-    pendingSeek = { targetMs: clamped, setAtEpochMs: now, untilEpochMs: now + SEEK_HOLD_MS };
+    nowEpochMs = Date.now();
     onMediaAction({ seek: { positionMs: clamped } });
   }
 
