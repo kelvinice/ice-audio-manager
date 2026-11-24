@@ -2297,14 +2297,150 @@ theirs first, and Claude wrote its own without opening theirs. Mark each revisio
 | Codex | +2 | −1 | +1 |
 | **Total** | **+5** | −1 | +4 |
 
-**Awaiting the owner's ruling.** The totals point to:
-- **A1:** CSS `transform` drift of 2–3 soft gradient layers.
-- **B1 only:** the expanded card.
-- **C1 + C2 + C3:** moves only while playing, stops when hidden, a user switch.
-- **D1:** one owner-tuned speed, backed by the `--ice-ambient-period` token that D3's supporters asked for. Minimal
-  sets it to `0s`.
+**Owner ruling · 2026-11-24: Accepted (moved to plan.md).**
+- **A1 (+6):** CSS `transform` drift of 2–3 soft gradient layers.
+- **B1 only (+6):** the expanded card (`392 × 164`).
+- **C1 + C2 + C3 (+6 each):** moves only while playing (`animation-play-state: paused` on pause), stops when hidden/collapsed/suspended (`animation: none`), and adds a `"Moving background"` switch in Settings → Appearance.
+- **D1 (+5) + D3 token (+4):** one owner-tuned speed, backed by `--ice-ambient-period` (`0s` in `Minimal`).
+- **Amendments adopted:** move `.stage` `drop-shadow` off the animated subtree first, keep the contrast scrim anchored and don't key the drift loop to `art.id`, and run the 60 s 144 Hz measurement gate before shipping (with `C4` ~30 fps JS `transform` driver as fallback if CPU exceeds `+0.1 %` over static).
 
-The amendments above apply. C4 stays the fallback if the 144 Hz measurement fails.
+---
+
+### D-26 · Visualizer spectrum bands and bar dynamics *(added 2026-11-24, owner request; neutral entry under §0.4)*
+
+**Owner request (2026-11-24):** *"Open discussion about Visualizer FFT spectrum bands vs. beat shaper — I prefer what's
+more fun for user and not too flat, satisfying to look at."*
+
+**Facts: how our visualizer works today (checked in the code 2026-11-24):**
+- **Rust meter source (`crates/ice-win/src/meter.rs`, `crates/ice-core/src/meter.rs`):**
+  - Polls Windows' `IAudioMeterInformation::GetPeakValue` and `GetChannelsPeakValues` (`crates/ice-win/src/meter.rs:39–59`)
+    every `33 ms` (`30 Hz`, `METER_INTERVAL` in `crates/ice-core/src/meter.rs:20`) on a single `ice-meter` MTA thread.
+  - The thread starts on the first `MeterSubscription` and exits within one `33 ms` tick when the last subscription drops
+    (`crates/ice-win/src/meter.rs:95–130`).
+  - Emits `MeterFrame { peak: f32, channels: Vec<f32> }` over `audio://meter/v1` only when values change by `>= 0.005`
+    (`MIN_CHANGE`), and sends silence once (`crates/ice-core/src/meter.rs:24–61, 119–134`).
+  - **Measured CPU (Phase 3):** `0.013 %` while visible, `0 %` while hidden (budget: `< 1 %` while visible, `0 %` while hidden).
+  - **Signal limitation:** `IAudioMeterInformation` reports only one scalar amplitude (`0.0–1.0`) per output channel
+    (`[L, R]` on stereo). It contains no frequency or pitch information: a sub-bass kick, vocal swell, and hi-hat all
+    collapse into the same two L/R peak numbers, and modern loud masters sit near `0.7–1.0` peak across most of a song.
+- **UI shaping and rendering (`app/ui/src/lib/notch/beat.ts`, `visualizer.ts`, `VisualizerBars.svelte`):**
+  - Three surfaces share a 14-bar bank (`BEAT_BAR_COUNT = 14`, `beat.ts:22`):
+    1. `compact`: 5 bars (`12 px` tall, `2 px` wide, `2 px` gap) in the idle pill (`IdlePill.svelte`).
+    2. `expanded`: 5 bars (`16 px` tall, `2 px` wide, `2 px` gap) in the expanded media header (`ExpandedMediaCard.svelte`).
+    3. `wide`: 14 bars (`24 px` tall, `2 px` wide, `3 px` gap) as the waveform scrubber in the now-playing pill
+       (`TrackActivity.svelte:80`), coloured by playback progress over a resting line (`WIDE_TEXTURE`, `visualizer.ts:48`).
+  - `BeatShaper` (`beat.ts:51–152`, added in `0ceac61`) tracks a per-channel dB floor (`FLOOR_TAU_S = 1.2 s`) and ceiling
+    (`CEIL_RELEASE_DB_PER_S = 4 dB/s`, `MIN_RANGE_DB = 6 dB`) to compute `punch` (swing above body) and `onset`
+    (frame-to-frame dB jump over `6 dB`). When `onset >= 0.3`, it increments a beat counter and hashes `(beat, bar)`
+    via `Math.sin` (`beatHash`, `beat.ts:46–49`) to scale each bar's target height.
+  - `VisualizerBank` (`visualizer.ts:143–250`) drives 14 `Spring1D` instances using identical `(k, c, m)` parameters for
+    every bar (`ATTACK_STIFFNESS_MULT = 4.5`, `ATTACK_MASS_MULT = 0.35`, `DECAY_STIFFNESS_MULT = 2.4`), and
+    `VisualizerBars.svelte:65–76` renders each bar via compositor-only `clip-path: inset(pct% 0 pct% 0 round 999px)` and
+    `opacity`.
+- **Why bars can still look flat or uniform today:**
+  1. **Simultaneous movement across all bars:** because all 14 bars are driven by the same instantaneous `[L, R]` peak
+     frame, every bar rises on the same frame and falls on the same frame; `beatHash` varies their peak heights on a
+     beat, but cannot create independent bass vs. vocal vs. treble rhythm.
+  2. **Sustained or melodic passages without sharp `+1.8 dB/frame` onsets:** when `onset < 0.3`, `this.beat` does not
+     advance (`beat.ts:129`), so the spatial pattern stays frozen and bars hover near the low `body` level (`0.1–0.2`)
+     whenever `db` is close to the `1.2 s` running floor.
+  3. **Uniform spring physics across all bars:** every bar shares the exact same attack/decay spring constants
+     (`visualizer.ts:217`), so bass and treble bars move at the same speed.
+
+**Facts: WASAPI loopback frequency analysis on Windows 11 (sourced / estimated):**
+- **WASAPI shared-mode loopback (`AUDCLNT_STREAMFLAGS_LOOPBACK`):**
+  - Standard documented Win32 COM API (`IAudioClient::Initialize` with `AUDCLNT_SHAREMODE_SHARED | AUDCLNT_STREAMFLAGS_LOOPBACK`
+    and `IAudioCaptureClient::GetBuffer` on the default `Flow::Render` endpoint). Already available in our `windows`
+    crate features (`Win32_Media_Audio`).
+  - Captures the mixed digital render stream of the active playback device (typically `48 kHz` or `44.1 kHz` IEEE float32).
+  - **Windows privacy indicator:** Windows 11's taskbar microphone icon tracks active `Flow::Capture` (recording/mic)
+    sessions; shared-mode loopback on a `Flow::Render` (speaker/headphone) endpoint does not open a microphone (to
+    verify on host during QA).
+  - **Trust & privacy rules (`docs/code-practices.md` §1, §2):** PCM samples are reduced in memory on the `ice-meter`
+    thread to `14` bar magnitudes (`0.0–1.0`) at `30 Hz` and immediately discarded — never stored, logged, or exposed
+    beyond `MeterFrame`. When the last `MeterSubscription` drops (notch hidden, idle pill without bars, suspended, or
+    gaming mode), the `IAudioClient` stops and drops within one `33 ms` tick (`0 %` CPU while hidden).
+- **Two ways to extract frequency bands from `48 kHz` PCM at `30 Hz` (~`1,600` frames per `33 ms` tick):**
+  1. **In-tree cascade of log-spaced 2nd-order IIR biquad band-pass filters (or Goertzel bands), zero external crates:**
+     - `14` biquad filters (~`45 Hz` sub-bass to `~14 kHz` air) running on mono-summed (or stereo-paired) samples require
+       `5` multiply-adds per sample per band: `14 × 1,600 × 5 ≈ 112,000` float ops per `33 ms` tick (`~3.4 MFLOP/s`,
+       estimated `< 0.03 ms` CPU per tick in release Rust, zero heap allocations).
+     - Tracks continuous time-domain envelope per band with zero window latency.
+  2. **Windowed radix-2 real FFT (`1024` or `2048` samples):**
+     - A `1024`- or `2048`-sample Hann-windowed ring buffer (`21.3 ms` or `42.6 ms` at `48 kHz`) transformed once every
+       `33 ms` via radix-2 FFT (either ~80 lines of in-tree Cooley-Tukey Rust or a crate like `rustfft`), grouping
+       narrow low-frequency bins (`23.4 Hz/bin` at `2048`) and wide high-frequency bins into `14` log-spaced bands.
+     - Compute cost is similarly small (`~10–25k` ops per `33 ms` tick, estimated `< 0.05 ms` CPU per tick).
+- **Fallback need:** if an application holds the endpoint in WASAPI Exclusive Mode, or if loopback initialization fails on
+  a virtual/Bluetooth driver, `IAudioMeterInformation` + `BeatShaper` can remain as an automatic fallback so the bars still
+  move.
+
+**Options.**
+
+*Part A · Signal and frequency source (pick one).*
+- **A0 · Keep `IAudioMeterInformation` peaks + today's `BeatShaper` (`beat.ts`).**
+  - *Costs and risks:* zero new Rust code (`0.013 %` CPU measured); bars have no pitch separation and move on the same
+    scalar peak envelope, which can still feel uniform or flat between sharp onsets.
+- **A1 · `IAudioMeterInformation` peaks + multi-envelope travelling-wave shaper in TypeScript (no audio capture).**
+  - *What it changes:* keeps the peak-only Rust meter, but drives the 14 bars from three distinct time-constant followers
+    (fast transient `~35 ms`, beat body `~140 ms`, slow melodic swell `~450 ms`) plus a short ring-buffer delay line
+    (`1–3` ticks across bars) and slow phase oscillator so sustained music ripples continuously instead of freezing
+    between `+1.8 dB` onsets.
+  - *Costs and risks:* zero Rust/COM complexity; still cannot distinguish a real bass kick from a loud vocal or hi-hat
+    because the input is only L/R peak amplitude.
+- **A2 · WASAPI loopback capture + in-tree 14-band log-spaced IIR biquad filter bank in Rust (with `IAudioMeterInformation` + `A1` fallback).**
+  - *What it changes:* while a `MeterSubscription` is active, `ice-meter` reads shared-mode loopback PCM on the default
+    render endpoint, runs `14` zero-allocation biquad band-pass filters (`~45 Hz` to `~14 kHz`), and sends the `14` real
+    band levels in `MeterFrame.channels` (or `bands`). Falls back automatically to `IAudioMeterInformation` if loopback
+    is unavailable.
+  - *Costs and risks:* ~150–200 lines of COM + biquad Rust in `crates/ice-win/src/meter.rs`, no new external crate;
+    must verify `< 1 %` visible CPU (`0 %` hidden), clean rebind on device switch, and zero Windows mic-indicator trigger.
+- **A3 · WASAPI loopback capture + windowed `1024`/`2048`-point FFT in Rust (with `IAudioMeterInformation` + `A1` fallback).**
+  - *What it changes:* same WASAPI loopback lifecycle as A2, but uses a `1024`/`2048`-sample ring buffer + Hann window +
+    FFT bin grouping into `14` log-spaced bands.
+  - *Costs and risks:* finer sub-bass bin separation (`23.4 Hz` at `2048` samples) at the cost of a `21–43 ms` windowing
+    buffer and either an in-tree radix-2 FFT or an external DSP crate (`rustfft`).
+
+*Part B · Per-band shaping, layout, and spring feel to make the bars fun & non-flat (pick many; combines with Part A).*
+- **B1 · Per-band adaptive range (per-band AGC) + pink-noise tilt (`+3.5 to +4.5 dB/octave`) + punchy power curve.**
+  - *Why:* raw audio spectra drop off by `~3–6 dB/octave` toward treble, which leaves high-frequency bars flat near the
+    bottom while bass pegs the top. Tilting the bands and running a fast adaptive floor/ceiling per band lets bass,
+    vocals, and hi-hats each use the full bar travel (`0.10–1.0`) independently.
+- **B2 · Frequency-graded `(k, c, m)` spring physics across the bars.**
+  - *Why:* instead of identical spring constants on all 14 bars (`visualizer.ts:217`), scale mass and damping across the
+    bar index: bass bars get slightly heavier mass and a meatier rebound overshoot, mid bars track vocals smoothly, and
+    treble bars get lighter mass with snappy attack/decay for crisp percussion shimmer (still honouring `Snappy` /
+    `Smooth` / `Bouncy` and disabled under `Off` / reduce motion).
+- **B3 · Lateral neighbor coupling (`~15–20 %` bleed with 1-tick lag) + minimum melodic motion floor.**
+  - *Why:* when a solo instrument plays in a narrow band (or between beats), subtle neighbor coupling prevents isolated
+    "single-tooth" spikes next to dead-flat bars, creating an organic connected wave silhouette.
+- **B4 · Bar layout mapping (pick one of `B4a` or `B4b` by scoring both):**
+  - **B4a · Symmetric centre-bass (`[treble, mid, bass, mid, treble]`) on the 5-bar badge, and low-to-high (`bass → treble`)
+    with stereo shimmer on the 14-bar wide waveform scrubber:** keeps the 5-bar compact/expanded icon visually balanced
+    around a strong centre beat while the 14-bar wide scrubber reads naturally from left to right.
+  - **B4b · Left-to-right low-to-high (`bass → treble`) on all variants (both 5-bar and 14-bar):** classic spectrum
+    analyzer ordering everywhere.
+
+#### Positions
+
+*Sealed: each agent writes `docs/votes/D-26/<agent>.md` (template in [docs/votes/README.md](votes/README.md)). The reveal
+copies the scores here once all three files exist (§0.4).*
+
+#### Vote · Part A *pick one* (signal & frequency source)
+
+| Agent | A0 peak + BeatShaper today | A1 peak + multi-envelope wave shaper | A2 WASAPI loopback + 14-band IIR biquads | A3 WASAPI loopback + 1024/2048 FFT |
+|---|---|---|---|---|
+| Claude | | | | |
+| Gemini | | | | |
+| Codex | | | | |
+
+#### Vote · Part B *pick many* (shaping, physics & layout; B4a vs B4b is pick-higher)
+
+| Agent | B1 per-band AGC + pink tilt | B2 frequency-graded `(k, c, m)` springs | B3 neighbor wave coupling | B4a symmetric 5-bar + L→R 14-bar | B4b L→R bass→treble everywhere |
+|---|---|---|---|---|---|
+| Claude | | | | | |
+| Gemini | | | | | |
+| Codex | | | | | |
 
 ---
 
@@ -2419,4 +2555,5 @@ A decision passes when all three agents have voted and the rules produce a resul
 | D-22 | YouTube Music playback, lyrics, network use | N0 +1 (−1/+1/+1), N1 +6 (+2/+2/+2), N2 −5 (−1/−2/−2), B1 +6 (+2/+2/+2), B2 −3 (−1/−1/−1), B3 −6 (−2/−2/−2), K0 −1 (−1/0/0), K1 +5 (+2/+2/+1), K2 −2 (0/−1/−1), K3 −6 (−2/−2/−2) | **Closed 2026-11-23 (owner)** | N1 adopted (§1.5 rewritten); B1 as a "Music services" widget (Spotify + YouTube Music), on by default, switchable per service; K1 opt-in with all amendments |
 | D-23 | Visual direction: art backdrop, translucency, cleanliness | V1 +3 (+1/+1/+1; Claude changed after reveal), V2 +5 (+2/+2/+1; Claude changed after reveal), V3 +4 (+1/+2/+1), V4 +6 (+2/+2/+2), V5 −5 (−1/−2/−2), V6 +3 (+1/+1/+1) | **Closed 2026-11-23 (owner)** | V2 default, V1 opt-in per theme with luminance scrim, one backdrop per theme, V3, V4 (D-18 row visible), V6 with lyrics; V5 rejected |
 | D-24 | Project licence: MIT or GPL-3.0 | G0 +4 (+1/+2/+1), G1 −3 (−1/−1/−1), G2 +5 (+2/+1/+2) | **Closed 2026-11-23 (owner)** | G2: stay MIT; licence changes only on the owner's explicit acceptance; references read, never copied (code-practices §1.8) |
-| D-25 | Ambient motion: moving gradient backdrop | A0 −1 (−1/−1/+1), **A1 +6 (+2/+2/+2)**, A2 −3, A3 −3, A4 −2 (0/−1/−1). **B1 +6**, B2 −3 (−1/−1/−1; Claude changed after reveal from +1), B3 −5 (−1/−2/−2, Gemini block). **C1 +6, C2 +6, C3 +6**, C4 −2 (0/−1/−1), C5 −3. **D1 +5 (+1/+2/+2)**, D2 −1 (0/0/−1), D3 +4 (+2/+1/+1) | **Voted 2026-11-24; revision round open, awaiting owner** | Totals: A1 on the expanded card only, while playing, stopped when hidden, with an off switch and one tuned speed (`--ice-ambient-period`, `0s` in Minimal). Amendments: compositor teardown, scrim anchored, shadow filter off the subtree, 144 Hz measurement gate with a 30 fps fallback |
+| D-25 | Ambient motion: moving gradient backdrop | A0 −1 (−1/−1/+1), **A1 +6 (+2/+2/+2)**, A2 −3, A3 −3, A4 −2 (0/−1/−1). **B1 +6**, B2 −3 (−1/−1/−1; Claude changed after reveal from +1), B3 −5 (−1/−2/−2, Gemini block). **C1 +6, C2 +6, C3 +6**, C4 −2 (0/−1/−1), C5 −3. **D1 +5 (+1/+2/+2)**, D2 −1 (0/0/−1), D3 +4 (+2/+1/+1) | **Closed 2026-11-24 (owner)** | Accepted: A1 on the expanded card only, while playing, stopped when hidden, with an off switch and one tuned speed (`--ice-ambient-period`, `0s` in Minimal). Amendments: compositor teardown, scrim anchored, shadow filter off the subtree, 144 Hz measurement gate with a 30 fps fallback. Moved to plan.md |
+| D-26 | Visualizer spectrum bands and bar dynamics | — | **Open 2026-11-24: sealed voting** | Owner request ("more fun for user and not too flat, satisfying to look at"). Part A (signal/frequency source: peak shaper vs WASAPI loopback biquads/FFT), Part B (per-band AGC + tilt, graded springs, wave coupling, bar layout) |

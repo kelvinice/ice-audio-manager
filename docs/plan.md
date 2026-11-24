@@ -227,9 +227,10 @@ games on the pinned monitor. Budgets met in every profile.
         5-bar variants pick 5). Faster fall (decay ×2.4, was ×0.65), resting height 0.1 (was 0.18), peaks brighten.
         Tested with simulated 120 BPM kicks on loud and quiet tracks (`beat.test.ts`)
   - [ ] By hand: compare with Spotify on a few genres (EDM, hip-hop, acoustic, a quiet podcast) on both monitors
-  - [ ] Idea, needs its own decision: **real bass/treble bands.** The meter gives only a peak per channel (no spectrum),
-        so the bars follow beats, not pitch. True bands need WASAPI loopback capture + a small filter bank/FFT on the
-        meter thread while visible (CPU and the §2 stop condition to measure)
+  - [ ] **D-26 (open in planning-discussion.md): real bass/treble spectrum bands and bar dynamics.** The meter today gives
+        only a peak per channel (no spectrum), so the bars follow beats, not pitch. D-26 compares an upgraded multi-envelope
+        wave shaper against WASAPI loopback capture + a 14-band IIR biquad filter bank or FFT on the meter thread while
+        visible, paired with per-band adaptive gain, frequency-graded springs, and wave coupling
 - [ ] Secondary QA: Chromium/Edge/Firefox media sessions, **including YouTube Music** (the website, and the app installed
       from Chrome/Edge). Owner, 2026-11-23: Spotify and YouTube Music are the supported music services (see Backlog)
 - [x] Expanded card empty state when nothing plays: a clear hint (e.g. "Nothing playing. Start Spotify or YouTube Music"),
@@ -321,7 +322,7 @@ Runs between Phase 3 and Phase 4. Item 1 is a bug fix that comes first. D-21 Par
 
 ---
 
-## Music services, lyrics and look (D-22, D-23; accepted 2026-11-23)
+## Music services, lyrics, look and ambient motion (D-22, D-23, D-25)
 
 Items marked *(needs Settings)* wait for the Phase 4 Settings window. The rest can start now.
 
@@ -355,6 +356,23 @@ Items marked *(needs Settings)* wait for the Phase 4 Settings window. The rest c
 - [x] V3 translucent controls and V4 cleanliness pass on the 384×178 card, keeping D-18's device row visible. Before/after
       screenshots verified at `100%` and `150%` across light/dark desktops and all 4 themes (Gemini). *Superseded by the
       2026-11-24 relayout below*
+
+**D-25 · Ambient motion on the expanded card (accepted 2026-11-24):**
+- [ ] Move `.stage`'s `filter: drop-shadow(...)` (`NotchApp.svelte:135`) off the animated subtree so drifting layers and
+      springs don't re-filter the stage every frame (Gemini)
+- [ ] **A1 + B1:** Split `.art-wash` (`NotchBackdrop.svelte`) into 2–3 oversized soft radial-gradient layers (no `filter`,
+      sized to the `392×164` expanded card) drifting on compositor-only CSS `transform` (`translate3d` / `scale`) with
+      coprime periods (e.g. `22 s` and `31 s`), keeping the contrast scrim anchored still and the animation phase unkeyed
+      from `art.id` so track changes, pins, and resumes never snap the colours (Gemini)
+- [ ] **C1 + C2 lifecycle:** animate only on the expanded card while visible and media is playing (`animation-play-state:
+      paused` when paused so colours freeze in place; `animation: none` when collapsed, hidden, suspended, under reduce
+      motion / preset `Off`, or when `--ice-ambient-period: 0s`) (Gemini)
+- [ ] **D1 + D3 + C3 setting and token:** add `--ice-ambient-period` to `base.css` and `docs/theming.md` (`0s` in `Minimal`,
+      prototype-tuned speed in `Ice`/`Midnight`/`Fluent`), plus a `"Moving background"` switch in Settings → Appearance
+      (default on; config field + command by Claude/Codex, UI by Gemini)
+- [ ] **144 Hz measurement gate before shipping:** 60 s on the 144 Hz monitor (process-tree CPU, GPU engine use, private
+      working set vs. static backdrop). If process-tree CPU rises by `> +0.1 %` over static, fall back to a ~30 fps
+      JavaScript `transform` driver (`C4`)
 
 ---
 
