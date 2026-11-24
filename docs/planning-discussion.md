@@ -2092,6 +2092,179 @@ closed decision changes only through a new entry.
 
 ---
 
+### D-25 · Ambient motion: a slowly moving gradient backdrop *(added 2026-11-24, owner request; neutral entry under §0.4)*
+
+**Owner request (2026-11-24):** *"Add discussion about gradient dynamic background animations (it's moving but not too
+fast or too slow), research about implementations."* D-23 made the art-derived gradient wash (V2) the default backdrop.
+Today that wash is static.
+
+**Facts: our notch today (Claude, checked in the code 2026-11-24):**
+- **The backdrop is static.** `NotchBackdrop.svelte` paints two radial gradients from `--ice-active-wash-primary/secondary`
+  (`backdrop.ts#computeArtBackdrop`) under a scrim. The only motion is a 360 ms fade when the art ID changes (none with
+  reduce motion). The V1 blurred cover exists as an opt-in (`--ice-art-backdrop`, `0` in every bundled theme).
+- **Where it shows:** the expanded card and the now-playing pill (`hasBackdropArt`). The idle pill has no art backdrop.
+- **Colours:** one accent per cover; the second wash colour is derived from it. The D-23 task "2–3 colour art palette and
+  average luminance in `ice_core::media`" is still open (plan.md).
+- **Run time:** since 2026-11-24, `Instant` keeps the WebView notch awake at idle, and the "While playing" now-playing
+  setting keeps the pill up for as long as music plays. An animation on those surfaces can run for hours.
+- **Rules that apply:**
+  - plan.md budget: idle CPU < 0.2 % over 60 s. There is no budget row for "visible and animating".
+  - code-practices §2: "Hidden means idle: when the notch is hidden, stop animation loops and timers."
+  - D-13 / the notch module doc: animate `transform`, `opacity`, `filter` and `clip-path` only. Reduce motion (Windows'
+    flag via the shell, `systemReduceMotion`) or the Off preset means no motion.
+  - §5: every visual choice is a `--ice-*` token, so themes (e.g. Minimal) can turn it off.
+- **Displays:** the owner's monitors run at 144 Hz and 75 Hz (plan.md). A CSS animation ticks at the display's refresh
+  rate; it can't be told to run at a lower frame rate.
+- **Measured reference points:** the visible visualizer costs 0.013 % CPU (Phase 3); a settled, visible WebView costs
+  0.059 % CPU (Phase 0.2). A continuously running ambient animation has **not** been measured.
+
+**Facts: how moving gradients are built elsewhere (sourced 2026-11-24; links below):**
+1. **Animated custom properties (`@property`).** Registering e.g. `--angle` as `<angle>` lets gradient angles and stops
+   interpolate, which plain CSS variables can't. Supported by every engine [1]. Animating a custom property isn't done on the
+   compositor: each frame recalculates style and repaints. Reported in 2023 with Chromium issue 1411864 [2]; not re-checked
+   against current Chromium.
+2. **Soft gradient "blobs" moved with `transform`.** Several large radial-gradient layers (soft edges baked into the
+   gradient, no `filter`) are translated, rotated or scaled. `transform` and `opacity` on their own layer skip paint and
+   are applied in composition [3][4].
+   - Animating `filter: blur()` itself isn't efficient. The Chrome team's workaround is pre-blurred copies on their own
+     layers, with only `opacity`/`transform` animated [5].
+   - A WebKit bug describes a very large blur on a transformed gradient breaking pages [6] (WebKit, not Chromium).
+3. **WebGL mesh gradient (the Stripe look).** A shader deforms a coloured mesh with noise on a canvas.
+   - Known through community reverse engineering: a small WebGL wrapper ("minigl") plus a `Gradient` class, packaged as
+     Whatamesh [7][8]. A standalone library reports ~8 kB gzipped [9].
+   - It runs a `requestAnimationFrame` loop and holds a WebGL context.
+   - The reverse-engineered code states no licence; §1.8 allows reading it, never copying it.
+4. **Apple Music's moving cover background.** A reverse-engineering write-up describes several rotated ("twisted")
+   copies of the cover art under a blur, run as a Metal shader on macOS [10]. Apple doesn't document it. In our terms it's
+   the V1 blurred cover, set in motion.
+5. **The cost of a CSS animation that never ends.** In 2017 a CSS-keyframe blinking cursor kept VS Code at ~13 % CPU when
+   idle (the reporter's measurement on a MacBook Pro). VS Code moved the blink to JavaScript timers, citing a Chromium
+   issue [11][12]. Whether this still holds in current Chromium is unverified.
+
+**Facts: accessibility (sourced):**
+- **WCAG 2.2.2 Pause, Stop, Hide (Level A):** moving content needs a way to pause, stop or hide it when it starts
+  automatically, lasts more than 5 s and is shown alongside other content.
+  - Stopping within 5 s also satisfies it.
+  - A pause that lasts only while hovered or focused doesn't count [13].
+- **Windows' setting reaches CSS:** Settings → Accessibility → Visual effects → Animation effects sets
+  `prefers-reduced-motion` [14]. Our shell already passes the same Windows flag to the notch as `systemReduceMotion`.
+
+**"Not too fast, not too slow" (estimated, to tune with a prototype):** ambient backgrounds are usually a slow drift.
+- A full loop takes tens of seconds.
+- Each layer travels a fraction of the card.
+- Layers run on different, unequal periods, so the pattern doesn't visibly repeat.
+
+These numbers are a design choice; no source sets them.
+
+**Options.**
+
+*Part A · Technique (pick one).*
+- **A0 · Keep the backdrop static** (today). No cost. Doesn't add the motion the owner asked for.
+- **A1 · CSS `transform` drift of 2–3 soft gradient blobs** in the art colours: each layer on its own long period, pure CSS
+  `@keyframes`, no JavaScript loop (fact 2).
+  - *Costs and risks:*
+    - compositor frames at the display rate (144 Hz) for as long as it runs; CPU/GPU unmeasured;
+    - fact 5 (a never-ending CSS animation in Chromium);
+    - memory for large composited layers in a transparent WebView2 window, unmeasured.
+- **A2 · `@property` animation of today's wash** (gradient angle and stop positions). One layer; the smallest change to
+  `NotchBackdrop.svelte`.
+  - *Costs and risks:* style recalculation and repaint every frame on the main thread (fact 1). CPU above A1 (estimated).
+- **A3 · Canvas/WebGL mesh gradient**, our own shader written from the idea (fact 3).
+  - *Costs and risks:* a continuously deforming mesh, like Stripe's, can lower its own frame rate (e.g. 30 fps). But:
+    - a JavaScript `requestAnimationFrame` loop, which must stop when hidden or suspended;
+    - a WebGL context, memory unmeasured;
+    - the most new code to own; §1.8 applies.
+- **A4 · Moving blurred cover** (Apple Music style, fact 4): 2–3 copies of the cover with a static `filter: blur()`, only
+  rotated or translated.
+  - *Costs and risks:*
+    - V1 is an opt-in that's off in every bundled theme (D-23 ruling), so this only shows where a theme turns it on;
+    - light covers wash out (D-23 finding);
+    - blur cost on large layers (fact 2).
+
+*Part B · Where it runs (pick many).*
+- **B1 · Expanded card** (while hovered or pinned).
+- **B2 · Now-playing pill** (the 2.4 s pop-up, or for hours with "While playing").
+- **B3 · Idle pill** (always visible in Instant; it has no art backdrop today).
+
+*Part C · When it moves (pick many).*
+- **C1 · Only while media is playing.** It freezes in place when paused or when nothing plays.
+- **C2 · Stops whenever the surface is hidden or suspended, or while a fullscreen app covers the monitor.** §2 already
+  requires the hidden case.
+- **C3 · A user switch**, e.g. Settings → Appearance → "Moving background" (WCAG 2.2.2). Reduce motion and the Off preset
+  keep it static either way (D-13).
+- **C4 · A capped frame rate:** drive the motion from JavaScript at a fixed rate (e.g. ~30 fps) instead of the display rate.
+  - *Costs:* needs a JavaScript loop. A1 in pure CSS can't cap its rate; `steps()` makes it visibly jerky.
+- **C5 · Audio-reactive drift:** speed or amplitude follows the visualizer's level. Meter frames already arrive while the
+  visualizer is visible.
+  - *Costs:* needs JavaScript; motion tied to the music moves more and is busier.
+
+*Part D · Speed (pick one).*
+- **D1 · One fixed speed,** chosen by the owner from a prototype.
+- **D2 · A setting: Calm / Normal / Lively** (a token such as `--ice-ambient-period`), with the default chosen from a prototype.
+- **D3 · The theme decides** (e.g. Ice moves, Minimal is static), with no user speed setting.
+
+**Measurement before shipping, whatever wins:** the Phase 0.2 recipe, 60 s with the motion running on the 144 Hz monitor:
+process-tree CPU, GPU engine use (Task Manager) and private working set, compared with the static backdrop. The result
+either fits under an existing budget row or the decision adds a "visible and animating" row.
+
+**If adopted:** Phase 4 (Appearance). Backdrop, tokens and `docs/theming.md` by Gemini; the 2–3 colour palette by Claude
+(the open D-23 task); the setting with the Appearance page.
+
+**Sources (read 2026-11-24):**
+[1] [web.dev: @property baseline](https://web.dev/blog/at-property-baseline) ·
+[2] [Bram.us: the gotcha with @property animating custom properties](https://www.bram.us/2023/02/01/the-gotcha-with-property) ·
+[3] [MDN: Animation performance and frame rate](https://developer.mozilla.org/en-US/docs/Web/Performance/Guides/Animation_performance_and_frame_rate) ·
+[4] [web.dev: high-performance CSS animations](https://web.dev/articles/animations-guide) ·
+[5] [Chrome for Developers: Animating a blur](https://developer.chrome.com/blog/animated-blur/) ·
+[6] [WebKit bug 228312](https://bugs.webkit.org/show_bug.cgi?id=228312) ·
+[7] [Bram.us: the Stripe website gradient effect](https://www.bram.us/2021/10/13/how-to-create-the-stripe-website-gradient-effect) ·
+[8] [Whatamesh](https://github.com/jordienr/whatamesh) ·
+[9] [Mesh Gradient docs](https://meshgradientweb.vercel.app/docs/introduction) ·
+[10] [aadishv.dev: Apple Music background](https://www.aadishv.dev/music) ·
+[11] [VS Code issue 22900](https://www.github.com/microsoft/vscode/issues/22900) ·
+[12] [The Register, 2017](https://www.theregister.com/2017/03/23/cursor_devours_cpu_cycles_ms_code_editor/) ·
+[13] [W3C: Understanding SC 2.2.2](https://www.w3.org/WAI/WCAG22/Understanding/pause-stop-hide) ·
+[14] [MDN: prefers-reduced-motion](https://developer.mozilla.org/docs/Web/CSS/Reference/At-rules/@media/prefers-reduced-motion)
+
+#### Positions
+
+*Sealed: each agent writes `docs/votes/D-25/<agent>.md` (template in [docs/votes/README.md](votes/README.md)). The reveal
+copies the scores here once all three files exist (§0.4).*
+
+#### Vote · Part A *pick one* (technique)
+
+| Agent | A0 static | A1 CSS transform blobs | A2 `@property` wash | A3 WebGL mesh | A4 moving blurred cover |
+|---|---|---|---|---|---|
+| Claude | | | | | |
+| Gemini | | | | | |
+| Codex | | | | | |
+
+#### Vote · Part B *pick many* (where)
+
+| Agent | B1 expanded card | B2 now-playing pill | B3 idle pill |
+|---|---|---|---|
+| Claude | | | |
+| Gemini | | | |
+| Codex | | | |
+
+#### Vote · Part C *pick many* (when)
+
+| Agent | C1 only while playing | C2 stop when hidden/suspended/fullscreen | C3 user switch | C4 capped frame rate | C5 audio-reactive |
+|---|---|---|---|---|---|
+| Claude | | | | | |
+| Gemini | | | | | |
+| Codex | | | | | |
+
+#### Vote · Part D *pick one* (speed)
+
+| Agent | D1 one fixed speed | D2 Calm / Normal / Lively setting | D3 theme decides |
+|---|---|---|---|
+| Claude | | | |
+| Gemini | | | |
+| Codex | | | |
+
+---
+
 ## 6. Session S5: Team workflow
 
 ### D-14 · Roles
@@ -2203,3 +2376,4 @@ A decision passes when all three agents have voted and the rules produce a resul
 | D-22 | YouTube Music playback, lyrics, network use | N0 +1 (−1/+1/+1), N1 +6 (+2/+2/+2), N2 −5 (−1/−2/−2), B1 +6 (+2/+2/+2), B2 −3 (−1/−1/−1), B3 −6 (−2/−2/−2), K0 −1 (−1/0/0), K1 +5 (+2/+2/+1), K2 −2 (0/−1/−1), K3 −6 (−2/−2/−2) | **Closed 2026-11-23 (owner)** | N1 adopted (§1.5 rewritten); B1 as a "Music services" widget (Spotify + YouTube Music), on by default, switchable per service; K1 opt-in with all amendments |
 | D-23 | Visual direction: art backdrop, translucency, cleanliness | V1 +3 (+1/+1/+1; Claude changed after reveal), V2 +5 (+2/+2/+1; Claude changed after reveal), V3 +4 (+1/+2/+1), V4 +6 (+2/+2/+2), V5 −5 (−1/−2/−2), V6 +3 (+1/+1/+1) | **Closed 2026-11-23 (owner)** | V2 default, V1 opt-in per theme with luminance scrim, one backdrop per theme, V3, V4 (D-18 row visible), V6 with lyrics; V5 rejected |
 | D-24 | Project licence: MIT or GPL-3.0 | G0 +4 (+1/+2/+1), G1 −3 (−1/−1/−1), G2 +5 (+2/+1/+2) | **Closed 2026-11-23 (owner)** | G2: stay MIT; licence changes only on the owner's explicit acceptance; references read, never copied (code-practices §1.8) |
+| D-25 | Ambient motion: moving gradient backdrop | — | **Open 2026-11-24: sealed voting** | Owner request. Parts A (technique), B (where), C (when), D (speed). Measure before shipping |
