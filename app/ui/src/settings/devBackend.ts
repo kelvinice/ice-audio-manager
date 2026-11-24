@@ -58,6 +58,7 @@ function initialSnapshot(): EngineSnapshot {
       ],
       knobGestures: true,
       showDisconnected: false,
+      idleLingerSecs: 15,
     },
   };
 }
@@ -99,6 +100,7 @@ function applyCommand(s: EngineSnapshot, c: Command): void {
     case 'setPinnedMonitor': st.pinnedMonitor = c.displayPath; break;
     case 'setKnobGestures': st.knobGestures = c.enabled; break;
     case 'setShowDisconnected': st.showDisconnected = c.enabled; break;
+    case 'setIdleLinger': st.idleLingerSecs = c.secs; break;
     case 'setDefaultRoles': st.defaultRoles = c.roles; break;
     case 'setFavourites': st.favouritesPlayback = c.deviceIds.map(ref); break;
     case 'setDevicePrefs': {

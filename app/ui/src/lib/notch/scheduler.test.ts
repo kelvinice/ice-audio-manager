@@ -80,6 +80,7 @@ function sampleSnapshot(): EngineSnapshot {
       pinnedMonitor: null,
       knobGestures: false,
       showDisconnected: false,
+      idleLingerSecs: 15,
       appearance: { theme: 'ice', preset: 'smooth', idleStyle: 'mini_pill', nowPlaying: 'brief' },
     },
     media: null,
@@ -433,4 +434,14 @@ test('now playing pill: off never pops up, while_playing stays while playing and
 
   // Brief (default) shrinks back to idle once the pop-up expires.
   assert.equal(resolveDisplayedView({ kind: 'idle' }, next, 'brief', 1).kind, 'idle');
+});
+
+test('idle linger follows settings.idleLingerSecs (D-21.1 L1)', () => {
+  const snap = sampleSnapshot();
+  snap.settings.idleLingerSecs = 60;
+  const sched = new NotchActivityScheduler(0);
+  sched.applySnapshot(snap, 0);
+  assert.equal(sched.nextTickDelayMs(0, false), 60_000);
+  assert.equal(sched.tick(IDLE_SUSPEND_LINGER_MS, false).shouldRequestSuspend, false, 'the 15 s default no longer applies');
+  assert.equal(sched.tick(60_000, false).shouldRequestSuspend, true);
 });

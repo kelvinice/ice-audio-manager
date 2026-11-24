@@ -286,8 +286,11 @@ Runs between Phase 3 and Phase 4. Item 1 is a bug fix that comes first. D-21 Par
 - [ ] R2 optional modules (Phase 4 Activities): a disabled module runs no timer, subscription or IPC
 
 **D-21.1 (accepted 2026-11-23):**
-- [ ] L1 · Idle linger in config, per profile (default 15 s, validated range), replacing `IDLE_SUSPEND_LINGER_MS`
-      (Claude: config + schema migration; Gemini: the UI reads it from the snapshot)
+- [x] L1 · Idle linger in config, per profile (default 15 s, validated range), replacing `IDLE_SUSPEND_LINGER_MS`
+      (Claude: config + schema migration; Gemini: the UI reads it from the snapshot). *Done 2026-11-24 (Claude): one value,
+      `idle_linger_secs` (schema v6, 5–600 s, out-of-range edits rejected), because only Balanced suspends now (Instant stays
+      awake, Lite has no WebView); `Command::SetIdleLinger`; the scheduler reads `settings.idleLingerSecs`; Settings →
+      General shows "Sleep the notch after" (5 s – 5 min) while Balanced is selected*
 - [ ] L2 · Event-driven hit-testing for the WebView notch, replacing the cursor poll (Codex).
   - Spike on the real host first: moving edges during spring morphs, mixed DPI, glow/shadow not clipped.
   - If it can't follow the springs cleanly, narrow when the poll runs instead.
@@ -365,6 +368,11 @@ to the static native pill. Done by Claude; module docs: [app-ui-notch](modules/a
       cover-and-controls pill while media plays; pausing shrinks it; Balanced doesn't idle-suspend while it shows) · **Off**
       (no pop-up and no notch wake on a new track; the idle pill just shows the title)
 - [ ] By hand: each of the three modes with Spotify (skip, pause, resume) in Instant and Balanced
+- [x] **Waveform scrubber replaces the now-playing pill's buttons** (owner: hovering expands the notch before the buttons
+      can be reached). `TrackActivity` shows a 14-bar live waveform (`VisualizerBars variant="wide"`, `spreadLevels`) lit in
+      the art accent up to the played position, dim after it; a calm resting waveform while paused or without a meter.
+      Position is interpolated locally and re-rendered only when the next bar lights up (~every duration / 14)
+- [ ] By hand: the waveform on light/dark desktops, a live stream (no duration = all lit) and pause/resume
 - [ ] Visual QA of the new card on both monitors at 100 % / 150 %, light/dark desktops, all 4 themes (owner)
 - [ ] Phase 6: measure Instant idle with the WebView awake (expected ≈ 77 MB private WS from Phase 0.2, inside the ≤ 100 MB
       target) and the cursor poll's idle CPU, which now runs for as long as Instant shows the notch. D-21.1 L2

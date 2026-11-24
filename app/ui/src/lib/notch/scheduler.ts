@@ -20,6 +20,7 @@ export const PLUG_DURATION_MS = 2000;
 export const MIC_DURATION_MS = 1600;
 export const TRACK_CHANGE_DURATION_MS = 2400;
 export const PLUG_SWITCH_MERGE_WINDOW_MS = 1500;
+/** Default idle linger; the live value is `settings.idleLingerSecs` (D-21.1 L1, config `idle_linger_secs`). */
 export const IDLE_SUSPEND_LINGER_MS = 15_000;
 
 /** Q-10 idle appearance modes: settled default is `'mini_pill'`, with `'dot'` and `'hidden'` kept as options. */
@@ -250,6 +251,10 @@ export class NotchActivityScheduler {
   private seqCounter = 0;
   /** `trackSeq` of the last track pop-up (see `nowPlaying.ts#resolveDisplayedView`). */
   lastTrackSeq = 0;
+
+  private lingerMs(): number {
+    return (this.state.settings?.idleLingerSecs ?? IDLE_SUSPEND_LINGER_MS / 1000) * 1000;
+  }
 
   constructor(nowMs = 0) {
     this.state = {
@@ -597,7 +602,7 @@ export class NotchActivityScheduler {
       this.state.activity.kind === 'idle' &&
       !this.state.suspendDispatched &&
       this.state.idleSinceMs !== null &&
-      nowMs - this.state.idleSinceMs >= IDLE_SUSPEND_LINGER_MS;
+      nowMs - this.state.idleSinceMs >= this.lingerMs();
 
     if (shouldRequestSuspend) {
       this.state.suspendDispatched = true;
@@ -614,7 +619,7 @@ export class NotchActivityScheduler {
       return Math.max(0, this.state.activity.expiresAtMs - nowMs);
     }
     if (!this.state.suspendDispatched && this.state.idleSinceMs !== null) {
-      return Math.max(0, this.state.idleSinceMs + IDLE_SUSPEND_LINGER_MS - nowMs);
+      return Math.max(0, this.state.idleSinceMs + this.lingerMs() - nowMs);
     }
     return null;
   }

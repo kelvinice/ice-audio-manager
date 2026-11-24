@@ -37,6 +37,7 @@ function baseSettings(overrides: Partial<SettingsView> = {}): SettingsView {
     devices: [],
     knobGestures: true,
     showDisconnected: false,
+    idleLingerSecs: 15,
     ...overrides,
   };
 }

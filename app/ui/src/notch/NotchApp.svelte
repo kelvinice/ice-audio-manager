@@ -63,7 +63,8 @@
             <TrackActivity
               activity={ctrl.activeView}
               instant={ctrl.isInstant}
-              onMediaAction={(action) => ctrl.sendMediaAction(action)}
+              preset={ctrl.notchSnapshot.preset}
+              notchVisible={ctrl.isNotchVisible}
             />
           {:else}
             <IdlePill

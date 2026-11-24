@@ -46,7 +46,7 @@ updating the constants.
   expanded, suspended, monitors, system reduce-motion). The controller merges them; the scheduler decides what activity shows.
 - **Animation:** springs only, animating `transform`/`opacity`/`filter`/`clip-path`; the pill morph drives an SVG `<rect rx ry>` plus `clip-path: inset(… round …)`,
   never `width/height`. No loop while hidden or settled. Reduce motion (Windows flag via the shell) or preset `off` = instant, no fade.
-- **After idle linger** (`IDLE_SUSPEND_LINGER_MS` = 15 s today; D-21.1 L1 moves it to config) the UI calls `request_idle_suspend` (Balanced only; Instant stays awake, so the notch never drops back to the static native pill); the shell suspends or releases the WebView.
+- **After idle linger** (`settings.idleLingerSecs`, config `idle_linger_secs`, default 15 s) the UI calls `request_idle_suspend` (Balanced only; Instant stays awake, so the notch never drops back to the static native pill); the shell suspends or releases the WebView.
 - **Reports to shell:** `report_hit_rect` (click-through area), `report_first_paint`, `report_event_rendered`. Visualizer: `set_visualizer({ active })`, frames on `audio://meter/v1`.
 - Album art via `iceart://<id>`; accent/glow from `art.accent`.
 
@@ -68,3 +68,4 @@ updating the constants.
   smaller `--ice-drop-shadow` so the shadow isn't clipped; Instant no longer requests idle suspend.
 - 2026-11-24 Claude: "More…" and the in-notch picker removed (`NotchDeviceRowModel` is just `chips`); visualizer `BarShaper` + `clip-path` bars.
 - 2026-11-24 Claude: "Now playing pill" setting (`nowPlaying.ts`, Settings → Notch, tray); Balanced only idle-suspends when the shown view is idle.
+- 2026-11-24 Claude: `TrackActivity` has no transport buttons; a waveform scrubber (`VisualizerBars variant="wide"` + `spreadLevels`, accent up to the played position). Idle linger read from settings.

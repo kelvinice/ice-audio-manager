@@ -315,6 +315,7 @@ impl Engine for FakeEngine {
             | Command::SetIdleStyle { .. }
             | Command::SetNowPlayingPill { .. }
             | Command::SetShowDisconnected { .. }
+            | Command::SetIdleLinger { .. }
             | Command::SetDefaultRoles { .. } => {
                 let eps = endpoints(&st.snap);
                 match st.config.apply_setting(&command, &eps) {

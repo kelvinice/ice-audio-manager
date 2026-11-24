@@ -18,8 +18,14 @@ use crate::hotkey::Chord;
 use crate::resolve::{DeviceRef, MatchMode, resolve};
 
 /// v2: performance profile and pinned monitor. v3: `show_disconnected`. v4: saved notch appearance.
-/// v5: `appearance.nowPlaying` (how the now-playing pill behaves).
-pub const SCHEMA_VERSION: u32 = 5;
+/// v5: `appearance.nowPlaying` (how the now-playing pill behaves). v6: `idle_linger_secs` (D-21.1 L1).
+pub const SCHEMA_VERSION: u32 = 6;
+
+/// Default seconds the notch WebView stays awake at idle before `Balanced` hands over to the native pill
+/// (`Instant` never does; `Lite` has no WebView).
+pub const IDLE_LINGER_SECS_DEFAULT: u16 = 15;
+/// Allowed idle linger, in seconds.
+pub const IDLE_LINGER_SECS: std::ops::RangeInclusive<u16> = 5..=600;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
@@ -45,6 +51,8 @@ pub struct Config {
     /// List unplugged endpoints (e.g. an empty headphone jack) greyed out, like Windows' "Show disconnected
     /// devices". Never as switch targets, and never `NotPresent` ghosts (D-16).
     pub show_disconnected: bool,
+    /// D-21.1 L1: how long the notch stays awake at idle before `Balanced` suspends it ([`IDLE_LINGER_SECS`]).
+    pub idle_linger_secs: u16,
 }
 
 impl Default for Config {
@@ -61,6 +69,7 @@ impl Default for Config {
             favourites: Favourites::default(),
             knob: KnobGestures::default(),
             show_disconnected: false,
+            idle_linger_secs: IDLE_LINGER_SECS_DEFAULT,
         }
     }
 }
@@ -180,10 +189,19 @@ impl Config {
             return Err(ConfigError::TooNew(schema_version));
         }
         let cfg: Self = toml::from_str(text).map_err(|e| ConfigError::Parse(e.to_string()))?;
+        if !IDLE_LINGER_SECS.contains(&cfg.idle_linger_secs) {
+            return Err(ConfigError::Parse(format!(
+                "idle_linger_secs = {} is outside {}–{} seconds",
+                cfg.idle_linger_secs,
+                IDLE_LINGER_SECS.start(),
+                IDLE_LINGER_SECS.end()
+            )));
+        }
         match cfg.schema_version {
             v if v > SCHEMA_VERSION => Err(ConfigError::TooNew(v)),
-            // v0/v1 gain the default profile and an initially unassigned monitor pin, and v0–v2 gain
-            // `show_disconnected = false`, and v0–v4 gain `appearance.nowPlaying = "brief"`, all via serde defaults.
+            // v0/v1 gain the default profile and an initially unassigned monitor pin, v0–v2 gain
+            // `show_disconnected = false`, v0–v4 gain `appearance.nowPlaying = "brief"`, and v0–v5 gain
+            // `idle_linger_secs = 15`, all via serde defaults.
             _ => Ok(Self { schema_version: SCHEMA_VERSION, ..cfg }),
         }
     }
@@ -277,6 +295,7 @@ impl Config {
                 .collect(),
             knob_gestures: self.knob.enabled,
             show_disconnected: self.show_disconnected,
+            idle_linger_secs: self.idle_linger_secs,
         }
     }
 
@@ -367,6 +386,16 @@ impl Config {
             Command::SetIdleStyle { style } => next.appearance.idle_style = *style,
             Command::SetNowPlayingPill { mode } => next.appearance.now_playing = *mode,
             Command::SetShowDisconnected { enabled } => next.show_disconnected = *enabled,
+            Command::SetIdleLinger { secs } => {
+                if !IDLE_LINGER_SECS.contains(secs) {
+                    return Err(format!(
+                        "Choose between {} seconds and {} minutes.",
+                        IDLE_LINGER_SECS.start(),
+                        IDLE_LINGER_SECS.end() / 60
+                    ));
+                }
+                next.idle_linger_secs = *secs;
+            }
             Command::SetDefaultRoles { roles } => next.default_roles = *roles,
             _ => return Ok(false),
         }
@@ -661,6 +690,22 @@ mod tests {
                 ..Appearance::default()
             }
         );
+    }
+
+    #[test]
+    fn v5_migrates_with_the_default_idle_linger_and_validates_its_range() {
+        let mut config = Config::from_toml("schema_version = 5\nperformance_profile = 'balanced'").unwrap();
+        assert_eq!(config.schema_version, SCHEMA_VERSION);
+        assert_eq!(config.view(&[]).idle_linger_secs, IDLE_LINGER_SECS_DEFAULT);
+
+        assert_eq!(config.apply_setting(&Command::SetIdleLinger { secs: 60 }, &[]), Ok(true));
+        assert!(config.apply_setting(&Command::SetIdleLinger { secs: 2 }, &[]).is_err(), "below the range");
+        assert!(config.apply_setting(&Command::SetIdleLinger { secs: 3600 }, &[]).is_err(), "above the range");
+        let saved = Config::from_toml(&config.to_toml()).unwrap();
+        assert_eq!(saved.idle_linger_secs, 60);
+
+        // A hand-edited out-of-range value is a bad file: the last valid config stays (like any parse error).
+        assert!(matches!(Config::from_toml("idle_linger_secs = 1"), Err(ConfigError::Parse(_))));
     }
 
     #[test]

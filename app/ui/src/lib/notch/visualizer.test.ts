@@ -11,7 +11,9 @@ import {
   MIN_BAR_SCALE,
   perceptualLevel,
   SILENT_THRESHOLD,
+  spreadLevels,
   VisualizerBank,
+  WIDE_BAR_COUNT,
 } from './visualizer.ts';
 
 function stepBankFor(bank: VisualizerBank, hz: number, totalSec: number): boolean {
@@ -182,4 +184,19 @@ test('reduce motion / off preset jumps immediately with zero animation frames', 
   bank.setFrame({ peak: 0, channels: [] });
   assert.equal(bank.isSettled(), true);
   assert.deepEqual(bank.values(), [0, 0, 0, 0, 0]);
+});
+
+test('spreadLevels fills the wide waveform from the bank levels with a resting shape', () => {
+  const rest = spreadLevels([], WIDE_BAR_COUNT);
+  assert.equal(rest.length, WIDE_BAR_COUNT);
+  assert.ok(rest.every((v) => v > 0.1 && v < 0.4), `paused waveform stays low but visible: ${rest}`);
+  assert.ok(new Set(rest.map((v) => v.toFixed(3))).size > 3, 'textured, not a flat line');
+
+  const loud = spreadLevels([0.2, 0.6, 1, 0.6, 0.2], WIDE_BAR_COUNT);
+  const mid = Math.floor(WIDE_BAR_COUNT / 2);
+  assert.ok(loud[mid] > loud[0], `centre follows the loud centre level: ${loud}`);
+  assert.ok(loud.every((v, i) => v >= rest[i] - 1e-9 && v <= 1));
+
+  const buf: number[] = [];
+  assert.equal(spreadLevels([1, 1, 1, 1, 1], WIDE_BAR_COUNT, buf), buf, 'reuses the output buffer');
 });

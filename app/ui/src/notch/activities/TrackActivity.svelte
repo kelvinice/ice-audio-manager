@@ -1,23 +1,54 @@
 <script lang="ts">
-  import type { MediaAction } from '../../lib/ipc/engine';
+  import type { SpringPreset } from '../../lib/ipc/types';
   import type { ActivityView } from '../../lib/notch/scheduler';
+  import { toMsNumber } from '../../lib/notch/scheduler';
+  import { WIDE_BAR_COUNT } from '../../lib/notch/visualizer';
   import AlbumArtTile from './AlbumArtTile.svelte';
-  import DeviceIcon from './DeviceIcon.svelte';
+  import VisualizerBars from './VisualizerBars.svelte';
 
   type TrackView = Extract<ActivityView, { kind: 'track' }>;
 
   interface Props {
     activity: TrackView;
     instant: boolean;
-    onMediaAction: (action: MediaAction) => void;
+    preset: SpringPreset;
+    notchVisible: boolean;
   }
 
-  let { activity, instant, onMediaAction }: Props = $props();
+  let { activity, instant, preset, notchVisible }: Props = $props();
 
   const isPlaying = $derived(activity.media.status === 'playing');
   const hasPrevious = $derived(
     !instant && Boolean(activity.previousTitle || activity.previousArtist),
   );
+
+  // No transport buttons here: hovering expands the notch before they can be reached (owner, 2026-11-24).
+  // Instead a waveform scrubber: live bars, lit in the accent up to the played position.
+  const durationMs = $derived(toMsNumber(activity.media.durationMs));
+  // GSMTC sends the position only now and then; interpolate from the last report while playing.
+  let anchor = $state({ posMs: 0, atMs: 0 });
+  let nowMs = $state(0);
+  $effect(() => {
+    const posMs = toMsNumber(activity.media.positionMs) ?? 0;
+    void activity.media.status;
+    const at = performance.now();
+    anchor = { posMs, atMs: at };
+    nowMs = at;
+  });
+  const elapsedMs = $derived(anchor.posMs + (isPlaying ? Math.max(0, nowMs - anchor.atMs) : 0));
+  const progress = $derived(durationMs ? Math.max(0, Math.min(1, elapsedMs / durationMs)) : null);
+
+  // Re-render only when the next bar lights up (every duration / 14, ~17 s for a 4-minute song), not every second.
+  $effect(() => {
+    if (!isPlaying || !durationMs || !notchVisible) return;
+    const step = durationMs / WIDE_BAR_COUNT;
+    const nextBoundary = (Math.floor(elapsedMs / step) + 1) * step;
+    const delay = Math.max(250, Math.min(60_000, nextBoundary - elapsedMs + 30));
+    const id = window.setTimeout(() => {
+      nowMs = performance.now();
+    }, delay);
+    return () => window.clearTimeout(id);
+  });
 </script>
 
 <div class="track-row">
@@ -44,32 +75,9 @@
     {/key}
   </div>
 
-  <!-- Fixed right transport slot: never moves or remounts across track changes (D-13.1) -->
-  <div class="transport-slot" role="group" aria-label="Playback controls">
-    <button
-      class="transport-btn"
-      type="button"
-      aria-label="Previous track"
-      onclick={() => onMediaAction('previous')}
-    >
-      <DeviceIcon kind="prev" size={11} />
-    </button>
-    <button
-      class="transport-btn primary-btn"
-      type="button"
-      aria-label={isPlaying ? 'Pause' : 'Play'}
-      onclick={() => onMediaAction('playPause')}
-    >
-      <DeviceIcon kind={isPlaying ? 'pause' : 'play'} size={12} />
-    </button>
-    <button
-      class="transport-btn"
-      type="button"
-      aria-label="Next track"
-      onclick={() => onMediaAction('next')}
-    >
-      <DeviceIcon kind="next" size={11} />
-    </button>
+  <!-- Fixed right slot: never moves or remounts across track changes (D-13.1). -->
+  <div class="wave-slot" class:paused={!isPlaying} title={isPlaying ? undefined : 'Paused'}>
+    <VisualizerBars active={isPlaying && notchVisible} {preset} {instant} variant="wide" {progress} />
   </div>
 </div>
 
@@ -131,34 +139,16 @@
     text-overflow: ellipsis;
   }
 
-  .transport-slot {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
+  .wave-slot {
     flex-shrink: 0;
-  }
-
-  .transport-btn {
-    appearance: none;
-    width: 24px;
-    height: 24px;
-    padding: 0;
-    display: inline-flex;
+    display: flex;
     align-items: center;
-    justify-content: center;
-    border-radius: var(--ice-radius-pill);
-    border: 1px solid var(--ice-border);
-    background: var(--ice-surface);
-    color: var(--ice-fg);
-    cursor: pointer;
+    padding-right: 2px;
+    transition: opacity 240ms ease;
   }
 
-  .transport-btn.primary-btn {
-    width: 26px;
-    height: 26px;
-    border-color: var(--ice-active-accent, var(--ice-accent));
-    background: var(--ice-accent-soft);
-    color: var(--ice-accent-strong);
+  .wave-slot.paused {
+    opacity: 0.6;
   }
 
   @keyframes track-label-out {

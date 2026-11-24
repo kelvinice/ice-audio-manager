@@ -15,6 +15,7 @@ const settings: SettingsView = {
   devices: [],
   knobGestures: false,
   showDisconnected: false,
+  idleLingerSecs: 15,
 };
 
 const snapshot: EngineSnapshot = {

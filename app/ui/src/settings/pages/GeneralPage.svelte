@@ -33,6 +33,24 @@
     },
   ];
 
+  // D-21.1 L1 (config `idle_linger_secs`, 5–600 s). Only Balanced suspends, so only Balanced shows the choice.
+  const LINGER_PRESETS = [5, 15, 30, 60, 120, 300];
+
+  function lingerLabel(secs: number): string {
+    const base = secs < 60 ? `${secs} seconds` : secs === 60 ? '1 minute' : `${secs / 60} minutes`;
+    return secs === 15 ? `${base} (default)` : base;
+  }
+
+  function lingerValue(secs: number): string {
+    return String(secs);
+  }
+
+  /** The presets, plus the saved value if it was hand-edited to something else, so the select never lies. */
+  function lingerOptions(current: number): { value: string; label: string }[] {
+    const all = LINGER_PRESETS.includes(current) ? LINGER_PRESETS : [...LINGER_PRESETS, current].sort((a, b) => a - b);
+    return all.map((secs) => ({ value: String(secs), label: lingerLabel(secs) }));
+  }
+
   const roles: { value: RoleSet; label: string }[] = [
     { value: 'default', label: 'Default device' },
     { value: 'communications', label: 'Communications device' },
@@ -67,6 +85,22 @@
       choices={profiles}
       onchange={(profile) => client.apply({ type: 'setPerformanceProfile', profile })}
     />
+    {#if settings.performanceProfile === 'balanced'}
+      <SettingCard
+        icon="power"
+        title="Sleep the notch after"
+        description="How long the notch stays ready when nothing happens, before the small native pill takes over."
+      >
+        {#snippet control()}
+          <Select
+            label="Sleep the notch after"
+            value={lingerValue(settings.idleLingerSecs)}
+            options={lingerOptions(settings.idleLingerSecs)}
+            onchange={(secs) => client.apply({ type: 'setIdleLinger', secs: Number(secs) })}
+          />
+        {/snippet}
+      </SettingCard>
+    {/if}
   </Section>
 
   <Section title="Switching">

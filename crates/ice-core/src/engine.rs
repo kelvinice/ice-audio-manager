@@ -259,6 +259,10 @@ pub enum Command {
     SetShowDisconnected {
         enabled: bool,
     },
+    /// D-21.1 L1: seconds the notch stays awake at idle before `Balanced` suspends it.
+    SetIdleLinger {
+        secs: u16,
+    },
     /// Roles used by switches that don't specify their own.
     SetDefaultRoles {
         roles: RoleSet,
@@ -285,6 +289,7 @@ impl Command {
             | Self::SetPinnedMonitor { .. }
             | Self::SetKnobGestures { .. }
             | Self::SetShowDisconnected { .. }
+            | Self::SetIdleLinger { .. }
             | Self::SetDefaultRoles { .. } => true,
             Self::SwitchTo { .. }
             | Self::SwitchBinding { .. }
@@ -367,6 +372,13 @@ pub struct SettingsView {
     pub knob_gestures: bool,
     #[serde(default)]
     pub show_disconnected: bool,
+    /// Seconds before `Balanced` suspends the idle notch (`config::IDLE_LINGER_SECS`).
+    #[serde(default = "default_idle_linger_secs")]
+    pub idle_linger_secs: u16,
+}
+
+fn default_idle_linger_secs() -> u16 {
+    crate::config::IDLE_LINGER_SECS_DEFAULT
 }
 
 /// Something the user should be told about.

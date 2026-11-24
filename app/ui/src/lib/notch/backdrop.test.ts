@@ -30,6 +30,7 @@ const baseSettings: SettingsView = {
   devices: [],
   knobGestures: true,
   showDisconnected: true,
+  idleLingerSecs: 15,
 };
 
 test('computeArtBackdrop derives 2-stop gradient washes and keeps WCAG AA scrim contrast on bright covers', () => {

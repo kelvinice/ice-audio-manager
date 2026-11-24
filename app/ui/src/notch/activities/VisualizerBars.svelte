@@ -4,7 +4,9 @@
   import {
     barScaleY,
     DEFAULT_BAR_COUNT,
+    spreadLevels,
     subscribeVisualizer,
+    WIDE_BAR_COUNT,
     type VisualizerHandle,
   } from '../../lib/notch/visualizer';
 
@@ -12,32 +14,45 @@
     active: boolean;
     preset?: SpringPreset;
     instant?: boolean;
-    variant?: 'compact' | 'expanded';
+    /** `wide`: the now-playing pill's waveform scrubber (more bars, resting shape, progress colouring). */
+    variant?: 'compact' | 'expanded' | 'wide';
+    /** `wide` only: played fraction 0–1 (bars up to it use the accent); `null` = unknown (all accent). */
+    progress?: number | null;
   }
-
-  const BAR_INDICES = Array.from({ length: DEFAULT_BAR_COUNT }, (_, i) => i);
 
   let {
     active,
     preset = 'smooth',
     instant = false,
     variant = 'compact',
+    progress = null,
   }: Props = $props();
+
+  // The variant never changes for a mounted bar set.
+  // svelte-ignore state_referenced_locally
+  const wide = variant === 'wide';
+  const barIndices = Array.from({ length: wide ? WIDE_BAR_COUNT : DEFAULT_BAR_COUNT }, (_, i) => i);
+  const playedCount = $derived(
+    progress === null ? barIndices.length : Math.round(Math.max(0, Math.min(1, progress)) * barIndices.length),
+  );
 
   const barEls: Array<HTMLSpanElement | undefined> = [];
   const lastClips: string[] = [];
   const lastOpacities: string[] = [];
+  const wideLevels: number[] = [];
   let available = $state(true);
   let handle: VisualizerHandle | null = null;
 
-  function applyLevels(levels: ReadonlyArray<number>, nextAvailable: boolean): void {
+  function applyLevels(rawLevels: ReadonlyArray<number>, nextAvailable: boolean): void {
     available = nextAvailable;
-    if (!nextAvailable) {
+    // The wide waveform stays visible without a meter (resting shape), so its progress still reads.
+    if (!nextAvailable && !wide) {
       lastClips.length = 0;
       lastOpacities.length = 0;
       return;
     }
-    for (let i = 0; i < BAR_INDICES.length; i += 1) {
+    const levels = wide ? spreadLevels(nextAvailable ? rawLevels : [], barIndices.length, wideLevels) : rawLevels;
+    for (let i = 0; i < barIndices.length; i += 1) {
       const el = barEls[i];
       if (!el) continue;
       const level = levels[i] ?? 0;
@@ -70,10 +85,10 @@
   });
 </script>
 
-{#if available}
-  <div class="visualizer-bars" class:expanded={variant === 'expanded'} aria-hidden="true">
-    {#each BAR_INDICES as idx (idx)}
-      <span class="bar" bind:this={barEls[idx]}></span>
+{#if available || wide}
+  <div class="visualizer-bars" class:expanded={variant === 'expanded'} class:wide aria-hidden="true">
+    {#each barIndices as idx (idx)}
+      <span class="bar" class:unplayed={wide && idx >= playedCount} bind:this={barEls[idx]}></span>
     {/each}
   </div>
 {/if}
@@ -102,5 +117,17 @@
     /* Resting = MIN_BAR_SCALE (0.18): clip 41 % from each end. */
     clip-path: inset(41% 0 41% 0 round 999px);
     opacity: 0.72;
+  }
+
+  /* Waveform scrubber: 14 × 2 px bars, 3 px gaps (whole pixels at 100 % and 150 %). */
+  .visualizer-bars.wide {
+    gap: 3px;
+    height: 24px;
+  }
+
+  /* Not heard yet: a dim neutral, so the lit accent part reads as progress. */
+  .bar.unplayed {
+    background: color-mix(in srgb, var(--ice-fg-muted) 50%, transparent);
+    transition: background-color 400ms ease;
   }
 </style>

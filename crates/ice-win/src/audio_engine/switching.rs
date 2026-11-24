@@ -81,6 +81,7 @@ impl Worker {
             | Command::SetIdleStyle { .. }
             | Command::SetNowPlayingPill { .. }
             | Command::SetShowDisconnected { .. }
+            | Command::SetIdleLinger { .. }
             | Command::SetDefaultRoles { .. } => self.edit_settings(&command),
         }
     }
