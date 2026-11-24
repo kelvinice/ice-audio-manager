@@ -18,6 +18,7 @@ const settings: SettingsView = {
   idleLingerSecs: 15,
   musicServices: { spotify: true, youtubeMusic: true },
   lyrics: { enabled: false, onlineLookup: false, showOnPill: true, showOnCard: true, wordHighlight: true, romaji: true, cacheMaxMb: 50 },
+  visualizerSpectrum: true,
   showNotchHotkey: null,
 };
 

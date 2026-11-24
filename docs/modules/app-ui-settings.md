@@ -32,7 +32,7 @@ created when opened and destroyed when closed (shell: `app/src-tauri/src/setting
 | Notch | Idle style; pinned display | `SetIdleStyle`; `SetPinnedMonitor` (display path) |
 | Appearance | Theme (`Ice`, `Ice Light`, `Midnight`, `Fluent`, `Minimal`); animation preset (`Bouncy` first with `Default` badge); Background → `Moving background` toggle | `SetTheme`; `SetPreset`; `SetMovingBackdrop` |
 | Activities | Music services (`Spotify`, `YouTube Music`); Synced lyrics display (`Show synced lyrics`, pill/card extensions, active word highlight, Japanese Romaji) | `SetMusicService`; `SetLyricsEnabled`; `SetLyricsDisplay` |
-| Privacy | Master network off switch; opt-in LRCLIB (`lrclib.net`) disclosure & toggle | `DisableAllNetworkFeatures`; `SetLyricsOnlineLookup` |
+| Privacy | Master network off switch; opt-in LRCLIB (`lrclib.net`) disclosure & toggle; local audio loopback spectrum visualizer disclosure & meter-only fallback switch | `DisableAllNetworkFeatures`; `SetLyricsOnlineLookup`; `SetVisualizerSpectrum` |
 | Storage | Live lyrics cache usage bar, max cache size (`5–500 MB`), clear cache, open local `.lrc` overrides folder | `SetLyricsCacheMaxMb`; `get_lyrics_storage_stats`; `clear_lyrics_cache`; `open_lyrics_folder` |
 | About | Version, trust promises | `plugin:app|version` |
 
@@ -64,3 +64,4 @@ created when opened and destroyed when closed (shell: `app/src-tauri/src/setting
 - 2026-11-24 Claude: Activities page (Spotify / YouTube Music switches, D-22); Shortcuts → Notch ("show notch" hotkey, D-19); General → "Sleep the notch after" (Balanced); Notch → "Now playing pill".
 - 2026-11-24 Gemini: `AppearancePage` adds `Ice Light` theme card, puts `Bouncy` leftmost with `Default` badge, and adds `Background → Moving background` (`SetMovingBackdrop`).
 - 2026-11-24 Gemini: added `PrivacyPage` (D-22 network transparency + LRCLIB opt-in), `StoragePage` (lyrics cache usage, `cache_max_mb` selector, clear cache, local `.lrc` folder), and synced lyrics display controls on `ActivitiesPage`.
+- 2026-11-24 Gemini: D-26 `PrivacyPage` "Local audio analysis" section with loopback spectrum disclosure and meter-only fallback switch (`SetVisualizerSpectrum`).

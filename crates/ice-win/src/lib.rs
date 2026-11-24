@@ -14,6 +14,7 @@ pub mod endpoints;
 pub mod file_watch;
 pub mod fullscreen;
 pub mod hotkeys;
+pub mod loopback;
 pub mod lyrics;
 pub mod media;
 pub mod media_service;

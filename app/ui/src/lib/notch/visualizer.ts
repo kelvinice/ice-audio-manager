@@ -117,24 +117,31 @@ export function mapFrameToBars(
 export function deriveVisualizerSpringParams(
   preset: SpringPresetId,
   phase: 'attack' | 'decay',
+  barIndex = 0,
+  barCount = 1,
 ): SpringParams {
   const base = SPRING_PRESETS[preset];
   if (base.instant) {
     return { ...base, instant: true, precision: BAR_SPRING_PRECISION };
   }
+  // D-26 B2: frequency-graded spring physics (bar 0 = weightier bass, bar N-1 = snappier treble).
+  const freqT = barCount > 1 ? clamp01(barIndex / (barCount - 1)) : 0.5;
+  const massGrade = 1.28 - 0.56 * freqT; // 1.28× bass → 1.00× mid → 0.72× treble
+  const stiffGrade = 0.88 + 0.34 * freqT; // 0.88× bass → 1.05× mid → 1.22× treble
   if (phase === 'attack') {
     return {
-      stiffness: base.stiffness * ATTACK_STIFFNESS_MULT,
+      stiffness: base.stiffness * ATTACK_STIFFNESS_MULT * stiffGrade,
       damping: base.damping * ATTACK_DAMPING_MULT,
-      mass: base.mass * ATTACK_MASS_MULT,
+      mass: base.mass * ATTACK_MASS_MULT * massGrade,
       precision: BAR_SPRING_PRECISION,
     };
   }
-  const stiffness = base.stiffness * DECAY_STIFFNESS_MULT;
-  const mass = base.mass;
+  const stiffness = base.stiffness * DECAY_STIFFNESS_MULT * stiffGrade;
+  const mass = base.mass * massGrade;
+  const dampingRatio = DECAY_DAMPING_RATIO - 0.08 + 0.12 * freqT; // 0.96 bass → 1.08 treble
   return {
     stiffness,
-    damping: 2 * Math.sqrt(stiffness * mass) * DECAY_DAMPING_RATIO,
+    damping: 2 * Math.sqrt(stiffness * mass) * dampingRatio,
     mass,
     precision: BAR_SPRING_PRECISION,
   };
@@ -147,17 +154,21 @@ export class VisualizerBank {
   constructor(barCount = DEFAULT_BAR_COUNT, preset: SpringPresetId = 'bouncy') {
     const count = Math.max(MIN_BAR_COUNT, Math.min(BEAT_BAR_COUNT, Math.round(barCount)));
     this.effectivePreset = preset;
-    const initialParams = deriveVisualizerSpringParams(preset, 'decay');
-    this.springs = Array.from({ length: count }, () => new Spring1D(0, initialParams));
+    this.springs = Array.from(
+      { length: count },
+      (_, i) => new Spring1D(0, deriveVisualizerSpringParams(preset, 'decay', i, count)),
+    );
   }
 
   setPreset(preset: SpringPresetId, instantOverride = false): void {
     const next: SpringPresetId = instantOverride ? 'off' : preset;
     if (next === this.effectivePreset) return;
     this.effectivePreset = next;
-    for (const spring of this.springs) {
+    const count = this.springs.length;
+    for (let i = 0; i < count; i += 1) {
+      const spring = this.springs[i];
       const phase = spring.target > spring.value ? 'attack' : 'decay';
-      spring.setParams(deriveVisualizerSpringParams(next, phase));
+      spring.setParams(deriveVisualizerSpringParams(next, phase, i, count));
     }
   }
 
@@ -170,7 +181,8 @@ export class VisualizerBank {
   }
 
   setTargets(targets: ReadonlyArray<number>): boolean {
-    for (let i = 0; i < this.springs.length; i += 1) {
+    const count = this.springs.length;
+    for (let i = 0; i < count; i += 1) {
       const spring = this.springs[i];
       const nextTarget = clamp01(targets[i] ?? 0);
       const changed =
@@ -178,7 +190,7 @@ export class VisualizerBank {
         (nextTarget === 0 && spring.target !== 0);
       if (!changed) continue;
       const phase = nextTarget > spring.value ? 'attack' : 'decay';
-      spring.setParams(deriveVisualizerSpringParams(this.effectivePreset, phase));
+      spring.setParams(deriveVisualizerSpringParams(this.effectivePreset, phase, i, count));
       spring.setTarget(nextTarget);
     }
     return !this.isSettled();
@@ -217,7 +229,17 @@ export function syntheticMeterFrame(tick: number): MeterFrame {
   const x = tick % 65_536;
   const left = 0.45 + 0.35 * Math.sin(x * 0.37) * Math.abs(Math.sin(x * 0.05));
   const right = 0.4 + 0.35 * Math.sin(x * 0.29 + 1.0) * Math.abs(Math.sin(x * 0.07));
-  return { peak: Math.max(left, right), channels: [left, right] };
+  const kick = Math.pow(Math.max(0, Math.sin(x * 0.22)), 3);
+  const vocal = 0.5 + 0.5 * Math.sin(x * 0.09 + 0.7);
+  const hat = Math.pow(Math.max(0, Math.sin(x * 0.67)), 4);
+  const bands = Array.from({ length: BANK_BAR_COUNT }, (_, i) => {
+    const pos = i / (BANK_BAR_COUNT - 1);
+    const low = clamp01(1 - pos * 2.4) * (0.2 + 0.72 * kick);
+    const mid = clamp01(1 - Math.abs(pos - 0.45) * 2.8) * (0.14 + 0.42 * vocal);
+    const high = clamp01((pos - 0.55) * 2.2) * (0.04 + 0.35 * hat);
+    return clamp01(low + mid + high);
+  });
+  return { peak: Math.max(left, right), channels: [left, right], bands };
 }
 
 export interface VisualizerSubscriptionOptions {

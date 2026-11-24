@@ -23,7 +23,8 @@ global hotkeys, per-device spatial sound and `config.toml` hot reload. The only 
 | `props.rs` | Property-store helpers and the property keys we read (`FRIENDLY_NAME`, `CONTAINER_ID`, `ENDPOINT_DEVNODE`, `FORM_FACTOR`, `STABLE_ID`…) |
 | `hotkeys.rs` | `HotkeyService`: `RegisterHotKey` on its own message-loop thread (thread-level, no window, no hook) |
 | `file_watch.rs` | `DirWatch`: event-driven directory change notification for config reload (no polling) |
-| `meter.rs` | `MeterHub`: `IAudioMeterInformation` peaks on an `ice-meter` thread that runs only while a subscription lives |
+| `meter.rs` | `MeterHub`: `IAudioMeterInformation` peaks + optional [`loopback::LoopbackCapture`] 14-band spectrum on one `ice-meter` thread (runs only while subscribed; automatic peak-only fallback and rebind reset) |
+| `loopback.rs` | `LoopbackCapture`: shared-mode WASAPI render loopback (`AUDCLNT_STREAMFLAGS_LOOPBACK`, 100 ms buffer) drained non-blockingly on the 30 Hz `ice-meter` tick into `ice_core::spectrum::SpectrumAnalyzer` (§1.9 in-memory reduction only) |
 | `com.rs` | `ComGuard` (MTA init) |
 
 ## How it works
@@ -58,3 +59,4 @@ Unit tests sit in each file; real-device paths use `#[ignore]` tests and the [ma
 
 ## Change log
 - 2026-11-23 Claude: initial recap.
+- 2026-11-24 Gemini: D-26 `loopback.rs` shared-mode WASAPI render loopback + `MeterHub::set_spectrum_enabled` (rebind state reset, DRM/silent loopback auto-fallback, Privacy switch wiring).

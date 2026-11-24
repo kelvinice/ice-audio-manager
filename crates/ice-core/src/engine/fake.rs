@@ -108,13 +108,30 @@ fn lock(state: &Mutex<State>) -> MutexGuard<'_, State> {
     state.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
-/// Made-up stereo levels for tick `t`: two beating sines, so the visualizer has movement to style.
-fn fake_levels(t: u32) -> MeterFrame {
+/// Made-up stereo levels (and optional 14-band spectrum) for tick `t`, so `--fake-engine` can preview both A2 and A1.
+fn fake_levels(t: u32, with_bands: bool) -> MeterFrame {
     #[expect(clippy::cast_precision_loss, reason = "the tick wraps at 2^16, exact in f32")]
     let x = (t % 65_536) as f32;
     let left = 0.45 + 0.35 * (x * 0.37).sin() * (x * 0.05).sin().abs();
     let right = 0.40 + 0.35 * (x * 0.29 + 1.0).sin() * (x * 0.07).sin().abs();
-    MeterFrame::new(left.max(right), vec![left, right])
+    let peak = left.max(right);
+    if !with_bands {
+        return MeterFrame::new(peak, vec![left, right]);
+    }
+    let kick = (x * 0.22).sin().max(0.0).powi(3);
+    let vocal = 0.5 + 0.5 * (x * 0.09 + 0.7).sin();
+    let hat = (x * 0.67).sin().max(0.0).powi(4);
+    let bands = (0..crate::meter::SPECTRUM_BANDS)
+        .map(|i| {
+            #[expect(clippy::cast_precision_loss, reason = "i < 14")]
+            let pos = i as f32 / (crate::meter::SPECTRUM_BANDS as f32 - 1.0);
+            let low = (1.0 - pos * 2.4).clamp(0.0, 1.0) * (0.20 + 0.72 * kick);
+            let mid = (1.0 - ((pos - 0.45) * 2.8).abs()).clamp(0.0, 1.0) * (0.14 + 0.42 * vocal);
+            let high = ((pos - 0.55) * 2.2).clamp(0.0, 1.0) * (0.04 + 0.35 * hat);
+            (low + mid + high).clamp(0.0, 1.0)
+        })
+        .collect();
+    MeterFrame::with_bands(peak, vec![left, right], bands)
 }
 
 fn device(id: &str, name: &str, flow: Flow, form_factor: u32, spatial: Option<SpatialMode>) -> DeviceSummary {
@@ -378,6 +395,7 @@ impl Engine for FakeEngine {
             | Command::SetLyricsDisplay { .. }
             | Command::SetLyricsCacheMaxMb { .. }
             | Command::DisableAllNetworkFeatures
+            | Command::SetVisualizerSpectrum { .. }
             | Command::SetShowNotchHotkey { .. }
             | Command::SetDefaultRoles { .. } => {
                 let eps = endpoints(&st.snap);
@@ -440,12 +458,13 @@ impl Engine for FakeEngine {
             .spawn(move || {
                 let mut tick = 0_u32;
                 loop {
-                    let audible = {
+                    let (audible, with_bands) = {
                         let st = lock(&state);
-                        st.snap.media.as_ref().is_some_and(|m| m.status == PlaybackStatus::Playing)
-                            && !st.snap.volume.is_some_and(|v| v.muted)
+                        let playing = st.snap.media.as_ref().is_some_and(|m| m.status == PlaybackStatus::Playing)
+                            && !st.snap.volume.is_some_and(|v| v.muted);
+                        (playing, st.config.visualizer_spectrum)
                     };
-                    let frame = if audible { fake_levels(tick) } else { MeterFrame::default() };
+                    let frame = if audible { fake_levels(tick, with_bands) } else { MeterFrame::default() };
                     if !sink.offer(&frame) {
                         return;
                     }

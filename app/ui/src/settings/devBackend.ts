@@ -70,6 +70,7 @@ function initialSnapshot(): EngineSnapshot {
         romaji: true,
         cacheMaxMb: 50,
       },
+      visualizerSpectrum: true,
       showNotchHotkey: null,
     },
   };
@@ -128,6 +129,7 @@ function applyCommand(s: EngineSnapshot, c: Command): void {
       break;
     case 'setLyricsCacheMaxMb': st.lyrics = { ...st.lyrics, cacheMaxMb: c.maxMb }; break;
     case 'disableAllNetworkFeatures': st.lyrics = { ...st.lyrics, onlineLookup: false }; break;
+    case 'setVisualizerSpectrum': st.visualizerSpectrum = c.enabled; break;
     case 'setShowNotchHotkey': st.showNotchHotkey = c.hotkey; break;
     case 'setDefaultRoles': st.defaultRoles = c.roles; break;
     case 'setFavourites': st.favouritesPlayback = c.deviceIds.map(ref); break;

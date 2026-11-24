@@ -40,9 +40,13 @@ impl Worker {
     pub(super) fn set_config(&mut self, cfg: Config) {
         if cfg != self.config {
             let lyrics_changed = cfg.lyrics != self.config.lyrics;
+            let spectrum_changed = cfg.visualizer_spectrum != self.config.visualizer_spectrum;
             self.config = cfg;
             if lyrics_changed && let Some(lyrics) = &self.lyrics {
                 lyrics.update_config(self.config.lyrics);
+            }
+            if spectrum_changed {
+                lock(&self.shared).meter.set_spectrum_enabled(self.config.visualizer_spectrum);
             }
             self.pending.clear(); // pickers refer to the old bindings (review ENG-03)
             self.hotkeys = None; // dropping the service unregisters every chord

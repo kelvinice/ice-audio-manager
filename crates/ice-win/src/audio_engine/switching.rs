@@ -89,6 +89,7 @@ impl Worker {
             | Command::SetLyricsDisplay { .. }
             | Command::SetLyricsCacheMaxMb { .. }
             | Command::DisableAllNetworkFeatures
+            | Command::SetVisualizerSpectrum { .. }
             | Command::SetShowNotchHotkey { .. }
             | Command::SetDefaultRoles { .. } => self.edit_settings(&command),
         }

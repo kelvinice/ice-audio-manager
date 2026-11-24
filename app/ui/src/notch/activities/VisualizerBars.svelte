@@ -9,7 +9,7 @@
     withRestShape,
     type VisualizerHandle,
   } from '../../lib/notch/visualizer';
-  import { pickBars } from '../../lib/notch/beat';
+  import { pickBadgeBars } from '../../lib/notch/beat';
 
   interface Props {
     active: boolean;
@@ -53,10 +53,10 @@
       lastOpacities.length = 0;
       return;
     }
-    // Wide: every bar of the bank over a low resting line. Compact/expanded: 5 independent bars picked from it.
+    // Wide: 14-bar L→R bass→treble over a low resting line. Compact/expanded: symmetric centre-bass 5-bar badge (B4a).
     const levels = wide
       ? withRestShape(nextAvailable ? rawLevels : silence, shown)
-      : pickBars(rawLevels, barIndices.length, shown);
+      : pickBadgeBars(rawLevels, barIndices.length, shown);
     for (let i = 0; i < barIndices.length; i += 1) {
       const el = barEls[i];
       if (!el) continue;

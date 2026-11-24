@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { MeterFrame } from '../ipc/engine.ts';
-import { BEAT_BAR_COUNT, BeatShaper, beatHash, pickBars } from './beat.ts';
+import { BEAT_BAR_COUNT, BeatShaper, beatHash, pickBadgeBars, pickBars } from './beat.ts';
 
 const FRAME_MS = 33; // the engine's meter cadence (30 Hz)
 const frame = (l: number, r = l): MeterFrame => ({ peak: Math.max(l, r), channels: [l, r] });
@@ -80,4 +80,40 @@ test('tempoRate tracks slow vs fast beat intervals smoothly', () => {
   const fastFrames = Array.from({ length: 220 }, (_, i) => frame(i % 12 === 0 ? 0.92 : 0.35));
   run(fast, fastFrames);
   assert.ok(fast.tempoRate > 1.22, `fast beats should speed up tempoRate, got ${fast.tempoRate.toFixed(2)}`);
+});
+
+test('D-26 spectrum mode moves active bars from bass to treble, gates empty hiss, and settles on silence', () => {
+  const s = new BeatShaper();
+  const makeBands = (hotIdx: number, level: number, hiss = 0.0002): MeterFrame => {
+    const bands = new Array<number>(BEAT_BAR_COUNT).fill(hiss);
+    bands[hotIdx] = level;
+    return { peak: level, channels: [level, level], bands };
+  };
+
+  // Steady low tone at 0.5 peak: low bar stays visibly active, empty treble hiss stays gated at 0.
+  const lowOut = run(s, Array.from({ length: 20 }, () => makeBands(1, 0.5))).at(-1)!;
+  assert.ok(lowOut[1] > 0.5, `bass band stays active: ${lowOut[1].toFixed(2)}`);
+  assert.equal(lowOut[12], 0, `empty treble hiss is gated to 0, got ${lowOut[12]}`);
+
+  // Shift to steady high tone at the same 0.5 peak: energy moves to treble, bass drops to 0.
+  const highOut = run(s, Array.from({ length: 20 }, () => makeBands(11, 0.5)), 20 * FRAME_MS).at(-1)!;
+  assert.ok(highOut[11] > 0.5, `treble band lifts on high tone: ${highOut[11].toFixed(2)}`);
+  assert.equal(highOut[1], 0, `quiet bass drops to 0: ${highOut[1]}`);
+
+  // Silence returns every bar strictly to 0.
+  const silent = s.shape({ peak: 0, channels: [0, 0], bands: new Array<number>(BEAT_BAR_COUNT).fill(0) }, 45 * FRAME_MS);
+  assert.ok(silent.every((v) => v === 0), `silence resets every bar: ${silent}`);
+});
+
+test('D-26 B4a pickBadgeBars places bass in the centre and treble on the outer edges', () => {
+  const bassOnly = new Array<number>(BEAT_BAR_COUNT).fill(0);
+  bassOnly[1] = 0.9;
+  const bassBadge = pickBadgeBars(bassOnly, 5);
+  assert.deepEqual(bassBadge, [0, 0, 0.9, 0, 0]);
+
+  const trebleOnly = new Array<number>(BEAT_BAR_COUNT).fill(0);
+  trebleOnly[12] = 0.8;
+  const trebleBadge = pickBadgeBars(trebleOnly, 5);
+  assert.equal(trebleBadge[2], 0);
+  assert.equal(trebleBadge[4], 0.8);
 });

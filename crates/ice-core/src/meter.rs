@@ -18,6 +18,8 @@ use ts_rs::TS;
 
 /// Time between two reads: 30 Hz, the cap in plan.md and code-practices §2.
 pub const METER_INTERVAL: Duration = Duration::from_millis(33);
+/// Number of log-spaced spectrum bands (45 Hz – 14 kHz) carried in [`MeterFrame::bands`] (D-26).
+pub const SPECTRUM_BANDS: usize = 14;
 /// Frames queued per subscription. A consumer that falls behind loses frames, never memory.
 const BUFFER: usize = 4;
 /// Smallest change worth sending (well under one pixel of bar height).
@@ -35,19 +37,37 @@ pub struct MeterFrame {
     /// Per-channel peaks (0.0–1.0) in the endpoint's channel order (front left, front right, …).
     /// Empty when Windows doesn't report channels.
     pub channels: Vec<f32>,
+    /// Optional 14-band log-spaced spectrum levels (0.0–1.0, ~45 Hz – 14 kHz) from local WASAPI loopback (D-26).
+    /// `None` when using peak-meter-only fallback (`IAudioMeterInformation` or Privacy toggle off).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub bands: Option<Vec<f32>>,
 }
 
 impl MeterFrame {
-    /// Builds a frame from raw readings, clamping each value to 0.0–1.0 (NaN counts as 0).
+    /// Builds a peak-only frame from raw readings, clamping each value to 0.0–1.0 (NaN counts as 0).
     #[must_use]
     pub fn new(peak: f32, channels: Vec<f32>) -> Self {
         let clamp = |v: f32| if v.is_nan() { 0.0 } else { v.clamp(0.0, 1.0) };
-        Self { peak: clamp(peak), channels: channels.into_iter().map(clamp).collect() }
+        Self { peak: clamp(peak), channels: channels.into_iter().map(clamp).collect(), bands: None }
+    }
+
+    /// Builds a frame with both endpoint peaks and 14-band spectrum levels (D-26).
+    #[must_use]
+    pub fn with_bands(peak: f32, channels: Vec<f32>, bands: Vec<f32>) -> Self {
+        let clamp = |v: f32| if v.is_nan() { 0.0 } else { v.clamp(0.0, 1.0) };
+        Self {
+            peak: clamp(peak),
+            channels: channels.into_iter().map(clamp).collect(),
+            bands: Some(bands.into_iter().map(clamp).collect()),
+        }
     }
 
     #[must_use]
     pub fn is_silent(&self) -> bool {
-        self.peak < SILENT && self.channels.iter().all(|c| *c < SILENT)
+        self.peak < SILENT
+            && self.channels.iter().all(|c| *c < SILENT)
+            && self.bands.as_ref().is_none_or(|b| b.iter().all(|v| *v < SILENT))
     }
 
     /// Whether a consumer showing `self` would visibly change on `next`.
@@ -55,7 +75,13 @@ impl MeterFrame {
         if self.is_silent() && next.is_silent() {
             return false;
         }
-        self.channels.len() != next.channels.len()
+        let bands_differ = match (&self.bands, &next.bands) {
+            (None, None) => false,
+            (Some(a), Some(b)) => a.len() != b.len() || a.iter().zip(b).any(|(x, y)| (x - y).abs() >= MIN_CHANGE),
+            _ => true,
+        };
+        bands_differ
+            || self.channels.len() != next.channels.len()
             || (self.peak - next.peak).abs() >= MIN_CHANGE
             || self.channels.iter().zip(&next.channels).any(|(a, b)| (a - b).abs() >= MIN_CHANGE)
     }
@@ -145,9 +171,23 @@ mod tests {
     #[test]
     fn values_are_clamped_and_nan_is_silence() {
         let f = MeterFrame::new(f32::NAN, vec![1.5, -0.2]);
-        assert_eq!(f, MeterFrame { peak: 0.0, channels: vec![1.0, 0.0] });
+        assert_eq!(f, MeterFrame { peak: 0.0, channels: vec![1.0, 0.0], bands: None });
         assert!(MeterFrame::new(0.0005, vec![0.0, 0.0009]).is_silent());
         assert!(!frame(0.0, 0.2).is_silent());
+    }
+
+    #[test]
+    fn band_changes_are_delivered_even_when_peak_is_unchanged() {
+        let (mut sink, sub) = channel();
+        let low = MeterFrame::with_bands(0.5, vec![0.5, 0.5], vec![0.5, 0.4, 0.0, 0.0]);
+        let high = MeterFrame::with_bands(0.5, vec![0.5, 0.5], vec![0.0, 0.0, 0.4, 0.5]);
+        let tiny = MeterFrame::with_bands(0.5, vec![0.5, 0.5], vec![0.0, 0.0, 0.402, 0.5]);
+        assert!(sink.offer(&low));
+        assert!(sink.offer(&high), "same-peak spectrum shift must not be suppressed");
+        assert!(sink.offer(&tiny), "sub-threshold band delta is skipped");
+        assert_eq!(sub.try_recv().unwrap(), low);
+        assert_eq!(sub.try_recv().unwrap(), high);
+        assert_eq!(sub.try_recv(), Err(TryRecvError::Empty));
     }
 
     #[test]

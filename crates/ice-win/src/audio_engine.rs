@@ -294,6 +294,7 @@ impl Worker {
         })
         .inspect_err(|e| tracing::warn!(error = %e, "lyrics thread failed to start; lyrics disabled"))
         .ok();
+        lock(&shared).meter.set_spectrum_enabled(config.visualizer_spectrum);
         let mut w = Self {
             eps,
             endpoints: Vec::new(),

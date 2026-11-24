@@ -306,6 +306,10 @@ pub enum Command {
     },
     /// D-22 Privacy master kill switch: turns off all optional network features at once.
     DisableAllNetworkFeatures,
+    /// D-26 Privacy switch: use local WASAPI loopback for 14-band spectrum bars (`false` = peak-meter-only fallback).
+    SetVisualizerSpectrum {
+        enabled: bool,
+    },
     /// Roles used by switches that don't specify their own.
     SetDefaultRoles {
         roles: RoleSet,
@@ -340,6 +344,7 @@ impl Command {
             | Self::SetLyricsDisplay { .. }
             | Self::SetLyricsCacheMaxMb { .. }
             | Self::DisableAllNetworkFeatures
+            | Self::SetVisualizerSpectrum { .. }
             | Self::SetShowNotchHotkey { .. }
             | Self::SetDefaultRoles { .. } => true,
             Self::SwitchTo { .. }
@@ -432,6 +437,9 @@ pub struct SettingsView {
     /// D-22 synced lyrics, Privacy opt-in, Romaji, and Storage cache ceiling.
     #[serde(default)]
     pub lyrics: LyricsConfig,
+    /// D-26: live 14-band spectrum bars via local WASAPI loopback (`false` = peak-meter-only fallback).
+    #[serde(default = "default_visualizer_spectrum")]
+    pub visualizer_spectrum: bool,
     /// D-19 "show notch" hotkey, if bound.
     #[serde(default)]
     pub show_notch_hotkey: Option<String>,
@@ -439,6 +447,10 @@ pub struct SettingsView {
 
 fn default_idle_linger_secs() -> u16 {
     crate::config::IDLE_LINGER_SECS_DEFAULT
+}
+
+fn default_visualizer_spectrum() -> bool {
+    true
 }
 
 /// Something the user should be told about.

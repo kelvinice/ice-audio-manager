@@ -14,3 +14,4 @@ pub mod lyrics;
 pub mod media;
 pub mod meter;
 pub mod resolve;
+pub mod spectrum;

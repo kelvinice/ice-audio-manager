@@ -178,3 +178,17 @@ test('withRestShape keeps live bars and puts a low, textured line under silence'
   const live = withRestShape(new Array<number>(WIDE_BAR_COUNT).fill(0.8));
   assert.ok(live.every((v) => v === 0.8), 'live levels pass through untouched');
 });
+
+test('D-26 B2 grades spring physics from heavier bass (bar 0) to snappier treble (bar N-1)', () => {
+  const bass = deriveVisualizerSpringParams('bouncy', 'decay', 0, WIDE_BAR_COUNT);
+  const treble = deriveVisualizerSpringParams('bouncy', 'decay', WIDE_BAR_COUNT - 1, WIDE_BAR_COUNT);
+  const omega = (p: { stiffness: number; mass: number }) => Math.sqrt(p.stiffness / p.mass);
+  assert.ok(bass.mass > treble.mass, `bass mass (${bass.mass}) > treble mass (${treble.mass})`);
+  assert.ok(omega(treble) > omega(bass), `treble natural frequency > bass natural frequency`);
+
+  // Reduce-motion / off preset remains instant on every bar.
+  const offBass = deriveVisualizerSpringParams('off', 'attack', 0, WIDE_BAR_COUNT);
+  const offTreble = deriveVisualizerSpringParams('off', 'decay', WIDE_BAR_COUNT - 1, WIDE_BAR_COUNT);
+  assert.equal(offBass.instant, true);
+  assert.equal(offTreble.instant, true);
+});

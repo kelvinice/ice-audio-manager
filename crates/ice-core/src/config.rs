@@ -24,7 +24,8 @@ use crate::resolve::{DeviceRef, MatchMode, resolve};
 /// v7: `[music_services]` (D-22 switches) and `show_notch_hotkey` (D-19).
 /// v8: `appearance.movingBackdrop` (D-25 ambient motion on the expanded card).
 /// v9: `[lyrics]` (D-22 opt-in LRCLIB, local `.lrc`, Romaji subtitles, and `cache_max_mb`).
-pub const SCHEMA_VERSION: u32 = 9;
+/// v10: `visualizer_spectrum` (D-26 local WASAPI loopback spectrum bars, default `true`; off = peak-meter-only).
+pub const SCHEMA_VERSION: u32 = 10;
 
 /// Default seconds the notch WebView stays awake at idle before `Balanced` hands over to the native pill
 /// (`Instant` never does; `Lite` has no WebView).
@@ -62,6 +63,8 @@ pub struct Config {
     pub music_services: MusicServices,
     /// D-22: synced lyrics, Privacy opt-in, Romaji subtitles, and storage cache cap.
     pub lyrics: LyricsConfig,
+    /// D-26: local WASAPI loopback 14-band spectrum analyser (off = peak-meter-only fallback).
+    pub visualizer_spectrum: bool,
     /// D-19: opens (or closes) the expanded notch; in Lite, the tray quick-switch menu. Unbound by default.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub show_notch_hotkey: Option<Chord>,
@@ -84,6 +87,7 @@ impl Default for Config {
             idle_linger_secs: IDLE_LINGER_SECS_DEFAULT,
             music_services: MusicServices::default(),
             lyrics: LyricsConfig::default(),
+            visualizer_spectrum: true,
             show_notch_hotkey: None,
         }
     }
@@ -323,6 +327,7 @@ impl Config {
             idle_linger_secs: self.idle_linger_secs,
             music_services: self.music_services,
             lyrics: self.lyrics,
+            visualizer_spectrum: self.visualizer_spectrum,
             show_notch_hotkey: self.show_notch_hotkey.map(|c| c.to_string()),
         }
     }
@@ -453,6 +458,7 @@ impl Config {
                 next.lyrics.cache_max_mb = *max_mb;
             }
             Command::DisableAllNetworkFeatures => next.lyrics.online_lookup = false,
+            Command::SetVisualizerSpectrum { enabled } => next.visualizer_spectrum = *enabled,
             Command::SetShowNotchHotkey { hotkey } => {
                 next.show_notch_hotkey = parse_hotkey(hotkey.as_deref())?;
                 next.check_hotkeys_unique()?;
@@ -857,6 +863,21 @@ mod tests {
         assert!(!saved.lyrics.online_lookup, "master kill switch turns off online lookup");
         assert_eq!(saved.lyrics.cache_max_mb, 100);
         assert!(matches!(Config::from_toml("[lyrics]\ncacheMaxMb = 2"), Err(ConfigError::Parse(_))));
+    }
+
+    #[test]
+    fn v9_migrates_with_visualizer_spectrum_on_and_saves_privacy_switch() {
+        let v9 = "schema_version = 9\n[lyrics]\nenabled = true";
+        let mut config = Config::from_toml(v9).unwrap();
+        assert_eq!(config.schema_version, SCHEMA_VERSION);
+        assert!(config.lyrics.enabled, "v9 lyrics settings are preserved");
+        assert!(config.view(&[]).visualizer_spectrum, "D-26 default is local spectrum bars on");
+
+        let off = Command::SetVisualizerSpectrum { enabled: false };
+        assert_eq!(config.apply_setting(&off, &[]), Ok(true));
+        assert_eq!(config.apply_setting(&off, &[]), Ok(false), "already off");
+        let saved = Config::from_toml(&config.to_toml()).unwrap();
+        assert!(!saved.view(&[]).visualizer_spectrum);
     }
 
     #[test]

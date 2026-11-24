@@ -73,4 +73,31 @@
       text="Local .lrc files (Storage) and Japanese Romaji conversion run 100 % locally on your PC. Private Spotify or YouTube Music account APIs are never queried."
     />
   </Section>
+
+  <Section
+    title="Local audio analysis"
+    description="Controls how the notch visualizer reads your playback audio on this PC. Nothing here uses the network or opens a microphone."
+  >
+    <SettingCard
+      icon="music"
+      title="Live spectrum bars (local audio loopback)"
+      description="Reads what you hear to draw bass, vocal, and treble bars — reduced immediately in memory to 14 bar heights and active only while the visualizer is visible. Nothing is saved, logged, or sent off this PC. Turn off to use peak-meter-only bars."
+    >
+      {#snippet control()}
+        <Toggle
+          label="Use local audio loopback for live spectrum bars"
+          checked={settings.visualizerSpectrum}
+          onchange={(enabled) => void client.apply({ type: 'setVisualizerSpectrum', enabled })}
+        />
+      {/snippet}
+    </SettingCard>
+
+    {#if !settings.visualizerSpectrum}
+      <InfoBar
+        tone="info"
+        title="Peak-meter-only visualizer active"
+        text="The visualizer is reading Windows' scalar endpoint peak meter only (no audio stream capture). Turn Live spectrum bars back on anytime for real bass, mid, and treble separation."
+      />
+    {/if}
+  </Section>
 {/if}
