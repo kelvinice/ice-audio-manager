@@ -1,16 +1,20 @@
 //! Background `ice-lyrics` worker thread: local `.lrc` overrides (Option B), bounded LRU cache,
-//! opt-in LRCLIB lookups (Option A), and offline Japanese → Romaji enrichment.
+//! opt-in non-blocking LRCLIB lookups (Option A) on short-lived `ice-lyrics-net` threads, and offline
+//! Japanese → Romaji enrichment.
 
 pub mod cache;
 pub mod lrclib;
 pub mod romaji;
 
 use std::path::PathBuf;
-use std::sync::mpsc::{self, Receiver, Sender};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::thread::JoinHandle;
+use std::time::{Duration, Instant};
 
 use ice_core::lyrics::{
-    LyricsConfig, LyricsDocument, LyricsProvider, LyricsState, LyricsStatus, LyricsStorageStats, TrackQuery, track_key,
+    LyricsConfig, LyricsDocument, LyricsState, LyricsStatus, LyricsStorageStats, TrackQuery, track_key,
 };
 use ice_core::media::{NowPlaying, PlaybackStatus};
 use windows::Win32::UI::Shell::ShellExecuteW;
@@ -26,16 +30,28 @@ use self::cache::{
 use self::lrclib::LrcLibProvider;
 use self::romaji::JapaneseRomaji;
 
+/// Wait before starting an online LRCLIB request so rapid track skips only query the settled track.
+const ONLINE_DEBOUNCE: Duration = Duration::from_millis(250);
+/// Upper bound on concurrent `ice-lyrics-net` worker threads.
+const MAX_INFLIGHT_HTTP: usize = 2;
+/// Backoff before checking slot availability again when `MAX_INFLIGHT_HTTP` fetches are already running.
+const INFLIGHT_RETRY_DELAY: Duration = Duration::from_millis(120);
+
+type FetchFn =
+    Arc<dyn Fn(&TrackQuery, &(dyn Fn() -> bool + Sync)) -> Result<Option<LyricsDocument>, String> + Send + Sync>;
+
 enum In {
     Track(Option<NowPlaying>),
     Config(LyricsConfig),
     ClearCache,
+    FetchDone { epoch: u64, query: TrackQuery, result: Result<Option<LyricsDocument>, String> },
     Quit,
 }
 
-/// Handle to the `ice-lyrics` thread. Dropping sends `Quit` and joins cleanly.
+/// Handle to the `ice-lyrics` thread. Dropping aborts any in-flight work, sends `Quit`, and joins cleanly.
 pub struct LyricsService {
     tx: Sender<In>,
+    active_gen: Arc<AtomicU64>,
     join: Option<JoinHandle<()>>,
 }
 
@@ -48,12 +64,26 @@ impl LyricsService {
         initial_config: LyricsConfig,
         on_state: impl Fn(LyricsState) + Send + 'static,
     ) -> std::io::Result<Self> {
+        let provider = Arc::new(LrcLibProvider::new());
+        let fetcher: FetchFn = Arc::new(move |query, cancelled| provider.fetch_cancellable(query, cancelled));
+        Self::start_with(initial_config, default_lyrics_root(), fetcher, ONLINE_DEBOUNCE, on_state)
+    }
+
+    fn start_with(
+        initial_config: LyricsConfig,
+        root: PathBuf,
+        fetcher: FetchFn,
+        online_debounce: Duration,
+        on_state: impl Fn(LyricsState) + Send + 'static,
+    ) -> std::io::Result<Self> {
         let (tx, rx) = mpsc::channel();
-        let root = default_lyrics_root();
-        let join = std::thread::Builder::new()
-            .name("ice-lyrics".into())
-            .spawn(move || run(&rx, root, initial_config, &on_state))?;
-        Ok(Self { tx, join: Some(join) })
+        let worker_tx = tx.clone();
+        let active_gen = Arc::new(AtomicU64::new(0));
+        let worker_gen = Arc::clone(&active_gen);
+        let join = std::thread::Builder::new().name("ice-lyrics".into()).spawn(move || {
+            run(&rx, &worker_tx, root, initial_config, worker_gen, fetcher, online_debounce, &on_state)
+        })?;
+        Ok(Self { tx, active_gen, join: Some(join) })
     }
 
     pub fn update_track(&self, media: Option<NowPlaying>) {
@@ -71,6 +101,7 @@ impl LyricsService {
 
 impl Drop for LyricsService {
     fn drop(&mut self) {
+        self.active_gen.fetch_add(1, Ordering::AcqRel);
         let _ = self.tx.send(In::Quit);
         if let Some(j) = self.join.take() {
             let _ = j.join();
@@ -136,16 +167,70 @@ pub fn open_custom_folder() -> Result<(), String> {
     Ok(())
 }
 
-fn run(rx: &Receiver<In>, root: PathBuf, mut config: LyricsConfig, out: &dyn Fn(LyricsState)) {
+struct InflightGuard(Arc<AtomicUsize>);
+
+impl Drop for InflightGuard {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, Ordering::AcqRel);
+    }
+}
+
+fn try_acquire_slot(inflight: &Arc<AtomicUsize>, limit: usize) -> Option<InflightGuard> {
+    let mut cur = inflight.load(Ordering::Acquire);
+    while cur < limit {
+        match inflight.compare_exchange_weak(cur, cur + 1, Ordering::AcqRel, Ordering::Acquire) {
+            Ok(_) => return Some(InflightGuard(Arc::clone(inflight))),
+            Err(actual) => cur = actual,
+        }
+    }
+    None
+}
+
+fn spawn_online_fetch(
+    tx: &Sender<In>,
+    active_gen: &Arc<AtomicU64>,
+    inflight: &Arc<AtomicUsize>,
+    fetcher: &FetchFn,
+    epoch: u64,
+    query: TrackQuery,
+) -> bool {
+    let Some(guard) = try_acquire_slot(inflight, MAX_INFLIGHT_HTTP) else {
+        return false;
+    };
+    let tx = tx.clone();
+    let active_gen = Arc::clone(active_gen);
+    let fetcher = Arc::clone(fetcher);
+    std::thread::Builder::new()
+        .name("ice-lyrics-net".into())
+        .spawn(move || {
+            let _guard = guard;
+            let result = fetcher(&query, &|| active_gen.load(Ordering::Acquire) != epoch);
+            let _ = tx.send(In::FetchDone { epoch, query, result });
+        })
+        .is_ok()
+}
+
+#[expect(clippy::too_many_arguments, reason = "single worker entry keeps state local to the STA thread")]
+fn run(
+    rx: &Receiver<In>,
+    tx: &Sender<In>,
+    root: PathBuf,
+    mut config: LyricsConfig,
+    active_gen: Arc<AtomicU64>,
+    fetcher: FetchFn,
+    online_debounce: Duration,
+    out: &dyn Fn(LyricsState),
+) {
     // STA, not MTA: both Romaji backends (`JapanesePhoneticAnalyzer`, `IFELanguage`) are single-threaded classes and
     // fail from an MTA (no proxy for `IFELanguage`; the analyzer refuses to activate). Nothing here needs a message
     // pump: every COM call is synchronous on this thread, and WinHTTP and file I/O aren't COM.
     let _com = ComGuard::init_sta().ok();
     let romaji = JapaneseRomaji::new();
-    let lrclib = LrcLibProvider::new();
+    let inflight = Arc::new(AtomicUsize::new(0));
 
     let mut current_media: Option<NowPlaying> = None;
     let mut last_resolved_key: Option<String> = None;
+    let mut pending_online: Option<(Instant, u64, TrackQuery)> = None;
     let mut last_state = LyricsState::default();
 
     let mut emit = |next: LyricsState| {
@@ -155,13 +240,37 @@ fn run(rx: &Receiver<In>, root: PathBuf, mut config: LyricsConfig, out: &dyn Fn(
         }
     };
 
-    while let Ok(first) = rx.recv() {
-        // Coalesce burst updates so rapid skips only query the latest track.
-        let mut latest = first;
-        let mut clear_requested = matches!(latest, In::ClearCache);
-        while let Ok(more) = rx.try_recv() {
-            match more {
-                In::Quit => return,
+    loop {
+        let first = match &pending_online {
+            Some((deadline, _, _)) => match rx.recv_timeout(deadline.saturating_duration_since(Instant::now())) {
+                Ok(m) => m,
+                Err(RecvTimeoutError::Timeout) => {
+                    if let Some((_, epoch, query)) = pending_online.take()
+                        && epoch == active_gen.load(Ordering::Acquire)
+                        && !spawn_online_fetch(tx, &active_gen, &inflight, &fetcher, epoch, query.clone())
+                    {
+                        pending_online = Some((Instant::now() + INFLIGHT_RETRY_DELAY, epoch, query));
+                    }
+                    continue;
+                }
+                Err(RecvTimeoutError::Disconnected) => break,
+            },
+            None => match rx.recv() {
+                Ok(m) => m,
+                Err(_) => break,
+            },
+        };
+
+        let mut clear_requested = false;
+        let mut finished = Vec::new();
+        let mut quit = false;
+
+        for msg in std::iter::once(first).chain(std::iter::from_fn(|| rx.try_recv().ok())) {
+            match msg {
+                In::Quit => {
+                    quit = true;
+                    break;
+                }
                 In::ClearCache => clear_requested = true,
                 In::Config(c) => {
                     let prev_max = config.cache_max_mb;
@@ -174,46 +283,91 @@ fn run(rx: &Receiver<In>, root: PathBuf, mut config: LyricsConfig, out: &dyn Fn(
                     }
                     if re_resolve {
                         last_resolved_key = None;
+                        pending_online = None;
+                        active_gen.fetch_add(1, Ordering::AcqRel);
                     }
                 }
                 In::Track(m) => {
+                    let prev_key = current_media.as_ref().and_then(active_track_query).map(|q| q.track_key);
+                    let next_key = m.as_ref().and_then(active_track_query).map(|q| q.track_key);
+                    if next_key != prev_key {
+                        active_gen.fetch_add(1, Ordering::AcqRel);
+                        pending_online = None;
+                        last_resolved_key = None;
+                    }
                     current_media = m;
                 }
+                In::FetchDone { epoch, query, result } => finished.push((epoch, query, result)),
             }
-            latest = In::Track(current_media.clone());
         }
 
-        match latest {
-            In::Quit => break,
-            In::ClearCache => clear_requested = true,
-            In::Config(c) => {
-                let prev_max = config.cache_max_mb;
-                let re_resolve =
-                    c.enabled != config.enabled || c.online_lookup != config.online_lookup || c.romaji != config.romaji;
-                config = c;
-                if config.cache_max_mb < prev_max {
-                    enforce_limit(&root, config.cache_max_mb);
-                }
-                if re_resolve {
-                    last_resolved_key = None;
-                }
-            }
-            In::Track(m) => current_media = m,
+        if quit {
+            active_gen.fetch_add(1, Ordering::AcqRel);
+            break;
         }
 
         if clear_requested {
             let _ = clear_disk_cache(&root, config.cache_max_mb);
             last_resolved_key = None;
+            pending_online = None;
+            active_gen.fetch_add(1, Ordering::AcqRel);
+        }
+
+        let current_gen = active_gen.load(Ordering::Acquire);
+        let active_key = current_media.as_ref().and_then(active_track_query).map(|q| q.track_key);
+
+        for (epoch, query, result) in finished {
+            let is_current = epoch == current_gen && config.enabled && active_key.as_ref() == Some(&query.track_key);
+            match result {
+                Ok(Some(mut doc)) => {
+                    if !clear_requested {
+                        write_cache(&root, &query, Some(&doc), config.cache_max_mb);
+                    }
+                    if is_current && apply_romaji_cancellable(&mut doc, config.romaji, &romaji, &active_gen, epoch) {
+                        emit(LyricsState {
+                            status: LyricsStatus::Ready,
+                            track_key: Some(query.track_key),
+                            document: Some(doc),
+                        });
+                    }
+                }
+                Ok(None) => {
+                    if !clear_requested {
+                        write_cache(&root, &query, None, config.cache_max_mb);
+                    }
+                    if is_current {
+                        emit(LyricsState {
+                            status: LyricsStatus::NotFound,
+                            track_key: Some(query.track_key),
+                            document: None,
+                        });
+                    }
+                }
+                Err(e) => {
+                    if e != "cancelled" {
+                        tracing::debug!(error = %e, "lyrics lookup skipped/failed");
+                    }
+                    if is_current {
+                        emit(LyricsState {
+                            status: LyricsStatus::NotFound,
+                            track_key: Some(query.track_key),
+                            document: None,
+                        });
+                    }
+                }
+            }
         }
 
         if !config.enabled {
             last_resolved_key = None;
+            pending_online = None;
             emit(LyricsState { status: LyricsStatus::Disabled, track_key: None, document: None });
             continue;
         }
 
         let Some(query) = current_media.as_ref().and_then(active_track_query) else {
             last_resolved_key = None;
+            pending_online = None;
             emit(LyricsState { status: LyricsStatus::Idle, track_key: None, document: None });
             continue;
         };
@@ -225,20 +379,26 @@ fn run(rx: &Receiver<In>, root: PathBuf, mut config: LyricsConfig, out: &dyn Fn(
 
         // 1. Option B: local custom `.lrc` override (always offline, checked first).
         if let Some(mut doc) = load_local_lrc(&root, &query) {
-            apply_romaji(&mut doc, config.romaji, &romaji);
-            emit(LyricsState { status: LyricsStatus::Ready, track_key: Some(query.track_key), document: Some(doc) });
+            if apply_romaji_cancellable(&mut doc, config.romaji, &romaji, &active_gen, current_gen) {
+                emit(LyricsState {
+                    status: LyricsStatus::Ready,
+                    track_key: Some(query.track_key),
+                    document: Some(doc),
+                });
+            }
             continue;
         }
 
         // 2. Option B: managed LRU disk cache.
         match read_cache(&root, &query) {
             CacheLookup::Hit(mut doc) => {
-                apply_romaji(&mut doc, config.romaji, &romaji);
-                emit(LyricsState {
-                    status: LyricsStatus::Ready,
-                    track_key: Some(query.track_key),
-                    document: Some(doc),
-                });
+                if apply_romaji_cancellable(&mut doc, config.romaji, &romaji, &active_gen, current_gen) {
+                    emit(LyricsState {
+                        status: LyricsStatus::Ready,
+                        track_key: Some(query.track_key),
+                        document: Some(doc),
+                    });
+                }
                 continue;
             }
             CacheLookup::NegativeHit => {
@@ -255,83 +415,8 @@ fn run(rx: &Receiver<In>, root: PathBuf, mut config: LyricsConfig, out: &dyn Fn(
         }
 
         emit(LyricsState { status: LyricsStatus::Loading, track_key: Some(query.track_key.clone()), document: None });
-
-        match lrclib.fetch(&query) {
-            Ok(Some(mut doc)) => {
-                apply_romaji(&mut doc, config.romaji, &romaji);
-                write_cache(&root, &query, Some(&doc), config.cache_max_mb);
-                let pending = drain_pending(rx, &mut current_media, &mut config, &mut last_resolved_key);
-                if pending.quit {
-                    break;
-                }
-                if pending.changed {
-                    continue;
-                }
-                emit(LyricsState {
-                    status: LyricsStatus::Ready,
-                    track_key: Some(query.track_key),
-                    document: Some(doc),
-                });
-            }
-            Ok(None) => {
-                write_cache(&root, &query, None, config.cache_max_mb);
-                let pending = drain_pending(rx, &mut current_media, &mut config, &mut last_resolved_key);
-                if pending.quit {
-                    break;
-                }
-                if pending.changed {
-                    continue;
-                }
-                emit(LyricsState { status: LyricsStatus::NotFound, track_key: Some(query.track_key), document: None });
-            }
-            Err(e) => {
-                tracing::debug!(error = %e, "lyrics lookup skipped/failed");
-                emit(LyricsState { status: LyricsStatus::NotFound, track_key: Some(query.track_key), document: None });
-            }
-        }
+        pending_online = Some((Instant::now() + online_debounce, current_gen, query));
     }
-}
-
-struct PendingOutcome {
-    changed: bool,
-    quit: bool,
-}
-
-fn drain_pending(
-    rx: &Receiver<In>,
-    current_media: &mut Option<NowPlaying>,
-    config: &mut LyricsConfig,
-    last_resolved_key: &mut Option<String>,
-) -> PendingOutcome {
-    let mut out = PendingOutcome { changed: false, quit: false };
-    while let Ok(msg) = rx.try_recv() {
-        match msg {
-            In::Track(m) => {
-                let next_key = m.as_ref().and_then(active_track_query).map(|q| q.track_key);
-                if next_key != *last_resolved_key {
-                    out.changed = true;
-                    *last_resolved_key = None;
-                }
-                *current_media = m;
-            }
-            In::Config(c) => {
-                if c != *config {
-                    *config = c;
-                    *last_resolved_key = None;
-                    out.changed = true;
-                }
-            }
-            In::ClearCache => {
-                *last_resolved_key = None;
-                out.changed = true;
-            }
-            In::Quit => {
-                out.quit = true;
-                return out;
-            }
-        }
-    }
-    out
 }
 
 fn active_track_query(m: &NowPlaying) -> Option<TrackQuery> {
@@ -350,10 +435,187 @@ fn active_track_query(m: &NowPlaying) -> Option<TrackQuery> {
     })
 }
 
-/// Fills `LyricLine::romaji` (never `subtitle`, which is the source's own paired line) once per loaded song.
-/// The cache never stores it (`cache::write_cache`), so it's regenerated on load and generator fixes apply everywhere.
-fn apply_romaji(doc: &mut LyricsDocument, enabled: bool, romaji: &JapaneseRomaji) {
+/// Fills `LyricLine::romaji` (never `subtitle`, which is the source's own paired line) once per loaded song,
+/// stopping early if `active_gen` moves away from `expected_gen`.
+fn apply_romaji_cancellable(
+    doc: &mut LyricsDocument,
+    enabled: bool,
+    romaji: &JapaneseRomaji,
+    active_gen: &AtomicU64,
+    expected_gen: u64,
+) -> bool {
     for line in &mut doc.lines {
+        if active_gen.load(Ordering::Acquire) != expected_gen {
+            return false;
+        }
         line.romaji = (enabled && line.subtitle.is_none()).then(|| romaji.line_to_romaji(&line.text)).flatten();
+    }
+    active_gen.load(Ordering::Acquire) == expected_gen
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+    use std::sync::mpsc;
+
+    use ice_core::lyrics::{LyricsSource, LyricsSyncKind, parse_lrc};
+
+    use super::*;
+
+    fn temp_root(name: &str) -> PathBuf {
+        let p = std::env::temp_dir().join(format!("ice-lyrics-svc-test-{name}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&p);
+        fs::create_dir_all(&p).unwrap();
+        p
+    }
+
+    fn song(title: &str) -> NowPlaying {
+        NowPlaying {
+            app_id: "Spotify.exe".into(),
+            title: title.into(),
+            artist: "Artist".into(),
+            album: "Album".into(),
+            status: PlaybackStatus::Playing,
+            position_ms: Some(0),
+            duration_ms: Some(180_000),
+            position_updated_ms: None,
+            art: None,
+        }
+    }
+
+    #[test]
+    fn slow_online_fetch_does_not_block_or_starve_subsequent_cached_tracks_or_drop() {
+        let root = temp_root("nonblocking");
+        let cdir = ensure_custom_dir(&root).unwrap();
+        fs::write(cdir.join("Artist - FastLocal.lrc"), "[00:01.00]Local lyric").unwrap();
+
+        let (fetch_started_tx, fetch_started_rx) = mpsc::channel();
+        let (states_tx, states_rx) = mpsc::channel();
+        let fetcher: FetchFn = Arc::new(move |q, cancelled| {
+            let _ = fetch_started_tx.send(q.title.clone());
+            let deadline = Instant::now() + Duration::from_secs(5);
+            while Instant::now() < deadline {
+                if cancelled() {
+                    return Err("cancelled".into());
+                }
+                std::thread::sleep(Duration::from_millis(15));
+            }
+            let (_, lines) = parse_lrc("[00:01.00]Slow remote", q.duration_ms);
+            Ok(Some(LyricsDocument {
+                track_key: q.track_key.clone(),
+                source: LyricsSource::Lrclib,
+                sync_kind: LyricsSyncKind::Line,
+                instrumental: false,
+                lines,
+                plain_text: None,
+            }))
+        });
+
+        let cfg = LyricsConfig { enabled: true, online_lookup: true, ..LyricsConfig::default() };
+        let svc = LyricsService::start_with(cfg, root.clone(), fetcher, Duration::from_millis(20), move |st| {
+            let _ = states_tx.send(st);
+        })
+        .unwrap();
+
+        // Track A starts a slow remote fetch.
+        svc.update_track(Some(song("SlowRemote")));
+        assert_eq!(fetch_started_rx.recv_timeout(Duration::from_secs(2)).unwrap(), "SlowRemote");
+
+        // While SlowRemote is blocked, switch to FastLocal: it must resolve promptly without waiting 5s.
+        let t0 = Instant::now();
+        svc.update_track(Some(song("FastLocal")));
+        let deadline = Instant::now() + Duration::from_secs(2);
+        let mut resolved_fast = false;
+        while Instant::now() < deadline {
+            if let Ok(st) = states_rx.recv_timeout(Duration::from_millis(200))
+                && st.status == LyricsStatus::Ready
+                && st.document.as_ref().is_some_and(|d| d.lines[0].text == "Local lyric")
+            {
+                resolved_fast = true;
+                break;
+            }
+        }
+        assert!(resolved_fast, "FastLocal should resolve immediately while SlowRemote is aborted");
+        assert!(t0.elapsed() < Duration::from_secs(1));
+
+        // Now trigger another slow remote lookup and drop immediately: Drop must not block for 5s.
+        svc.update_track(Some(song("SlowRemote2")));
+        assert_eq!(fetch_started_rx.recv_timeout(Duration::from_secs(2)).unwrap(), "SlowRemote2");
+        let drop_start = Instant::now();
+        drop(svc);
+        assert!(drop_start.elapsed() < Duration::from_millis(500), "Drop should exit without waiting on HTTP");
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn config_then_track_burst_preserves_config_and_ignores_stale_fetch_results() {
+        let root = temp_root("burst-and-stale");
+        let (states_tx, states_rx) = mpsc::channel();
+        let (release_a_tx, release_a_rx) = mpsc::channel();
+        let release_a_rx = std::sync::Mutex::new(release_a_rx);
+        let fetcher: FetchFn = Arc::new(move |q, _| {
+            if q.title == "SongA" {
+                let _ = release_a_rx.lock().unwrap().recv_timeout(Duration::from_secs(2));
+                return Err("network boom".into());
+            }
+            let (_, lines) = parse_lrc("[00:01.00]Song B synced", q.duration_ms);
+            Ok(Some(LyricsDocument {
+                track_key: q.track_key.clone(),
+                source: LyricsSource::Lrclib,
+                sync_kind: LyricsSyncKind::Line,
+                instrumental: false,
+                lines,
+                plain_text: None,
+            }))
+        });
+
+        let initial_cfg = LyricsConfig { enabled: false, online_lookup: false, ..LyricsConfig::default() };
+        let svc = LyricsService::start_with(initial_cfg, root.clone(), fetcher, Duration::from_millis(20), move |st| {
+            let _ = states_tx.send(st);
+        })
+        .unwrap();
+
+        // Burst: Config(enabled + online) immediately followed by Track(SongA).
+        svc.update_config(LyricsConfig { enabled: true, online_lookup: true, ..LyricsConfig::default() });
+        svc.update_track(Some(song("SongA")));
+
+        let expected_a_key = active_track_query(&song("SongA")).unwrap().track_key;
+        let mut saw_loading_a = false;
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while Instant::now() < deadline {
+            if let Ok(st) = states_rx.recv_timeout(Duration::from_millis(200))
+                && st.status == LyricsStatus::Loading
+                && st.track_key.as_deref() == Some(expected_a_key.as_str())
+            {
+                saw_loading_a = true;
+                break;
+            }
+        }
+        assert!(saw_loading_a, "Config + Track burst must apply both and start Loading for SongA");
+
+        // Switch to SongB before SongA finishes; release SongA to return an error.
+        svc.update_track(Some(song("SongB")));
+        let _ = release_a_tx.send(());
+
+        let mut saw_ready_b = false;
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while Instant::now() < deadline {
+            if let Ok(st) = states_rx.recv_timeout(Duration::from_millis(200)) {
+                assert_ne!(
+                    (st.status, st.track_key.as_deref()),
+                    (LyricsStatus::NotFound, Some(active_track_query(&song("SongA")).unwrap().track_key.as_str())),
+                    "stale error for SongA must never emit after moving to SongB"
+                );
+                if st.status == LyricsStatus::Ready
+                    && st.document.as_ref().is_some_and(|d| d.lines[0].text == "Song B synced")
+                {
+                    saw_ready_b = true;
+                    break;
+                }
+            }
+        }
+        assert!(saw_ready_b, "SongB should finish cleanly without being clobbered by stale SongA error");
+        drop(svc);
+        let _ = fs::remove_dir_all(&root);
     }
 }

@@ -23,7 +23,8 @@ use super::cache::MAX_ENTRY_BYTES;
 
 const LRCLIB_HOST: &str = "lrclib.net";
 const USER_AGENT: &str = "IceAudioManager/0.0.1 (+https://github.com/kelvinice/ice-audio-manager)";
-const TIMEOUT_MS: i32 = 4_000;
+const RESOLVE_CONNECT_TIMEOUT_MS: i32 = 3_000;
+const SEND_RECEIVE_TIMEOUT_MS: i32 = 4_000;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -63,12 +64,22 @@ impl LrcLibProvider {
             *g = Some(Instant::now() + Duration::from_secs(secs.clamp(5, 300)));
         }
     }
-}
 
-impl LyricsProvider for LrcLibProvider {
-    fn fetch(&self, query: &TrackQuery) -> Result<Option<LyricsDocument>, String> {
+    /// Fetches lyrics from LRCLIB, checking `is_cancelled` before every request phase and response chunk so
+    /// track skips or shutdown abort pending work promptly.
+    ///
+    /// # Errors
+    /// Returns `"cancelled"` when `is_cancelled()` fires, or a human-readable network/rate-limit error.
+    pub fn fetch_cancellable(
+        &self,
+        query: &TrackQuery,
+        is_cancelled: &(dyn Fn() -> bool + Sync),
+    ) -> Result<Option<LyricsDocument>, String> {
         if query.title.trim().is_empty() || query.artist.trim().is_empty() {
             return Ok(None);
+        }
+        if is_cancelled() {
+            return Err("cancelled".into());
         }
         if self.is_backed_off() {
             return Err("lrclib rate-limit backoff active".into());
@@ -83,7 +94,7 @@ impl LyricsProvider for LrcLibProvider {
             get_params.push(("duration", ((dur_ms + 500) / 1_000).to_string()));
         }
         let get_path = format!("/api/get?{}", encode_query(&get_params));
-        match winhttp_get_lrclib(&get_path)? {
+        match winhttp_get_lrclib(&get_path, is_cancelled)? {
             HttpOutcome::Ok(body) => {
                 if let Ok(rec) = serde_json::from_slice::<LrcLibRecord>(&body)
                     && let Some(doc) = record_to_document(rec, query)
@@ -99,6 +110,10 @@ impl LyricsProvider for LrcLibProvider {
             HttpOutcome::HttpError(code) => return Err(format!("lrclib HTTP {code}")),
         }
 
+        if is_cancelled() {
+            return Err("cancelled".into());
+        }
+
         // 2. Normalized search fallback (`GET /api/search`, ±2 s preferred, ±5 s max).
         let clean_title = normalize_query_title(&query.title);
         let search_params = vec![
@@ -106,7 +121,7 @@ impl LyricsProvider for LrcLibProvider {
             ("artist_name", query.artist.clone()),
         ];
         let search_path = format!("/api/search?{}", encode_query(&search_params));
-        match winhttp_get_lrclib(&search_path)? {
+        match winhttp_get_lrclib(&search_path, is_cancelled)? {
             HttpOutcome::Ok(body) => {
                 let records = serde_json::from_slice::<Vec<LrcLibRecord>>(&body).unwrap_or_default();
                 Ok(pick_best_search_match(records, query).and_then(|rec| record_to_document(rec, query)))
@@ -118,6 +133,12 @@ impl LyricsProvider for LrcLibProvider {
             }
             HttpOutcome::HttpError(code) => Err(format!("lrclib HTTP {code}")),
         }
+    }
+}
+
+impl LyricsProvider for LrcLibProvider {
+    fn fetch(&self, query: &TrackQuery) -> Result<Option<LyricsDocument>, String> {
+        self.fetch_cancellable(query, &|| false)
     }
 }
 
@@ -232,7 +253,10 @@ impl Drop for HInternet {
     }
 }
 
-fn winhttp_get_lrclib(path_and_query: &str) -> Result<HttpOutcome, String> {
+fn winhttp_get_lrclib(path_and_query: &str, is_cancelled: &(dyn Fn() -> bool + Sync)) -> Result<HttpOutcome, String> {
+    if is_cancelled() {
+        return Err("cancelled".into());
+    }
     let ua = HSTRING::from(USER_AGENT);
     // SAFETY: valid null-terminated UTF-16 user-agent string; handle wrapped immediately in RAII HInternet.
     let session = HInternet(unsafe {
@@ -243,7 +267,13 @@ fn winhttp_get_lrclib(path_and_query: &str) -> Result<HttpOutcome, String> {
     }
     // SAFETY: session is a valid WinHTTP session handle.
     unsafe {
-        let _ = WinHttpSetTimeouts(session.0, TIMEOUT_MS, TIMEOUT_MS, TIMEOUT_MS, TIMEOUT_MS);
+        let _ = WinHttpSetTimeouts(
+            session.0,
+            RESOLVE_CONNECT_TIMEOUT_MS,
+            RESOLVE_CONNECT_TIMEOUT_MS,
+            SEND_RECEIVE_TIMEOUT_MS,
+            SEND_RECEIVE_TIMEOUT_MS,
+        );
     }
 
     let host = HSTRING::from(LRCLIB_HOST);
@@ -271,10 +301,16 @@ fn winhttp_get_lrclib(path_and_query: &str) -> Result<HttpOutcome, String> {
         return Err("WinHttpOpenRequest failed".into());
     }
 
+    if is_cancelled() {
+        return Err("cancelled".into());
+    }
     // SAFETY: req is a valid request handle with no extra headers or request body.
     unsafe {
         WinHttpSendRequest(req.0, None, None, 0, 0, 0).map_err(|e| format!("WinHttpSendRequest: {e}"))?;
         WinHttpReceiveResponse(req.0, std::ptr::null_mut()).map_err(|e| format!("WinHttpReceiveResponse: {e}"))?;
+    }
+    if is_cancelled() {
+        return Err("cancelled".into());
     }
 
     let status = query_header_u32(req.0, WINHTTP_QUERY_STATUS_CODE).unwrap_or(0);
@@ -291,6 +327,9 @@ fn winhttp_get_lrclib(path_and_query: &str) -> Result<HttpOutcome, String> {
 
     let mut body = Vec::new();
     loop {
+        if is_cancelled() {
+            return Err("cancelled".into());
+        }
         let mut avail = 0u32;
         // SAFETY: req is a valid response-ready handle and `avail` is a valid stack pointer.
         unsafe {
@@ -388,5 +427,19 @@ mod tests {
         ];
         let picked = pick_best_search_match(records, &query).unwrap();
         assert_eq!(picked.synced_lyrics.as_deref(), Some("[00:01.00]Synced"));
+    }
+
+    #[test]
+    fn fetch_cancellable_aborts_immediately_when_pre_cancelled() {
+        let provider = LrcLibProvider::new();
+        let query = TrackQuery {
+            track_key: "k".into(),
+            title: "Idol".into(),
+            artist: "YOASOBI".into(),
+            album: String::new(),
+            duration_ms: Some(213_000),
+        };
+        let err = provider.fetch_cancellable(&query, &|| true).unwrap_err();
+        assert_eq!(err, "cancelled");
     }
 }

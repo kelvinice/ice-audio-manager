@@ -14,6 +14,8 @@ use serde::{Deserialize, Serialize};
 pub const MAX_ENTRY_BYTES: u64 = 256 * 1024;
 /// Negative cache TTL for LRCLIB 404 misses (24 hours).
 const NEGATIVE_TTL_MS: u64 = 24 * 60 * 60 * 1000;
+/// Minimum age before a cache hit rewrites the entry on disk to bump `accessed_ms`.
+const ACCESS_TOUCH_INTERVAL_MS: u64 = 60 * 60 * 1000;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -157,9 +159,11 @@ pub fn read_cache(root: &Path, query: &TrackQuery) -> CacheLookup {
     let Some(mut doc) = record.document.clone() else { return CacheLookup::Miss };
     doc.track_key.clone_from(&query.track_key);
     doc.source = LyricsSource::Cache;
-    record.accessed_ms = now;
-    if let Ok(updated) = serde_json::to_vec(&record) {
-        let _ = write_atomic(&path, &updated);
+    if now.saturating_sub(record.accessed_ms) >= ACCESS_TOUCH_INTERVAL_MS {
+        record.accessed_ms = now;
+        if let Ok(updated) = serde_json::to_vec(&record) {
+            let _ = write_atomic(&path, &updated);
+        }
     }
     CacheLookup::Hit(doc)
 }
@@ -198,9 +202,10 @@ pub fn enforce_limit(root: &Path, cache_max_mb: u16) {
     let dir = cache_dir(root);
     let Ok(entries) = fs::read_dir(&dir) else { return };
     let max_bytes = u64::from(cache_max_mb) * 1024 * 1024;
-    let mut files: Vec<(u64, u64, PathBuf)> = Vec::new();
+    let mut candidates: Vec<(u64, u64, PathBuf)> = Vec::new();
     let mut total = 0u64;
 
+    // Pass 1: metadata only. When under the limit (the common case), skip reading/parsing every cached file.
     for entry in entries.flatten() {
         let path = entry.path();
         if !path.is_file() || path.extension().and_then(|e| e.to_str()) != Some("json") {
@@ -209,22 +214,29 @@ pub fn enforce_limit(root: &Path, cache_max_mb: u16) {
         let Ok(meta) = entry.metadata() else { continue };
         let len = meta.len();
         total = total.saturating_add(len);
-        let accessed = fs::read(&path)
+        let mtime = meta
+            .modified()
             .ok()
-            .and_then(|b| serde_json::from_slice::<CachedRecord>(&b).ok())
-            .map(|r| r.accessed_ms)
-            .unwrap_or_else(|| {
-                meta.modified()
-                    .ok()
-                    .and_then(|m| m.duration_since(UNIX_EPOCH).ok())
-                    .and_then(|d| u64::try_from(d.as_millis()).ok())
-                    .unwrap_or(0)
-            });
-        files.push((accessed, len, path));
+            .and_then(|m| m.duration_since(UNIX_EPOCH).ok())
+            .and_then(|d| u64::try_from(d.as_millis()).ok())
+            .unwrap_or(0);
+        candidates.push((mtime, len, path));
     }
     if total <= max_bytes {
         return;
     }
+
+    // Pass 2: only when over the cap, read `accessed_ms` (falling back to `mtime`) to evict oldest first.
+    let mut files: Vec<(u64, u64, PathBuf)> = candidates
+        .into_iter()
+        .map(|(mtime, len, path)| {
+            let accessed = fs::read(&path)
+                .ok()
+                .and_then(|b| serde_json::from_slice::<CachedRecord>(&b).ok())
+                .map_or(mtime, |r| r.accessed_ms);
+            (accessed, len, path)
+        })
+        .collect();
     files.sort_by_key(|(accessed, _, _)| *accessed);
     for (_, len, path) in files {
         if total <= max_bytes {
@@ -433,6 +445,39 @@ mod tests {
         assert!(cdir.join("entry9.json").exists(), "newest entry should remain");
         let stats = storage_stats(&root, 1);
         assert!(stats.cache_bytes <= 1024 * 1024);
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn read_cache_skips_rewrite_when_fresh_and_touches_when_stale() {
+        let root = temp_root("touch-interval");
+        let q = query("Artist T", "Track T");
+        let (_, lines) = parse_lrc("[00:01.00]Hello", Some(180_000));
+        let doc = LyricsDocument {
+            track_key: q.track_key.clone(),
+            source: LyricsSource::Lrclib,
+            sync_kind: LyricsSyncKind::Line,
+            instrumental: false,
+            lines,
+            plain_text: None,
+        };
+        write_cache(&root, &q, Some(&doc), 50);
+        let path = cache_entry_path(&root, &q);
+        let first: CachedRecord = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        let recent_accessed = now_unix_ms().saturating_sub(60_000);
+        let mut pinned = first.clone();
+        pinned.accessed_ms = recent_accessed;
+        fs::write(&path, serde_json::to_vec(&pinned).unwrap()).unwrap();
+
+        assert!(matches!(read_cache(&root, &q), CacheLookup::Hit(_)));
+        let after_fresh_read: CachedRecord = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        assert_eq!(after_fresh_read.accessed_ms, recent_accessed, "fresh hit should not rewrite JSON");
+
+        pinned.accessed_ms = now_unix_ms().saturating_sub(ACCESS_TOUCH_INTERVAL_MS * 2);
+        fs::write(&path, serde_json::to_vec(&pinned).unwrap()).unwrap();
+        assert!(matches!(read_cache(&root, &q), CacheLookup::Hit(_)));
+        let after_stale_read: CachedRecord = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        assert!(after_stale_read.accessed_ms > pinned.accessed_ms, "stale hit refreshes accessed_ms");
         let _ = fs::remove_dir_all(&root);
     }
 }

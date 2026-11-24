@@ -10,18 +10,20 @@ browser or installed app is the second). No network, no sign-in.
 ## Files
 | File | What it does |
 |---|---|
-| `media.rs` | Stateless WinRT reads: `manager`, `now_playing`, `sessions`, `send(action)`, `current_art`, `read` (track + art), `refresh_playback` (status/timeline); `MediaWatcher` + `MediaSignal` forward GSMTC events to a non-blocking sink; art pipeline |
-| `media_service.rs` | `MediaService`: the `ice-media` thread; coalesces signals, reads once per burst, returns `MediaUpdate` to the engine |
-| `lyrics.rs`, `lyrics/{cache,lrclib,romaji}.rs` | `LyricsService` (`ice-lyrics` MTA thread): Option B local `.lrc` overrides (`%LOCALAPPDATA%\IceAudioManager\lyrics\custom\`) & bounded LRU disk cache (`cache_max_mb`), Option A opt-in WinHTTP LRCLIB (`https://lrclib.net`) client, and offline Japanese → Romaji via Windows MS-IME `IFELanguage::GetJMorphResult` + `kana_to_romaji` |
+| `media.rs` | Stateless WinRT reads: `manager`, `now_playing`, `sessions`, `send(action)`, `current_art`, `read` (track + art), `read_within_cached` (skips PNG encode when `ArtInfo` matches), `refresh_playback` (status/timeline); `MediaWatcher` + `MediaSignal` forward GSMTC events to a non-blocking sink; art pipeline |
+| `media_service.rs` | `MediaService`: the `ice-media` watcher thread + `ice-media-cmd` transport thread (`MediaCommandSender`, queued seek coalescing); coalesces GSMTC signals and stops confirm reads once both track and new art arrive |
+| `lyrics.rs`, `lyrics/{cache,lrclib,romaji}.rs` | `LyricsService` (`ice-lyrics` STA thread): Option B local `.lrc` overrides (`%LOCALAPPDATA%\IceAudioManager\lyrics\custom\`) & bounded LRU disk cache (`cache_max_mb`, 1 h hit-touch interval, metadata-first eviction), Option A non-blocking cancellable WinHTTP LRCLIB (`https://lrclib.net`) on short-lived `ice-lyrics-net` workers (250 ms skip debounce, max 2 in flight), and offline Japanese → Romaji via `JapanesePhoneticAnalyzer` / MS-IME `IFELanguage::GetJMorphResult` + `kana_to_romaji` |
 
 ## How it works
 - **Event-driven, no polling.** `MediaWatcher` forwards session / properties / playback / timeline events. `media_service` sets bits in a
   dirty mask (`SESSION_BITS`, `PLAYBACK_BITS`) and wakes at most once per burst, then waits `SETTLE` (60 ms) so a track change (properties +
-  playback + timeline together) is read once.
-- **Confirm reads (`CONFIRM_AFTER`: +300 ms, +1 s, +2.5 s after a track read).** Spotify can fire "properties changed" before the new
-  title is readable, so the first read may return the old track; the re-reads correct it and emit only if something changed. A timeline
-  duration jump (`DURATION_JUMP_MS`) on a playback-only event also forces a track read. The first read gives the cover only
-  `FIRST_ART_BUDGET` (400 ms, `media::read_within`) so a slow cover can't hold back the title; the re-reads use the full `ART_BUDGET`.
+  playback + timeline together) is read once. Outbound `Command::Media` actions run on `ice-media-cmd` (`MediaCommandSender`, coalescing burst
+  seeks and dropping stale seeks before `Next`/`Previous`) so track skips and seeks never wait behind slow GSMTC art/property reads or `ice-audio`.
+- **Confirm reads (`CONFIRM_AFTER`: +200 ms, +800 ms, +2 s after a track read).** Spotify can fire "properties changed" before the new
+  title is readable, so the first read may return the old track; the re-reads correct it, emit only if something changed, and disarm early as
+  soon as both a new track and new art are observed. A timeline duration jump (`DURATION_JUMP_MS`) on a playback-only event also forces a track
+  read. The first read gives the cover `FIRST_ART_BUDGET` (250 ms, `media::read_within_cached`) so a slow cover can't hold back the title; confirm
+  re-reads use `CONFIRM_ART_BUDGET` (1.2 s) and skip PNG re-encoding when the decoded thumbnail hash matches `known_art`.
 - **Own MTA thread (`ice-media`).** Every call here blocks on cross-process WinRT, so it must never run on a UI (STA) thread or on
   `ice-audio` (a slow media app must not delay a device switch). MED-09.
 - **Bounded:** `CALL_LIMIT` 500 ms per WinRT call, `ART_BUDGET` 2 s for all art work for one read; oversized art is rejected before decode (MED-02/03).
@@ -48,3 +50,4 @@ Unit tests for colour maths live in `ice-core`; this module is covered by the ma
 - 2026-11-24 Gemini: added `lyrics/` (`LyricsService` on `ice-lyrics` thread, Option B local `.lrc` + LRU disk cache, Option A opt-in WinHTTP LRCLIB client, and offline MS-IME `IFELanguage` Romaji).
 - 2026-11-24 Claude: lyrics cache `format: 2` (older records dropped), generated Romaji stored in `LyricLine.romaji` and stripped before caching; IME word breaks for kana-only lines; particles as spoken.
 - 2026-11-24 Claude: Romaji fixed: `ice-lyrics` thread is STA (both Windows backends are STA classes); `JapanesePhoneticAnalyzer` first, `IFELanguage` second (probed once), kana last; `romaji_reads_kanji()` for Settings. Kanji Romaji needs Japanese installed in Windows (lyrics.md §9).
+- 2026-11-24 Gemini: split `ice-media-cmd` (`MediaCommandSender` + seek/skip coalescing) off GSMTC reads, added `read_within_cached` + early confirm disarm, made LRCLIB lookups non-blocking/cancellable (`ice-lyrics-net`, 250 ms debounce, max 2 in flight) with metadata-first cache eviction and 1 h hit-touch throttling.
