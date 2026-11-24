@@ -18,6 +18,7 @@ windows-future.workspace = true
 [dependencies.windows]
 workspace = true
 features = [
+    "Globalization",
     "Win32_Devices_Display",
     "Win32_Graphics_Dwm",
     "Win32_Graphics_Gdi",

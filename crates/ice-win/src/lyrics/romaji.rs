@@ -1,9 +1,22 @@
-//! Offline Japanese → Romaji conversion using Windows' built-in MS-IME (`IFELanguage::GetJMorphResult`)
-//! with automatic fallback to `ice_core::lyrics::kana_to_romaji` (100 % MIT, zero extra crates).
+//! Offline Japanese → Romaji using Windows' own Japanese language data, falling back to
+//! `ice_core::lyrics::kana_to_romaji` (100 % MIT, zero extra crates).
+//!
+//! **Backends, tried in order (2026-11-24 fix: Romaji never worked on kanji lines):**
+//! 1. `Windows.Globalization.JapanesePhoneticAnalyzer`: word-by-word readings. The supported modern API.
+//! 2. `IFELanguage::GetJMorphResult` (`MSIME.Japan`): kept for PCs where it still answers (e.g. the "previous
+//!    version" Microsoft IME). The new IME (Windows 10 2004+) returns `S_FALSE` for reverse conversion.
+//! 3. Kana only: the Hepburn table, unspaced. Kanji can't be read without 1 or 2.
+//!
+//! **Both Windows backends are single-threaded (STA) classes:** created on an MTA thread, `IFELanguage`'s
+//! QueryInterface fails (`E_NOINTERFACE`: no proxy) and the analyzer refuses to activate. The `ice-lyrics` thread is
+//! therefore an STA (`super::run`). **Both need the Japanese language in Windows** (Settings → Time & language →
+//! Language & region → Add Japanese); with only English installed they return nothing and only kana lines get Romaji.
+//! Each backend is probed once at start, so a dead one costs nothing per line.
 
 use std::ffi::c_void;
 
 use ice_core::lyrics::{contains_japanese, contains_kanji, kana_to_romaji, segmented_kana_to_romaji};
+use windows::Globalization::JapanesePhoneticAnalyzer;
 use windows::Win32::System::Com::{CLSCTX_INPROC_SERVER, CLSIDFromProgID, CoCreateInstance, CoTaskMemFree};
 use windows::core::{GUID, HRESULT, HSTRING, IUnknown, Interface, PCWSTR};
 
@@ -11,9 +24,14 @@ use windows::core::{GUID, HRESULT, HSTRING, IUnknown, Interface, PCWSTR};
 const IID_IFE_LANGUAGE: GUID = GUID::from_u128(0x019f_7152_e6db_11d0_83c3_00c0_4fdd_b82e);
 /// Request reverse morphological conversion (Kanji → Kana reading).
 const FELANG_REQ_REV: u32 = 0x0003_0000;
-/// Output Hiragana readings with phrase/clause segmentation.
+/// Hiragana output, automatic segmentation, no invisible characters (`msime.h`).
 const FELANG_CMODE_HIRAGANAOUT: u32 = 0x0000_0000;
-const FELANG_CMODE_PHRASEPREDICT: u32 = 0x1000_0000;
+const FELANG_CMODE_AUTOMATIC: u32 = 0x0800_0000;
+const FELANG_CMODE_NOINVISIBLECHAR: u32 = 0x4000_0000;
+/// `JapanesePhoneticAnalyzer::GetWords` accepts at most 100 characters per call.
+const ANALYZER_MAX_CHARS: usize = 100;
+/// Probe text for "does this backend read kanji at all".
+const PROBE: &str = "日本語";
 
 #[repr(C)]
 struct IFeLanguageVtbl {
@@ -48,59 +66,64 @@ struct MorRslt {
     p_private: *mut c_void,
 }
 
-/// RAII wrapper around Windows' `MSIME.Japan` `IFELanguage` COM object (lives on the `ice-lyrics` MTA thread).
+/// Which backend reads kanji on this PC (logged once at start).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RomajiBackend {
+    PhoneticAnalyzer,
+    Ime,
+    /// Neither Windows backend reads kanji: only kana lines get Romaji.
+    KanaOnly,
+}
+
+/// The Romaji converter for the `ice-lyrics` thread, which must be an STA (see the module docs).
 pub struct JapaneseRomaji {
+    analyzer: bool,
     raw: Option<*mut IFeLanguageRaw>,
 }
 
 impl JapaneseRomaji {
-    /// Initializes `IFELanguage` if the Windows Japanese IME is installed; degrades cleanly if absent.
+    /// Probes both Windows backends once; keeps only the ones that read kanji here.
     #[must_use]
     pub fn new() -> Self {
-        let prog_id = HSTRING::from("MSIME.Japan");
-        // SAFETY: `prog_id` is a valid null-terminated UTF-16 string; COM is initialized on the calling thread.
-        let raw = unsafe {
-            let Ok(clsid) = CLSIDFromProgID(PCWSTR(prog_id.as_ptr())) else {
-                tracing::debug!("MSIME.Japan not installed; Romaji will convert Kana-only lines");
-                return Self { raw: None };
-            };
-            let Ok(unknown) = CoCreateInstance::<_, IUnknown>(&clsid, None, CLSCTX_INPROC_SERVER) else {
-                tracing::debug!("IFELanguage unavailable");
-                return Self { raw: None };
-            };
-            let mut ptr: *mut c_void = std::ptr::null_mut();
-            let hr = unknown.query(&IID_IFE_LANGUAGE, &mut ptr);
-            if hr.is_err() || ptr.is_null() {
-                tracing::debug!(?hr, "IFELanguage QueryInterface unavailable");
-                return Self { raw: None };
+        let analyzer = analyzer_words(PROBE).is_some_and(|w| !w.is_empty());
+        let mut this = Self { analyzer, raw: None };
+        if !analyzer {
+            this.raw = open_ime();
+            if this.raw.is_some() && this.ime_reading(PROBE).is_none() {
+                this.close_ime();
             }
-            let obj = ptr.cast::<IFeLanguageRaw>();
-            let open_hr = ((*(*obj).vtbl).open)(ptr);
-            if open_hr.is_err() {
-                ((*(*obj).vtbl).release)(ptr);
-                tracing::debug!(?open_hr, "IFELanguage::Open failed");
-                return Self { raw: None };
-            }
-            Some(obj)
-        };
-        Self { raw }
+        }
+        tracing::info!(backend = ?this.backend(), "Romaji backend");
+        this
     }
 
-    /// Returns an offline Hepburn Romaji subtitle for `line`, or `None` if not Japanese / unreadable Kanji.
+    #[must_use]
+    pub fn backend(&self) -> RomajiBackend {
+        if self.analyzer {
+            RomajiBackend::PhoneticAnalyzer
+        } else if self.raw.is_some() {
+            RomajiBackend::Ime
+        } else {
+            RomajiBackend::KanaOnly
+        }
+    }
+
+    /// Returns an offline Hepburn Romaji subtitle for `line`, or `None` if not Japanese / unreadable kanji.
     #[must_use]
     pub fn line_to_romaji(&self, line: &str) -> Option<String> {
         if !contains_japanese(line) {
             return None;
         }
-        // The IME's word breaks space the words and let particles read as spoken (は → wa). Kana-only lines go
-        // through it too: on their own they'd come out as one unspaced word ("kiminonamaewa").
-        if let Some(kana) = self.kanji_to_spaced_kana(line) {
+        // Word-segmented readings space the words and let particles read as spoken (は → wa). Kana-only lines go
+        // through them too: on their own they'd come out as one unspaced word ("kiminonamaewa").
+        let reading = if self.analyzer { analyzer_reading(line) } else { self.ime_reading(line) };
+        if let Some(kana) = reading {
             let rom = segmented_kana_to_romaji(&kana);
             if !rom.is_empty() && !contains_kanji(&rom) {
                 return Some(rom);
             }
         }
-        // Without the Japanese IME: kana converts directly (unspaced); kanji can't be read.
+        // No Windows reading: kana converts directly (unspaced); kanji can't be read.
         if contains_kanji(line) {
             return None;
         }
@@ -108,6 +131,77 @@ impl JapaneseRomaji {
         (!rom.is_empty() && rom != line.trim()).then_some(rom)
     }
 
+    fn close_ime(&mut self) {
+        if let Some(obj) = self.raw.take() {
+            // SAFETY: `obj` was opened and owned uniquely by `JapaneseRomaji`.
+            unsafe {
+                let _ = ((*(*obj).vtbl).close)(obj.cast());
+                ((*(*obj).vtbl).release)(obj.cast());
+            }
+        }
+    }
+
+    fn ime_reading(&self, text: &str) -> Option<String> {
+        self.kanji_to_spaced_kana(text)
+    }
+}
+
+/// Words with their readings from `JapanesePhoneticAnalyzer` (STA only), or `None` if it can't run here.
+fn analyzer_words(text: &str) -> Option<Vec<(String, String)>> {
+    let chars: Vec<char> = text.chars().collect();
+    let mut words = Vec::new();
+    for chunk in chars.chunks(ANALYZER_MAX_CHARS) {
+        let chunk: String = chunk.iter().collect();
+        let found = JapanesePhoneticAnalyzer::GetWords(&HSTRING::from(chunk.as_str())).ok()?;
+        for w in found {
+            words.push((w.DisplayText().ok()?.to_string(), w.YomiText().ok()?.to_string()));
+        }
+    }
+    Some(words)
+}
+
+/// Space-separated hiragana readings, one per word, or `None` when the analyzer reads nothing.
+fn analyzer_reading(line: &str) -> Option<String> {
+    let parts: Vec<String> = analyzer_words(line)?
+        .into_iter()
+        .map(|(display, yomi)| if yomi.trim().is_empty() { display } else { yomi })
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect();
+    (!parts.is_empty()).then(|| parts.join(" "))
+}
+
+/// Opens `MSIME.Japan`'s `IFELanguage` (STA only), or `None` if absent.
+fn open_ime() -> Option<*mut IFeLanguageRaw> {
+    let prog_id = HSTRING::from("MSIME.Japan");
+    // SAFETY: `prog_id` is a valid null-terminated UTF-16 string; COM (STA) is initialized on the calling thread.
+    unsafe {
+        let Ok(clsid) = CLSIDFromProgID(PCWSTR(prog_id.as_ptr())) else {
+            tracing::debug!("MSIME.Japan not installed");
+            return None;
+        };
+        let Ok(unknown) = CoCreateInstance::<_, IUnknown>(&clsid, None, CLSCTX_INPROC_SERVER) else {
+            tracing::debug!("IFELanguage unavailable");
+            return None;
+        };
+        let mut ptr: *mut c_void = std::ptr::null_mut();
+        let hr = unknown.query(&IID_IFE_LANGUAGE, &mut ptr);
+        if hr.is_err() || ptr.is_null() {
+            tracing::debug!(?hr, "IFELanguage QueryInterface unavailable (needs an STA thread)");
+            return None;
+        }
+        let obj = ptr.cast::<IFeLanguageRaw>();
+        let open_hr = ((*(*obj).vtbl).open)(ptr);
+        if open_hr.is_err() {
+            ((*(*obj).vtbl).release)(ptr);
+            tracing::debug!(?open_hr, "IFELanguage::Open failed");
+            return None;
+        }
+        Some(obj)
+    }
+}
+
+impl JapaneseRomaji {
     fn kanji_to_spaced_kana(&self, text: &str) -> Option<String> {
         let obj = self.raw?;
         let utf16: Vec<u16> = text.encode_utf16().collect();
@@ -121,7 +215,7 @@ impl JapaneseRomaji {
             let hr = ((*(*obj).vtbl).get_j_morph_result)(
                 obj.cast(),
                 FELANG_REQ_REV,
-                FELANG_CMODE_HIRAGANAOUT | FELANG_CMODE_PHRASEPREDICT,
+                FELANG_CMODE_HIRAGANAOUT | FELANG_CMODE_AUTOMATIC | FELANG_CMODE_NOINVISIBLECHAR,
                 len,
                 utf16.as_ptr(),
                 std::ptr::null(),
@@ -145,13 +239,7 @@ impl Default for JapaneseRomaji {
 
 impl Drop for JapaneseRomaji {
     fn drop(&mut self) {
-        if let Some(obj) = self.raw.take() {
-            // SAFETY: `obj` was opened and owned uniquely by `JapaneseRomaji`.
-            unsafe {
-                let _ = ((*(*obj).vtbl).close)(obj.cast());
-                ((*(*obj).vtbl).release)(obj.cast());
-            }
-        }
+        self.close_ime();
     }
 }
 
@@ -187,4 +275,27 @@ unsafe fn extract_spaced_output(res: &MorRslt) -> Option<String> {
         }
     }
     Some(String::from_utf16_lossy(output))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// By hand on a real PC: `cargo test -p ice-win romaji_on_this_pc -- --ignored --nocapture`.
+    /// Prints the backend in use and the Romaji for a few lines (kanji lines need Japanese installed in Windows).
+    #[test]
+    #[ignore = "depends on the PC's Japanese language data; prints results"]
+    fn romaji_on_this_pc() {
+        std::thread::spawn(|| {
+            let _com = crate::com::ComGuard::init_sta().expect("COM STA");
+            let romaji = JapaneseRomaji::new();
+            println!("backend: {:?}", romaji.backend());
+            for line in ["見上げた夜空の星達の光", "私は学校へ行く", "ダンボールを抱えて", "いったいこのままいつまで"]
+            {
+                println!("{line} -> {:?}", romaji.line_to_romaji(line));
+            }
+        })
+        .join()
+        .expect("romaji thread");
+    }
 }

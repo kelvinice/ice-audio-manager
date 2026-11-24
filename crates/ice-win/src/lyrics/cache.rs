@@ -271,6 +271,8 @@ pub fn storage_stats(root: &Path, cache_max_mb: u16) -> LyricsStorageStats {
         custom_files,
         cache_max_mb,
         custom_dir: custom.display().to_string(),
+        // Filled in by `super::storage_stats` (needs an STA thread); file-level stats don't know.
+        romaji_reads_kanji: false,
     }
 }
 

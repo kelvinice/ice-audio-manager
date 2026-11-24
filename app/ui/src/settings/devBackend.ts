@@ -175,6 +175,7 @@ export function createDevBackend(): Backend {
             customFiles: 2,
             cacheMaxMb: snapshot.settings.lyrics.cacheMaxMb,
             customDir: '%LOCALAPPDATA%\\IceAudioManager\\lyrics\\custom',
+            romajiReadsKanji: false,
           } as T;
         case 'clear_lyrics_cache':
           return {
@@ -183,6 +184,7 @@ export function createDevBackend(): Backend {
             customFiles: 2,
             cacheMaxMb: snapshot.settings.lyrics.cacheMaxMb,
             customDir: '%LOCALAPPDATA%\\IceAudioManager\\lyrics\\custom',
+            romajiReadsKanji: false,
           } as T;
         case 'open_lyrics_folder':
           return undefined as T;

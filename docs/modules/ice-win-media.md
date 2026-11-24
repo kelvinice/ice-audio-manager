@@ -47,3 +47,4 @@ Unit tests for colour maths live in `ice-core`; this module is covered by the ma
 - 2026-11-24 Gemini: `refresh_playback` now populates `NowPlaying.position_updated_ms` from GSMTC `TimelineProperties.LastUpdatedTime` (with stale-resume guard).
 - 2026-11-24 Gemini: added `lyrics/` (`LyricsService` on `ice-lyrics` thread, Option B local `.lrc` + LRU disk cache, Option A opt-in WinHTTP LRCLIB client, and offline MS-IME `IFELanguage` Romaji).
 - 2026-11-24 Claude: lyrics cache `format: 2` (older records dropped), generated Romaji stored in `LyricLine.romaji` and stripped before caching; IME word breaks for kana-only lines; particles as spoken.
+- 2026-11-24 Claude: Romaji fixed: `ice-lyrics` thread is STA (both Windows backends are STA classes); `JapanesePhoneticAnalyzer` first, `IFELanguage` second (probed once), kana last; `romaji_reads_kanji()` for Settings. Kanji Romaji needs Japanese installed in Windows (lyrics.md §9).

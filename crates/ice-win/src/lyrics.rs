@@ -81,13 +81,34 @@ impl Drop for LyricsService {
 /// Returns current disk usage of the lyrics cache and local `.lrc` overrides.
 #[must_use]
 pub fn storage_stats(cache_max_mb: u16) -> LyricsStorageStats {
-    read_storage_stats(&default_lyrics_root(), cache_max_mb)
+    LyricsStorageStats {
+        romaji_reads_kanji: romaji_reads_kanji(),
+        ..read_storage_stats(&default_lyrics_root(), cache_max_mb)
+    }
 }
 
 /// Deletes all managed cache files (leaving user `custom\` `.lrc` files untouched).
 #[must_use]
 pub fn clear_lyrics_cache(cache_max_mb: u16) -> LyricsStorageStats {
-    clear_disk_cache(&default_lyrics_root(), cache_max_mb)
+    LyricsStorageStats {
+        romaji_reads_kanji: romaji_reads_kanji(),
+        ..clear_disk_cache(&default_lyrics_root(), cache_max_mb)
+    }
+}
+
+/// Whether a Windows backend reads kanji here. Probed on a short-lived STA thread (both backends are STA classes),
+/// only when the Settings window asks; installing Japanese in Windows takes effect without restarting the app.
+#[must_use]
+pub fn romaji_reads_kanji() -> bool {
+    std::thread::Builder::new()
+        .name("ice-romaji-probe".into())
+        .spawn(|| {
+            let _com = ComGuard::init_sta().ok();
+            JapaneseRomaji::new().backend() != romaji::RomajiBackend::KanaOnly
+        })
+        .ok()
+        .and_then(|h| h.join().ok())
+        .unwrap_or(false)
 }
 
 /// Ensures `%LOCALAPPDATA%\IceAudioManager\lyrics\custom\` exists and opens it in File Explorer.
@@ -116,7 +137,10 @@ pub fn open_custom_folder() -> Result<(), String> {
 }
 
 fn run(rx: &Receiver<In>, root: PathBuf, mut config: LyricsConfig, out: &dyn Fn(LyricsState)) {
-    let _com = ComGuard::init_mta().ok();
+    // STA, not MTA: both Romaji backends (`JapanesePhoneticAnalyzer`, `IFELanguage`) are single-threaded classes and
+    // fail from an MTA (no proxy for `IFELanguage`; the analyzer refuses to activate). Nothing here needs a message
+    // pump: every COM call is synchronous on this thread, and WinHTTP and file I/O aren't COM.
+    let _com = ComGuard::init_sta().ok();
     let romaji = JapaneseRomaji::new();
     let lrclib = LrcLibProvider::new();
 

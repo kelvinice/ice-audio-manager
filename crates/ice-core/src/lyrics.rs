@@ -164,6 +164,10 @@ pub struct LyricsStorageStats {
     pub custom_files: u32,
     pub cache_max_mb: u16,
     pub custom_dir: String,
+    /// Whether Windows can read kanji for Romaji here (needs the Japanese language installed); when false, only
+    /// kana lines get Romaji. Probed when the Settings window asks, never in the background.
+    #[serde(default)]
+    pub romaji_reads_kanji: bool,
 }
 
 /// Metadata sent to a [`LyricsProvider`] (never includes user identifiers or secrets).

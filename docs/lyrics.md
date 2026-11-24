@@ -166,6 +166,10 @@ Romaji off also hid paired translations, and Romaji generator fixes never reache
 
 When `lyrics.romaji` is enabled and a lyric line contains Hiragana, Katakana, or Kanji **and** does not already have a paired subtitle:
 
+> **Corrected 2026-11-24 (see §9):** the IME path below never worked as shipped. The backends are now, in order:
+> `Windows.Globalization.JapanesePhoneticAnalyzer`, then `IFELanguage`, then kana only, all on an **STA** `ice-lyrics`
+> thread, and **both Windows backends need the Japanese language installed in Windows**.
+
 1. **Primary (0 MB binary overhead): Windows MS-IME (`IFELanguage::GetJMorphResult`) in `crates/ice-win`**
    - Calls Windows' built-in Japanese morphological analyzer via COM on the dedicated MTA worker thread (strictly wrapped in RAII + `// SAFETY:`).
    - Produces accurate context-aware Kana readings and natural word/clause boundaries (`むてき の えがお で あらす めでぃあ`), which a tiny pure-Rust Hepburn table in `ice-core` converts to clean Romaji (`muteki no egao de arasu media`).
@@ -331,3 +335,44 @@ spoken, and the Romaji sweep (above).
 - The ladder uses `overflow: clip` with a 2 px clip margin, so the lift and glow aren't shaved vertically.
 - Other rows (next, previous) are plain text and keep their ellipsis.
 - Tested in `fitLine.test.ts`: fits, shrinks, slides to the very end, centres in the card.
+
+---
+
+## 9. Fixed (2026-11-24): Romaji never appeared on kanji lines
+
+**Report (owner):** no Romaji at all.
+
+**What I measured on the owner's PC** (`cargo test -p ice-win romaji_on_this_pc -- --ignored --nocapture`, plus
+one-off diagnostics):
+
+| Path | Result | Why |
+|---|---|---|
+| `IFELanguage` from the `ice-lyrics` thread (as shipped) | init fails: `QueryInterface` → `E_NOINTERFACE` | `MSIME.Japan` is `ThreadingModel = Apartment` (STA). From an MTA thread COM hands back a proxy, and `IFELanguage` has no proxy/stub, so the interface can't be reached |
+| `IFELanguage` from an STA thread (`MSIME.Japan`, `.FELang`, `.FELang.15`) | `GetJMorphResult` → `S_FALSE`, no result, in every mode | The new Microsoft IME (Windows 10 2004+) doesn't do reverse conversion, and this PC has no Japanese dictionary (`System32\IME\IMEJP\DICTS` is missing) |
+| `JapanesePhoneticAnalyzer` from an MTA thread | refuses to activate (`0x8000001D`) | Also an STA class |
+| `JapanesePhoneticAnalyzer` from an STA thread | 0 words for every line | Only English (en-US) is installed in Windows, so there's no Japanese language data |
+
+So **kanji lines never had Romaji on this PC**, before or after the 2026-11-24 Romaji changes. Only kana-only lines did,
+through the built-in kana table (unspaced). The old cache confirms it: records written before `format: 2` had Romaji
+on 1 of 34 and 4 of 48 Japanese lines.
+
+**Fix** (`crates/ice-win/src/lyrics/romaji.rs`, `lyrics.rs`):
+- The `ice-lyrics` thread is now an **STA**. No message pump is needed: every COM call there is synchronous on that
+  thread, and WinHTTP and file I/O aren't COM.
+- **Backends in order:** `JapanesePhoneticAnalyzer` (word readings and boundaries; the supported modern API), then
+  `IFELanguage` (kept for PCs where it still answers, e.g. the "previous version" IME; mode flags corrected to
+  `HIRAGANAOUT | AUTOMATIC | NOINVISIBLECHAR`), then kana only. Each is probed once at start, so a dead backend
+  costs nothing per line; the one in use is logged (`Romaji backend`).
+- **Settings tells you:** `LyricsStorageStats.romajiReadsKanji` (probed on a short-lived STA thread only when the
+  Settings window asks). Activities → Synced lyrics shows "Romaji only covers kana lines on this PC" with how to add
+  Japanese, when Windows can't read kanji.
+
+**What the owner needs to do to get kanji Romaji:** add **Japanese** in Windows Settings → Time & language → Language &
+region (the language features, no need to type with it). *Expected* to make `JapanesePhoneticAnalyzer` return
+readings; not yet verified on this PC, since installing a language changes the system. Then reopen Settings →
+Activities: the hint disappears when it works.
+
+**If installing Japanese isn't acceptable:** kanji Romaji needs a reading dictionary shipped with the app (§7 item 5).
+Every option is a trade-off for a decision entry: size (a full tokenizer dictionary is ~15–50 MB against the < 10 MB
+installer budget), licence (KANJIDIC/JMdict are CC BY-SA; the `kakasi` crate is GPL, see D-24), or an online service
+(network, §1.5).

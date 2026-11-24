@@ -119,7 +119,12 @@ export type LyricsDocument = { trackKey: string, source: LyricsSource, syncKind:
 
 export type LyricsState = { status: LyricsStatus, trackKey: string | null, document: LyricsDocument | null, };
 
-export type LyricsStorageStats = { cacheBytes: number, cacheFiles: number, customFiles: number, cacheMaxMb: number, customDir: string, };
+export type LyricsStorageStats = { cacheBytes: number, cacheFiles: number, customFiles: number, cacheMaxMb: number, customDir: string,
+/**
+ * Whether Windows can read kanji for Romaji here (needs the Japanese language installed); when false, only
+ * kana lines get Romaji. Probed when the Settings window asks, never in the background.
+ */
+romajiReadsKanji: boolean, };
 
 export type MediaAction = "playPause" | "play" | "pause" | "next" | "previous" | { "seek": { positionMs: number, } };
 

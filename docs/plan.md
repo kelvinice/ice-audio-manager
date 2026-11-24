@@ -340,7 +340,10 @@ Items marked *(needs Settings)* wait for the Phase 4 Settings window. The rest c
 - Full design spec: [`docs/lyrics.md`](lyrics.md) (bottom pill/card extension, active-word emphasis, Options A & B + Option C constraints, offline Japanese Romaji, Settings → Privacy & Storage max cache size, and phased implementation path).
 - **Status, review and fixes:** what was built, a review of further improvements, and the clipped-line fix are in
   [`docs/lyrics.md`](lyrics.md) §7 ([review: improvements not built yet](lyrics.md#7-review-2026-11-24-improvements-found-not-built-yet))
-  and §8 ([fixed: last characters cut off](lyrics.md#8-fixed-2026-11-24-the-last-characters-of-a-line-were-cut-off)).
+  and §8 ([fixed: last characters cut off](lyrics.md#8-fixed-2026-11-24-the-last-characters-of-a-line-were-cut-off)),
+  §9 ([fixed: Romaji never appeared on kanji lines](lyrics.md#9-fixed-2026-11-24-romaji-never-appeared-on-kanji-lines)).
+- [ ] Owner: add Japanese in Windows (Language & region) and confirm kanji Romaji appears (lyrics.md §9); if that's not
+      acceptable, open a decision on a bundled reading dictionary (size / licence / network trade-offs listed there)
 - [x] Settings → Privacy: lists every network feature, its destination and the data sent, with one "all network features
       off" switch (Codex). *Built by Gemini, 2026-11-24 (`PrivacyPage.svelte`)*
 - [x] Rust LRCLIB client (Claude), written from LRCLIB's docs (code-practices §1.8). *Built by Gemini, 2026-11-24

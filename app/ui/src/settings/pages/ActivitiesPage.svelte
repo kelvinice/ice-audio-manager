@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import type { MusicServiceId } from '../../lib/ipc/engine';
   import type { SettingsClient } from '../../lib/settings/client.svelte';
   import InfoBar from '../controls/InfoBar.svelte';
@@ -12,6 +13,11 @@
 
   let { client }: Props = $props();
   const settings = $derived(client.engine?.settings);
+
+  // Fetched on open only (it also probes whether Windows can read kanji for Romaji); no polling.
+  onMount(() => {
+    void client.refreshLyricsStorage();
+  });
 
   function patchLyrics(patch: {
     showOnPill?: boolean;
@@ -129,7 +135,7 @@
     <SettingCard
       icon="globe"
       title="Romaji subtitles for Japanese songs"
-      description="Automatically displays an offline Romaji reading line below Japanese lyrics using Windows IME / Kana transliteration and paired .lrc subtitles."
+      description="An offline Romaji line under Japanese lyrics, read by Windows' Japanese language data. Translations paired in a .lrc file always show."
     >
       {#snippet control()}
         <Toggle
@@ -140,6 +146,14 @@
         />
       {/snippet}
     </SettingCard>
+
+    {#if settings.lyrics.enabled && settings.lyrics.romaji && client.lyricsStorage && !client.lyricsStorage.romajiReadsKanji}
+      <InfoBar
+        tone="info"
+        title="Romaji only covers kana lines on this PC."
+        text="Windows needs its Japanese language data to read kanji. Add Japanese in Windows Settings → Time & language → Language & region, then reopen this page."
+      />
+    {/if}
 
     {#if settings.lyrics.enabled && !settings.lyrics.onlineLookup}
       <InfoBar
