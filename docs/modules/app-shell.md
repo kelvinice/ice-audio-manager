@@ -47,6 +47,9 @@ state to the UI, and exposes a small set of Tauri commands. Thin by rule: valida
 - **Only a *new* track wakes the notch** (`TrackKey`: app + title + artist + album); art/position/status updates do not.
 
 ## Traps
+- Cursor poll (`spawn_cursor_poll`): the hit rect is scaled by the notch window's own width / `NOTCH_CANVAS_W`, never a
+  stored monitor `scale_factor` (stale after topology/DPI changes → clicks beside the pill were swallowed). It re-applies
+  `set_click_through` every tick (no cached state) and leaves the window click-through when it stops.
 - Never keep logic here that the app needs while the WebView is released; the engine, tray, hotkeys and native pill must work alone.
 - Every `update_and_emit` bumps `NotchSnapshot.revision`; the UI drops older ones.
 - `iceart://` must stay in the production CSP and serve nothing but engine-cached IDs.
@@ -67,3 +70,4 @@ Unit tests in `art.rs`, `engine_bridge.rs`, `ipc.rs`, `meter.rs`, `placement.rs`
 - 2026-11-24 Gemini: `NOTCH_CANVAS_H` raised to `292` (for bottom lyrics extension); added Settings-only `get_lyrics_storage_stats`, `clear_lyrics_cache`, and `open_lyrics_folder` commands (`permissions/shell.toml`).
 - 2026-11-24 Gemini: `meter::forward` drains queued frames to latest, `SharedRuntime::update_and_emit` / `engine_bridge` skip unchanged `NotchSnapshot` bumps and closed-window emits (`LyricsChanged`, non-waking `MediaChanged` fast paths), and `settings.rs` lyrics storage commands run via `spawn_blocking`.
 - 2026-11-24 Gemini: `NOTCH_CANVAS_W` raised to `648` for Edge Nook side-by-side layout + concave ears, `NotchSnapshot.notch_style`, and `engine_bridge` `native_dot.set_notch_style` sync.
+- 2026-11-25 Claude: cursor poll scales the hit rect from the window width, re-checks `WS_EX_TRANSPARENT` every tick and resets it on exit (fix: clicks around the pill / music pill blocked); UI resends `report_hit_rect` after wake or a failed send.

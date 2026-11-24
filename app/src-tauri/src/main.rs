@@ -532,11 +532,18 @@ fn spawn_cursor_poll(state: Arc<SharedRuntime>, benchmark: bool) {
     let poll_state = Arc::clone(&state);
     let worker = std::thread::Builder::new().name("ice-cursor-poll".into()).spawn(move || {
         let state = poll_state;
-        let mut last_ignore: Option<bool> = None;
+        // `set_click_through` reads the window's real `WS_EX_TRANSPARENT` bit and writes only on a change, so it runs every
+        // tick instead of trusting a cached value: a style reset elsewhere can't leave the window catching clicks.
+        let mut last_hwnd = 0;
         loop {
             let hwnd = state.notch_hwnd.load(Ordering::Acquire);
             let visible = state.notch_visible.load(Ordering::Acquire);
             if hwnd == 0 || !visible {
+                // Hidden or gone: leave it click-through, so it can't come back catching clicks before the next poll.
+                if last_hwnd != 0 {
+                    let _ = overlay_win::set_click_through(last_hwnd, true);
+                    last_hwnd = 0;
+                }
                 if !benchmark {
                     // Allow a newly opened preview to start its own worker, or keep this one.
                     state.cursor_poll_running.store(false, Ordering::Release);
@@ -546,10 +553,10 @@ fn spawn_cursor_poll(state: Arc<SharedRuntime>, benchmark: bool) {
                         break;
                     }
                 }
-                last_ignore = None;
                 std::thread::sleep(Duration::from_millis(120));
                 continue;
             }
+            last_hwnd = hwnd;
 
             let Some((cx, cy)) = overlay_win::cursor_pos() else {
                 std::thread::sleep(Duration::from_millis(100));
@@ -562,15 +569,20 @@ fn spawn_cursor_poll(state: Arc<SharedRuntime>, benchmark: bool) {
 
             let near = cx >= wl - 64 && cx <= wr + 64 && cy >= wt - 32 && cy <= wb + 64;
             if !near {
-                if last_ignore != Some(true) {
-                    let _ = overlay_win::set_click_through(hwnd, true);
-                    last_ignore = Some(true);
-                }
+                let _ = overlay_win::set_click_through(hwnd, true);
                 std::thread::sleep(Duration::from_millis(100));
                 continue;
             }
 
-            let scale = state.active_monitor_info().map_or(1.0, |m| m.scale_factor);
+            // Scale from the window itself (physical width / logical canvas width). The active monitor's stored
+            // `scale_factor` could be stale or belong to another monitor after a topology/DPI change, which offset the
+            // clickable rect so clicks next to the pill were swallowed. Also avoids cloning the snapshot every tick.
+            let win_w = wr - wl;
+            if win_w <= 0 {
+                std::thread::sleep(Duration::from_millis(100));
+                continue;
+            }
+            let scale = f64::from(win_w) / f64::from(NOTCH_CANVAS_W);
             let hr = *state.hit_rect.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
             let pad = 6.0;
             let pl = wl + ((hr.x - pad) * scale).floor() as i32;
@@ -579,11 +591,7 @@ fn spawn_cursor_poll(state: Arc<SharedRuntime>, benchmark: bool) {
             let pb = wt + ((hr.y + hr.height + pad) * scale).ceil() as i32;
 
             let inside = cx >= pl && cx <= pr && cy >= pt && cy <= pb;
-            let want_ignore = !inside;
-            if last_ignore != Some(want_ignore) {
-                let _ = overlay_win::set_click_through(hwnd, want_ignore);
-                last_ignore = Some(want_ignore);
-            }
+            let _ = overlay_win::set_click_through(hwnd, !inside);
             std::thread::sleep(Duration::from_millis(if benchmark { 16 } else { 34 }));
         }
     });

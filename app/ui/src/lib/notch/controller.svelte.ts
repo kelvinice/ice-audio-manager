@@ -300,7 +300,11 @@ export class NotchController {
       this.lastHitRect.height !== nextRect.height
     ) {
       this.lastHitRect = nextRect;
-      void invoke('report_hit_rect', { rect: nextRect });
+      // A lost report would leave the shell with an old (e.g. expanded) rect that swallows clicks around the pill,
+      // and the dedup above would never resend it: forget it on failure so the next sync retries.
+      invoke('report_hit_rect', { rect: nextRect }).catch(() => {
+        if (this.lastHitRect === nextRect) this.lastHitRect = null;
+      });
     }
   }
 
@@ -319,6 +323,8 @@ export class NotchController {
     const prevSeq = this.notchSnapshot?.eventSeq ?? 0;
     const wasSuspended = this.notchSnapshot?.suspended ?? false;
     this.notchSnapshot = next;
+    // Waking from TrySuspend: re-send the hit rect even if unchanged (a report made while suspending may be lost).
+    if (wasSuspended && !next.suspended) this.lastHitRect = null;
     document.documentElement.dataset.theme = next.theme;
 
     this.benchOverride = deriveBenchOverride(
