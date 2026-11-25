@@ -4,7 +4,7 @@ import type { EngineSnapshot, Envelope, SettingsView } from '../ipc/engine.ts';
 import { applyEnvelope, lyricsDelayChoice, lyricsDelayFromChoice, moveItem, nextId, recordKeys } from './model.ts';
 
 const settings: SettingsView = {
-  appearance: { theme: 'ice', preset: 'smooth', idleStyle: 'mini_pill', notchStyle: 'floating', nowPlaying: 'brief', movingBackdrop: true, hibernate: false, hibernateLook: 'plain', hibernateHideFromCapture: true },
+  appearance: { theme: 'ice', preset: 'smooth', idleStyle: 'mini_pill', notchStyle: 'floating', nowPlaying: 'brief', movingBackdrop: true, hibernate: false, hibernateLook: 'plain', hibernateHideFromCapture: true, dragEffects: { landingRipple: false, jellyLanding: false, carryGlow: false } },
   performanceProfile: 'instant',
   pinnedMonitor: null,
   notchAnchor: 'top_center',

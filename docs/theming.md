@@ -29,6 +29,7 @@ All `--ice-*` variables are defined with their `Ice` defaults in CSS `:root`. An
 | `--ice-border` | Surface | `rgba(107, 197, 255, 0.22)` | No | Inner hairline border around pill and cards |
 | `--ice-rim` | Surface | `rgba(154, 214, 255, 0.45)` | Yes | 1 px specular rim highlight around the notch capsule |
 | `--ice-shadow` | Surface | `0 10px 28px rgba(0, 0, 0, 0.48), 0 2px 8px rgba(0, 0, 0, 0.32)` | No | Box shadow beneath Settings / card elements |
+| `--ice-lift-shadow` | Surface | `0 14px 28px rgba(0, 0, 0, 0.5)` | No | Deeper shadow of a held / carried notch (`.lift-shadow`, opacity follows the lift spring; absent at rest). Same canvas-margin rule as `--ice-drop-shadow`; `ice_light` and `minimal` override it |
 | `--ice-drop-shadow` | Surface | `0 6px 16px rgba(0, 0, 0, 0.42)` | No | Box shadow beneath the floating `.pill-shadow` sibling element (off the animated pill subtree so D-25 drift does not re-filter it). Offset + blur must stay inside the canvas margin (≥ 24 px around the expanded pill, `geometry.ts`) or the window edge clips it |
 | `--ice-radius` | Surface | `22px` | No | Expanded card corner radius (compact pills compute capsule radii dynamically) |
 | `--ice-radius-md` | Surface | `12px` | No | Large tiles: expanded album art and the empty-state music tile |

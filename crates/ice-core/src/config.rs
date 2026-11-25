@@ -36,7 +36,8 @@ use crate::resolve::{DeviceRef, MatchMode, resolve};
 /// v17: `notch_x_ratio` continuous horizontal position (`0.0..=1.0`, absent = preset anchor) and bottom Edge Nook.
 /// v18: `[call_mode]` (D-30: lower the music while people talk on a call; off by default).
 /// v19: `lyrics.estimated_word_sync` (Experimental: estimated word highlight on line-synced lyrics; off by default).
-pub const SCHEMA_VERSION: u32 = 19;
+/// v20: `appearance.dragEffects` (Experimental: landing ripple, jelly landing, carry glow; all off).
+pub const SCHEMA_VERSION: u32 = 20;
 
 /// Allowed per-device lyric delay, in ms (negative = lyrics earlier).
 pub const LYRICS_DELAY_MS: std::ops::RangeInclusive<i32> = -1000..=2000;
@@ -297,8 +298,8 @@ impl Config {
             // `appearance.hibernateLook = "plain"`, v0–v13 devices an automatic lyrics delay (no
             // `lyrics_delay_ms`), v0–v14 gain `notch_anchor = "top_center"`, v0–v15 gain
             // `notch_placement = "drag_snap"`, v0–v16 gain `notch_x_ratio = None`, v0–v17 gain `[call_mode]`
-            // (off, Discord's builds as call apps), and v0–v18 gain `lyrics.estimated_word_sync = false`, all via
-            // serde defaults.
+            // (off, Discord's builds as call apps), v0–v18 gain `lyrics.estimated_word_sync = false`, and v0–v19
+            // gain `appearance.dragEffects` (all off), all via serde defaults.
             _ => Ok(Self { schema_version: SCHEMA_VERSION, ..cfg }),
         }
     }
@@ -551,6 +552,12 @@ impl Config {
                 }
             }
             Command::SetLyricsEstimatedWordSync { enabled } => next.lyrics.estimated_word_sync = *enabled,
+            Command::SetDragEffects { landing_ripple, jelly_landing, carry_glow } => {
+                let fx = &mut next.appearance.drag_effects;
+                fx.landing_ripple = landing_ripple.unwrap_or(fx.landing_ripple);
+                fx.jelly_landing = jelly_landing.unwrap_or(fx.jelly_landing);
+                fx.carry_glow = carry_glow.unwrap_or(fx.carry_glow);
+            }
             Command::SetLyricsCacheMaxMb { max_mb } => {
                 if !LYRICS_CACHE_MAX_MB.contains(max_mb) {
                     return Err(format!(
@@ -1237,6 +1244,22 @@ mod tests {
 
         let saved = Config::from_toml(&config.to_toml()).unwrap();
         assert!(saved.lyrics.estimated_word_sync);
+    }
+
+    #[test]
+    fn v19_gains_drag_effects_off_and_saves_them() {
+        use crate::appearance::DragEffects;
+        let mut config = Config::from_toml("schema_version = 19\n[appearance]\ntheme = 'midnight'").unwrap();
+        assert_eq!(config.schema_version, SCHEMA_VERSION);
+        assert_eq!(config.appearance.drag_effects, DragEffects::default());
+
+        let set = Command::SetDragEffects { landing_ripple: Some(true), jelly_landing: None, carry_glow: Some(true) };
+        assert_eq!(config.apply_setting(&set, &[]), Ok(true));
+        assert_eq!(config.apply_setting(&set, &[]), Ok(false));
+        let saved = Config::from_toml(&config.to_toml()).unwrap();
+        let fx = saved.appearance.drag_effects;
+        assert!(fx.landing_ripple && fx.carry_glow && !fx.jelly_landing);
+        assert!(saved.view(&[]).appearance.drag_effects.landing_ripple);
     }
 
     #[test]

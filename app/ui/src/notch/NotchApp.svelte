@@ -4,6 +4,7 @@
   import { CANVAS_H, CANVAS_W } from '../lib/notch/geometry';
   import ExpandedNotch from './activities/ExpandedNotch.svelte';
   import IdlePill from './activities/IdlePill.svelte';
+  import LandingRipple from './activities/LandingRipple.svelte';
   import LyricsExtension from './activities/LyricsExtension.svelte';
   import MicActivity from './activities/MicActivity.svelte';
   import NookExpandedNotch from './activities/NookExpandedNotch.svelte';
@@ -33,6 +34,8 @@
     class:bottom-anchor={ctrl.isBottomAnchor}
     class:nook={ctrl.notchStyle === 'nook'}
     class:place-settle={ctrl.placedFlash && !ctrl.isInstant}
+    class:jelly={ctrl.dragEffects.jellyLanding}
+    style:--lift={ctrl.lift.toFixed(3)}
   >
   <div
     class="pill-shadow"
@@ -43,6 +46,21 @@
     style:border-radius={ctrl.surfaceShape.shadowRadiusCss}
     aria-hidden="true"
   ></div>
+  <!-- Held / carried: a deeper shadow (and the optional accent glow) fades in with the lift; absent at rest. -->
+  {#if ctrl.lift > 0.001}
+    <div
+      class="lift-shadow"
+      class:glow={ctrl.dragEffects.carryGlow}
+      style:top={ctrl.isBottomAnchor ? undefined : `${ctrl.surfaceShape.topPad}px`}
+      style:bottom={ctrl.isBottomAnchor ? `${ctrl.surfaceShape.bottomPad}px` : undefined}
+      style:width={`${ctrl.pillSize.w}px`}
+      style:height={`${ctrl.pillSize.h}px`}
+      style:border-radius={ctrl.surfaceShape.shadowRadiusCss}
+      style:opacity={Math.min(1, ctrl.lift).toFixed(3)}
+      style:--ice-carry-glow={ctrl.activeGlowCss}
+      aria-hidden="true"
+    ></div>
+  {/if}
   <div
     class="pill-clip"
     style:clip-path={ctrl.surfaceShape.clipPath}
@@ -272,6 +290,11 @@
       {/if}
     {/if}
   </svg>
+  {#if ctrl.placedFlash && ctrl.dragEffects.landingRipple && !ctrl.isInstant}
+    {#key ctrl.placedFlashKey}
+      <LandingRipple shape={ctrl.surfaceShape} pill={ctrl.pillSize} />
+    {/key}
+  {/if}
   </div>
 </div>
 
@@ -370,10 +393,27 @@
     pointer-events: none;
   }
 
+  /* Held / carried: the pill grows a little with the lift spring (compositor-only). */
   .notch-motion {
     position: absolute;
     inset: 0;
     transform-origin: 50% 18px;
+    transform: scale(calc(1 + 0.045 * var(--lift, 0)));
+  }
+
+  .lift-shadow {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    background: transparent;
+    box-shadow: var(--ice-lift-shadow);
+    pointer-events: none;
+  }
+
+  .lift-shadow.glow {
+    box-shadow:
+      var(--ice-lift-shadow),
+      0 0 22px 3px var(--ice-carry-glow, var(--ice-accent-glow));
   }
 
   .notch-motion.nook {
@@ -388,20 +428,52 @@
     transform-origin: 50% 100%;
   }
 
+  /* Landing impact (owner, 2026-11-26): squashed flat against the edge it docks on, one rebound, settle. The origin is
+     that edge (see the transform-origin rules above), so it reads as hitting the bezel / taskbar. */
   .notch-motion.place-settle {
-    animation: notch-place-settle 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation: notch-place-settle 440ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  /* Experimental "Jelly landing": softer and wobblier, two rebounds. */
+  .notch-motion.place-settle.jelly {
+    animation: notch-place-jelly 640ms cubic-bezier(0.33, 1, 0.68, 1) both;
   }
 
   .rim-flash {
-    animation: notch-rim-flash 360ms ease-out both;
+    filter: drop-shadow(0 0 3px var(--ice-active-accent, var(--ice-accent)));
+    animation: notch-rim-flash 440ms ease-out both;
   }
 
   @keyframes notch-place-settle {
     0% {
-      transform: scaleX(1.032) scaleY(0.955);
+      transform: scaleX(1.06) scaleY(0.86);
     }
-    55% {
-      transform: scaleX(0.99) scaleY(1.015);
+    32% {
+      transform: scaleX(0.975) scaleY(1.05);
+    }
+    60% {
+      transform: scaleX(1.01) scaleY(0.985);
+    }
+    100% {
+      transform: scaleX(1) scaleY(1);
+    }
+  }
+
+  @keyframes notch-place-jelly {
+    0% {
+      transform: scaleX(1.1) scaleY(0.8);
+    }
+    20% {
+      transform: scaleX(0.94) scaleY(1.1);
+    }
+    40% {
+      transform: scaleX(1.04) scaleY(0.95);
+    }
+    60% {
+      transform: scaleX(0.985) scaleY(1.025);
+    }
+    80% {
+      transform: scaleX(1.005) scaleY(0.995);
     }
     100% {
       transform: scaleX(1) scaleY(1);
@@ -410,7 +482,10 @@
 
   @keyframes notch-rim-flash {
     0% {
-      opacity: 0.9;
+      opacity: 1;
+    }
+    35% {
+      opacity: 0.85;
     }
     100% {
       opacity: 0;

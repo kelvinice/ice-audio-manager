@@ -84,6 +84,7 @@ impl SharedRuntime {
         let summaries = placement::summaries(&monitors);
         let reduce_motion = overlay_win::reduce_motion_enabled();
         let mut snapshot = NotchSnapshot {
+            dragging: false,
             revision: 1,
             event_seq: 0,
             placed_seq: 0,

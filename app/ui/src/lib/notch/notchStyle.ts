@@ -59,7 +59,8 @@ export interface NotchStyleStrategy {
   readonly usesSideBySideLyrics: boolean;
   earRadius(box: { h: number }): number;
   targetGeometry(ctx: GeometryContext): PillBox;
-  computeSurfaceShape(pillSize: PillBox, bottom?: boolean): SurfaceShape;
+  /** `lift` 0–1: held / carried (Edge Nook becomes a full capsule off the edge; Floating already is one). */
+  computeSurfaceShape(pillSize: PillBox, bottom?: boolean, lift?: number): SurfaceShape;
   computeHitRect(target: { w: number; h: number }, bottom?: boolean): HitRect;
 }
 
@@ -128,6 +129,51 @@ export function buildNookRimPath(left: number, right: number, h: number, r: numb
     ` L ${f(right)} ${f(ear)}` +
     ` A ${f(ear)} ${f(ear)} 0 0 1 ${f(right + ear)} 0`
   );
+}
+
+/** How far a held / carried notch moves off its edge, so its rounded flush-side corners show (logical px). */
+export const LIFT_GAP_PX = 6;
+
+const clamp01 = (n: number): number => Math.max(0, Math.min(1, n));
+
+/**
+ * Edge Nook outline at a lift of 0–1 (owner, 2026-11-26: a held notch is a full capsule, not half-rounded). The first
+ * half of the lift folds the ears away, the second rounds the flush-edge corners; the pill also moves `LIFT_GAP_PX` off
+ * the edge. At `lift = 0` the paths equal `buildNookFillPath` / `buildNookRimPath`. Bottom anchors are the mirror image.
+ */
+export function buildLiftedNookPaths(
+  left: number,
+  right: number,
+  h: number,
+  r: number,
+  ear: number,
+  lift: number,
+  bottom = false,
+): { fill: string; rim: string; ear: number; edgeR: number; gap: number } {
+  const safeH = Math.max(4, h);
+  const k = clamp01(lift);
+  const earNow = ear * clamp01(1 - 2 * k);
+  const e = earNow >= 0.5 ? earNow : 0;
+  const edgeRaw = Math.min(r * clamp01(2 * k - 1), Math.max(0, safeH - r));
+  const t = e === 0 && edgeRaw >= 0.5 ? edgeRaw : 0;
+  const gap = LIFT_GAP_PX * Math.max(0, lift);
+  const y0 = gap;
+  const y1 = gap + safeH;
+  const f = (n: number) => n.toFixed(2);
+  const P = (x: number, y: number) => `${f(x)} ${f(bottom ? CANVAS_H - y : y)}`;
+  // Mirroring top↔bottom reverses every arc's direction.
+  const A = (rad: number, sweep: 0 | 1, x: number, y: number) =>
+    ` A ${f(rad)} ${f(rad)} 0 0 ${bottom ? 1 - sweep : sweep} ${P(x, y)}`;
+
+  let d = e > 0 ? `M ${P(left - e, y0)}${A(e, 1, left, y0 + e)}` : `M ${P(left, y0 + t)}`;
+  d += ` L ${P(left, y1 - r)}${A(r, 0, left + r, y1)}`;
+  d += ` L ${P(right - r, y1)}${A(r, 0, right, y1 - r)}`;
+  d += ` L ${P(right, y0 + (e || t))}`;
+  if (e > 0) d += A(e, 1, right + e, y0);
+  else if (t > 0) d += A(t, 0, right - t, y0);
+  // Once the edge corners are round, the edge side is part of the outline too, so the rim closes over it.
+  const rim = t > 0 ? `${d} L ${P(left + t, y0)}${A(t, 0, left, y0 + t)}` : d;
+  return { fill: `${rim} Z`, rim, ear: e, edgeR: t, gap };
 }
 
 export const floatingStyleStrategy: NotchStyleStrategy = Object.freeze({
@@ -214,22 +260,23 @@ export const nookStyleStrategy: NotchStyleStrategy = Object.freeze({
         return idleGeometry(ctx.idleMode, ctx.hasMedia, ctx.micMuted, vol, 2, true);
     }
   },
-  computeSurfaceShape(pillSize: PillBox, bottom = false): SurfaceShape {
+  computeSurfaceShape(pillSize: PillBox, bottom = false, lift = 0): SurfaceShape {
     const rawEar = nookEarForHeight(pillSize.h);
     const { left, right, r, e } = clampNookArcs(pillSize.w, pillSize.h, pillSize.r, rawEar);
-    const fillD = buildNookFillPath(left, right, pillSize.h, r, e, bottom);
-    const rimD = buildNookRimPath(left, right, pillSize.h, r, e, bottom);
+    const p = buildLiftedNookPaths(left, right, pillSize.h, r, e, lift, bottom);
+    const free = `${r.toFixed(2)}px`;
+    const edge = `${p.edgeR.toFixed(2)}px`;
     return {
       insetLeft: Math.max(0, left),
-      insetTop: bottom ? Math.max(0, CANVAS_H - pillSize.h) : 0,
-      topPad: 0,
-      bottomPad: 0,
+      insetTop: bottom ? Math.max(0, CANVAS_H - pillSize.h - p.gap) : p.gap,
+      topPad: bottom ? 0 : p.gap,
+      bottomPad: bottom ? p.gap : 0,
       isBottom: bottom,
-      earRadius: e,
-      clipPath: `path('${fillD}')`,
-      shadowRadiusCss: bottom ? `${r.toFixed(2)}px ${r.toFixed(2)}px 0 0` : `0 0 ${r.toFixed(2)}px ${r.toFixed(2)}px`,
+      earRadius: p.ear,
+      clipPath: `path('${p.fill}')`,
+      shadowRadiusCss: bottom ? `${free} ${free} ${edge} ${edge}` : `${edge} ${edge} ${free} ${free}`,
       rimKind: 'path',
-      rimPathD: rimD,
+      rimPathD: p.rim,
     };
   },
   computeHitRect(target: { w: number; h: number }, bottom = false): HitRect {

@@ -2,15 +2,58 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { BOTTOM_PAD, CANVAS_H, CANVAS_W, TOP_PAD } from './geometry.ts';
 import {
+  buildLiftedNookPaths,
   buildNookFillPath,
   buildNookRimPath,
   floatingStyleStrategy,
+  LIFT_GAP_PX,
   getNotchStyleStrategy,
   NOOK_EXPANDED_W_SINGLE,
   NOOK_EXPANDED_W_SPLIT,
   nookStyleStrategy,
   plainGeometryContext,
 } from './notchStyle.ts';
+
+test('a resting Edge Nook (lift 0) keeps exactly the docked outline, top and bottom', () => {
+  for (const bottom of [false, true]) {
+    for (const ear of [0, 8]) {
+      const p = buildLiftedNookPaths(260, 388, 28, 13, ear, 0, bottom);
+      // The docked builder writes the flush edge as a bare `0`; same coordinate.
+      const norm = (d: string) => d.replace(/\b0\.00\b/g, '0');
+      assert.equal(norm(p.rim), norm(buildNookRimPath(260, 388, 28, 13, ear, bottom)));
+      assert.equal(norm(p.fill), norm(buildNookFillPath(260, 388, 28, 13, ear, bottom)));
+      assert.equal(p.gap, 0);
+    }
+  }
+});
+
+test('a held Edge Nook (lift 1) is a full capsule off the edge, with no ears', () => {
+  const top = nookStyleStrategy.computeSurfaceShape({ w: 116, h: 28, r: 13, vol: 40 }, false, 1);
+  assert.equal(top.earRadius, 0);
+  assert.equal(top.insetTop, LIFT_GAP_PX);
+  assert.equal(top.topPad, LIFT_GAP_PX);
+  assert.equal(top.shadowRadiusCss, '13.00px 13.00px 13.00px 13.00px');
+  // Four convex corners (sweep 0), no concave ear arcs, and the rim closes over the edge side.
+  assert.equal((top.rimPathD.match(/ A /g) ?? []).length, 4);
+  assert.ok(!/ A [\d.]+ [\d.]+ 0 0 1 /.test(top.rimPathD), 'no concave arcs');
+  assert.ok(top.rimPathD.startsWith(`M ${(CANVAS_W / 2 - 58).toFixed(2)} ${(LIFT_GAP_PX + 13).toFixed(2)}`));
+
+  const bottom = nookStyleStrategy.computeSurfaceShape({ w: 116, h: 28, r: 13, vol: 40 }, true, 1);
+  assert.equal(bottom.insetTop, CANVAS_H - 28 - LIFT_GAP_PX);
+  assert.equal(bottom.bottomPad, LIFT_GAP_PX);
+  assert.ok(!/ A [\d.]+ [\d.]+ 0 0 0 /.test(bottom.rimPathD), 'mirrored: every corner sweeps the other way');
+});
+
+test('halfway through a lift the ears are gone before the edge corners round', () => {
+  const quarter = buildLiftedNookPaths(260, 388, 28, 13, 8, 0.25, false);
+  assert.ok(quarter.ear > 0 && quarter.ear < 8);
+  assert.equal(quarter.edgeR, 0);
+  const half = buildLiftedNookPaths(260, 388, 28, 13, 8, 0.5, false);
+  assert.equal(half.ear, 0);
+  assert.equal(half.edgeR, 0);
+  const most = buildLiftedNookPaths(260, 388, 28, 13, 8, 0.9, false);
+  assert.ok(most.edgeR > 9 && most.edgeR < 13);
+});
 
 test('strategy registry returns nook by default and floating when selected', () => {
   assert.equal(getNotchStyleStrategy('floating'), floatingStyleStrategy);

@@ -52,6 +52,9 @@ pub struct NotchSnapshot {
     pub event_seq: u64,
     #[ts(type = "number")]
     pub placed_seq: u64,
+    /// D-20: the shell is carrying the notch (from the drag threshold until the button is released); the WebView
+    /// shows the lifted, fully rounded pill meanwhile.
+    pub dragging: bool,
     pub activity: ActivityKind,
     pub volume_percent: u8,
     pub muted: bool,
@@ -148,6 +151,8 @@ mod tests {
             &format!("export {}", ice_core::appearance::NowPlayingPill::decl(&cfg)),
             "",
             &format!("export {}", ice_core::appearance::HibernateLook::decl(&cfg)),
+            "",
+            &format!("export {}", ice_core::appearance::DragEffects::decl(&cfg)),
             "",
             &format!("export {}", ice_core::placement::NotchAnchor::decl(&cfg)),
             "",

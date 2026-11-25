@@ -51,6 +51,8 @@ const IDLE_VIEW: ActivityView = Object.freeze({ kind: 'idle' });
  * settled, without the idle linger: nothing can pop up, and music playing would otherwise keep re-arming the linger.
  */
 const HIBERNATE_HANDOVER_MS = 1000;
+/** After asking the shell to drag, how long the notch stays lifted waiting for `NotchSnapshot.dragging`. */
+const HELD_DRAG_START_GRACE_MS = 600;
 
 export class NotchController {
   private readonly scheduler = new NotchActivityScheduler(Date.now());
@@ -63,6 +65,12 @@ export class NotchController {
   private pointerInside = $state(false);
   lyricsCardOpen = $state(true);
   pillSize = $state({ w: 116, h: 30, r: 13, vol: 40 });
+  /** 0 = resting on its edge, 1 = held / carried (full capsule, lifted). Spring-driven; may overshoot slightly. */
+  lift = $state(0);
+  /** The pointer is pressed on the notch (a possible drag); cleared on release or when the shell's drag ends. */
+  private held = $state(false);
+  private heldFallbackTimer: number | null = null;
+  private readonly liftSpring: SpringGroup<'lift'>;
   placedFlash = $state(false);
   placedFlashKey = $state(0);
 
@@ -194,7 +202,19 @@ export class NotchController {
     resolveMusicServices(this.engineState.settings, this.engineState.media),
   );
   readonly isIdleHidden = $derived(!this.isExpanded && this.activeView.kind === 'idle' && this.idleMode === 'hidden');
-  readonly surfaceShape = $derived(this.styleStrategy.computeSurfaceShape(this.pillSize, this.isBottomAnchor));
+  /**
+   * Owner, 2026-11-26: holding or carrying the notch shows it as a full capsule lifted off its edge (Edge Nook loses
+   * its ears and flush corners while held). A press on the open card doesn't lift it; a drag does (the card collapses).
+   */
+  readonly isLifted = $derived(
+    !this.isHibernating && ((this.held && !this.isExpanded) || (this.notchSnapshot?.dragging ?? false)),
+  );
+  readonly dragEffects = $derived(
+    this.engineState.settings?.appearance.dragEffects ?? { landingRipple: false, jellyLanding: false, carryGlow: false },
+  );
+  readonly surfaceShape = $derived(
+    this.styleStrategy.computeSurfaceShape(this.pillSize, this.isBottomAnchor, this.lift),
+  );
   readonly insetLeft = $derived(this.surfaceShape.insetLeft);
   readonly clipPath = $derived(this.surfaceShape.clipPath);
   readonly showPillLyrics = $derived(
@@ -252,6 +272,30 @@ export class NotchController {
         this.pillSize = { w: vals.w, h: vals.h, r: vals.r, vol: vals.vol };
       },
     );
+    // Snappy on purpose: the lift should answer the press at once, whatever the morph preset is.
+    this.liftSpring = new SpringGroup<'lift'>({ lift: 0 }, 'snappy', (vals) => {
+      this.lift = vals.lift;
+    });
+  }
+
+  /** Moves the lift spring towards the current held / carried state (instant with reduce motion or preset off). */
+  private syncLift(): void {
+    const target = this.isLifted ? 1 : 0;
+    const snap = this.notchSnapshot;
+    if (this.isInstant || (snap?.suspended ?? false) || (snap?.hiddenForBench ?? false)) {
+      this.liftSpring.snapAll({ lift: target });
+    } else {
+      this.liftSpring.setTargets({ lift: target });
+    }
+  }
+
+  private setHeld(held: boolean): void {
+    if (this.heldFallbackTimer !== null) {
+      clearTimeout(this.heldFallbackTimer);
+      this.heldFallbackTimer = null;
+    }
+    this.held = held;
+    this.syncLift();
   }
 
   private clearActivityTimer(): void {
@@ -377,7 +421,15 @@ export class NotchController {
     const prevSeq = this.notchSnapshot?.eventSeq ?? 0;
     const prevAnchor = this.notchSnapshot?.anchor;
     const wasSuspended = this.notchSnapshot?.suspended ?? false;
+    const wasDragging = this.notchSnapshot?.dragging ?? false;
     this.notchSnapshot = next;
+    // The shell's drag ended (button released or Esc): let go, so the notch settles back onto its edge.
+    if (wasDragging && !next.dragging) this.held = false;
+    if (next.dragging && this.heldFallbackTimer !== null) {
+      clearTimeout(this.heldFallbackTimer);
+      this.heldFallbackTimer = null;
+    }
+    this.syncLift();
     // Waking from TrySuspend or switching anchor: re-send the hit rect even if unchanged.
     if ((wasSuspended && !next.suspended) || (prevAnchor !== undefined && prevAnchor !== next.anchor)) {
       this.lastHitRect = null;
@@ -418,10 +470,15 @@ export class NotchController {
     }
     this.placedFlashKey += 1;
     this.placedFlash = true;
-    this.placedFlashTimer = window.setTimeout(() => {
-      this.placedFlashTimer = null;
-      this.placedFlash = false;
-    }, 380);
+    // Long enough for the longest landing (`notch-place-jelly` / `notch-ripple`, 640 ms in NotchApp.svelte).
+    const fx = this.dragEffects;
+    this.placedFlashTimer = window.setTimeout(
+      () => {
+        this.placedFlashTimer = null;
+        this.placedFlash = false;
+      },
+      fx.jellyLanding || fx.landingRipple ? 680 : 460,
+    );
   }
 
   private applyEngineSnapshot(snapshot: EngineSnapshot): void {
@@ -559,6 +616,8 @@ export class NotchController {
       disposed = true;
       this.dragCleanup?.();
       this.springs.dispose();
+      this.liftSpring.dispose();
+      if (this.heldFallbackTimer !== null) clearTimeout(this.heldFallbackTimer);
       this.clearTimers();
       this.clearActivityTimer();
       this.clearOptimisticSeek();
@@ -652,14 +711,21 @@ export class NotchController {
       this.hoverExpanded = false;
       this.pointerInside = false;
       this.syncGeometry(false);
-      void invoke('start_notch_drag').catch(() => {});
+      // Stay lifted until the shell's drag ends (`NotchSnapshot.dragging`); if it never starts, put the notch down.
+      this.heldFallbackTimer = window.setTimeout(() => {
+        this.heldFallbackTimer = null;
+        if (!(this.notchSnapshot?.dragging ?? false)) this.setHeld(false);
+      }, HELD_DRAG_START_GRACE_MS);
+      void invoke('start_notch_drag').catch(() => this.setHeld(false));
     };
 
     const onEnd = (ev?: Event) => {
       if (ev instanceof PointerEvent && ev.pointerId !== pointerId) return;
       cleanup();
+      this.setHeld(false);
     };
 
+    this.setHeld(true);
     this.dragCleanup = cleanup;
     window.addEventListener('pointermove', onMove, true);
     window.addEventListener('pointerup', onEnd, true);

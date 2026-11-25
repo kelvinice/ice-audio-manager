@@ -41,7 +41,7 @@ function initialSnapshot(): EngineSnapshot {
     media: null,
     lyrics: { status: 'disabled', trackKey: null, document: null },
     settings: {
-      appearance: { theme: 'ice', preset: 'bouncy', idleStyle: 'mini_pill', notchStyle: 'nook', nowPlaying: 'while_playing', movingBackdrop: true, hibernate: false, hibernateLook: 'plain', hibernateHideFromCapture: true },
+      appearance: { theme: 'ice', preset: 'bouncy', idleStyle: 'mini_pill', notchStyle: 'nook', nowPlaying: 'while_playing', movingBackdrop: true, hibernate: false, hibernateLook: 'plain', hibernateHideFromCapture: true, dragEffects: { landingRipple: false, jellyLanding: false, carryGlow: false } },
       performanceProfile: 'instant',
       pinnedMonitor: 'DISPLAY-PATH-1',
       notchAnchor: 'top_center',
@@ -93,6 +93,8 @@ const notch: NotchSnapshot = {
   revision: 1,
   eventSeq: 0,
   placedSeq: 0,
+
+  dragging: false,
   activity: 'idle',
   volumePercent: 42,
   muted: false,
@@ -151,6 +153,20 @@ function applyCommand(s: EngineSnapshot, c: Command): void {
       };
       break;
     case 'setLyricsEstimatedWordSync': st.lyrics = { ...st.lyrics, estimatedWordSync: c.enabled }; break;
+
+    case 'setDragEffects':
+
+      st.appearance.dragEffects = {
+
+        landingRipple: c.landingRipple ?? st.appearance.dragEffects.landingRipple,
+
+        jellyLanding: c.jellyLanding ?? st.appearance.dragEffects.jellyLanding,
+
+        carryGlow: c.carryGlow ?? st.appearance.dragEffects.carryGlow,
+
+      };
+
+      break;
     case 'setLyricsCacheMaxMb': st.lyrics = { ...st.lyrics, cacheMaxMb: c.maxMb }; break;
     case 'disableAllNetworkFeatures': st.lyrics = { ...st.lyrics, onlineLookup: false }; break;
     case 'setVisualizerSpectrum': st.visualizerSpectrum = c.enabled; break;

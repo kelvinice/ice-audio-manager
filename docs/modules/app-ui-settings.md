@@ -36,7 +36,7 @@ created when opened and destroyed when closed (shell: `app/src-tauri/src/setting
 | Activities | Music services (`Spotify`, `YouTube Music`); Synced lyrics display (`Show synced lyrics`, pill/card extensions, active word highlight, Japanese Romaji) | `SetMusicService`; `SetLyricsEnabled`; `SetLyricsDisplay` |
 | Privacy | Master network off switch; opt-in LRCLIB (`lrclib.net`) disclosure & toggle; local audio loopback spectrum visualizer disclosure & meter-only fallback switch | `DisableAllNetworkFeatures`; `SetLyricsOnlineLookup`; `SetVisualizerSpectrum` |
 | Storage | Live lyrics cache usage bar, max cache size (`5–500 MB`), clear cache, open local `.lrc` overrides folder | `SetLyricsCacheMaxMb`; `get_lyrics_storage_stats`; `clear_lyrics_cache`; `open_lyrics_folder` |
-| Experimental | Estimated word highlight for line-synced lyrics (off by default) | `SetLyricsEstimatedWordSync` |
+| Experimental | Estimated word highlight for line-synced lyrics (off by default); Drag & drop: landing ripple, jelly landing, glow while carrying (off; disabled with Fixed position) | `SetLyricsEstimatedWordSync`; `SetDragEffects` |
 | About | Version, trust promises | `plugin:app|version` |
 
 ## How it works
@@ -79,3 +79,4 @@ created when opened and destroyed when closed (shell: `app/src-tauri/src/setting
 - 2026-11-25 Claude: D-30 **Call mode** page (`CallModePage.svelte`, nav after Hibernate, `call` glyph U+E717): switch, level, hold, sensitivity, call-app list; `devBackend` handles `setCallMode`.
 - 2026-11-25 Gemini: enabled all six anchors for Edge Nook too, added `"Custom position (N%)"` `InfoBar` when `settings.notchXRatio` is set (`ChoiceGroup` accepts `null`), and updated `devBackend` for `setNotchPosition` and `placedSeq`.
 - 2026-11-25 Gemini: added **Experimental** page (`ExperimentalPage.svelte`, `flask` icon) with `SetLyricsEstimatedWordSync` toggle; updated `ActivitiesPage` word-highlight copy and `devBackend`.
+- 2026-11-26 Claude: Experimental → **Drag & drop** section (landing ripple, jelly landing, glow while carrying → `SetDragEffects`); `devBackend` handles it and `NotchSnapshot.dragging`.

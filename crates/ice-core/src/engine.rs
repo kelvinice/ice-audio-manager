@@ -342,6 +342,12 @@ pub enum Command {
     SetLyricsEstimatedWordSync {
         enabled: bool,
     },
+    /// Experimental: patch the drag & drop effects (`None` leaves one unchanged).
+    SetDragEffects {
+        landing_ripple: Option<bool>,
+        jelly_landing: Option<bool>,
+        carry_glow: Option<bool>,
+    },
     /// D-22 Storage: set maximum managed lyrics disk cache size in MiB (`5..=500`).
     SetLyricsCacheMaxMb {
         max_mb: u16,
@@ -401,6 +407,7 @@ impl Command {
             | Self::SetLyricsOnlineLookup { .. }
             | Self::SetLyricsDisplay { .. }
             | Self::SetLyricsEstimatedWordSync { .. }
+            | Self::SetDragEffects { .. }
             | Self::SetLyricsCacheMaxMb { .. }
             | Self::DisableAllNetworkFeatures
             | Self::SetVisualizerSpectrum { .. }

@@ -86,8 +86,12 @@ pub(super) fn start(app: &AppHandle, state: &Arc<SharedRuntime>, host: Host) {
     } else {
         (cursor.0 - left, cursor.1 - top)
     };
-    // The card collapses while it's carried; dropping it shows the pill at its new place.
-    state.update_and_emit(app, |s| s.expanded = false);
+    // The card collapses while it's carried (the WebView lifts it into a full capsule); dropping it shows the pill at
+    // its new place.
+    state.update_and_emit(app, |s| {
+        s.expanded = false;
+        s.dragging = true;
+    });
     let job = Drag {
         app: app.clone(),
         host,
@@ -107,10 +111,12 @@ pub(super) fn start(app: &AppHandle, state: &Arc<SharedRuntime>, host: Host) {
     let st = Arc::clone(state);
     let spawned = std::thread::Builder::new().name("ice-notch-drag".into()).spawn(move || {
         job.run(&st);
+        job.released(&st); // idempotent: covers every early return in `run`
         st.dragging.store(false, Ordering::Release);
     });
     if spawned.is_err() {
         state.dragging.store(false, Ordering::Release);
+        state.update_and_emit(app, |s| s.dragging = false);
     }
 }
 
@@ -153,6 +159,8 @@ impl Drag {
             self.move_host(state, pos);
             std::thread::sleep(FRAME);
         };
+        // Let go: the WebView starts settling its shape back onto the edge while the window springs into place.
+        self.released(state);
 
         let Some(target_drop) = dropped else {
             // Esc (or no cursor): back where it was, nothing saved.
@@ -204,6 +212,12 @@ impl Drag {
             repin,
             "Notch dropped"
         );
+    }
+
+    /// Ends the carried state for the WebView (`NotchSnapshot.dragging`). Emits only on a change, so calling it twice
+    /// is free.
+    fn released(&self, state: &SharedRuntime) {
+        state.update_and_emit(&self.app, |s| s.dragging = false);
     }
 
     fn move_host(&self, state: &SharedRuntime, pos: (i32, i32)) {

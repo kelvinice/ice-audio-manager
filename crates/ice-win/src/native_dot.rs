@@ -1537,6 +1537,9 @@ pub(crate) fn rasterize_pill_frame(pixels: &mut [u32], w: i32, h: i32, scale: f3
     }
     let metrics = frame_metrics(state.mode, state.idle_style, state.notch_style);
     let is_nook = state.notch_style == NotchStyle::Nook;
+    // Twin: `isLifted` / `buildLiftedNookPaths` in app/ui/src/lib/notch (owner, 2026-11-26): a pressed or carried Edge
+    // Nook pill is drawn as a full capsule (no ears, no flush edge) so it reads as picked up; the layout stays put.
+    let lifted = is_nook && (state.drag_origin.is_some() || matches!(state.interaction, PillInteraction::Pressed));
     let is_bottom = state.anchor.is_bottom();
     let ear = if is_nook { metrics.ear as f32 } else { 0.0 };
     let body_w = (lw - 2.0 * ear).max(12.0);
@@ -1656,11 +1659,11 @@ pub(crate) fn rasterize_pill_frame(pixels: &mut [u32], w: i32, h: i32, scale: f3
         let ly = (py as f32 + 0.5) / scale;
         for px in 0..w {
             let lx = (px as f32 + 0.5) / scale;
-            let sdf = if is_nook {
+            let sdf = if is_nook && !lifted {
                 let nook_ly = if is_bottom { lh - ly } else { ly };
                 sd_nook_notch(lx, nook_ly, cx, half_w, lh, radius, ear)
             } else {
-                sd_round_box(lx, ly, cx, shape_cy, half_w, half_h, radius)
+                sd_round_box(lx, ly, cx, shape_cy, half_w, half_h, if lifted { half_h } else { radius })
             };
             let coverage = ((aa * 0.5 - sdf) / aa).clamp(0.0, 1.0);
             if coverage <= 0.0 {
@@ -2425,6 +2428,35 @@ mod tests {
         assert_eq!(fresh.apply_envelope(&env), EnvelopeOutcome::Updated);
         assert!(fresh.mic_muted);
         assert_eq!(fresh.mode, PillMode::Idle);
+    }
+
+    #[test]
+    fn a_carried_or_pressed_nook_pill_is_a_full_capsule() {
+        let m = frame_metrics(PillMode::Idle, IdleStyle::MiniPill, NotchStyle::Nook);
+        let (w, h) = (m.total_w(), m.body_h);
+        let mut st = PillState::new(NativePillTheme::ice());
+        st.notch_style = NotchStyle::Nook;
+        let alpha = |px: &[u32], x: i32, y: i32| (px[(y * w + x) as usize] >> 24) & 0xff;
+        // Just inside the body's top-left corner, on the flush edge (the ears sit outside it).
+        let (corner_x, corner_y) = (m.ear + 1, 0);
+
+        let mut px = vec![0u32; (w * h) as usize];
+        rasterize_pill_frame(&mut px, w, h, 1.0, &st);
+        assert!(alpha(&px, corner_x, corner_y) >= 200, "docked: the flush top edge is filled to the corner");
+        let ear_px = (m.ear - 2, 0);
+        assert!(alpha(&px, ear_px.0, ear_px.1) >= 100, "docked: the ear fills the flush edge beside the body");
+        let docked_centre = alpha(&px, w / 2, h / 2);
+        assert!(docked_centre > 0);
+
+        for (drag, pressed) in [(true, false), (false, true)] {
+            st.drag_origin = drag.then_some((10, 10));
+            st.interaction = if pressed { PillInteraction::Pressed } else { PillInteraction::None };
+            rasterize_pill_frame(&mut px, w, h, 1.0, &st);
+            assert_eq!(alpha(&px, corner_x, corner_y), 0, "lifted: the top corner is rounded off");
+            assert_eq!(alpha(&px, ear_px.0, ear_px.1), 0, "lifted: no ears");
+            // The centre carries the idle content, so compare loosely: still as solid as the docked pill.
+            assert!(alpha(&px, w / 2, h / 2) >= docked_centre.min(200), "lifted: still a solid pill");
+        }
     }
 
     #[test]

@@ -94,6 +94,21 @@ pub struct Appearance {
     pub hibernate_look: HibernateLook,
     /// D-27: while hibernating, leave the notch windows out of screen captures (`WDA_EXCLUDEFROMCAPTURE`).
     pub hibernate_hide_from_capture: bool,
+    /// Experimental (owner, 2026-11-26): extra drag & drop effects on the WebView notch. All off by default.
+    pub drag_effects: DragEffects,
+}
+
+/// Experimental drag & drop effects (WebView notch only; the native pill keeps the plain lift and rim flash).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(TS))]
+#[serde(default, deny_unknown_fields, rename_all = "camelCase")]
+pub struct DragEffects {
+    /// An accent ring spreads out from the notch where it lands.
+    pub landing_ripple: bool,
+    /// A softer, wobblier landing (two rebounds instead of one).
+    pub jelly_landing: bool,
+    /// The carried pill glows in the accent colour.
+    pub carry_glow: bool,
 }
 
 impl Appearance {
@@ -127,6 +142,7 @@ impl Default for Appearance {
             hibernate: false,
             hibernate_look: HibernateLook::default(),
             hibernate_hide_from_capture: true,
+            drag_effects: DragEffects::default(),
         }
     }
 }

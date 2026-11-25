@@ -96,6 +96,7 @@ impl Worker {
             | Command::SetLyricsOnlineLookup { .. }
             | Command::SetLyricsDisplay { .. }
             | Command::SetLyricsEstimatedWordSync { .. }
+            | Command::SetDragEffects { .. }
             | Command::SetLyricsCacheMaxMb { .. }
             | Command::DisableAllNetworkFeatures
             | Command::SetVisualizerSpectrum { .. }
