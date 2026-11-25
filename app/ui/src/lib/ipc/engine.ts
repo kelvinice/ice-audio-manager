@@ -120,6 +120,26 @@ romaji: boolean,
  */
 cacheMaxMb: number, };
 
+export type CallModeConfig = {
+/**
+ * Off by default: the app never changes another app's volume unless asked to.
+ */
+enabled: boolean,
+/**
+ * Executable names whose audio counts as a call (`Discord.exe`; `.exe` optional, any case).
+ */
+apps: Array<string>,
+/**
+ * Music level while people talk, % of its own level ([`CALL_DUCK_PERCENT`]).
+ */
+duckPercent: number,
+/**
+ * Quiet seconds before the music comes back ([`CALL_HOLD_SECS`]).
+ */
+holdSecs: number, sensitivity: CallSensitivity, };
+
+export type CallSensitivity = "low" | "normal" | "high";
+
 export type LyricsSource = "local" | "cache" | "lrclib";
 
 export type LyricsSyncKind = "word" | "line" | "plain";
@@ -243,6 +263,10 @@ lyrics: LyricsConfig,
  */
 visualizerSpectrum: boolean,
 /**
+ * D-30 call mode settings.
+ */
+callMode: CallModeConfig,
+/**
  * D-19 "show notch" hotkey, if bound.
  */
 showNotchHotkey: string | null, };
@@ -291,7 +315,7 @@ media: NowPlaying | null,
  */
 lyrics: LyricsState, };
 
-export type Command = { "type": "switchTo", deviceId: string, roles: RoleSet, } | { "type": "switchBinding", bindingId: string, } | { "type": "togglePair", pairId: string, } | { "type": "cycleFavourites", flow: Flow, step: number, } | { "type": "setVolume", percent: number, } | { "type": "stepVolume", delta: number, } | { "type": "toggleMute" } | { "type": "toggleMicMute" } | { "type": "media", action: MediaAction, } | { "type": "setSpatial", deviceId: string, mode: SpatialMode, } | { "type": "resolveChoice", requestId: number, deviceId: string | null, } | { "type": "refresh" } | { "type": "setTogglePair", pairId: string, primaryId: string, secondaryId: string, hotkey: string | null, roles: RoleSet | null, } | { "type": "removeTogglePair", pairId: string, } | { "type": "setBinding", bindingId: string, deviceId: string, hotkey: string | null, roles: RoleSet | null, } | { "type": "removeBinding", bindingId: string, } | { "type": "setFavourites", flow: Flow, deviceIds: Array<string>, } | { "type": "setDevicePrefs", deviceId: string, spatial: SpatialMode | null, alias: string | null, hidden: boolean | null, } | { "type": "setLyricsDelay", deviceId: string, delayMs: number | null, } | { "type": "setTheme", theme: ThemeKind, } | { "type": "setPreset", preset: SpringPreset, } | { "type": "setIdleStyle", style: IdleStyle, } | { "type": "setNotchStyle", style: NotchStyle, } | { "type": "setNowPlayingPill", mode: NowPlayingPill, } | { "type": "setMovingBackdrop", enabled: boolean, } | { "type": "setHibernate", enabled: boolean, } | { "type": "setHibernateLook", look: HibernateLook, } | { "type": "setHibernateHideFromCapture", enabled: boolean, } | { "type": "setPerformanceProfile", profile: PerformanceProfile, } | { "type": "setNotchAnchor", anchor: NotchAnchor, } | { "type": "setNotchPosition", anchor: NotchAnchor, xRatio: number | null, } | { "type": "setNotchPlacement", placement: NotchPlacement, } | { "type": "setPinnedMonitor", displayPath: string, } | { "type": "setKnobGestures", enabled: boolean, } | { "type": "setShowDisconnected", enabled: boolean, } | { "type": "setIdleLinger", secs: number, } | { "type": "setShowNotchHotkey", hotkey: string | null, } | { "type": "setMusicService", service: MusicServiceId, enabled: boolean, } | { "type": "setLyricsEnabled", enabled: boolean, } | { "type": "setLyricsOnlineLookup", enabled: boolean, } | { "type": "setLyricsDisplay", showOnPill: boolean | null, showOnCard: boolean | null, wordHighlight: boolean | null, romaji: boolean | null, } | { "type": "setLyricsCacheMaxMb", maxMb: number, } | { "type": "disableAllNetworkFeatures" } | { "type": "setVisualizerSpectrum", enabled: boolean, } | { "type": "setDefaultRoles", roles: RoleSet, };
+export type Command = { "type": "switchTo", deviceId: string, roles: RoleSet, } | { "type": "switchBinding", bindingId: string, } | { "type": "togglePair", pairId: string, } | { "type": "cycleFavourites", flow: Flow, step: number, } | { "type": "setVolume", percent: number, } | { "type": "stepVolume", delta: number, } | { "type": "toggleMute" } | { "type": "toggleMicMute" } | { "type": "media", action: MediaAction, } | { "type": "setSpatial", deviceId: string, mode: SpatialMode, } | { "type": "resolveChoice", requestId: number, deviceId: string | null, } | { "type": "refresh" } | { "type": "setTogglePair", pairId: string, primaryId: string, secondaryId: string, hotkey: string | null, roles: RoleSet | null, } | { "type": "removeTogglePair", pairId: string, } | { "type": "setBinding", bindingId: string, deviceId: string, hotkey: string | null, roles: RoleSet | null, } | { "type": "removeBinding", bindingId: string, } | { "type": "setFavourites", flow: Flow, deviceIds: Array<string>, } | { "type": "setDevicePrefs", deviceId: string, spatial: SpatialMode | null, alias: string | null, hidden: boolean | null, } | { "type": "setLyricsDelay", deviceId: string, delayMs: number | null, } | { "type": "setTheme", theme: ThemeKind, } | { "type": "setPreset", preset: SpringPreset, } | { "type": "setIdleStyle", style: IdleStyle, } | { "type": "setNotchStyle", style: NotchStyle, } | { "type": "setNowPlayingPill", mode: NowPlayingPill, } | { "type": "setMovingBackdrop", enabled: boolean, } | { "type": "setHibernate", enabled: boolean, } | { "type": "setHibernateLook", look: HibernateLook, } | { "type": "setHibernateHideFromCapture", enabled: boolean, } | { "type": "setPerformanceProfile", profile: PerformanceProfile, } | { "type": "setNotchAnchor", anchor: NotchAnchor, } | { "type": "setNotchPosition", anchor: NotchAnchor, xRatio: number | null, } | { "type": "setNotchPlacement", placement: NotchPlacement, } | { "type": "setPinnedMonitor", displayPath: string, } | { "type": "setKnobGestures", enabled: boolean, } | { "type": "setShowDisconnected", enabled: boolean, } | { "type": "setIdleLinger", secs: number, } | { "type": "setShowNotchHotkey", hotkey: string | null, } | { "type": "setMusicService", service: MusicServiceId, enabled: boolean, } | { "type": "setLyricsEnabled", enabled: boolean, } | { "type": "setLyricsOnlineLookup", enabled: boolean, } | { "type": "setLyricsDisplay", showOnPill: boolean | null, showOnCard: boolean | null, wordHighlight: boolean | null, romaji: boolean | null, } | { "type": "setLyricsCacheMaxMb", maxMb: number, } | { "type": "disableAllNetworkFeatures" } | { "type": "setVisualizerSpectrum", enabled: boolean, } | { "type": "setCallMode", enabled: boolean | null, apps: Array<string> | null, duckPercent: number | null, holdSecs: number | null, sensitivity: CallSensitivity | null, } | { "type": "setDefaultRoles", roles: RoleSet, };
 
 export type Notice = { "type": "notConnected", name: string, } | { "type": "chooseDevice", requestId: number, name: string, candidates: Array<DeviceSummary>, } | { "type": "switchFailed", name: string, failedRoles: Array<Role>, } | { "type": "spatialUnavailable", name: string, mode: SpatialMode, reason: string, } | { "type": "hotkeyConflict", bindingId: string, keys: string, } | { "type": "configReplaced", backup: string, error: string, } | { "type": "configInvalid", error: string, } | { "type": "configSaveFailed", error: string, } | { "type": "settingRejected", error: string, };
 

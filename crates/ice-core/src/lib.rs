@@ -5,6 +5,7 @@
 #![forbid(unsafe_code)]
 
 pub mod appearance;
+pub mod call_mode;
 pub mod config;
 pub mod device;
 pub mod engine;

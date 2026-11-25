@@ -16,6 +16,7 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use crate::appearance::{Appearance, HibernateLook, IdleStyle, NotchStyle, NowPlayingPill, SpringPreset, ThemeKind};
+use crate::call_mode::{CallModeConfig, CallSensitivity};
 use crate::device::{DeviceState, Flow, Role};
 use crate::lyrics::{LyricsConfig, LyricsState};
 use crate::media::{MusicServiceId, MusicServices, NowPlaying};
@@ -347,6 +348,14 @@ pub enum Command {
     SetVisualizerSpectrum {
         enabled: bool,
     },
+    /// D-30 call mode: patch its settings (`None` leaves a field unchanged; `apps` replaces the whole list).
+    SetCallMode {
+        enabled: Option<bool>,
+        apps: Option<Vec<String>>,
+        duck_percent: Option<u8>,
+        hold_secs: Option<u8>,
+        sensitivity: Option<CallSensitivity>,
+    },
     /// Roles used by switches that don't specify their own.
     SetDefaultRoles {
         roles: RoleSet,
@@ -390,6 +399,7 @@ impl Command {
             | Self::SetLyricsCacheMaxMb { .. }
             | Self::DisableAllNetworkFeatures
             | Self::SetVisualizerSpectrum { .. }
+            | Self::SetCallMode { .. }
             | Self::SetShowNotchHotkey { .. }
             | Self::SetDefaultRoles { .. } => true,
             Self::SwitchTo { .. }
@@ -496,6 +506,9 @@ pub struct SettingsView {
     /// D-26: live 14-band spectrum bars via local WASAPI loopback (`false` = peak-meter-only fallback).
     #[serde(default = "default_visualizer_spectrum")]
     pub visualizer_spectrum: bool,
+    /// D-30 call mode settings.
+    #[serde(default)]
+    pub call_mode: CallModeConfig,
     /// D-19 "show notch" hotkey, if bound.
     #[serde(default)]
     pub show_notch_hotkey: Option<String>,

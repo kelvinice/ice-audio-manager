@@ -412,6 +412,7 @@ impl Engine for FakeEngine {
             | Command::SetLyricsCacheMaxMb { .. }
             | Command::DisableAllNetworkFeatures
             | Command::SetVisualizerSpectrum { .. }
+            | Command::SetCallMode { .. }
             | Command::SetShowNotchHotkey { .. }
             | Command::SetDefaultRoles { .. } => {
                 let eps = endpoints(&st.snap);

@@ -89,6 +89,8 @@ function sampleSnapshot(): EngineSnapshot {
       musicServices: { spotify: true, youtubeMusic: true },
       lyrics: { enabled: false, onlineLookup: false, showOnPill: true, showOnCard: true, wordHighlight: true, romaji: true, cacheMaxMb: 50 },
       visualizerSpectrum: true,
+
+      callMode: { enabled: false, apps: ['Discord.exe'], duckPercent: 30, holdSecs: 3, sensitivity: 'normal' },
       showNotchHotkey: null,
       appearance: { theme: 'ice', preset: 'smooth', idleStyle: 'mini_pill', notchStyle: 'floating', nowPlaying: 'brief', movingBackdrop: true, hibernate: false, hibernateLook: 'plain', hibernateHideFromCapture: true },
     },

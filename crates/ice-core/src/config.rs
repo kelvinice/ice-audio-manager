@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 use crate::appearance::Appearance;
+use crate::call_mode::{CallModeConfig, normalize_apps};
 use crate::device::{DeviceState, EndpointInfo, Flow};
 use crate::engine::{
     BindingView, Command, DevicePrefsView, PerformanceProfile, RoleSet, SavedDevice, SettingsView, SpatialMode,
@@ -33,7 +34,8 @@ use crate::resolve::{DeviceRef, MatchMode, resolve};
 /// v15: `notch_anchor` (D-20 `"top_left"` | `"top_center"` default | `"top_right"`).
 /// v16: bottom `notch_anchor` values (Floating) and `notch_placement` (`"drag_snap"` default | `"fixed"`), D-20.
 /// v17: `notch_x_ratio` continuous horizontal position (`0.0..=1.0`, absent = preset anchor) and bottom Edge Nook.
-pub const SCHEMA_VERSION: u32 = 17;
+/// v18: `[call_mode]` (D-30: lower the music while people talk on a call; off by default).
+pub const SCHEMA_VERSION: u32 = 18;
 
 /// Allowed per-device lyric delay, in ms (negative = lyrics earlier).
 pub const LYRICS_DELAY_MS: std::ops::RangeInclusive<i32> = -1000..=2000;
@@ -101,6 +103,8 @@ pub struct Config {
     pub lyrics: LyricsConfig,
     /// D-26: local WASAPI loopback 14-band spectrum analyser (off = peak-meter-only fallback).
     pub visualizer_spectrum: bool,
+    /// D-30: lower the music while people talk on a call (off by default).
+    pub call_mode: CallModeConfig,
     /// D-19: opens (or closes) the expanded notch; in Lite, the tray quick-switch menu. Unbound by default.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub show_notch_hotkey: Option<Chord>,
@@ -127,6 +131,7 @@ impl Default for Config {
             music_services: MusicServices::default(),
             lyrics: LyricsConfig::default(),
             visualizer_spectrum: true,
+            call_mode: CallModeConfig::default(),
             show_notch_hotkey: None,
         }
     }
@@ -279,6 +284,7 @@ impl Config {
         {
             return Err(ConfigError::Parse(format!("notch_x_ratio = {ratio} must be finite and within 0.0–1.0")));
         }
+        cfg.call_mode.validate().map_err(|e| ConfigError::Parse(format!("call_mode: {e}")))?;
         match cfg.schema_version {
             v if v > SCHEMA_VERSION => Err(ConfigError::TooNew(v)),
             // v0/v1 gain the default profile and an initially unassigned monitor pin, v0–v2 gain
@@ -289,7 +295,8 @@ impl Config {
             // `appearance.hibernate = false` with `hibernateHideFromCapture = true`, v0–v12 gain
             // `appearance.hibernateLook = "plain"`, v0–v13 devices an automatic lyrics delay (no
             // `lyrics_delay_ms`), v0–v14 gain `notch_anchor = "top_center"`, v0–v15 gain
-            // `notch_placement = "drag_snap"`, and v0–v16 gain `notch_x_ratio = None`, all via serde defaults.
+            // `notch_placement = "drag_snap"`, v0–v16 gain `notch_x_ratio = None`, and v0–v17 gain `[call_mode]`
+            // (off, Discord's builds as call apps), all via serde defaults.
             _ => Ok(Self { schema_version: SCHEMA_VERSION, ..cfg }),
         }
     }
@@ -403,6 +410,7 @@ impl Config {
             music_services: self.music_services,
             lyrics: self.lyrics,
             visualizer_spectrum: self.visualizer_spectrum,
+            call_mode: self.call_mode.clone(),
             show_notch_hotkey: self.show_notch_hotkey.map(|c| c.to_string()),
         }
     }
@@ -552,6 +560,17 @@ impl Config {
             }
             Command::DisableAllNetworkFeatures => next.lyrics.online_lookup = false,
             Command::SetVisualizerSpectrum { enabled } => next.visualizer_spectrum = *enabled,
+            Command::SetCallMode { enabled, apps, duck_percent, hold_secs, sensitivity } => {
+                let c = &mut next.call_mode;
+                c.enabled = enabled.unwrap_or(c.enabled);
+                c.duck_percent = duck_percent.unwrap_or(c.duck_percent);
+                c.hold_secs = hold_secs.unwrap_or(c.hold_secs);
+                c.sensitivity = sensitivity.unwrap_or(c.sensitivity);
+                if let Some(apps) = apps {
+                    c.apps = normalize_apps(apps)?;
+                }
+                c.validate()?;
+            }
             Command::SetShowNotchHotkey { hotkey } => {
                 next.show_notch_hotkey = parse_hotkey(hotkey.as_deref())?;
                 next.check_hotkeys_unique()?;
@@ -1165,6 +1184,41 @@ mod tests {
 
         assert_eq!(config.apply_setting(&Command::SetNotchAnchor { anchor: NotchAnchor::TopRight }, &[]), Ok(true));
         assert_eq!(config.notch_x_ratio, None);
+    }
+
+    #[test]
+    fn v17_gains_call_mode_off_and_saves_its_settings() {
+        use crate::call_mode::{CallModeConfig, CallSensitivity};
+        let mut config = Config::from_toml("schema_version = 17\nnotch_anchor = 'top_right'").unwrap();
+        assert_eq!(config.schema_version, SCHEMA_VERSION);
+        assert_eq!(config.call_mode, CallModeConfig::default());
+        assert!(!config.view(&[]).call_mode.enabled);
+
+        let set = Command::SetCallMode {
+            enabled: Some(true),
+            apps: Some(vec!["Discord.exe".into(), " Zoom.exe ".into(), "zoom".into()]),
+            duck_percent: Some(20),
+            hold_secs: None,
+            sensitivity: Some(CallSensitivity::High),
+        };
+        assert_eq!(config.apply_setting(&set, &[]), Ok(true));
+        assert_eq!(config.apply_setting(&set, &[]), Ok(false));
+        let saved = Config::from_toml(&config.to_toml()).unwrap();
+        assert!(saved.call_mode.enabled);
+        assert_eq!(saved.call_mode.apps, vec!["Discord.exe".to_string(), "Zoom.exe".to_string()]);
+        assert_eq!((saved.call_mode.duck_percent, saved.call_mode.hold_secs), (20, 3));
+        assert_eq!(saved.call_mode.sensitivity, CallSensitivity::High);
+
+        let bad = Command::SetCallMode {
+            enabled: None,
+            apps: None,
+            duck_percent: Some(99),
+            hold_secs: None,
+            sensitivity: None,
+        };
+        assert!(config.apply_setting(&bad, &[]).is_err());
+        assert_eq!(config.call_mode.duck_percent, 20, "a rejected setting changes nothing");
+        assert!(Config::from_toml("schema_version = 18\n[call_mode]\nholdSecs = 60").is_err());
     }
 
     #[test]

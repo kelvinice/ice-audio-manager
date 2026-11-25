@@ -76,6 +76,13 @@ function initialSnapshot(): EngineSnapshot {
         cacheMaxMb: 50,
       },
       visualizerSpectrum: true,
+      callMode: {
+        enabled: false,
+        apps: ['Discord.exe', 'DiscordPTB.exe', 'DiscordCanary.exe'],
+        duckPercent: 30,
+        holdSecs: 3,
+        sensitivity: 'normal',
+      },
       showNotchHotkey: null,
     },
   };
@@ -145,6 +152,15 @@ function applyCommand(s: EngineSnapshot, c: Command): void {
     case 'setLyricsCacheMaxMb': st.lyrics = { ...st.lyrics, cacheMaxMb: c.maxMb }; break;
     case 'disableAllNetworkFeatures': st.lyrics = { ...st.lyrics, onlineLookup: false }; break;
     case 'setVisualizerSpectrum': st.visualizerSpectrum = c.enabled; break;
+    case 'setCallMode':
+      st.callMode = {
+        enabled: c.enabled ?? st.callMode.enabled,
+        apps: c.apps ?? st.callMode.apps,
+        duckPercent: c.duckPercent ?? st.callMode.duckPercent,
+        holdSecs: c.holdSecs ?? st.callMode.holdSecs,
+        sensitivity: c.sensitivity ?? st.callMode.sensitivity,
+      };
+      break;
     case 'setShowNotchHotkey': st.showNotchHotkey = c.hotkey; break;
     case 'setDefaultRoles': st.defaultRoles = c.roles; break;
     case 'setFavourites': st.favouritesPlayback = c.deviceIds.map(ref); break;
