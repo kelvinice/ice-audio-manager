@@ -44,3 +44,4 @@ Unit tests in the file cover state and envelope handling and frame rasterisation
 - 2026-11-25 Claude: `apply_snapshot` / `apply_envelope` take `Appearance::effective_idle_style()`, so hibernating with the hidden look hides the pill through the usual `IdleStyle::Hidden` path (no plain frame painted first: the shell sets the idle style before `set_plain`).
 - 2026-11-25 Claude: D-28 C1 twin: the volume pop-up draws the % first (left-aligned, 13 px box) and the bar after it (82–180); `glyphs::Align::Left`.
 - 2026-11-25 Claude: `PillState.anchor` + `NativeDotHandle::set_anchor`; `paint_pill` and window creation use `overlay_win::notch_origin` (one centre with the WebView notch).
+- 2026-11-25 Claude: the wheel: `PillInput::Wheel { notches, shift }` from `WM_MOUSEWHEEL` (`wheel_notches` accumulates touchpad deltas), emitted outside the click state machine; window test sends real messages.

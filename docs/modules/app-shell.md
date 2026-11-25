@@ -81,3 +81,4 @@ Unit tests in `art.rs`, `engine_bridge.rs`, `ipc.rs`, `meter.rs`, `placement.rs`
 - 2026-11-25 Claude: `open_language_settings` command (settings-controls permission, fixed target `ms-settings:regionlanguage`, no input).
 - 2026-11-25 Claude: `engine_bridge::Update::Delta` is boxed too (a media delta grew with the art palette; clippy `large_enum_variant`).
 - 2026-11-25 Claude: `Placement.anchor` (from `settings.notch_anchor`; a change repositions both hosts like a repin); every `move_top_center` call is `move_notch`; `NOTCH_CANVAS_W/H` come from `ice_core::placement`.
+- 2026-11-25 Claude: `wire_native_pill` handles `PillInput::Wheel`: ±`WHEEL_VOLUME_STEP` (4) % per notch, Shift → next device (`preview_target`), like the WebView notch.

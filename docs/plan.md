@@ -270,8 +270,13 @@ Runs between Phase 3 and Phase 4. Item 1 is a bug fix that comes first. D-21 Par
   - Click-first: native pressed state within one frame. Hover-to-open is opt-in. Middle-click = mute.
     *Done in `native_dot/input.rs`: pressed paints in 0.35 ms p50; the pill reports `PillInput::{Click, MiddleClick, HoverOpen}`
     through `set_input_handler` and the shell wires them (Codex). Still open: the by-hand focus check (QA F4,
-    `cargo test -p ice-win real_click -- --ignored`) and the wheel.*
-  - The wheel ships only after testing Windows' "scroll inactive windows" setting on and off.
+    `cargo test -p ice-win real_click -- --ignored`).*
+  - [x] The wheel (Claude, 2026-11-25): `PillInput::Wheel { notches, shift }` (touchpad deltas add up to whole notches),
+        shell: ±4 % per notch, Shift switches device, like the WebView notch (`WHEEL_VOLUME_STEP` twin). Checked through
+        the running app's shell and engine: two notches 40 % → 48 %, Shift + one notch switched the output. With Windows'
+        "Scroll inactive windows when hovering" off, the wheel goes to the focused app and the pill does nothing, which is
+        harmless
+  - [ ] By hand: wheel over the pill with "Scroll inactive windows when hovering" on and off
 - [x] Shell wiring (Codex): pill click wakes and expands the notch; in Lite, a click opens the tray quick-switch menu.
       *Done 2026-11-24 (Claude): `app/src-tauri/src/show_notch.rs` (`wire_native_pill`); middle click = mute; hover-to-open
       (opt-in) does the same as a click; nothing happens over a fullscreen game; `tray::open_quick_menu` extracted*

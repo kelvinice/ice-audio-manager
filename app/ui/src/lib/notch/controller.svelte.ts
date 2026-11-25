@@ -616,6 +616,7 @@ export class NotchController {
     if (e.shiftKey) {
       void invoke('trigger_switch');
     } else {
+      // Twin: `WHEEL_VOLUME_STEP` in app/src-tauri/src/show_notch.rs (the native pill's wheel).
       const step = e.deltaY < 0 ? 4 : -4;
       void invoke('adjust_volume', { delta: step });
     }

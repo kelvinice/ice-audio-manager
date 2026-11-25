@@ -7,11 +7,14 @@
 
 use std::sync::Arc;
 
-use ice_core::engine::Command;
+use ice_core::engine::{Command, RoleSet};
 use ice_win::native_dot::{NativeDotHandle, PillInput};
 use tauri::AppHandle;
 
 use super::{Preview, SharedRuntime, request_preview, tray};
+
+/// Volume change per wheel notch over the native pill. Twin: `onWheel` (`step = 4`) in app/ui/src/lib/notch/controller.svelte.ts.
+const WHEEL_VOLUME_STEP: i32 = 4;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Open {
@@ -67,9 +70,27 @@ pub(super) fn wire_native_pill(app: &AppHandle, state: &Arc<SharedRuntime>, dot:
     let app = app.clone();
     let state = Arc::clone(state);
     dot.set_input_handler(Arc::new(move |input| {
-        if input == PillInput::MiddleClick {
-            state.engine.send(Command::ToggleMute);
-            return;
+        match input {
+            PillInput::MiddleClick => {
+                state.engine.send(Command::ToggleMute);
+                return;
+            }
+            // Like the WebView notch: ±4 % per notch, Shift switches to the next device.
+            PillInput::Wheel { notches, shift: true } => {
+                if notches != 0
+                    && let Some(target) = super::engine_bridge::preview_target(&state.engine.snapshot())
+                {
+                    state.engine.send(Command::SwitchTo { device_id: target.id.clone(), roles: RoleSet::Default });
+                }
+                return;
+            }
+            PillInput::Wheel { notches, shift: false } => {
+                let delta = i8::try_from(i32::from(notches).saturating_mul(WHEEL_VOLUME_STEP))
+                    .unwrap_or(if notches > 0 { i8::MAX } else { i8::MIN });
+                state.engine.send(Command::StepVolume { delta });
+                return;
+            }
+            PillInput::Click | PillInput::HoverOpen => {}
         }
         let (handle, st) = (app.clone(), Arc::clone(&state));
         let _ = app.run_on_main_thread(move || show(&handle, &st, Open::Show));
