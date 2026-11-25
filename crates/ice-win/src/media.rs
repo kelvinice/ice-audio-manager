@@ -1,8 +1,8 @@
-//! Now playing via Global System Media Transport Controls (GSMTC). Phase 3 (F15–F17).
+//! Now playing via Global System Media Transport Controls (GSMTC). Phase 3 (F15â€“F17).
 //!
 //! Event-driven: [`MediaWatcher`] forwards GSMTC change events to a non-blocking sink; the owner re-reads
 //! what changed ([`read`] for track + art, [`refresh_playback`] for status and timeline). No polling
-//! (code-practices §2). Album art is decoded and downscaled with Windows' own imaging API (no image crate),
+//! (code-practices Â§2). Album art is decoded and downscaled with Windows' own imaging API (no image crate),
 //! hashed for caching (`iceart://<id>`), and given a readable accent colour (`ice_core::media`).
 //!
 //! **Threading (review MED-09):** every function here blocks on cross-process WinRT calls and must run on an
@@ -16,7 +16,7 @@ use std::sync::{Arc, mpsc};
 use std::time::{Duration, Instant};
 
 use ice_core::engine::MediaAction;
-use ice_core::media::{ArtInfo, NowPlaying, PlaybackStatus, accent_for_art, art_id};
+use ice_core::media::{ArtInfo, NowPlaying, PlaybackStatus, accent_for_art, art_id, art_palette};
 use windows::Foundation::TypedEventHandler;
 use windows::Graphics::Imaging::{
     BitmapAlphaMode, BitmapDecoder, BitmapEncoder, BitmapInterpolationMode, BitmapPixelFormat, BitmapTransform,
@@ -171,7 +171,7 @@ pub struct Art {
     pub png: Vec<u8>,
 }
 
-/// The current session's art, downscaled so the longer side is at most `max_px` (clamped to 16–512).
+/// The current session's art, downscaled so the longer side is at most `max_px` (clamped to 16â€“512).
 /// `Ok(None)` without a session or art.
 ///
 /// # Errors
@@ -349,7 +349,7 @@ fn timeline_ms(start: i64, end: i64, position: i64) -> (Option<u64>, Option<u64>
 /// The size `(w, h)` scaled so the longer side is at most `max_px`, never below 1 px.
 fn fit(w: u32, h: u32, max_px: u32) -> (u32, u32) {
     let scale = (f64::from(max_px) / f64::from(w.max(h))).min(1.0);
-    // Both results are ≤ the inputs (scale ≤ 1), so the casts can't truncate or go negative.
+    // Both results are â‰¤ the inputs (scale â‰¤ 1), so the casts can't truncate or go negative.
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     let px = |v: u32| (f64::from(v) * scale).round().max(1.0) as u32;
     (px(w), px(h))
@@ -390,7 +390,7 @@ fn read_art_cached(
     if w.max(h) > MAX_SOURCE_SIDE || u64::from(w) * u64::from(h) > MAX_SOURCE_PIXELS {
         return Err(too_big("album art"));
     }
-    // Scaling happens before the EXIF rotation, so a 90°/270° image comes out transposed (review MED-05).
+    // Scaling happens before the EXIF rotation, so a 90Â°/270Â° image comes out transposed (review MED-05).
     let transposed = (decoder.OrientedPixelWidth()?, decoder.OrientedPixelHeight()?) != (w, h);
     let (sw, sh) = fit(w, h, max_px);
     let (out_w, out_h) = if transposed { (sh, sw) } else { (sw, sh) };
@@ -422,7 +422,9 @@ fn read_art_cached(
     {
         return Ok(Some(ArtOutcome::Reused(known.clone())));
     }
-    let info = ArtInfo { id, width: out_w, height: out_h, accent: accent_for_art(Some(pixels)) };
+    let (palette, luminance_pct) = art_palette(pixels);
+    let info =
+        ArtInfo { id, width: out_w, height: out_h, accent: accent_for_art(Some(pixels)), palette, luminance_pct };
     Ok(Some(ArtOutcome::New(Art { info, png: encode_png(pixels, out_w, out_h, &budget)? })))
 }
 

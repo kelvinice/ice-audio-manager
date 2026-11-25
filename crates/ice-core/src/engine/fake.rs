@@ -85,7 +85,14 @@ fn fake_track(i: usize, status: PlaybackStatus) -> NowPlaying {
         position_ms: Some(52_000),
         duration_ms: Some(secs * 1000),
         position_updated_ms: Some(now_unix_ms()),
-        art: Some(ArtInfo { id: format!("fake-art-{}", i % FAKE_TRACKS.len()), width: 16, height: 16, accent }),
+        art: Some(ArtInfo {
+            id: format!("fake-art-{}", i % FAKE_TRACKS.len()),
+            width: 16,
+            height: 16,
+            accent,
+            palette: vec![accent],
+            luminance_pct: 30,
+        }),
     }
 }
 use crate::device::{DeviceState, Flow};

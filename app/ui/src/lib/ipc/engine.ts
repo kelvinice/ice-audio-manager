@@ -157,7 +157,16 @@ id: string, width: number, height: number,
 /**
  * Readable accent colour derived from the art.
  */
-accent: Rgb, };
+accent: Rgb,
+/**
+ * Colours that are really in the art, largest area first, at most [`PALETTE_SIZE`] (owner, 2026-11-25: the
+ * backdrop should follow the cover, not hue-rotated guesses). Empty only for fully transparent art.
+ */
+palette: Array<Rgb>,
+/**
+ * The cover's average WCAG luminance, 0–100 % (the backdrop scrim strengthens over bright covers).
+ */
+luminancePct: number, };
 
 export type NowPlaying = {
 /**

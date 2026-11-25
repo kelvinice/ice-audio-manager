@@ -139,9 +139,10 @@ fn retry_start<T>(
 }
 
 enum Update {
-    // Boxed: the snapshot (devices, settings, media) is much larger than a delta.
+    // Both boxed: they move through a channel, and a snapshot (devices, settings, media) or a media delta (art
+    // palette) is large.
     Snapshot(Box<EngineSnapshot>),
-    Delta(Envelope),
+    Delta(Box<Envelope>),
 }
 
 fn follow(engine: &dyn Engine, mut publish: impl FnMut(Update) -> bool) {
@@ -171,7 +172,7 @@ fn follow(engine: &dyn Engine, mut publish: impl FnMut(Update) -> bool) {
             {
                 continue;
             }
-            if !publish(Update::Delta(delta)) {
+            if !publish(Update::Delta(Box::new(delta))) {
                 return;
             }
         }
@@ -231,7 +232,7 @@ pub(super) fn watch(app: AppHandle, state: Arc<SharedRuntime>) -> std::io::Resul
                 }
                 match update {
                     Update::Snapshot(snapshot) => apply_snapshot(&app_for_event, &state, &snapshot),
-                    Update::Delta(delta) => apply_event(&app_for_event, &state, delta),
+                    Update::Delta(delta) => apply_event(&app_for_event, &state, *delta),
                 }
             })
             .is_ok()
@@ -412,8 +413,14 @@ mod tests {
         // Position, status and late art don't count.
         let mut later = track("A", PlaybackStatus::Paused);
         later.position_ms = Some(500);
-        later.art =
-            Some(ice_core::media::ArtInfo { id: "x".into(), width: 1, height: 1, accent: ice_core::media::ICE_ACCENT });
+        later.art = Some(ice_core::media::ArtInfo {
+            id: "x".into(),
+            width: 1,
+            height: 1,
+            accent: ice_core::media::ICE_ACCENT,
+            palette: Vec::new(),
+            luminance_pct: 0,
+        });
         assert!(!is_new_track(&mut last, Some(&later)));
         assert!(is_new_track(&mut last, Some(&track("B", PlaybackStatus::Playing))));
         // A stopped session or none at all is not a track to show.

@@ -10,16 +10,6 @@ export interface MusicServiceItem {
   active: boolean;
 }
 
-/**
- * Forward-compatible extension for D-23 art metadata (`palette` and cover `luminance`)
- * until `ice_core::media::ArtInfo` exports them via `ts-rs`.
- */
-export interface ArtInfoWithPalette extends ArtInfo {
-  palette?: Rgb[] | null;
-  secondary?: Rgb | null;
-  luminance?: number | null;
-}
-
 export interface ArtBackdropStyle {
   hasArt: boolean;
   artId: string | null;
@@ -188,21 +178,33 @@ function deriveHueVariant(primary: Rgb, hueShiftDeg: number, satFloor: number, l
   return hslToRgb(h + hueShiftDeg, clamp(Math.max(s, satFloor), satFloor, 0.92), clamp(l * lightScale, 0.26, 0.62));
 }
 
-/** Derives a distinct secondary gradient stop (+28° warm shift) when `ArtInfo` provides a single accent. */
-export function deriveSecondaryStop(primary: Rgb): Rgb {
-  const [, s] = rgbToHsl(primary);
-  if (s < 0.08) return DEFAULT_SECONDARY_RGB;
-  return deriveHueVariant(primary, 28, 0.48, 0.88);
+/** Below this chroma a colour is neutral (white, grey, black): it stays neutral, never gets a made-up hue. */
+const NEUTRAL_CHROMA = 0.06;
+/** A small lift so a wash doesn't look duller than the cover once it's darkened behind text. */
+const CHROMA_LIFT = 1.15;
+
+/** HSL saturation that keeps `chroma` (how colourful the art really is) at lightness `l`. */
+function saturationForChroma(chroma: number, l: number): number {
+  const room = 1 - Math.abs(2 * l - 1);
+  return room <= 0 ? 0 : clamp(chroma / room, 0, 0.92);
 }
 
-function tuneWashColor(rgb: Rgb, isLightTheme: boolean): Rgb {
-  const [h, s, l] = rgbToHsl(rgb);
+/**
+ * A wash colour for one art colour: its own hue and its own colourfulness, moved into the readable lightness band
+ * (owner, 2026-11-25: follow the cover, don't invent colours). Pastels stay soft, vivid covers vivid, greys grey.
+ */
+function tuneWashColor(rgb: Rgb, isLightTheme: boolean, lightShift = 0): Rgb {
+  const [h] = rgbToHsl(rgb);
+  const chroma = (Math.max(rgb.r, rgb.g, rgb.b) - Math.min(rgb.r, rgb.g, rgb.b)) / 255;
+  const lifted = chroma < NEUTRAL_CHROMA ? chroma : chroma * CHROMA_LIFT;
+  const [, , l] = rgbToHsl(rgb);
   if (isLightTheme) {
-    return hslToRgb(h, s < 0.08 ? 0.2 : clamp(Math.max(s, 0.58), 0.58, 0.9), clamp(l, 0.58, 0.74));
+    const lightL = clamp(l + lightShift, 0.58, 0.76);
+    return hslToRgb(h, saturationForChroma(lifted, lightL), lightL);
   }
-  // Vivid jewel saturation, then a luminance cap (not just HSL lightness) so stacked orbs can't wash out the text.
-  const jewel = hslToRgb(h, s < 0.08 ? 0.24 : clamp(Math.max(s, 0.68), 0.68, 0.96), clamp(l, 0.3, 0.42));
-  return capLuminance(jewel, WASH_MAX_LUMINANCE);
+  // Then a luminance cap (not just HSL lightness), so stacked orbs can't wash out the text.
+  const darkL = clamp(l + lightShift, 0.26, 0.44);
+  return capLuminance(hslToRgb(h, saturationForChroma(lifted, darkL), darkL), WASH_MAX_LUMINANCE);
 }
 
 function scrimAlphasForLuminance(lum: number, isLightTheme: boolean): { top: number; bottom: number } {
@@ -241,7 +243,7 @@ function scrimAlphasForLuminance(lum: number, isLightTheme: boolean): { top: num
 
 /** Computes D-23/D-25 V2 gradient stops and V1 luminance-clamped scrim CSS variables from `art`. */
 export function computeArtBackdrop(
-  art: ArtInfoWithPalette | null | undefined,
+  art: ArtInfo | null | undefined,
   isLightTheme = false,
 ): ArtBackdropStyle {
   if (!art) {
@@ -262,23 +264,18 @@ export function computeArtBackdrop(
     };
   }
 
-  const rawPrimary = art.palette?.[0] ?? art.accent ?? DEFAULT_RGB;
-  const rawSecondary = art.palette?.[1] ?? art.secondary ?? deriveHueVariant(rawPrimary, 32, 0.56, 0.9);
-  const rawTertiary = art.palette?.[2] ?? deriveHueVariant(rawPrimary, -38, 0.56, 0.9);
-  const rawQuaternary = art.palette?.[3] ?? deriveHueVariant(rawPrimary, -78, 0.54, 0.84);
-  const rawHighlight = deriveHueVariant(rawPrimary, 62, 0.56, 0.94);
-  const primary = tuneWashColor(rawPrimary, isLightTheme);
-  const secondary = tuneWashColor(rawSecondary, isLightTheme);
-  const tertiary = tuneWashColor(rawTertiary, isLightTheme);
-  const quaternary = tuneWashColor(rawQuaternary, isLightTheme);
-  const highlight = tuneWashColor(rawHighlight, isLightTheme);
-  const coverLuminance = clamp(
-    typeof art.luminance === 'number' && Number.isFinite(art.luminance)
-      ? art.luminance
-      : relativeLuminance(rawPrimary),
-    0,
-    1,
-  );
+  // Only colours that are in the art (`ArtInfo.palette`, largest area first). A cover with fewer than four colours
+  // fills the other orbs with lighter/darker tones of its own colours, never with rotated hues.
+  const palette = art.palette.length > 0 ? art.palette : [art.accent];
+  const at = (i: number): Rgb => palette[i] ?? palette[i % palette.length] ?? DEFAULT_RGB;
+  const own = (i: number, toneShift: number): Rgb =>
+    tuneWashColor(at(i), isLightTheme, i < palette.length ? 0 : toneShift);
+  const primary = own(0, 0);
+  const secondary = own(1, 0.08);
+  const tertiary = own(2, -0.08);
+  const quaternary = own(3, 0.04);
+  const highlight = tuneWashColor(at(0), isLightTheme, 0.1);
+  const coverLuminance = clamp(art.luminancePct / 100, 0, 1);
   const { top, bottom } = scrimAlphasForLuminance(coverLuminance, isLightTheme);
   const scrimRgb = isLightTheme ? LIGHT_SCRIM_RGB : DARK_SCRIM_RGB;
   const scrimBotRgb = isLightTheme ? { r: 240, g: 243, b: 248 } : { r: 10, g: 13, b: 18 };

@@ -96,6 +96,69 @@ pub struct ArtInfo {
     pub height: u32,
     /// Readable accent colour derived from the art.
     pub accent: Rgb,
+    /// Colours that are really in the art, largest area first, at most [`PALETTE_SIZE`] (owner, 2026-11-25: the
+    /// backdrop should follow the cover, not hue-rotated guesses). Empty only for fully transparent art.
+    #[serde(default)]
+    pub palette: Vec<Rgb>,
+    /// The cover's average WCAG luminance, 0–100 % (the backdrop scrim strengthens over bright covers).
+    #[serde(default)]
+    pub luminance_pct: u8,
+}
+
+/// How many backdrop colours [`art_palette`] returns at most.
+pub const PALETTE_SIZE: usize = 4;
+/// Two palette colours at least this far apart (RGB distance) count as different colours.
+const PALETTE_MIN_DISTANCE: f64 = 56.0;
+/// A colour covering less than this share of the art's weight is a detail, not part of the palette.
+const PALETTE_MIN_SHARE: f64 = 0.03;
+
+/// The art's palette and average luminance (%) from BGRA8 pixels: up to [`PALETTE_SIZE`] distinct colours, by area.
+/// Area counts most and colour a little, so a pastel cover gives its pastel hues, a grey one its greys. Near-white
+/// and near-black pixels count less (paper, borders) but still win when nothing else is there.
+#[must_use]
+pub fn art_palette(pixels: &[u8]) -> (Vec<Rgb>, u8) {
+    let mut weight = vec![0f64; 4096];
+    let mut sums = vec![[0f64; 3]; 4096];
+    let (mut n, mut lum) = (0f64, 0f64);
+    let (pixels, _) = pixels.as_chunks::<4>();
+    for &[b, g, r, a] in pixels {
+        if a < 128 {
+            continue;
+        }
+        let c = Rgb::new(r, g, b);
+        n += 1.0;
+        lum += luminance(c);
+        let (_, s, l) = rgb_to_hsl(c);
+        let w = (0.5 + s) * if (0.06..=0.94).contains(&l) { 1.0 } else { 0.15 };
+        let i = (usize::from(r >> 4) << 8) | (usize::from(g >> 4) << 4) | usize::from(b >> 4);
+        weight[i] += w;
+        sums[i][0] += f64::from(r) * w;
+        sums[i][1] += f64::from(g) * w;
+        sums[i][2] += f64::from(b) * w;
+    }
+    if n == 0.0 {
+        return (Vec::new(), 0);
+    }
+    let total: f64 = weight.iter().sum();
+    let mut order: Vec<usize> = (0..weight.len()).filter(|&i| weight[i] > 0.0).collect();
+    order.sort_by(|&a, &b| weight[b].total_cmp(&weight[a]));
+    let to_u8 = |v: f64| v.round().clamp(0.0, 255.0) as u8;
+    let dist = |a: Rgb, b: Rgb| {
+        let d = |x: u8, y: u8| f64::from(x) - f64::from(y);
+        (d(a.r, b.r).powi(2) + d(a.g, b.g).powi(2) + d(a.b, b.b).powi(2)).sqrt()
+    };
+    let mut palette: Vec<Rgb> = Vec::with_capacity(PALETTE_SIZE);
+    for i in order {
+        if palette.len() == PALETTE_SIZE || (!palette.is_empty() && weight[i] < total * PALETTE_MIN_SHARE) {
+            break;
+        }
+        let w = weight[i];
+        let c = Rgb::new(to_u8(sums[i][0] / w), to_u8(sums[i][1] / w), to_u8(sums[i][2] / w));
+        if palette.iter().all(|&p| dist(p, c) >= PALETTE_MIN_DISTANCE) {
+            palette.push(c);
+        }
+    }
+    (palette, to_u8(lum / n * 100.0))
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -267,6 +330,31 @@ mod tests {
 
     fn image(pixels: &[(Rgb, usize)]) -> Vec<u8> {
         pixels.iter().flat_map(|(c, n)| std::iter::repeat_n([c.b, c.g, c.r, 255], *n).flatten()).collect()
+    }
+
+    #[test]
+    fn palette_holds_the_covers_own_colours_by_area() {
+        // The owner's case: a mostly white cover with pastel blue and pink. No hue that isn't in the art.
+        let pastel = image(&[
+            (Rgb::new(250, 250, 252), 600),
+            (Rgb::new(170, 205, 240), 250),
+            (Rgb::new(240, 180, 200), 130),
+            (Rgb::new(30, 30, 40), 20),
+        ]);
+        let (palette, lum) = art_palette(&pastel);
+        assert!(palette.len() >= 2 && palette.len() <= PALETTE_SIZE, "{palette:?}");
+        assert!(palette.iter().any(|c| c.b > c.r && c.b > 200), "pastel blue kept: {palette:?}");
+        assert!(palette.iter().any(|c| c.r > c.b && c.r > 200), "pastel pink kept: {palette:?}");
+        let green = |c: &Rgb| u16::from(c.g) > u16::from(c.r) + 20 && u16::from(c.g) > u16::from(c.b) + 20;
+        assert!(!palette.iter().any(green), "no invented green: {palette:?}");
+        assert!(lum > 60, "a bright cover: {lum}");
+        // Near-identical shades merge; tiny details don't make it in.
+        let one = image(&[(Rgb::new(200, 40, 40), 500), (Rgb::new(205, 45, 42), 480), (Rgb::new(20, 200, 20), 5)]);
+        assert_eq!(art_palette(&one).0.len(), 1);
+        // A grey cover gives its greys (an honest neutral wash), transparent art nothing.
+        let grey = image(&[(Rgb::new(100, 100, 100), 50), (Rgb::new(160, 160, 160), 50)]);
+        assert_eq!(art_palette(&grey).0.len(), 2);
+        assert_eq!(art_palette(&[0, 0, 0, 0]), (Vec::new(), 0));
     }
 
     #[test]

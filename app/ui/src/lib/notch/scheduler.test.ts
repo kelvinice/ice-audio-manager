@@ -306,7 +306,7 @@ function sampleMedia(overrides: Partial<NowPlaying> = {}): NowPlaying {
     album: 'Viva La Vida or Death and All His Friends',
     positionMs: 52_000n,
     durationMs: 211_000n,
-    art: { id: 'fake-art-0', width: 256, height: 256, accent: { r: 226, g: 88, b: 62 } },
+    art: { id: 'fake-art-0', width: 256, height: 256, accent: { r: 226, g: 88, b: 62 }, palette: [], luminancePct: 0 },
     ...overrides,
   };
 }
@@ -346,7 +346,7 @@ test('snapshot.media populates compact idle state and mediaChanged wakes track a
     album: "Hurry Up, We're Dreaming",
     positionMs: 0n,
     durationMs: 243_000n,
-    art: { id: 'fake-art-1', width: 256, height: 256, accent: { r: 196, g: 82, b: 212 } },
+    art: { id: 'fake-art-1', width: 256, height: 256, accent: { r: 196, g: 82, b: 212 }, palette: [], luminancePct: 0 },
   });
   const trackRes = sched.applyEnvelope(
     { revision: 3, event: { type: 'mediaChanged', media: nextTrack } },
