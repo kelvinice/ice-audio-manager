@@ -46,20 +46,36 @@
     style:border-radius={ctrl.surfaceShape.shadowRadiusCss}
     aria-hidden="true"
   ></div>
-  <!-- Held / carried: a deeper shadow (and the optional accent glow) fades in with the lift; absent at rest. -->
+  <!-- Held / carried: a deeper shadow fades in with the lift; absent at rest. -->
   {#if ctrl.lift > 0.001}
     <div
       class="lift-shadow"
-      class:glow={ctrl.dragEffects.carryGlow}
       style:top={ctrl.isBottomAnchor ? undefined : `${ctrl.surfaceShape.topPad}px`}
       style:bottom={ctrl.isBottomAnchor ? `${ctrl.surfaceShape.bottomPad}px` : undefined}
       style:width={`${ctrl.pillSize.w}px`}
       style:height={`${ctrl.pillSize.h}px`}
       style:border-radius={ctrl.surfaceShape.shadowRadiusCss}
       style:opacity={Math.min(1, ctrl.lift).toFixed(3)}
-      style:--ice-carry-glow={ctrl.activeGlowCss}
       aria-hidden="true"
     ></div>
+    {#if ctrl.dragEffects.carryGlow}
+      <!-- Experimental "Glow while carrying": a crisp ring of the song's colour hugging the pill plus a halo that
+           breathes slowly (opacity only) while it's held. The outer box follows the lift; the inner one breathes. -->
+      <div
+        class="carry-glow"
+        class:still={ctrl.isInstant}
+        style:top={ctrl.isBottomAnchor ? undefined : `${ctrl.surfaceShape.topPad}px`}
+        style:bottom={ctrl.isBottomAnchor ? `${ctrl.surfaceShape.bottomPad}px` : undefined}
+        style:width={`${ctrl.pillSize.w}px`}
+        style:height={`${ctrl.pillSize.h}px`}
+        style:border-radius={ctrl.surfaceShape.shadowRadiusCss}
+        style:opacity={Math.min(1, ctrl.lift).toFixed(3)}
+        style:--glow-c={ctrl.activeAccentCss}
+        aria-hidden="true"
+      >
+        <div class="carry-halo"></div>
+      </div>
+    {/if}
   {/if}
   <div
     class="pill-clip"
@@ -242,7 +258,7 @@
       <path
         d={ctrl.surfaceShape.rimPathD}
         fill="none"
-        stroke={ctrl.rimStroke}
+        stroke={ctrl.isLifted && ctrl.dragEffects.carryGlow ? ctrl.activeAccentCss : ctrl.rimStroke}
         stroke-width="2"
         vector-effect="non-scaling-stroke"
       />
@@ -267,7 +283,7 @@
         rx={ctrl.pillSize.r}
         ry={ctrl.pillSize.r}
         fill="none"
-        stroke={ctrl.rimStroke}
+        stroke={ctrl.isLifted && ctrl.dragEffects.carryGlow ? ctrl.activeAccentCss : ctrl.rimStroke}
         stroke-width="1"
         vector-effect="non-scaling-stroke"
       />
@@ -292,7 +308,7 @@
   </svg>
   {#if ctrl.placedFlash && ctrl.dragEffects.landingRipple && !ctrl.isInstant}
     {#key ctrl.placedFlashKey}
-      <LandingRipple shape={ctrl.surfaceShape} pill={ctrl.pillSize} />
+      <LandingRipple shape={ctrl.surfaceShape} pill={ctrl.pillSize} accent={ctrl.activeAccentCss} />
     {/key}
   {/if}
   </div>
@@ -410,10 +426,36 @@
     pointer-events: none;
   }
 
-  .lift-shadow.glow {
+  /* The ring sits right on the pill's edge (1.5 px spread, no blur); the halo is two soft layers of the same colour. */
+  .carry-glow {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    pointer-events: none;
+    box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--glow-c) 90%, transparent);
+  }
+
+  .carry-halo {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
     box-shadow:
-      var(--ice-lift-shadow),
-      0 0 22px 3px var(--ice-carry-glow, var(--ice-accent-glow));
+      0 0 10px 2px color-mix(in srgb, var(--glow-c) 62%, transparent),
+      0 0 26px 7px color-mix(in srgb, var(--glow-c) 30%, transparent);
+    animation: notch-carry-breathe 1.8s ease-in-out infinite alternate;
+  }
+
+  .carry-glow.still .carry-halo {
+    animation: none;
+  }
+
+  @keyframes notch-carry-breathe {
+    from {
+      opacity: 0.55;
+    }
+    to {
+      opacity: 1;
+    }
   }
 
   .notch-motion.nook {

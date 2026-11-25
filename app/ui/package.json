@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "check": "tsc --noEmit",
-    "test": "node --experimental-strip-types --test src/lib/motion/spring.test.ts src/lib/notch/scheduler.test.ts src/lib/notch/scrubber.test.ts src/lib/notch/lyrics.test.ts src/lib/notch/visualizer.test.ts src/lib/notch/beat.test.ts src/lib/notch/fitLine.test.ts src/lib/notch/devices.test.ts src/lib/notch/backdrop.test.ts src/lib/notch/notchStyle.test.ts src/lib/notch/drag.test.ts src/lib/notch/ambient.test.ts src/lib/notch/mediaSource.test.ts src/lib/settings/model.test.ts src/themes/themes.test.ts src/lib/notch/volume.test.ts"
+    "test": "node --experimental-strip-types --test src/lib/motion/spring.test.ts src/lib/notch/scheduler.test.ts src/lib/notch/scrubber.test.ts src/lib/notch/lyrics.test.ts src/lib/notch/visualizer.test.ts src/lib/notch/beat.test.ts src/lib/notch/fitLine.test.ts src/lib/notch/devices.test.ts src/lib/notch/backdrop.test.ts src/lib/notch/notchStyle.test.ts src/lib/notch/drag.test.ts src/lib/notch/ambient.test.ts src/lib/notch/mediaSource.test.ts src/lib/settings/model.test.ts src/themes/themes.test.ts src/lib/notch/volume.test.ts src/lib/notch/waves.test.ts"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.9.0"

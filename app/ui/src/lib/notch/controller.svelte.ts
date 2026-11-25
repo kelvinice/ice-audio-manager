@@ -470,15 +470,14 @@ export class NotchController {
     }
     this.placedFlashKey += 1;
     this.placedFlash = true;
-    // Long enough for the longest landing (`notch-place-jelly` / `notch-ripple`, 640 ms in NotchApp.svelte).
+    // Long enough for the longest landing: the ripple's last ring (300 ms delay + 1000 ms, LandingRipple.svelte), the
+    // jelly (640 ms) or the plain settle (440 ms, NotchApp.svelte).
     const fx = this.dragEffects;
-    this.placedFlashTimer = window.setTimeout(
-      () => {
-        this.placedFlashTimer = null;
-        this.placedFlash = false;
-      },
-      fx.jellyLanding || fx.landingRipple ? 680 : 460,
-    );
+    const landingMs = fx.landingRipple ? 1340 : fx.jellyLanding ? 680 : 460;
+    this.placedFlashTimer = window.setTimeout(() => {
+      this.placedFlashTimer = null;
+      this.placedFlash = false;
+    }, landingMs);
   }
 
   private applyEngineSnapshot(snapshot: EngineSnapshot): void {
