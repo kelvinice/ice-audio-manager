@@ -262,6 +262,100 @@ mod tests {
         assert_eq!(watch.watched.len(), sessions.len(), "every session accepts a state notification");
     }
 
+    /// Real host, read-only: while the app runs, logs Discord's peak and every music-session volume change it sees
+    /// for 15 s (what the running call mode writes). `cargo test -p ice-win real_watch_dip -- --ignored --nocapture`
+    #[test]
+    #[ignore = "needs the real audio service"]
+    fn real_watch_dip() {
+        use ice_core::call_mode::{CALL_TICK, CallModeConfig};
+        let _com = ComGuard::init_mta().unwrap();
+        let eps = Endpoints::new().unwrap();
+        let config = CallModeConfig::default();
+        let mut watch = SessionWatch::new(&eps, Arc::new(|| {}));
+        let start = std::time::Instant::now();
+        let mut last: Vec<(String, Option<f32>)> = Vec::new();
+        while start.elapsed() < std::time::Duration::from_secs(15) {
+            let sessions = watch.sessions();
+            let peak = sessions.iter().filter(|s| config.is_call_app(&s.exe) && s.is_active()).map(Session::peak);
+            let peak = peak.fold(0.0_f32, f32::max);
+            let now: Vec<(String, Option<f32>)> =
+                sessions.iter().filter(|s| !config.is_call_app(&s.exe)).map(|s| (s.exe.clone(), s.volume())).collect();
+            if now != last {
+                println!("{:>6} ms call={peak:.3} {now:?}", start.elapsed().as_millis());
+                last = now;
+            }
+            std::thread::sleep(CALL_TICK);
+        }
+    }
+
+    /// Real host, read-only: counts session notifications (what wakes `ice-call`) over 15 s with Discord watched, and
+    /// prints Discord's peak once a second. `cargo test -p ice-win real_notify_rate -- --ignored --nocapture`
+    #[test]
+    #[ignore = "needs the real audio service"]
+    fn real_notify_rate() {
+        use ice_core::call_mode::CallModeConfig;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        let _com = ComGuard::init_mta().unwrap();
+        let eps = Endpoints::new().unwrap();
+        let count = Arc::new(AtomicUsize::new(0));
+        let counter = Arc::clone(&count);
+        let mut watch = SessionWatch::new(
+            &eps,
+            Arc::new(move || {
+                counter.fetch_add(1, Ordering::Relaxed);
+            }),
+        );
+        let config = CallModeConfig::default();
+        let calls: Vec<Session> = watch.sessions().into_iter().filter(|s| config.is_call_app(&s.exe)).collect();
+        for s in &calls {
+            watch.watch(s);
+        }
+        for second in 1..=15 {
+            std::thread::sleep(std::time::Duration::from_secs(1));
+            let peak = calls.iter().filter(|s| s.is_active()).map(Session::peak).fold(0.0_f32, f32::max);
+            let active = calls.iter().filter(|s| s.is_active()).count();
+            println!(
+                "{second:>2}s notifications={} active_calls={active} peak={peak:.3}",
+                count.load(Ordering::Relaxed)
+            );
+        }
+    }
+
+    /// Real host, WRITES Spotify's mixer level for ~4 s, then puts it back: does Spotify re-write its own session
+    /// volume after someone else sets it? `cargo test -p ice-win real_spotify_echo -- --ignored --nocapture`
+    #[test]
+    #[ignore = "changes Spotify's volume briefly"]
+    fn real_spotify_echo() {
+        let _com = ComGuard::init_mta().unwrap();
+        let eps = Endpoints::new().unwrap();
+        let mut watch = SessionWatch::new(&eps, Arc::new(|| {}));
+        let spotify: Vec<Session> =
+            watch.sessions().into_iter().filter(|s| s.exe.eq_ignore_ascii_case("Spotify.exe")).collect();
+        println!("Spotify sessions: {}", spotify.len());
+        let original: Vec<Option<f32>> = spotify.iter().map(Session::volume).collect();
+        println!("original: {original:?}");
+        for target in [0.9_f32, 0.533, 0.066, 0.0, 0.25] {
+            for s in &spotify {
+                s.set_volume(target);
+            }
+            let mut seen = Vec::new();
+            for _ in 0..18 {
+                std::thread::sleep(std::time::Duration::from_millis(33));
+                let v: Vec<Option<f32>> = spotify.iter().map(Session::volume).collect();
+                if seen.last() != Some(&v) {
+                    seen.push(v);
+                }
+            }
+            println!("set {target:.3} -> read {seen:?}");
+        }
+        for (s, v) in spotify.iter().zip(&original) {
+            if let Some(v) = v {
+                s.set_volume(*v);
+            }
+        }
+        println!("restored: {:?}", spotify.iter().map(Session::volume).collect::<Vec<_>>());
+    }
+
     /// Real host, read-only: samples the active call sessions' peaks for 10 s at the call-mode tick and replays them
     /// through the `Ducker` (no volume is changed). `cargo test -p ice-win real_call_peaks -- --ignored --nocapture`
     #[test]

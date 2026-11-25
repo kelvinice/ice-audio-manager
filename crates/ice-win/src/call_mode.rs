@@ -110,10 +110,9 @@ fn run(config: CallModeConfig, now_playing: Option<String>, tx: &Sender<Msg>, rx
     st.restore_after_crash();
     st.rescan();
     tracing::debug!("call mode on");
-    loop {
-        let msg = if st.ticking() {
-            let wait = CALL_TICK.saturating_sub(st.last_tick.elapsed());
-            match rx.recv_timeout(wait) {
+    'run: loop {
+        let first = if st.ticking() {
+            match rx.recv_timeout(CALL_TICK.saturating_sub(st.last_tick.elapsed())) {
                 Ok(m) => Some(m),
                 Err(RecvTimeoutError::Timeout) => None,
                 Err(RecvTimeoutError::Disconnected) => break,
@@ -124,17 +123,27 @@ fn run(config: CallModeConfig, now_playing: Option<String>, tx: &Sender<Msg>, rx
                 Err(_) => break,
             }
         };
-        match msg {
-            None => st.tick(),
-            Some(Msg::Quit) => break,
-            Some(Msg::Config(c)) => st.configure(c),
-            Some(Msg::NowPlaying(id)) => st.set_now_playing(id),
-            Some(Msg::Sessions) => st.rescan(),
-            Some(Msg::Devices) => {
-                st.end_dip();
-                st.watch = SessionWatch::new(&st.eps, Arc::clone(&st.sink));
-                st.rescan();
+        // Take everything already queued: a burst of notifications costs one re-scan, and messages can never hold
+        // the level check back (before, a steady stream of messages starved the tick and froze a fade mid-way).
+        let mut rescan = false;
+        for msg in first.into_iter().chain(std::iter::from_fn(|| rx.try_recv().ok())) {
+            match msg {
+                Msg::Quit => break 'run,
+                Msg::Config(c) => rescan |= st.configure(c),
+                Msg::NowPlaying(id) => st.set_now_playing(id),
+                Msg::Sessions => rescan = true,
+                Msg::Devices => {
+                    st.release_dip();
+                    st.watch = SessionWatch::new(&st.eps, Arc::clone(&st.sink));
+                    rescan = true;
+                }
             }
+        }
+        if rescan {
+            st.rescan();
+        }
+        if st.ticking() && st.last_tick.elapsed() >= CALL_TICK {
+            st.tick();
         }
     }
     st.end_dip();
@@ -192,20 +201,22 @@ impl State {
         }
     }
 
-    fn configure(&mut self, config: CallModeConfig) {
+    /// Returns whether the call sessions must be re-scanned (the call-app list changed).
+    fn configure(&mut self, config: CallModeConfig) -> bool {
         self.ducker.configure(&config);
         let apps_changed = config.apps != self.config.apps;
         self.config = config;
         if apps_changed {
-            self.end_dip();
-            self.rescan();
+            self.release_dip();
         }
+        apps_changed
     }
 
     fn set_now_playing(&mut self, app_id: Option<String>) {
         if app_id != self.now_playing {
-            // The lowered app is no longer the one playing: give it its level back; the next tick lowers the new one.
-            self.end_dip();
+            // The lowered app is no longer the one playing: give it its level back. The ducker carries on, so if people
+            // are still talking the next tick lowers the new app at the same level (no jump to full and back).
+            self.release_dip();
             self.now_playing = app_id;
         }
     }
@@ -214,9 +225,19 @@ impl State {
         let now = Instant::now();
         let dt = now.saturating_duration_since(self.last_tick);
         self.last_tick = now;
-        let peak = self.calls.iter().filter(|s| s.is_active()).map(Session::peak).fold(0.0_f32, f32::max);
+        // "Is a call playing" is re-read on every tick, so a missed state notification can't keep this polling.
+        let mut peak = 0.0_f32;
+        let mut active = false;
+        for s in self.calls.iter().filter(|s| s.is_active()) {
+            active = true;
+            peak = peak.max(s.peak());
+        }
+        self.call_active = active;
+        let was_talking = self.ducker.talking();
         let gain = self.ducker.step(peak, dt);
-        if gain < 1.0 && !self.dipping {
+        // A new dip, or new talk after an outside change took the music out of the current one.
+        let onset = self.ducker.talking() && !was_talking;
+        if gain < 1.0 && (!self.dipping || (onset && self.dip.is_empty())) {
             self.start_dip();
         }
         self.apply(gain);
@@ -250,12 +271,19 @@ impl State {
         self.restore.save(&entries);
     }
 
+    /// Writes `base × gain` to every lowered session. A session whose level was changed by someone else (the user,
+    /// or another app such as Discord's Attenuation) leaves the dip and keeps that level; the next talk takes it in again.
     fn apply(&mut self, gain: f32) {
+        let before = self.dip.len();
         self.dip.retain_mut(|l| {
             if let Some(now) = l.session.volume()
                 && (now - l.written).abs() > USER_CHANGE_EPS
             {
-                tracing::debug!("call mode: the music's volume was changed by hand; leaving it there");
+                tracing::debug!(
+                    now,
+                    written = l.written,
+                    "call mode: the music's level was changed elsewhere; leaving it"
+                );
                 return false;
             }
             let level = l.base * gain;
@@ -265,13 +293,24 @@ impl State {
             l.written = level;
             l.session.set_volume(level)
         });
+        if self.dip.len() != before {
+            // Nothing of ours to restore after a crash for the sessions that left.
+            let entries: Vec<RestoreEntry> =
+                self.dip.iter().map(|l| RestoreEntry { exe: l.session.exe.clone(), base: l.base }).collect();
+            if entries.is_empty() { self.restore.clear() } else { self.restore.save(&entries) }
+        }
     }
 
-    /// Puts every lowered session back at its own level at once.
-    fn end_dip(&mut self) {
+    /// Gives every lowered session its own level back at once, without touching the ducker (app or device change).
+    fn release_dip(&mut self) {
         self.apply(1.0);
         self.dip.clear();
         self.dipping = false;
+    }
+
+    /// Releases the dip and resets the ducker (call mode off, quitting).
+    fn end_dip(&mut self) {
+        self.release_dip();
         self.ducker.reset();
     }
 

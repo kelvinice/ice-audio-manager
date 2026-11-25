@@ -48,7 +48,10 @@ global hotkeys, per-device spatial sound and `config.toml` hot reload. The only 
   it turns off (the drop restores the music, then joins). The worker forwards the now-playing `app_id` (only when it changes)
   and device refreshes. On `ice-call`: blocks on its channel while no call app plays; while one does (or the music is still
   lowered) it reads the call sessions' peaks every `CALL_TICK` (66 ms) into `ice_core::call_mode::Ducker` and writes
-  `base × gain` to the now-playing app's sessions. Stop condition: no active call session and the ducker at rest.
+  `base × gain` to the now-playing app's sessions. Stop condition: no active call session and the ducker at rest; "active"
+  is re-read every tick, so a missed notification can't keep it polling. Each wake drains the whole queue (one re-scan per
+  burst) and the tick runs whenever it's due, so messages never delay it. A level changed elsewhere leaves the dip; the
+  next talk onset takes the app in again. Music-app and device changes release the dip without resetting the ducker.
 - **Art cache:** the last 8 PNGs (`ART_CACHE`) serve `Engine::art`.
 
 ## Traps
@@ -60,8 +63,11 @@ global hotkeys, per-device spatial sound and `config.toml` hot reload. The only 
 - Show-disconnected lists only *Unplugged* endpoints, never ghosts or disabled ones, and they are never switch targets.
 - New `Command` handling goes through `switching.rs::command` (actions) or `settings.rs` (settings).
 - Call mode: `RegisterSessionNotification` only fires after a first `GetSessionEnumerator` (done in `register_manager`).
-  Session volumes persist in Windows per app, so a dip must always end with `end_dip` (off, quit, device change, music app
-  change); the restore file covers crashes. YouTube Music in a browser lowers that whole browser.
+  Session volumes persist in Windows per app, so a dip must always end with `release_dip` / `end_dip` (off, quit, device
+  change, music app change); the restore file covers crashes. YouTube Music in a browser lowers that whole browser.
+  Another app writing the same session (Discord's Attenuation) shows up as an outside change; keep only one of them on.
+  Real-host `#[ignore]` probes in `sessions.rs`: `real_sessions_list`, `real_call_peaks`, `real_notify_rate`,
+  `real_watch_dip` (read-only) and `real_spotify_echo` (writes Spotify's level for ~4 s, then restores it).
 
 ## Tests
 Unit tests sit in each file; real-device paths use `#[ignore]` tests and the [manual QA checklist](../qa/manual-checklist.md)
@@ -74,3 +80,4 @@ Unit tests sit in each file; real-device paths use `#[ignore]` tests and the [ma
 - 2026-11-25 Claude: hot reload and `sync_with_disk` go through `Worker::adopt_disk_config`, which keeps the live D-27 hibernate value (`Config::keep_session_state`); `edit_settings` still uses `set_config` directly. `SetHibernateLook` is a plain setting.
 - 2026-11-25 Claude: `summary_basic` fills `DeviceSummary.lyrics_delay_ms` from `Config::lyrics_delay_for` (playback only); `SetLyricsDelay` is a plain setting.
 - 2026-11-25 Claude: D-30 call mode: `call_mode.rs` + `call_mode/sessions.rs` (`ice-call` thread, session watch, dip, restore file), `Worker::sync_call_mode`, `proc_metrics::process_exe_name`; `SetCallMode` is a plain setting.
+- 2026-11-25 Claude: call mode glitch fixes: queue drained per wake (no tick starvation), `call_active` re-read per tick, re-dip on talk onset after an outside change, `release_dip` keeps the ducker on app/device change, restore file follows the dip; real-host probes.

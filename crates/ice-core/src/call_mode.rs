@@ -177,17 +177,14 @@ pub fn app_id_matches_exe(app_id: &str, exe: &str) -> bool {
     id == stem || before('.') == stem || before('!') == stem || before('_') == stem
 }
 
-/// Speech must be this many times louder than the call's background level ([`Ducker`]'s noise estimate).
-pub const CALL_NOISE_MARGIN: f32 = 3.0;
-/// How slowly the background estimate climbs towards a steady sound (time constant). It drops at once on any quieter
-/// tick, so the gaps between words keep it low while a constant sound (a stream, a noisy mic) stops counting as talk
-/// after roughly `CALL_NOISE_RISE × ln(1.5)` ≈ 8 s. Measured 2026-11-25 on the owner's PC: an active Discord session
-/// sat at 0.017–0.045 for 5 s without a pause, above the fixed Normal threshold.
-pub const CALL_NOISE_RISE: Duration = Duration::from_secs(20);
+/// Once talking, the call stays "talking" while its peak is at least this share of the threshold (hysteresis), so a
+/// level wobbling around the threshold can't flip the music up and down. Replaces an adaptive background estimate
+/// (2026-11-25) that re-armed on any single quiet tick and made lively call audio pump the music.
+pub const CALL_RELEASE_RATIO: f32 = 0.5;
 
-/// Turns the call app's peak level into the music's gain: lowered after [`CALL_ATTACK`] of speech, held while people
-/// talk, and faded back after `hold` of quiet. "Speech" means above both the sensitivity threshold and
-/// [`CALL_NOISE_MARGIN`] × the call's own background level. Pure and time-driven by the caller (`step(peak, dt)`).
+/// Turns the call app's peak level into the music's gain: lowered after [`CALL_ATTACK`] above the sensitivity
+/// threshold, held while the call stays above [`CALL_RELEASE_RATIO`] × that threshold, and faded back after `hold` of
+/// quiet. Pure and time-driven by the caller (`step(peak, dt)`).
 #[derive(Debug, Clone)]
 pub struct Ducker {
     threshold: f32,
@@ -197,8 +194,6 @@ pub struct Ducker {
     talking: bool,
     loud_for: Duration,
     quiet_for: Duration,
-    /// Estimated background level of the call audio.
-    noise: f32,
 }
 
 impl Ducker {
@@ -212,17 +207,6 @@ impl Ducker {
             talking: false,
             loud_for: Duration::ZERO,
             quiet_for: Duration::ZERO,
-            noise: 0.0,
-        }
-    }
-
-    /// Follows the call's background level: down at once, up slowly (see [`CALL_NOISE_RISE`]).
-    fn track_noise(&mut self, peak: f32, dt: Duration) {
-        if peak <= self.noise {
-            self.noise = peak;
-        } else {
-            let k = 1.0 - (-dt.as_secs_f32() / CALL_NOISE_RISE.as_secs_f32()).exp();
-            self.noise += (peak - self.noise) * k;
         }
     }
 
@@ -237,9 +221,8 @@ impl Ducker {
     pub fn step(&mut self, peak: f32, dt: Duration) -> f32 {
         let dt = dt.min(MAX_STEP);
         let peak = if peak.is_finite() { peak.max(0.0) } else { 0.0 };
-        let loud = peak >= self.threshold.max(self.noise * CALL_NOISE_MARGIN);
-        self.track_noise(peak, dt);
-        if loud {
+        let threshold = if self.talking { self.threshold * CALL_RELEASE_RATIO } else { self.threshold };
+        if peak >= threshold {
             self.loud_for += dt;
             self.quiet_for = Duration::ZERO;
             if self.loud_for >= CALL_ATTACK {
@@ -269,6 +252,12 @@ impl Ducker {
     #[must_use]
     pub const fn gain(&self) -> f32 {
         self.gain
+    }
+
+    /// People are talking (the music is going down or staying down), as opposed to holding or fading back.
+    #[must_use]
+    pub const fn talking(&self) -> bool {
+        self.talking
     }
 
     /// Nothing is lowered and nothing is pending: the caller may stop ticking.
@@ -330,19 +319,23 @@ mod tests {
     }
 
     #[test]
-    fn a_steady_background_sound_stops_counting_as_talk() {
-        let mut d = Ducker::new(&on());
-        // Like the measured Discord session: never below 0.017, around 0.045. It dips at first…
-        assert!(run(&mut d, 0.045, 6) < 1.0);
-        // …but the background estimate catches up within ~8 s, then the hold and fade bring the music back.
-        let g = run(&mut d, 0.045, 15 * 15);
-        assert!((g - 1.0).abs() < 1e-6, "still lowered at {g}");
-        // Speech well above that background still lowers it.
-        assert!(run(&mut d, 0.3, 6) < 1.0);
+    fn a_level_wobbling_around_the_threshold_never_pumps() {
+        // Low sensitivity (0.05), 1 s hold, silent: the owner's settings when the glitch was reported.
+        let cfg = CallModeConfig { sensitivity: CallSensitivity::Low, hold_secs: 1, duck_percent: 0, ..on() };
+        let mut d = Ducker::new(&cfg);
+        run(&mut d, 0.2, 4);
+        assert!(d.talking());
+        // 20 s of call audio wobbling 0.03–0.06 (below the 0.05 threshold most of the time, above half of it).
+        for i in 0..300 {
+            let g = d.step(if i % 3 == 0 { 0.06 } else { 0.03 }, TICK);
+            assert!(g.abs() < 1e-6, "the music came back at tick {i} (gain {g})");
+        }
+        // Real quiet still brings it back after the hold.
+        assert!((run(&mut d, 0.0, 16 + 16) - 1.0).abs() < 1e-6);
     }
 
     #[test]
-    fn pauses_between_words_keep_the_background_low() {
+    fn long_talk_with_pauses_between_words_stays_lowered() {
         let mut d = Ducker::new(&on());
         // 30 s of speech: 4 loud ticks, 2 near-silent ones (gaps between words).
         for _ in 0..75 {
