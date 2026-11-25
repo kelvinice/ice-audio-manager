@@ -2540,6 +2540,95 @@ notch"), **E1** (saved, survives restarts). Not built: a hotkey, timed hibernate
 per-app rules (D4), releasing the WebView while hibernating. The owner can still revise any part; a vote is only needed
 for the open ones.
 
+**Revision (owner, 2026-11-25):** E1 → **E2 without the timer**: every start is awake (session state; a hot reload keeps
+the live value). Hibernate has its own Settings page, and A3 was added as a choice next to A2 ("Plain notch" / "Hide the
+notch"). Balanced hands the hibernating notch to the native pill after 1 s.
+
+---
+
+### D-28 · Volume vs track progress in the notch: what the user sees and touches *(added 2026-11-25, owner request; neutral entry under §0.4)*
+
+**Owner request (2026-11-25):** *"Redesign the notch: currently the volume bar is too big, and users often mistake it for
+the music progress and sometimes change it instead. Design how the user will view and access them, then we will rethink
+the notch placement (D-20)."* Owner screenshot: Edge Nook card, Spotify, volume 13 %. Mockups of every option below, drawn
+1:1 with the Ice tokens: [design canvas](https://claude.ai/artifact/FBHNqAUsNUtdbeqgi9tCD4) (owner's account; private
+until shared).
+
+**Facts (checked in the code 2026-11-25):**
+- **Edge Nook card** (`NookExpandedNotch.svelte`, 408 × 206, or 572 × 206 with lyrics), top to bottom: header (player,
+  toolbar) · 64 px cover with title, artist and the **progress** scrubber in the meta column (`NookMediaPanel.svelte`) ·
+  transport row · **volume** row (`ExpandedVolumeRow.svelte`) · device chips.
+- **Progress** (`MediaScrubber.svelte`): 3 px rail (5 px on hover), solid `--ice-active-accent`, 9.5 px timecodes on both
+  sides. About 248 px wide in the single layout, 160 px in the split one (estimated from the CSS: 396 px inner width
+  − 64 px cover − 12 px gap − two 28 px timecodes − gaps).
+- **Volume**: 5 px rail (7 px on hover), gradient `--ice-accent` → `--ice-accent-strong`, mute button and % label; about
+  324 px (single) / 236 px (split). It is the **longest, thickest and most saturated bar** on the card and sits **directly
+  under the transport**, where most music players put the progress bar.
+- **Floating card** (`ExpandedNotch.svelte` + `ExpandedMediaCard.svelte`): the full-width scrubber sits directly above the
+  volume row, so two similar rails are stacked.
+- **Both bars act on pointer-down**: one click sets the value (`ExpandedVolumeRow.onPointerDown` → `send(…, true)`;
+  `MediaScrubber` seeks). A click can raise the volume in one step.
+- **The card opens on hover after 120 ms** (`controller.onPointerEnter`, `hoverTimer`) and closes 250 ms after leaving, so
+  a pointer crossing the top edge (tabs, title bars) can open it and land on a bar.
+- **Other ways in.** Volume: keys → volume pop-up (`VolumeActivity`, display only, 1.6 s); wheel over the WebView notch
+  ±4 % (Shift = switch device); middle-click mutes; the idle mini pill shows the %. The native pill has no wheel yet (plan.md,
+  D-19). Progress: the music pill's waveform fills to the played point (`TrackActivity`, display only); lyric lines
+  click-to-seek (`LyricsExtension`).
+
+**The flow today**
+
+| | Idle pill | Pop-up | Card |
+|---|---|---|---|
+| **Volume: see** | device + % | volume pop-up after a key/wheel change | slider row |
+| **Volume: change** | wheel, middle-click | keys, wheel | slider (click jumps), wheel |
+| **Progress: see** | (music pill while playing) waveform | track pop-up waveform | scrubber + times |
+| **Progress: change** | n/a | n/a | scrubber (click jumps), lyric click |
+
+**Options.**
+
+*Part A · Where the volume control lives in the card (pick one).*
+- **A1 · Restyle in place.** Same layout; volume becomes a short (≈ 140 px), thin (3 px), neutral grey rail; progress becomes
+  the only accent bar (4 px).
+  - *Costs and risks:* smallest change. The volume row stays under the transport, the position cue behind the mix-up.
+- **A2 · Song block + output strip.** Top: cover, title/artist, transport beside them, then a full-width progress bar with
+  both times (the accent bar). Below a soft divider, one "output" strip: device chips, then a compact volume (speaker icon,
+  ≈ 84 px neutral rail, %).
+  - *Costs and risks:* rearranges both card layouts (Nook and Floating) and their fixed heights (`notchStyle.ts`
+    206/166, `geometry.ts` 164/144); chips share the strip, so with 3+ chips the rail would need to collapse to icon + %.
+- **A3 · Volume chip, slider on demand.** No volume bar by default: a speaker chip shows the % in the output strip; wheel
+  over it changes volume; a click opens a slider in the strip (closes on ✕, Esc or leaving the card).
+  - *Costs and risks:* one more click for mouse users; a new transient card state (tests, keyboard focus, reduce motion);
+    less discoverable.
+- **A4 · Vertical volume at the card's right edge.** Orientation alone separates it from progress.
+  - *Costs and risks:* ≈ 120 px of travel; the Nook's right ear curve and the 572 px lyrics split each need their own
+    placement; Floating's side rail is full (5 buttons).
+
+*Part B · Telling them apart and preventing accidents (pick many; combine with any A).*
+- **B1 · Two visual languages.** Progress = accent fill + times. Volume = neutral fill + speaker icon + %. Never the same
+  thickness or colour.
+- **B2 · Volume never jumps up on a click.** Pointer-down on the rail grabs the current value; dragging changes it; a plain
+  click only steps (±2 %) towards the click. Seeking keeps click-to-jump.
+- **B3 · Hover-arm.** Controls ignore presses for ~200 ms after the card opened by hover (not after a click, pin or hotkey).
+- **B4 · Say what will move.** Hover or drag shows "0:42 / 3:53" over progress and "13 %" over volume.
+- **B5 · Wheel over the progress bar seeks ±5 s** (elsewhere on the notch the wheel stays volume).
+  - *Costs and risks:* the wheel then means two things depending on a 4 px target.
+
+*Part C · Compact states (pick many).*
+- **C1 · The volume pop-up names itself:** speaker icon and a large % lead; the bar is secondary.
+- **C2 · No change:** the music pill keeps its waveform as the only compact progress display.
+
+**Constraints this sets for D-20 (placement), to revisit after this closes:** the card must read the same when it grows
+down (top anchors) and up (D-20 A2 bottom anchors). A2/A3 split the card into a "song" block and an "output" strip that
+could swap order at a bottom anchor; A4 needs a mirrored edge at left anchors. Edge Nook is top-only (plan.md), so this
+mainly affects Floating.
+
+**Questions to the owner:**
+1. Do you change volume mostly with keys/wheel, or by dragging in the card?
+2. Is one extra click for in-card volume (A3) acceptable?
+3. Should a single click on the volume bar ever raise the volume?
+
+**Votes:** sealed, in [votes/D-28/](votes/D-28/).
+
 ## 6. Session S5: Team workflow
 
 ### D-14 · Roles

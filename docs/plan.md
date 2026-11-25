@@ -500,6 +500,13 @@ criteria below pass on both monitors. Items come from Claude's review of the Edg
       for meetings and screen sharing the notch turns into a plain notch (no track, art, lyrics or pop-ups), with a
       deliberate way to wake it. Options include leaving the notch out of screen captures (`WDA_EXCLUDEFROMCAPTURE`).
       Votes open once the Edge track is stable; no code before the owner closes it
+- [ ] **D-28 · Volume vs track progress** ([entry](planning-discussion.md#d-28--volume-vs-track-progress-in-the-notch-what-the-user-sees-and-touches-added-2026-11-25-owner-request-neutral-entry-under-04)):
+      owner report: the card's volume bar is mistaken for progress and changed by accident. Options A1–A4 (where volume
+      lives), B1–B5 (look and accident guards), C1–C2 (compact states); mockups on the design canvas. Votes sealed in
+      `docs/votes/D-28/` (Claude's in). Then D-20 placement is revisited with the card's song/output split in mind
+- [ ] Lyrics sometimes out of sync (owner, 2026-11-25): no output-latency compensation (Bluetooth adds ~0.15–0.3 s,
+      typical figure, not measured) and word timing is estimated unless the LRC has word stamps. Waiting on the owner:
+      early, late or random? Candidate fix: per-device lyric offset (auto default for Bluetooth, adjustable in Settings)
 
 **Fixed (2026-11-25):**
 - [x] Clicks right around the pill and the music pill were swallowed (Claude): the cursor poll scaled the hit rect with a
