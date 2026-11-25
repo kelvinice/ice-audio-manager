@@ -22,7 +22,7 @@ impl Worker {
                 self.disk_text = Some(text);
                 self.config_invalid = None;
                 self.config_replaced = None;
-                self.set_config(cfg);
+                self.adopt_disk_config(cfg);
             }
             Err(e) => self.config_problem(e.to_string()),
         }
@@ -35,6 +35,13 @@ impl Worker {
             self.publish_notices();
             self.notice(notice);
         }
+    }
+
+    /// Applies a config re-read from disk (hot reload, or adopting an external edit before a save). Hibernate is
+    /// session state, so the live value stays whatever the file says (D-27).
+    fn adopt_disk_config(&mut self, mut cfg: Config) {
+        cfg.keep_session_state(&self.config);
+        self.set_config(cfg);
     }
 
     pub(super) fn set_config(&mut self, cfg: Config) {
@@ -81,7 +88,7 @@ impl Worker {
                     match Config::from_toml(&t) {
                         Ok(cfg) => {
                             self.disk_text = Some(t);
-                            self.set_config(cfg);
+                            self.adopt_disk_config(cfg);
                         }
                         Err(_) => {
                             self.reload_at = Some(Instant::now() + RELOAD_DEBOUNCE);

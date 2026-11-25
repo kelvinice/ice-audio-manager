@@ -13,6 +13,7 @@
   import AppearancePage from './pages/AppearancePage.svelte';
   import DevicesPage from './pages/DevicesPage.svelte';
   import GeneralPage from './pages/GeneralPage.svelte';
+  import HibernatePage from './pages/HibernatePage.svelte';
   import NotchPage from './pages/NotchPage.svelte';
   import PrivacyPage from './pages/PrivacyPage.svelte';
   import ShortcutsPage from './pages/ShortcutsPage.svelte';
@@ -24,12 +25,23 @@
 
   let { client }: Props = $props();
 
-  type PageId = 'general' | 'devices' | 'shortcuts' | 'notch' | 'activities' | 'appearance' | 'privacy' | 'storage' | 'about';
+  type PageId =
+    | 'general'
+    | 'devices'
+    | 'shortcuts'
+    | 'notch'
+    | 'hibernate'
+    | 'activities'
+    | 'appearance'
+    | 'privacy'
+    | 'storage'
+    | 'about';
   const PAGES: { id: PageId; title: string; icon: IconName | 'notch' }[] = [
     { id: 'general', title: 'General', icon: 'settings' },
     { id: 'devices', title: 'Devices', icon: 'speakers' },
     { id: 'shortcuts', title: 'Shortcuts', icon: 'keyboard' },
     { id: 'notch', title: 'Notch', icon: 'notch' },
+    { id: 'hibernate', title: 'Hibernate', icon: 'moon' },
     { id: 'activities', title: 'Activities', icon: 'music' },
     { id: 'appearance', title: 'Appearance', icon: 'color' },
     { id: 'privacy', title: 'Privacy', icon: 'shield' },
@@ -186,6 +198,8 @@
               <ShortcutsPage {client} />
             {:else if page === 'notch'}
               <NotchPage {client} />
+            {:else if page === 'hibernate'}
+              <HibernatePage {client} />
             {:else if page === 'activities'}
               <ActivitiesPage {client} />
             {:else if page === 'appearance'}

@@ -897,10 +897,11 @@ impl NativeDotHandle {
     }
 
     /// Synchronizes state from an [`EngineSnapshot`] without stealing focus or revealing expired activities.
-    /// Applies the saved idle style. The theme stays the caller's choice ([`Self::set_theme`]), so a theme
+    /// Applies the idle style in effect (`Hidden` while hibernating with the hidden look, D-27). The theme stays the
+    /// caller's choice ([`Self::set_theme`]), so a theme
     /// built from CSS overrides isn't replaced by the built-in palette on every snapshot.
     pub fn apply_snapshot(&self, snapshot: &EngineSnapshot) {
-        self.set_idle_style(snapshot.settings.appearance.idle_style);
+        self.set_idle_style(snapshot.settings.appearance.effective_idle_style());
         let repaint_idle = {
             let mut rt = self.shared.lock();
             let prev_mic = rt.pill.mic_muted;
@@ -918,7 +919,7 @@ impl NativeDotHandle {
     /// Applies an [`Envelope`] from `ice_core::engine` and reveals/updates the pill on activity events.
     pub fn apply_envelope(&self, envelope: &Envelope) -> EnvelopeOutcome {
         if let EngineEvent::SettingsChanged { settings } = &envelope.event {
-            self.set_idle_style(settings.appearance.idle_style);
+            self.set_idle_style(settings.appearance.effective_idle_style());
         }
         let (outcome, reveal) = {
             let mut rt = self.shared.lock();

@@ -41,3 +41,4 @@ Unit tests in the file cover state and envelope handling and frame rasterisation
 - 2026-11-24 Gemini: added `BuiltinTheme::IceLight` and `NativePillTheme::ice_light()` for `Ice Light` native pill parity.
 - 2026-11-24 Gemini: added `NotchStyle::Nook` flush top-edge rendering (`frame_metrics`, `sd_nook_notch`, `set_notch_style`) matching WebView Edge Nook.
 - 2026-11-25 Claude: D-27 plain mode: `PillState.plain` / `set_plain` (activities update values but stay `Idle`, no reveal), `rasterize_plain_frame` (black silhouette + red mic dot), click-through while plain (`paint_pill`), `NativeDotHandle::set_capture_excluded` (applied on the pill thread via `ThreadSignal::CaptureExcluded`).
+- 2026-11-25 Claude: `apply_snapshot` / `apply_envelope` take `Appearance::effective_idle_style()`, so hibernating with the hidden look hides the pill through the usual `IdleStyle::Hidden` path (no plain frame painted first: the shell sets the idle style before `set_plain`).

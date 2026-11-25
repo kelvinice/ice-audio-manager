@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "ts")]
 use ts_rs::TS;
 
-use crate::appearance::{Appearance, IdleStyle, NotchStyle, NowPlayingPill, SpringPreset, ThemeKind};
+use crate::appearance::{Appearance, HibernateLook, IdleStyle, NotchStyle, NowPlayingPill, SpringPreset, ThemeKind};
 use crate::device::{DeviceState, Flow, Role};
 use crate::lyrics::{LyricsConfig, LyricsState};
 use crate::media::{MusicServiceId, MusicServices, NowPlaying};
@@ -265,6 +265,10 @@ pub enum Command {
     SetHibernate {
         enabled: bool,
     },
+    /// D-27: what the notch looks like while hibernating (plain notch, or hidden).
+    SetHibernateLook {
+        look: HibernateLook,
+    },
     /// D-27: while hibernating, leave the notch out of screen captures.
     SetHibernateHideFromCapture {
         enabled: bool,
@@ -346,6 +350,7 @@ impl Command {
             | Self::SetNowPlayingPill { .. }
             | Self::SetMovingBackdrop { .. }
             | Self::SetHibernate { .. }
+            | Self::SetHibernateLook { .. }
             | Self::SetHibernateHideFromCapture { .. }
             | Self::SetPerformanceProfile { .. }
             | Self::SetPinnedMonitor { .. }

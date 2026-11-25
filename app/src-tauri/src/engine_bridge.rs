@@ -31,7 +31,7 @@ pub(super) fn project(snapshot: &EngineSnapshot, view: &mut NotchSnapshot) {
     });
     view.theme = snapshot.settings.appearance.theme;
     view.preset = snapshot.settings.appearance.preset;
-    view.idle_style = snapshot.settings.appearance.idle_style;
+    view.idle_style = snapshot.settings.appearance.effective_idle_style();
     view.notch_style = snapshot.settings.appearance.notch_style;
     view.volume_percent = snapshot.volume.map_or(0, |volume| volume.percent);
     view.muted = snapshot.volume.is_some_and(|volume| volume.muted);
@@ -243,6 +243,8 @@ pub(super) fn native_dot_snapshot(dot: &NativeDotHandle, snapshot: &EngineSnapsh
 }
 
 fn native_dot_appearance(dot: &NativeDotHandle, appearance: &Appearance) {
+    // Idle style before `set_plain`: hibernating with the hidden look hides the pill without painting a plain frame.
+    dot.set_idle_style(appearance.effective_idle_style());
     dot.set_theme(NativePillTheme::builtin(appearance.theme));
     dot.set_notch_style(appearance.notch_style);
     dot.set_plain(appearance.hibernate);

@@ -24,7 +24,7 @@ function parseRgba(css: string): { rgb: Rgb; alpha: number } {
 }
 
 const baseSettings: SettingsView = {
-  appearance: { theme: 'ice', preset: 'smooth', idleStyle: 'mini_pill', notchStyle: 'floating', nowPlaying: 'brief', movingBackdrop: true, hibernate: false, hibernateHideFromCapture: true },
+  appearance: { theme: 'ice', preset: 'smooth', idleStyle: 'mini_pill', notchStyle: 'floating', nowPlaying: 'brief', movingBackdrop: true, hibernate: false, hibernateLook: 'plain', hibernateHideFromCapture: true },
   performanceProfile: 'instant',
   pinnedMonitor: null,
   defaultRoles: 'both',

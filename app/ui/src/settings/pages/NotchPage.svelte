@@ -4,8 +4,6 @@
   import ChoiceGroup from '../controls/ChoiceGroup.svelte';
   import InfoBar from '../controls/InfoBar.svelte';
   import Section from '../controls/Section.svelte';
-  import SettingCard from '../controls/SettingCard.svelte';
-  import Toggle from '../controls/Toggle.svelte';
   import MonitorMap from '../previews/MonitorMap.svelte';
   import NotchPreview from '../previews/NotchPreview.svelte';
 
@@ -61,38 +59,6 @@
 </script>
 
 {#if settings}
-  <Section
-    title="Hibernate"
-    description="For meetings and screen sharing: the notch becomes a plain black notch and stays out of your way."
-  >
-    <SettingCard
-      icon="power"
-      title="Hibernate notch"
-      description="No song, cover, lyrics or pop-ups, and clicks go straight through. A small red dot shows while your microphone is muted. Volume keys still work. Turn it off here or from the tray icon's menu."
-    >
-      {#snippet control()}
-        <Toggle
-          label="Hibernate notch"
-          checked={settings.appearance.hibernate}
-          onchange={(enabled) => client.apply({ type: 'setHibernate', enabled })}
-        />
-      {/snippet}
-    </SettingCard>
-    <SettingCard
-      icon="shield"
-      title="Hide from screen sharing"
-      description="While hibernating, leave the notch out of screen shares and recordings (Teams, Zoom, Meet, OBS). You still see it on your screen."
-    >
-      {#snippet control()}
-        <Toggle
-          label="Hide from screen sharing"
-          checked={settings.appearance.hibernateHideFromCapture}
-          onchange={(enabled) => client.apply({ type: 'setHibernateHideFromCapture', enabled })}
-        />
-      {/snippet}
-    </SettingCard>
-  </Section>
-
   <Section
     title="Notch style"
     description="Choose whether the notch floats as a pill or docks flush to the top edge of the screen."

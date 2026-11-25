@@ -5,15 +5,16 @@
 ## Purpose
 Pure domain logic and the **engine contract** that every other layer talks through. No Windows, no Tauri, no `unsafe`
 (`#![forbid(unsafe_code)]`). Everything here is unit-testable on any machine. Cargo feature `ts` derives `ts_rs::TS` on the
-contract types, and `cargo test -p ice-core --all-features` exports them to `app/ui/src/lib/ipc/engine.ts` (camelCase,
-`type`-tagged unions; never hand-edit that file).
+contract types, and the app crate's `export_ts_bindings` test (`cargo test -p ice-audio-manager export_ts_bindings`)
+writes them to `app/ui/src/lib/ipc/engine.ts` (camelCase, `type`-tagged unions; never hand-edit that file). A new type
+also needs a line in that test's list.
 
 ## Files
 | File | What it does |
 |---|---|
 | `engine.rs` | The contract: `Engine` trait, `Command`, `EngineEvent`, `Envelope`, `EngineSnapshot`, `Notice`, `SettingsView`, `RoleSet`, `PerformanceProfile`, `SpatialMode`, `MediaAction` |
 | `engine/fake.rs` | `FakeEngine`: in-memory engine with the owner's devices, three fake Spotify tracks and stereo meter levels. Used by `--fake-engine`, UI work and tests |
-| `config.rs` | `config.toml` schema (v12: `appearance.nowPlaying` v5, `idle_linger_secs` v6, `[music_services]` + `show_notch_hotkey` v7, `appearance.movingBackdrop` v8, `[lyrics]` + `cache_max_mb` v9, `visualizer_spectrum` v10, `appearance.notchStyle` v11, `appearance.hibernate` + `hibernateHideFromCapture` v12), `Config`, `ConfigStore` (load/save/read), `Config::apply_setting` (every settings command), `Config::view` → `SettingsView` |
+| `config.rs` | `config.toml` schema (v13: `appearance.nowPlaying` v5, `idle_linger_secs` v6, `[music_services]` + `show_notch_hotkey` v7, `appearance.movingBackdrop` v8, `[lyrics]` + `cache_max_mb` v9, `visualizer_spectrum` v10, `appearance.notchStyle` v11, `appearance.hibernate` + `hibernateHideFromCapture` v12, `appearance.hibernateLook` v13), `Config`, `ConfigStore` (load/save/read), `Config::apply_setting` (every settings command), `Config::view` → `SettingsView` |
 | `lyrics.rs` | Pure synced lyrics contract (`LyricsConfig`, `LyricsDocument`, `LyricsState`, `LyricsStorageStats`, `LyricsProvider` trait), LRC/Enhanced-LRC/dual-subtitle `parse_lrc`, weighted word cadence estimator, and pure Kana → Modified Hepburn `kana_to_romaji` |
 | `resolve.rs` | D-16 device identity: `DeviceRef`, `MatchMode`, `resolve`, `candidates`, `toggle`, `normalize_name` |
 | `device.rs` | `EndpointInfo`, `Flow` (render/capture), `Role`, `DeviceState`, `hardware_key_from_devnode` |
@@ -55,6 +56,8 @@ contract types, and `cargo test -p ice-core --all-features` exports them to `app
 - A new `Command`/`Notice`/`EngineEvent` variant must also be handled in `fake.rs`, the real engine (`ice-win-audio`), the tray
   (`app-tray`) and the UI scheduler (`app-ui-notch`). Grep the variant name in all four.
 - Adding a config field means: default, validation in `apply_setting`, `SettingsView`, **schema bump + migration test** (code-practices §7).
+- `appearance.hibernate` is written to the file but is **session state**: only `ConfigStore::load` (app start) may reset it,
+  and every re-read of the file (hot reload, adopting an external edit) must go through `keep_session_state`.
 - `percent` is 0–100, `scalar` is 0.0–1.0 (§11.2). Core Audio mixes both.
 - Windows renames re-installed devices ("2- Arctis Nova 7"); `normalize_name` strips that prefix. Never key on names alone.
 - `ts-rs` types for `u64` need `ts(type = "number")` (see `Envelope.revision`).
@@ -78,3 +81,4 @@ Inline `#[cfg(test)]` in each file. `resolve.rs` is built from the owner's real 
 - 2026-11-24 Gemini: schema v11 (`NotchStyle`: `Floating` default, `Nook`; `Appearance.notch_style`, `Command::SetNotchStyle`).
 - 2026-11-24 Gemini: updated defaults to `NotchStyle::Nook` and `NowPlayingPill::WhilePlaying`.
 - 2026-11-25 Claude: schema v12, D-27 hibernate: `Appearance.hibernate` (off) + `hibernate_hide_from_capture` (on), `Appearance::exclude_from_capture()`, `Command::SetHibernate` / `SetHibernateHideFromCapture`.
+- 2026-11-25 Claude: schema v13: `HibernateLook` (`plain` default / `hidden`), `Appearance.hibernate_look`, `Appearance::effective_idle_style()` (`Hidden` while hibernating with the hidden look), `Command::SetHibernateLook`. Hibernate is session state: `ConfigStore::load` (start only) clears it and `Config::keep_session_state` carries the live value over a re-read file.

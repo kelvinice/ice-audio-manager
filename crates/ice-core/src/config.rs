@@ -27,7 +27,8 @@ use crate::resolve::{DeviceRef, MatchMode, resolve};
 /// v10: `visualizer_spectrum` (D-26 local WASAPI loopback spectrum bars, default `true`; off = peak-meter-only).
 /// v11: `appearance.notchStyle` (`"nook"` default flush screen-edge docked style vs `"floating"` pill).
 /// v12: `appearance.hibernate` + `appearance.hibernateHideFromCapture` (D-27 plain notch for meetings; off / on).
-pub const SCHEMA_VERSION: u32 = 12;
+/// v13: `appearance.hibernateLook` (D-27 `"plain"` notch or `"hidden"` while hibernating).
+pub const SCHEMA_VERSION: u32 = 13;
 
 /// Default seconds the notch WebView stays awake at idle before `Balanced` hands over to the native pill
 /// (`Instant` never does; `Lite` has no WebView).
@@ -233,8 +234,8 @@ impl Config {
             // `idle_linger_secs = 15`, v0–v6 gain both music services on, v0–v7 gain
             // `appearance.movingBackdrop = true`, v0–v8 gain `[lyrics]` (off by default, 50 MB cap),
             // v0–v9 gain `visualizer_spectrum = true`, v0–v10 gain `appearance.notchStyle = "nook"`, and v0–v11 gain
-            // `appearance.hibernate = false` with `hibernateHideFromCapture = true`,
-            // all via serde defaults.
+            // `appearance.hibernate = false` with `hibernateHideFromCapture = true`, and v0–v12 gain
+            // `appearance.hibernateLook = "plain"`, all via serde defaults.
             _ => Ok(Self { schema_version: SCHEMA_VERSION, ..cfg }),
         }
     }
@@ -246,6 +247,12 @@ impl Config {
     #[must_use]
     pub fn to_toml(&self) -> String {
         toml::to_string_pretty(self).expect("config is always serialisable")
+    }
+
+    /// Carries the live session state (D-27 hibernate) over to a config re-read from disk, so a hot reload or an
+    /// external edit never hibernates or wakes the notch; only the hibernate command does.
+    pub const fn keep_session_state(&mut self, live: &Self) {
+        self.appearance.hibernate = live.appearance.hibernate;
     }
 
     /// The device preferences entry for a device, if any (matched by the resolver, so it survives re-links).
@@ -425,6 +432,7 @@ impl Config {
             Command::SetNowPlayingPill { mode } => next.appearance.now_playing = *mode,
             Command::SetMovingBackdrop { enabled } => next.appearance.moving_backdrop = *enabled,
             Command::SetHibernate { enabled } => next.appearance.hibernate = *enabled,
+            Command::SetHibernateLook { look } => next.appearance.hibernate_look = *look,
             Command::SetHibernateHideFromCapture { enabled } => next.appearance.hibernate_hide_from_capture = *enabled,
             Command::SetShowDisconnected { enabled } => next.show_disconnected = *enabled,
             Command::SetIdleLinger { secs } => {
@@ -586,6 +594,9 @@ impl ConfigStore {
     /// A file from a *newer* build isn't broken: it stays in place untouched (`backup: None`) and this run uses
     /// defaults. Saves then refuse to overwrite it, because it doesn't parse here. That keeps the owner's
     /// settings safe when an older build (e.g. an agent's un-rebased branch) starts after a schema bump.
+    ///
+    /// Only the app's start calls this, so it is where session state resets: hibernate (D-27) is always off at
+    /// start, whatever the file says (owner, 2026-11-25).
     #[must_use]
     pub fn load(&self) -> Loaded {
         let text = match std::fs::read_to_string(&self.path) {
@@ -594,7 +605,10 @@ impl ConfigStore {
             Err(e) => return self.replace_broken(&e.to_string()),
         };
         match Config::from_toml(&text) {
-            Ok(c) => Loaded::Ok(c),
+            Ok(mut c) => {
+                c.appearance.hibernate = false;
+                Loaded::Ok(c)
+            }
             Err(e @ ConfigError::TooNew(_)) => {
                 Loaded::Replaced { config: Config::default(), backup: None, error: e.to_string() }
             }
@@ -916,12 +930,57 @@ mod tests {
         assert_eq!(config.apply_setting(&set, &[]), Ok(true));
         assert_eq!(config.apply_setting(&set, &[]), Ok(false), "already hibernating");
         let saved = Config::from_toml(&config.to_toml()).unwrap();
-        assert!(saved.view(&[]).appearance.hibernate, "survives a restart");
+        assert!(saved.view(&[]).appearance.hibernate, "written to the file (a restart resets it: `ConfigStore::load`)");
         assert!(saved.view(&[]).appearance.exclude_from_capture());
 
         let show = Command::SetHibernateHideFromCapture { enabled: false };
         assert_eq!(config.apply_setting(&show, &[]), Ok(true));
         assert!(!config.view(&[]).appearance.exclude_from_capture());
+    }
+
+    #[test]
+    fn v12_migrates_with_a_plain_hibernate_look_and_hidden_hides_the_idle_notch() {
+        use crate::appearance::{HibernateLook, IdleStyle};
+        let v12 = "schema_version = 12\n[appearance]\nidleStyle = 'dot'\nhibernate = true";
+        let mut config = Config::from_toml(v12).unwrap();
+        assert_eq!(config.schema_version, SCHEMA_VERSION);
+        let appearance = config.view(&[]).appearance;
+        assert_eq!(appearance.hibernate_look, HibernateLook::Plain, "D-27: the plain notch by default");
+        assert_eq!(appearance.effective_idle_style(), IdleStyle::Dot, "the plain notch keeps the idle shape");
+
+        let hide = Command::SetHibernateLook { look: HibernateLook::Hidden };
+        assert_eq!(config.apply_setting(&hide, &[]), Ok(true));
+        assert_eq!(config.apply_setting(&hide, &[]), Ok(false), "already hidden");
+        let saved = Config::from_toml(&config.to_toml()).unwrap();
+        assert_eq!(saved.appearance.hibernate_look, HibernateLook::Hidden);
+        assert_eq!(saved.appearance.effective_idle_style(), IdleStyle::Hidden, "hidden while hibernating");
+
+        let wake = Command::SetHibernate { enabled: false };
+        assert_eq!(config.apply_setting(&wake, &[]), Ok(true));
+        assert_eq!(config.appearance.effective_idle_style(), IdleStyle::Dot, "awake: the chosen idle style again");
+    }
+
+    #[test]
+    fn every_start_is_awake_and_a_reload_keeps_the_live_hibernate() {
+        let dir = std::env::temp_dir().join(format!("ice-cfg-hibernate-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let store = ConfigStore::new(dir.join("config.toml"));
+        let mut hibernating = Config::default();
+        hibernating.appearance.hibernate = true;
+        store.save(&hibernating).unwrap();
+        match store.load() {
+            Loaded::Ok(c) => assert!(!c.appearance.hibernate, "owner: the app never starts hibernating"),
+            other => panic!("expected Ok, got {other:?}"),
+        }
+        // Hot reload re-reads the file: the session value wins both ways.
+        let mut reread = store.read().unwrap().unwrap();
+        assert!(reread.appearance.hibernate);
+        reread.keep_session_state(&Config::default());
+        assert!(!reread.appearance.hibernate, "a stale file doesn't hibernate an awake notch");
+        let mut awake_file = Config::default();
+        awake_file.keep_session_state(&hibernating);
+        assert!(awake_file.appearance.hibernate, "an external edit doesn't wake a hibernating notch");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

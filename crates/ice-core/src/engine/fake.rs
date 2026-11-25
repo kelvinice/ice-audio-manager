@@ -389,6 +389,7 @@ impl Engine for FakeEngine {
             | Command::SetNowPlayingPill { .. }
             | Command::SetMovingBackdrop { .. }
             | Command::SetHibernate { .. }
+            | Command::SetHibernateLook { .. }
             | Command::SetHibernateHideFromCapture { .. }
             | Command::SetShowDisconnected { .. }
             | Command::SetIdleLinger { .. }

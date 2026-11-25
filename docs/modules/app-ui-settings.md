@@ -13,7 +13,7 @@ created when opened and destroyed when closed (shell: `app/src-tauri/src/setting
 |---|---|
 | `src/settings/main.ts` | Picks the backend (Tauri, or `devBackend.ts` in a plain browser during `npm run dev`), mounts `SettingsApp` |
 | `src/settings/SettingsApp.svelte` | Frame: navigation (spring-driven indicator), page title + "Saved" flash, pinned error banner, page switch (`#page` hash or last page in `localStorage`) |
-| `src/settings/pages/*Page.svelte` | General · Devices · Shortcuts · Notch · Appearance · About |
+| `src/settings/pages/*Page.svelte` | General · Devices · Shortcuts · Notch · Hibernate · Activities · Appearance · Privacy · Storage · About |
 | `src/settings/pages/DeviceCard.svelte` | One device: star = show in notch, alias, spatial sound, hide |
 | `src/settings/pages/ShortcutCard.svelte` | A toggle pair or device shortcut, saved or a new draft (draft stays open if the engine refuses it) |
 | `src/settings/controls/*` | `SettingCard` (expander), `Row`, `Toggle`, `Select` (native), `ChoiceGroup` (radio cards with preview), `HotkeyField` (recorder), `KeyCaps`, `InfoBar`, `Section`, `Icon` (Segoe Fluent glyphs, `icons.ts`), `BrandMark` (snowflake SVG) |
@@ -30,6 +30,7 @@ created when opened and destroyed when closed (shell: `app/src-tauri/src/setting
 | Devices | Notch order (up/down/remove); per device: star, alias, spatial, hide; hidden list → Show | `SetFavourites`; `SetDevicePrefs` |
 | Shortcuts | Toggle pairs, device shortcuts (devices, chord, roles, remove); knob gestures | `SetTogglePair`/`RemoveTogglePair`; `SetBinding`/`RemoveBinding`; `SetKnobGestures` |
 | Notch | Notch style (`Edge Nook` default vs `Floating`); idle style; Now playing (`While playing` default, `Brief, then small`, `Off`); pinned display | `SetNotchStyle`; `SetIdleStyle`; `SetNowPlayingPill`; `SetPinnedMonitor` (display path) |
+| Hibernate | Hibernate notch (session only: the app always starts awake); while hibernating: `Plain notch` (default) or `Hide the notch`; hide from screen sharing | `SetHibernate`; `SetHibernateLook`; `SetHibernateHideFromCapture` |
 | Appearance | Theme (`Ice`, `Ice Light`, `Midnight`, `Fluent`, `Minimal`); animation preset (`Bouncy` first with `Default` badge); Background → `Moving background` toggle | `SetTheme`; `SetPreset`; `SetMovingBackdrop` |
 | Activities | Music services (`Spotify`, `YouTube Music`); Synced lyrics display (`Show synced lyrics`, pill/card extensions, active word highlight, Japanese Romaji) | `SetMusicService`; `SetLyricsEnabled`; `SetLyricsDisplay` |
 | Privacy | Master network off switch; opt-in LRCLIB (`lrclib.net`) disclosure & toggle; local audio loopback spectrum visualizer disclosure & meter-only fallback switch | `DisableAllNetworkFeatures`; `SetLyricsOnlineLookup`; `SetVisualizerSpectrum` |
@@ -68,3 +69,4 @@ created when opened and destroyed when closed (shell: `app/src-tauri/src/setting
 - 2026-11-24 Gemini: added "Notch style" (`Floating` / `Edge Nook`) choice group on `NotchPage` and flush concave-ear silhouette support in `NotchPreview`.
 - 2026-11-24 Gemini: made `Edge Nook` and `While playing` default on `NotchPage` and renamed "When the song changes" to "Now playing".
 - 2026-11-25 Claude: Notch page: "Hibernate" section (Hibernate notch, Hide from screen sharing toggles); `devBackend` handles both commands.
+- 2026-11-25 Claude: Hibernate moved to its own **Hibernate** page (`HibernatePage.svelte`, nav after Notch, new `moon` glyph U+E708): hibernate toggle, "While hibernating" choice (`Plain notch` / `Hide the notch`, `SetHibernateLook`), hide from screen sharing; `devBackend` handles `setHibernateLook`.

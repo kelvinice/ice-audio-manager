@@ -35,6 +35,8 @@ export const GLYPHS = {
   music: '',
   storage: '',
   lyrics: '',
+  // QuietHours (a crescent moon), the notch toolbar's hibernate symbol.
+  moon: '',
 } as const;
 
 export type IconName = keyof typeof GLYPHS;

@@ -93,7 +93,7 @@ impl SharedRuntime {
             preset: initial.settings.appearance.preset,
             system_reduce_motion: reduce_motion,
             theme: initial.settings.appearance.theme,
-            idle_style: initial.settings.appearance.idle_style,
+            idle_style: initial.settings.appearance.effective_idle_style(),
             notch_style: initial.settings.appearance.notch_style,
             expanded: false,
             suspended: false,

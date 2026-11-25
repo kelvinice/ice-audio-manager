@@ -86,7 +86,7 @@ function sampleSnapshot(): EngineSnapshot {
       lyrics: { enabled: false, onlineLookup: false, showOnPill: true, showOnCard: true, wordHighlight: true, romaji: true, cacheMaxMb: 50 },
       visualizerSpectrum: true,
       showNotchHotkey: null,
-      appearance: { theme: 'ice', preset: 'smooth', idleStyle: 'mini_pill', notchStyle: 'floating', nowPlaying: 'brief', movingBackdrop: true, hibernate: false, hibernateHideFromCapture: true },
+      appearance: { theme: 'ice', preset: 'smooth', idleStyle: 'mini_pill', notchStyle: 'floating', nowPlaying: 'brief', movingBackdrop: true, hibernate: false, hibernateLook: 'plain', hibernateHideFromCapture: true },
     },
     media: null,
     lyrics: { status: 'disabled', trackKey: null, document: null },
