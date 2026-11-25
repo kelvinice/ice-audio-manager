@@ -140,6 +140,7 @@
           {volumePercent}
           {muted}
           {barPercent}
+          {instant}
           {onToggleMute}
           {onSetVolume}
           {onSwitchDevice}

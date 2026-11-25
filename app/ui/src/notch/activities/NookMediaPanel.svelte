@@ -20,7 +20,7 @@
   let { media, notchVisible, instant, preset, onMediaAction }: Props = $props();
 
   /** Cover edge; the meta column (title, artist, transport) is exactly this tall. */
-  const COVER_PX = 78;
+  const COVER_PX = 84;
 
   const isPlaying = $derived(media.status === 'playing');
 </script>
@@ -70,17 +70,20 @@
 </div>
 
 <style>
+  /* Owner, 2026-11-26: the transport sat right under the artist and the seek bar right under the transport; the head
+     is 6 px taller (a clear gap under the artist) and the seek bar 2 px further down. Fits the 156 px card body:
+     84 + 12 + 16 (song) + 6 + 35 (output strip) = 153. */
   .media {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 12px;
   }
 
   .head {
     display: flex;
     align-items: center;
     gap: 14px;
-    height: 78px;
+    height: 84px;
   }
 
   .cover {
