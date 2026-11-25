@@ -57,6 +57,10 @@
   --ice-lyric-muted: rgba(237, 241, 247, 0.48);
   --ice-lyric-sub: rgba(237, 241, 247, 0.68);
   --ice-lyric-glow: color-mix(in srgb, var(--ice-active-accent, var(--ice-accent)) 42%, transparent);
+  /* D-27 hibernate: a plain notch looks like hardware on every theme, so these live here and no theme overrides them.
+     Twin: `rasterize_plain_frame` (native_dot.rs). */
+  --ice-hibernate-bg: #000;
+  --ice-hibernate-dot: var(--ice-danger);
 }
 
 /* Themes match any element (not only :root) so Settings → Appearance can preview each one side by side. */
@@ -150,9 +154,6 @@
   --ice-play-bg: var(--ice-accent-soft);
   --ice-play-fg: var(--ice-accent-strong);
   --ice-lyric-glow: transparent;
-  /* D-27 hibernate: a plain notch looks like hardware on every theme. Twin: `rasterize_plain_frame` (native_dot.rs). */
-  --ice-hibernate-bg: #000;
-  --ice-hibernate-dot: var(--ice-danger);
 }
 
 *,
