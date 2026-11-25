@@ -197,11 +197,11 @@ pub fn read(s: &Session, art_px: Option<u32>) -> Result<(NowPlaying, Option<Art>
 /// # Errors
 /// Fails if the track or playback state can't be read.
 pub fn read_within(s: &Session, art_px: Option<u32>, art_budget: Duration) -> Result<(NowPlaying, Option<Art>)> {
-    read_within_cached(s, art_px, art_budget, None)
+    read_within_cached(s, art_px, art_budget, None, None)
 }
 
 /// Like [`read_within`], but reuses `known_art` when the decoded thumbnail hashes to the same `id`, skipping
-/// accent extraction and PNG re-encoding.
+/// accent extraction and PNG re-encoding, and preserves `prev` playback state for same-track refreshes.
 ///
 /// # Errors
 /// Fails if the track or playback state can't be read.
@@ -210,6 +210,7 @@ pub(crate) fn read_within_cached(
     art_px: Option<u32>,
     art_budget: Duration,
     known_art: Option<&ArtInfo>,
+    prev: Option<&NowPlaying>,
 ) -> Result<(NowPlaying, Option<Art>)> {
     let props = wait(&s.TryGetMediaPropertiesAsync()?, CALL_LIMIT)?;
     let mut now = NowPlaying {
@@ -223,6 +224,16 @@ pub(crate) fn read_within_cached(
         position_updated_ms: None,
         art: None,
     };
+    if let Some(p) = prev
+        && p.app_id == now.app_id
+        && p.title == now.title
+        && p.artist == now.artist
+        && p.album == now.album
+    {
+        now.status = p.status;
+        now.position_ms = p.position_ms;
+        now.position_updated_ms = p.position_updated_ms;
+    }
     refresh_playback(s, &mut now)?;
     let outcome = art_px.and_then(|px| {
         read_art_cached(&props, px, art_budget, known_art)
@@ -279,7 +290,8 @@ fn resolve_position_updated_ms(
     if let Some(ts) = last_updated_unix_ms(last_updated_ticks, now_ms) {
         if status == PlaybackStatus::Playing {
             let elapsed = now_ms.saturating_sub(ts);
-            let stale_resume = prev_status != PlaybackStatus::Playing && elapsed > 5_000;
+            let stale_resume =
+                matches!(prev_status, PlaybackStatus::Paused | PlaybackStatus::Stopped) && elapsed > 5_000;
             let stale_overshoot = dur.is_some_and(|d| pos_ms.saturating_add(elapsed) > d.saturating_add(15_000));
             if stale_resume || stale_overshoot {
                 return Some(now_ms);
@@ -642,6 +654,35 @@ mod tests {
                 Some(20_000),
                 Some(200_000),
                 ten_secs_ago_ticks,
+                now,
+            ),
+            Some(now),
+        );
+        // Initial or mid-song full read (`Closed -> Playing`) preserves Spotify's older LastUpdatedTime.
+        let forty_secs_ago_ticks = WINDOWS_TO_UNIX_EPOCH_TICKS + ((now - 40_000) as i64) * 10_000;
+        assert_eq!(
+            resolve_position_updated_ms(
+                PlaybackStatus::Closed,
+                None,
+                None,
+                PlaybackStatus::Playing,
+                Some(0),
+                Some(200_000),
+                forty_secs_ago_ticks,
+                now,
+            ),
+            Some(now - 40_000),
+        );
+        // Corrupted timestamp that overshoots track duration still anchors to now.
+        assert_eq!(
+            resolve_position_updated_ms(
+                PlaybackStatus::Closed,
+                None,
+                None,
+                PlaybackStatus::Playing,
+                Some(180_000),
+                Some(200_000),
+                forty_secs_ago_ticks,
                 now,
             ),
             Some(now),

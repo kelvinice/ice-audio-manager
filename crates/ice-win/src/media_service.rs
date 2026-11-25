@@ -415,13 +415,15 @@ impl State {
             // Art is re-read on every track read: some apps send the new title first and the new thumbnail in
             // a second change, so "same title" doesn't mean "same art". Matching hashes reuse `known_art`
             // without re-encoding the PNG.
-            (Some(s), None) => match media::read_within_cached(&s, Some(ART_PX), art_budget, known_art) {
-                Ok((now, art)) => (Some(now), art),
-                Err(e) => {
-                    tracing::debug!(error = %e, "media read failed; keeping the last state");
-                    return ApplyOutcome { read_track: full, track_changed: false, art_changed: false };
+            (Some(s), None) => {
+                match media::read_within_cached(&s, Some(ART_PX), art_budget, known_art, self.last.as_ref()) {
+                    Ok((now, art)) => (Some(now), art),
+                    Err(e) => {
+                        tracing::debug!(error = %e, "media read failed; keeping the last state");
+                        return ApplyOutcome { read_track: full, track_changed: false, art_changed: false };
+                    }
                 }
-            },
+            }
         };
         let track_changed = !same_track(self.last.as_ref(), media.as_ref());
         let art_changed =
