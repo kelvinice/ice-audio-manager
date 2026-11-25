@@ -46,6 +46,9 @@ pub enum PillInput {
     MiddleClick,
     /// The cursor dwelt on the idle pill for the configured delay. Only sent when hover-to-open is enabled.
     HoverOpen,
+    /// D-20: the pill was pressed and moved past Windows' drag threshold. The press is no longer a click; the shell
+    /// runs the drag (it follows the cursor until the button is released, then snaps to an anchor).
+    DragStart,
     /// Whole wheel notches over the pill (positive = away from the user, i.e. volume up), with Shift held or not.
     Wheel { notches: i16, shift: bool },
 }
@@ -74,6 +77,10 @@ pub(super) struct InputState {
     tracking_leave: bool,
     /// Wheel delta not yet worth a whole notch (precision touchpads).
     wheel_accum: i32,
+    /// D-20: press-and-move starts a drag (the shell turns it on unless placement is `fixed`).
+    pub drag_enabled: bool,
+    /// Where the current press started (screen px), for the drag threshold.
+    press_at: Option<(i32, i32)>,
 }
 
 impl InputState {
@@ -153,12 +160,21 @@ pub(super) fn dispatch(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) -> 
     // SAFETY: set by `attach` to the `SharedState` the dot thread keeps alive while this window exists.
     let shared = unsafe { (GetWindowLongPtrW(hwnd, GWLP_USERDATA) as *const SharedState).as_ref() }?;
     let ev = match msg {
-        WM_MOUSEMOVE => Ev::Move,
+        WM_MOUSEMOVE => {
+            if drag_started(shared) {
+                start_drag(hwnd, shared);
+                return Some(LRESULT(0));
+            }
+            Ev::Move
+        }
         WM_MOUSELEAVE => {
             shared.lock().input.tracking_leave = false;
             Ev::Leave
         }
-        WM_LBUTTONDOWN => Ev::Down,
+        WM_LBUTTONDOWN => {
+            shared.lock().input.press_at = crate::overlay_win::cursor_pos();
+            Ev::Down
+        }
         WM_LBUTTONUP => Ev::Up { inside: point_inside(hwnd, lparam) },
         WM_MBUTTONDOWN => return Some(LRESULT(0)),
         WM_MBUTTONUP => Ev::MiddleUp { inside: point_inside(hwnd, lparam) },
@@ -178,6 +194,42 @@ pub(super) fn dispatch(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) -> 
     };
     apply(hwnd, shared, ev);
     Some(LRESULT(0))
+}
+
+/// Whether a press at `start` that is now at `now` has moved past the drag threshold `(tx, ty)` (Windows'
+/// `SM_CXDRAG`/`SM_CYDRAG`): further than that in either direction is a drag, not a click.
+fn past_drag_threshold(start: (i32, i32), now: (i32, i32), threshold: (i32, i32)) -> bool {
+    (now.0 - start.0).abs() > threshold.0 || (now.1 - start.1).abs() > threshold.1
+}
+
+/// D-20: a press on the pill that has moved past the drag threshold, while dragging is on.
+fn drag_started(shared: &SharedState) -> bool {
+    let rt = shared.lock();
+    if !rt.input.drag_enabled || rt.pill.interaction != PillInteraction::Pressed || rt.pill.plain {
+        return false;
+    }
+    let (Some(start), Some(now)) = (rt.input.press_at, crate::overlay_win::cursor_pos()) else {
+        return false;
+    };
+    past_drag_threshold(start, now, crate::overlay_win::drag_threshold())
+}
+
+/// Hands the press over to the shell's drag: the pill forgets it (no click on release), lets go of the mouse capture
+/// (the shell follows the cursor itself) and reports `DragStart`.
+fn start_drag(hwnd: HWND, shared: &SharedState) {
+    let repaint = {
+        let mut rt = shared.lock();
+        rt.input.press_at = None;
+        rt.pill.interaction = PillInteraction::None;
+        (rt.pill.clone(), rt.monitor.clone())
+    };
+    // SAFETY: this thread's own window; releasing a capture it holds.
+    unsafe {
+        let _ = KillTimer(Some(hwnd), HOVER_TIMER_ID);
+        let _ = ReleaseCapture();
+    }
+    let _ = paint_pill(hwnd, &repaint.1, &repaint.0);
+    emit(shared, PillInput::DragStart);
 }
 
 /// Cancels any press, hover and timer. Called when the pill hides, because a hidden window gets no leave message.
@@ -313,6 +365,15 @@ mod tests {
     fn leave_keeps_a_captured_press() {
         assert_eq!(step(Pressed, false, Ev::Leave).next, Pressed);
         assert_eq!(step(Hover, false, Ev::Leave).next, Idle);
+    }
+
+    #[test]
+    fn a_press_becomes_a_drag_only_past_the_threshold() {
+        let t = (4, 4);
+        assert!(!past_drag_threshold((100, 10), (104, 13), t), "within the threshold: still a click");
+        assert!(past_drag_threshold((100, 10), (105, 10), t), "right");
+        assert!(past_drag_threshold((100, 10), (100, 30), t), "down");
+        assert!(past_drag_threshold((100, 10), (90, 10), t), "left");
     }
 
     #[test]

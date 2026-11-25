@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import type { EngineSnapshot, Envelope, MediaAction, NotchStyle } from '../ipc/engine';
+import type { EngineSnapshot, Envelope, MediaAction, NotchAnchor, NotchStyle } from '../ipc/engine';
 import type { HitRect, NotchDelta, NotchSnapshot } from '../ipc/types';
 import { SpringGroup } from '../motion/spring.svelte';
 import {
@@ -10,10 +10,12 @@ import {
   resolveMusicServices,
   type MusicServiceId,
 } from './backdrop';
+import { isDragBlockedTarget, shouldStartDrag } from './drag';
 import {
   CARD_LYRICS_H,
   deriveBenchOverride,
   effectivePreset,
+  isBottomAnchor as isBottomAnchorValue,
   PILL_LYRICS_H,
   PILL_LYRICS_SUB_H,
   resolveRimStroke,
@@ -67,6 +69,7 @@ export class NotchController {
   private activityTimer: number | null = null;
   private optimisticSeek = $state<OptimisticSeek | null>(null);
   private optimisticSeekTimer: number | null = null;
+  private dragCleanup: (() => void) | null = null;
   private lastHitRect: HitRect | null = null;
   private lastReportedSeq = 0;
   private resnapshotting = false;
@@ -76,6 +79,15 @@ export class NotchController {
     this.notchSnapshot?.notchStyle ?? this.engineState.settings?.appearance.notchStyle ?? 'nook',
   );
   readonly styleStrategy = $derived(getNotchStyleStrategy(this.notchStyle));
+  readonly effectiveAnchor = $derived<NotchAnchor>(
+    this.notchSnapshot?.anchor ??
+      (this.notchStyle === 'nook'
+        ? 'top_center'
+        : (this.engineState.settings?.notchAnchor ?? 'top_center')),
+  );
+  readonly isBottomAnchor = $derived(
+    this.notchStyle === 'floating' && isBottomAnchorValue(this.effectiveAnchor),
+  );
   /** D-27 hibernate: a plain, click-through silhouette; no activities, no expansion, no media. */
   readonly isHibernating = $derived(this.engineState.settings?.appearance.hibernate ?? false);
   /** How much later lyrics show for the playing output (Bluetooth delay; `DeviceSummary.lyricsDelayMs`). */
@@ -183,7 +195,7 @@ export class NotchController {
     resolveMusicServices(this.engineState.settings, this.engineState.media),
   );
   readonly isIdleHidden = $derived(!this.isExpanded && this.activeView.kind === 'idle' && this.idleMode === 'hidden');
-  readonly surfaceShape = $derived(this.styleStrategy.computeSurfaceShape(this.pillSize));
+  readonly surfaceShape = $derived(this.styleStrategy.computeSurfaceShape(this.pillSize, this.isBottomAnchor));
   readonly insetLeft = $derived(this.surfaceShape.insetLeft);
   readonly clipPath = $derived(this.surfaceShape.clipPath);
   readonly showPillLyrics = $derived(
@@ -331,7 +343,10 @@ export class NotchController {
     } else {
       this.springs.setTargets(target);
     }
-    const nextRect = hibernating ? NO_HIT_RECT : strategy.computeHitRect(target);
+    const style = snap?.notchStyle ?? this.engineState.settings?.appearance.notchStyle;
+    const anchor = snap?.anchor ?? this.engineState.settings?.notchAnchor;
+    const isBottom = style === 'floating' && isBottomAnchorValue(anchor);
+    const nextRect = hibernating ? NO_HIT_RECT : strategy.computeHitRect(target, isBottom);
     if (
       !this.lastHitRect ||
       this.lastHitRect.x !== nextRect.x ||
@@ -361,10 +376,13 @@ export class NotchController {
   private applyNotchSnapshot(next: NotchSnapshot, instant = false): void {
     const prevActivity = this.notchSnapshot?.activity;
     const prevSeq = this.notchSnapshot?.eventSeq ?? 0;
+    const prevAnchor = this.notchSnapshot?.anchor;
     const wasSuspended = this.notchSnapshot?.suspended ?? false;
     this.notchSnapshot = next;
-    // Waking from TrySuspend: re-send the hit rect even if unchanged (a report made while suspending may be lost).
-    if (wasSuspended && !next.suspended) this.lastHitRect = null;
+    // Waking from TrySuspend or switching anchor: re-send the hit rect even if unchanged.
+    if ((wasSuspended && !next.suspended) || (prevAnchor !== undefined && prevAnchor !== next.anchor)) {
+      this.lastHitRect = null;
+    }
     document.documentElement.dataset.theme = next.theme;
 
     this.benchOverride = deriveBenchOverride(
@@ -375,7 +393,9 @@ export class NotchController {
       this.engineState.activity.kind === 'idle',
       Date.now(),
     );
-    this.syncGeometry(instant || wasSuspended !== next.suspended);
+    const flippedEdge =
+      prevAnchor !== undefined && isBottomAnchorValue(prevAnchor) !== isBottomAnchorValue(next.anchor);
+    this.syncGeometry(instant || wasSuspended !== next.suspended || flippedEdge);
     this.scheduleNextTick();
 
     if (next.eventSeq > this.lastReportedSeq && !next.suspended) {
@@ -516,6 +536,7 @@ export class NotchController {
 
     return () => {
       disposed = true;
+      this.dragCleanup?.();
       this.springs.dispose();
       this.clearTimers();
       this.clearActivityTimer();
@@ -580,8 +601,50 @@ export class NotchController {
     void invoke('set_hibernate', { enabled: true });
   };
 
-  onPointerEnter = (): void => {
+  onPointerDown = (e: PointerEvent): void => {
+    if (e.button !== 0 || this.isHibernating) return;
+    if (this.engineState.settings?.notchPlacement === 'fixed') return;
+    if (isDragBlockedTarget(e.target)) return;
+
+    this.dragCleanup?.();
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const pointerId = e.pointerId;
+
+    const cleanup = () => {
+      window.removeEventListener('pointermove', onMove, true);
+      window.removeEventListener('pointerup', onEnd, true);
+      window.removeEventListener('pointercancel', onEnd, true);
+      window.removeEventListener('blur', onEnd);
+      if (this.dragCleanup === cleanup) this.dragCleanup = null;
+    };
+
+    const onMove = (ev: PointerEvent) => {
+      if (ev.pointerId !== pointerId) return;
+      if (!shouldStartDrag(startX, startY, ev.clientX, ev.clientY)) return;
+      cleanup();
+      this.clearTimers();
+      this.hoverExpanded = false;
+      this.pointerInside = false;
+      this.syncGeometry(false);
+      void invoke('start_notch_drag').catch(() => {});
+    };
+
+    const onEnd = (ev?: Event) => {
+      if (ev instanceof PointerEvent && ev.pointerId !== pointerId) return;
+      cleanup();
+    };
+
+    this.dragCleanup = cleanup;
+    window.addEventListener('pointermove', onMove, true);
+    window.addEventListener('pointerup', onEnd, true);
+    window.addEventListener('pointercancel', onEnd, true);
+    window.addEventListener('blur', onEnd);
+  };
+
+  onPointerEnter = (e?: PointerEvent): void => {
     if (this.isHibernating) return;
+    if (e && e.buttons !== 0) return;
     this.clearTimers();
     this.pointerInside = true;
     this.scheduler.markInteraction(Date.now());

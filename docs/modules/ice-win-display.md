@@ -1,6 +1,6 @@
 # ice-win display, windows and process helpers
 
-> Paths: `crates/ice-win/src/{overlay_win,monitors,fullscreen,webview2,proc_metrics,desktop,autostart,music_service}.rs` · Owner: Gemini (overlay, monitors, webview2, proc_metrics), Codex (fullscreen, autostart, desktop) · Verified: 2026-11-23
+> Paths: `crates/ice-win/src/{overlay_win,drag_ghosts,monitors,fullscreen,webview2,proc_metrics,desktop,autostart,music_service}.rs` · Owner: Gemini (overlay, monitors, webview2, proc_metrics), Codex (fullscreen, autostart, desktop) · Verified: 2026-11-23
 
 ## Purpose
 Safe wrappers over the Win32/WebView2 pieces the shell needs around the notch window: window styles and positioning, monitor
@@ -10,7 +10,8 @@ integration and autostart. All `unsafe` stays here. No hooks into other processe
 ## Files
 | File | What it does |
 |---|---|
-| `overlay_win.rs` | `apply_overlay_styles` (transparent, topmost, `WS_EX_NOACTIVATE`/tool window, `MA_NOACTIVATE`), `remove_overlay_subclass`, `set_click_through`, `notch_origin` / `move_notch` (D-20 anchor in the work area, shared with the native pill), `ensure_topmost`, `move_pos_no_resize`, `apply_settings_mica`, `cursor_pos`, `window_rect`, `foreground_hwnd`, `reduce_motion_enabled` |
+| `overlay_win.rs` | `apply_overlay_styles` (transparent, topmost, `WS_EX_NOACTIVATE`/tool window, `MA_NOACTIVATE`), `remove_overlay_subclass`, `set_click_through`, `notch_origin` / `canvas_origin` / `move_notch` (D-20 anchor in work area, bottom overhang), `ensure_topmost`, `move_pos_no_resize`, `move_window_async`, `apply_settings_mica`, `cursor_pos`, `primary_button_down`, `escape_down`, `drag_threshold`, `window_rect`, `foreground_hwnd`, `reduce_motion_enabled` |
+| `drag_ghosts.rs` | `DragGhosts`: temporary non-activating, click-through layered slot overlays shown on all monitors during a D-20 drag (with `IceDragGhost` pill outline highlighted in accent under the nearest slot) |
 | `monitors.rs` | `MonitorInfo` (id, persistent display path, size, DPI scale, refresh Hz, work area), `list_monitors`, `resolve_target_monitor`, `PlacementMode` (`Pinned` default, `Primary`, `Cursor`) |
 | `fullscreen.rs` | `FullscreenWatcher::start(sink)` on a hidden-window thread: WinEvent notifications + `WM_DISPLAYCHANGE` → `FullscreenEvent::{Changed, DisplaysChanged}`; `snapshot()`, `is_monitor_covered(snapshot, monitor)`. `SHQueryUserNotificationState` is a hint only |
 | `session_watch.rs` | `SessionWatcher::start(sink)`: same hidden top-level window pattern; `WTSRegisterSessionNotification` + `WM_POWERBROADCAST` → `SessionEvent::{Locked, Unlocked, Suspending, Resumed}` (2026-11-24, for the notch pin) |
@@ -44,3 +45,4 @@ and `examples/fullscreen_spike.rs`.
 - 2026-11-25 Claude: `overlay_win::set_capture_excluded` (`SetWindowDisplayAffinity`, `WDA_EXCLUDEFROMCAPTURE` / `WDA_NONE`) for D-27 hibernate.
 - 2026-11-25 Claude: `overlay_win::ignores_cursor` (both `WS_EX_TRANSPARENT` and `WS_EX_LAYERED` set); `set_click_through` documented as for already-layered windows only (the native pill).
 - 2026-11-25 Claude: `move_top_center` → `notch_origin` / `move_notch` (D-20 anchors; work area, so a top taskbar is no longer covered).
+- 2026-11-25 Claude: D-20 drag & snap helpers in `overlay_win.rs` (`canvas_origin`, `move_window_async`, `primary_button_down`, `escape_down`, `drag_threshold`) and `drag_ghosts.rs` (`DragGhosts` layered slot overlays on the drag thread).

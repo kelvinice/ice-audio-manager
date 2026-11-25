@@ -19,7 +19,7 @@ use crate::appearance::{Appearance, HibernateLook, IdleStyle, NotchStyle, NowPla
 use crate::device::{DeviceState, Flow, Role};
 use crate::lyrics::{LyricsConfig, LyricsState};
 use crate::media::{MusicServiceId, MusicServices, NowPlaying};
-use crate::placement::NotchAnchor;
+use crate::placement::{NotchAnchor, NotchPlacement};
 
 /// Which default roles a switch sets (D-05, F02).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -289,6 +289,10 @@ pub enum Command {
     SetNotchAnchor {
         anchor: NotchAnchor,
     },
+    /// D-20: drag and snap the notch, or keep it where the tray and Settings put it.
+    SetNotchPlacement {
+        placement: NotchPlacement,
+    },
     SetPinnedMonitor {
         display_path: String,
     },
@@ -369,6 +373,7 @@ impl Command {
             | Self::SetPerformanceProfile { .. }
             | Self::SetPinnedMonitor { .. }
             | Self::SetNotchAnchor { .. }
+            | Self::SetNotchPlacement { .. }
             | Self::SetKnobGestures { .. }
             | Self::SetShowDisconnected { .. }
             | Self::SetIdleLinger { .. }
@@ -458,6 +463,9 @@ pub struct SettingsView {
     /// D-20: where on the pinned monitor's top edge the notch sits.
     #[serde(default)]
     pub notch_anchor: NotchAnchor,
+    /// D-20: drag to move (snaps to an anchor) or fixed.
+    #[serde(default)]
+    pub notch_placement: NotchPlacement,
     pub default_roles: RoleSet,
     pub toggle_pairs: Vec<TogglePairView>,
     pub bindings: Vec<BindingView>,

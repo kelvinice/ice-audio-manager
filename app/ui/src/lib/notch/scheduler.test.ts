@@ -81,6 +81,7 @@ function sampleSnapshot(): EngineSnapshot {
       performanceProfile: 'instant',
       pinnedMonitor: null,
       notchAnchor: 'top_center',
+      notchPlacement: 'drag_snap',
       knobGestures: false,
       showDisconnected: false,
       idleLingerSecs: 15,

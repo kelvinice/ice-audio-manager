@@ -10,6 +10,7 @@ use ice_core::engine::{
     Command, DeviceSummary, Engine, EngineEvent, EngineSnapshot, Envelope, Notice, RoleSet, SpatialMode,
 };
 use ice_core::media::{NowPlaying, PlaybackStatus};
+use ice_core::placement::NotchPlacement;
 use ice_win::audio_engine::AudioEngine;
 use ice_win::native_dot::{NativeDotHandle, NativePillTheme};
 use tauri::{AppHandle, Manager};
@@ -33,6 +34,7 @@ pub(super) fn project(snapshot: &EngineSnapshot, view: &mut NotchSnapshot) {
     view.preset = snapshot.settings.appearance.preset;
     view.idle_style = snapshot.settings.appearance.effective_idle_style();
     view.notch_style = snapshot.settings.appearance.notch_style;
+    view.anchor = snapshot.settings.notch_anchor.effective_for(snapshot.settings.appearance.notch_style);
     view.volume_percent = snapshot.volume.map_or(0, |volume| volume.percent);
     view.muted = snapshot.volume.is_some_and(|volume| volume.muted);
     view.mic_muted = snapshot.mic_muted.unwrap_or(false);
@@ -245,6 +247,7 @@ pub(super) fn watch(app: AppHandle, state: Arc<SharedRuntime>) -> std::io::Resul
 /// themes (CSS overrides) can replace the built-in palette here.
 pub(super) fn native_dot_snapshot(dot: &NativeDotHandle, snapshot: &EngineSnapshot) {
     native_dot_appearance(dot, &snapshot.settings.appearance);
+    dot.set_drag_enabled(snapshot.settings.notch_placement == NotchPlacement::DragSnap);
     dot.apply_snapshot(snapshot);
 }
 
@@ -288,6 +291,7 @@ fn apply_event(app: &AppHandle, state: &Arc<SharedRuntime>, delta: Envelope) {
     {
         if let EngineEvent::SettingsChanged { settings } = &delta.event {
             native_dot_appearance(dot, &settings.appearance);
+            dot.set_drag_enabled(settings.notch_placement == NotchPlacement::DragSnap);
         }
         let _ = dot.apply_envelope(&delta);
     }

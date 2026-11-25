@@ -3,7 +3,7 @@ use std::sync::PoisonError;
 use ice_core::appearance::{Appearance, IdleStyle, NotchStyle, NowPlayingPill, SpringPreset, ThemeKind};
 use ice_core::device::Flow;
 use ice_core::engine::{Command, DeviceSummary, EngineSnapshot, PerformanceProfile, SavedDevice, SettingsView};
-use ice_core::placement::NotchAnchor;
+use ice_core::placement::{NotchAnchor, NotchPlacement};
 use tauri::AppHandle;
 use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu};
 
@@ -168,9 +168,20 @@ pub(super) fn placement_menus(
         )?)?;
     }
     pinned.append(&PredefinedMenuItem::separator(app)?)?;
+    // The bottom edge is Floating-only (Edge Nook is flush with the top): listed but disabled under Edge Nook, where the
+    // check shows the anchor actually in use.
+    let style = settings.appearance.notch_style;
+    let in_use = settings.notch_anchor.effective_for(style);
     for anchor in NotchAnchor::ALL {
-        let selected = settings.notch_anchor == anchor;
-        pinned.append(&checked_command(app, anchor.label(), &Command::SetNotchAnchor { anchor }, selected)?)?;
+        let allowed = anchor.allowed_for(style);
+        let label = if allowed { anchor.label().to_string() } else { format!("{} (Floating style)", anchor.label()) };
+        let item = checked_command(app, &label, &Command::SetNotchAnchor { anchor }, in_use == anchor)?;
+        item.set_enabled(allowed)?;
+        pinned.append(&item)?;
     }
+    pinned.append(&PredefinedMenuItem::separator(app)?)?;
+    let drag = settings.notch_placement == NotchPlacement::DragSnap;
+    let next = if drag { NotchPlacement::Fixed } else { NotchPlacement::DragSnap };
+    pinned.append(&checked_command(app, "Drag to move", &Command::SetNotchPlacement { placement: next }, drag)?)?;
     Ok((pinned, profiles))
 }

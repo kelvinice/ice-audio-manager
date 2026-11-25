@@ -17,7 +17,8 @@ state to the UI, and exposes a small set of Tauri commands. Thin by rule: valida
 | `ipc.rs` | `NotchSnapshot`, `NotchDelta`, `ActivityKind`, `MonitorSummary` (index, id, `display_path`, `name`, position, size, scale, Hz), `HitRect` (TS bindings generated into `app/ui/src/lib/ipc/types.ts`) and the `open_music_service` command (notch window only; runs `ice_win::music_service::open` on a blocking task) |
 | `show_notch.rs` | D-19: `show` (hotkey toggles the pinned notch, pill click opens it; Lite → tray quick-switch menu; nothing over a game), `wire_native_pill` |
 | `session.rs` | D-21.1 L3: `ice_win::session_watch` → clears the notch pin (`expanded`) on session lock or sleep |
-| `placement.rs` | `Placement` (profile, pinned monitor, coverage, `gaming`, `generation`), `watch` (fullscreen + display changes), `reconcile` (apply profile/monitor/gaming to windows and the native pill) |
+| `placement.rs` | `Placement` (profile, pinned monitor, `anchor`, coverage, `gaming`, `generation`), `watch` (fullscreen + display changes), `reconcile` (apply profile/monitor/anchor/gaming to windows and the native pill, syncing `NotchSnapshot.anchor`) |
+| `drag.rs` | D-20 drag & snap loop (`start`, `Host::{WebView, Native}`): bounded 120 Hz worker moving either host via `SWP_NOACTIVATE` + showing `DragGhosts` across all monitors, springing to nearest slot on drop or back on Esc |
 | `meter.rs` | `Visualizer`: the shell owns the `audio://meter/v1` subscription and drains queued frames to the latest reading before emitting; the WebView only *requests* frames |
 | `art.rs` | `iceart://<id>` handler: engine PNGs only, no paths/queries/other methods |
 | `logging.rs` | File logs in `%LOCALAPPDATA%\IceAudioManager\logs` (`--verbose` for debug) |
@@ -29,7 +30,7 @@ state to the UI, and exposes a small set of Tauri commands. Thin by rule: valida
   `audio://meter/v1` (`MeterFrame`). Sent with `emit_to("notch"|"settings", …)`.
 - **Commands (UI → shell):** `get_notch_snapshot`, `get_engine_snapshot`, `report_hit_rect`, `report_first_paint`, `report_settings_ready`, `report_event_rendered`,
   `adjust_volume`, `set_volume`, `toggle_mute`, `toggle_mic_mute`, `trigger_switch`, `switch_to_device`, `media_command`, `toggle_expand`,
-  `request_idle_suspend`, `open_settings`, `set_visualizer`, `apply_setting`, `get_launch_at_sign_in`, `set_launch_at_sign_in` (Settings window only, permission `settings-controls`), `open_music_service`. A new command also needs a
+  `request_idle_suspend`, `open_settings`, `set_visualizer`, `set_hibernate`, `start_notch_drag`, `apply_setting`, `get_launch_at_sign_in`, `set_launch_at_sign_in` (Settings window only, permission `settings-controls`), `open_music_service`, `open_language_settings`. A new command also needs a
   permission in `permissions/shell.toml` and a capability entry.
 - **Flags:** `--fake-engine` (FakeEngine), `--start-minimized`, `--show-notch`, `--verbose`, `--bench` (+ `--sample-secs`, `--out`).
 
@@ -82,3 +83,4 @@ Unit tests in `art.rs`, `engine_bridge.rs`, `ipc.rs`, `meter.rs`, `placement.rs`
 - 2026-11-25 Claude: `engine_bridge::Update::Delta` is boxed too (a media delta grew with the art palette; clippy `large_enum_variant`).
 - 2026-11-25 Claude: `Placement.anchor` (from `settings.notch_anchor`; a change repositions both hosts like a repin); every `move_top_center` call is `move_notch`; `NOTCH_CANVAS_W/H` come from `ice_core::placement`.
 - 2026-11-25 Claude: `wire_native_pill` handles `PillInput::Wheel`: ±`WHEEL_VOLUME_STEP` (4) % per notch, Shift → next device (`preview_target`), like the WebView notch.
+- 2026-11-25 Claude & Gemini: D-20 drag & snap + bottom anchors (`drag.rs`, `start_notch_drag` command, `NotchSnapshot.anchor`, `show_notch::wire_native_pill` `DragStart`, `engine_bridge` `set_drag_enabled`, `spawn_cursor_poll` skips click-through updates while `state.dragging`, expanded-card drag collapses around collapsed pill centre, `placement::reconcile` syncs `view.anchor`).

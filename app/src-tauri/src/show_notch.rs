@@ -90,6 +90,10 @@ pub(super) fn wire_native_pill(app: &AppHandle, state: &Arc<SharedRuntime>, dot:
                 state.engine.send(Command::StepVolume { delta });
                 return;
             }
+            PillInput::DragStart => {
+                super::drag::start(&app, &state, super::drag::Host::Native);
+                return;
+            }
             PillInput::Click | PillInput::HoverOpen => {}
         }
         let (handle, st) = (app.clone(), Arc::clone(&state));

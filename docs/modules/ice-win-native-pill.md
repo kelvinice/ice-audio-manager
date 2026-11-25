@@ -11,10 +11,10 @@ profile **with no WebView alive** (D-15 / D-15.1). It is the answer to "the WebV
 |---|---|
 | `native_dot.rs` | Window + message loop thread, `NativeDotHandle`, `PillState`, `PillMode`, `NativePillTheme`, rasteriser (`rasterize_pill_frame`), engine subscription. **2022 lines**: over the limit, split planned (plan.md Cleanup backlog: window / drawing / layout / theme) |
 | `native_dot/glyphs.rs` | GDI glyph rasteriser: Segoe UI Variable Text + Segoe Fluent Icons into an alpha mask, no Direct2D/DirectWrite DLLs |
-| `native_dot/input.rs` | Mouse input as plain window messages: click-first, pressed state paints in one frame; `PillInput::{Click, MiddleClick, HoverOpen}`, `set_input_handler` |
+| `native_dot/input.rs` | Mouse input as plain window messages: click-first, pressed state paints in one frame; `PillInput::{Click, MiddleClick, HoverOpen, DragStart, Wheel}`, `set_input_handler` |
 
 ## Public surface
-- `NativeDotHandle::spawn(monitor)`, `show_idle`, `hide`, `set_idle_style(IdleStyle)`, `set_notch_style(NotchStyle)`, `move_to_monitor`, `set_theme`, `pulse_activity(progress, accent)`,
+- `NativeDotHandle::spawn(monitor)`, `show_idle`, `hide`, `set_idle_style(IdleStyle)`, `set_notch_style(NotchStyle)`, `set_drag_enabled(bool)`, `drag_move((i32, i32))`, `drag_end()`, `origin_for(monitor, anchor)`, `hwnd_raw()`, `move_to_monitor`, `set_theme`, `pulse_activity(progress, accent)`,
   `show_volume`, `show_mic_mute`, `show_state`, `set_standby_only`, `set_activity_timeout`, `set_input_handler`, `set_hover_open(delay)`, `is_visible`.
 - State sync: `apply_snapshot` / `apply_envelope` → `EnvelopeOutcome::{Updated, IgnoredStale, NeedsResnapshot}` (same revision protocol as the UI),
   or `subscribe_engine(engine)` → `NativePillSubscription` (own thread; `stop`/`join`).
@@ -45,3 +45,4 @@ Unit tests in the file cover state and envelope handling and frame rasterisation
 - 2026-11-25 Claude: D-28 C1 twin: the volume pop-up draws the % first (left-aligned, 13 px box) and the bar after it (82–180); `glyphs::Align::Left`.
 - 2026-11-25 Claude: `PillState.anchor` + `NativeDotHandle::set_anchor`; `paint_pill` and window creation use `overlay_win::notch_origin` (one centre with the WebView notch).
 - 2026-11-25 Claude: the wheel: `PillInput::Wheel { notches, shift }` from `WM_MOUSEWHEEL` (`wheel_notches` accumulates touchpad deltas), emitted outside the click state machine; window test sends real messages.
+- 2026-11-25 Claude: D-20 drag & snap + bottom anchors: `PillInput::DragStart` when pressed past `SM_CXDRAG`/`SM_CYDRAG`, `set_drag_enabled`, `drag_move` / `drag_end` / `origin_for` / `hwnd_raw` (`PillState.drag_origin`), and `notch_origin` updated for `body_h`.

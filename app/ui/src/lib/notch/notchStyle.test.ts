@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { CANVAS_W, TOP_PAD } from './geometry.ts';
+import { BOTTOM_PAD, CANVAS_H, CANVAS_W, TOP_PAD } from './geometry.ts';
 import {
   buildNookFillPath,
   buildNookRimPath,
@@ -92,4 +92,21 @@ test('hibernate keeps the plain idle shape whatever plays, pops up or is muted',
     const idle = strategy.targetGeometry({ ...quiet, pillLyricsExtraH: 0, cardLyricsExtraH: 0, showCardLyrics: false });
     assert.deepEqual(plain, idle, strategy.id);
   }
+});
+
+test('D-20 bottom anchors measure from BOTTOM_PAD in Floating and stay top-only in Edge Nook', () => {
+  const pill = { w: 116, h: 28, r: 14, vol: 40 };
+  const floatBottom = floatingStyleStrategy.computeSurfaceShape(pill, true);
+  assert.equal(floatBottom.isBottom, true);
+  assert.equal(floatBottom.insetTop, CANVAS_H - BOTTOM_PAD - pill.h);
+  assert.ok(floatBottom.clipPath.includes(`inset(${floatBottom.insetTop.toFixed(2)}px`));
+
+  const floatBottomHit = floatingStyleStrategy.computeHitRect({ w: 392, h: 164 }, true);
+  assert.equal(floatBottomHit.y, CANVAS_H - BOTTOM_PAD - 164);
+
+  const nookBottom = nookStyleStrategy.computeSurfaceShape(pill, true);
+  assert.equal(nookBottom.isBottom, false);
+  assert.equal(nookBottom.insetTop, 0);
+  const nookBottomHit = nookStyleStrategy.computeHitRect({ w: 116, h: 30 }, true);
+  assert.equal(nookBottomHit.y, 0);
 });

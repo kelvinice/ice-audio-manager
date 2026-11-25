@@ -390,6 +390,7 @@ impl Engine for FakeEngine {
             | Command::SetPerformanceProfile { .. }
             | Command::SetPinnedMonitor { .. }
             | Command::SetNotchAnchor { .. }
+            | Command::SetNotchPlacement { .. }
             | Command::SetKnobGestures { .. }
             | Command::SetTheme { .. }
             | Command::SetPreset { .. }

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { IdleStyle, NotchAnchor, NotchStyle, NowPlayingPill } from '../../lib/ipc/engine';
+  import type { IdleStyle, NotchAnchor, NotchPlacement, NotchStyle, NowPlayingPill } from '../../lib/ipc/engine';
   import type { SettingsClient } from '../../lib/settings/client.svelte';
   import ChoiceGroup from '../controls/ChoiceGroup.svelte';
   import InfoBar from '../controls/InfoBar.svelte';
@@ -42,11 +42,58 @@
     { value: 'hidden', label: 'Hidden', description: 'Nothing until the volume, device or track changes.' },
   ];
 
-  // D-20: where on the display's top edge. Twin: `NotchAnchor::label` in crates/ice-core/src/placement.rs.
-  const anchors: { value: NotchAnchor; label: string; description: string; badge?: string }[] = [
+  // D-20: top & bottom positions. Twin: `NotchAnchor::label` in crates/ice-core/src/placement.rs.
+  function effectiveTopAnchor(anchor: NotchAnchor): NotchAnchor {
+    switch (anchor) {
+      case 'bottom_left':
+        return 'top_left';
+      case 'bottom_center':
+        return 'top_center';
+      case 'bottom_right':
+        return 'top_right';
+      default:
+        return anchor;
+    }
+  }
+
+  const isNook = $derived(settings?.appearance.notchStyle === 'nook');
+
+  const anchors = $derived<{ value: NotchAnchor; label: string; description: string; badge?: string; disabled?: boolean }[]>([
     { value: 'top_left', label: 'Top left', description: 'Out of the way of centred title bars and tabs.' },
     { value: 'top_center', label: 'Top centre', badge: 'Default', description: 'Where a hardware notch would be.' },
     { value: 'top_right', label: 'Top right', description: 'Near the window controls, away from the middle.' },
+    {
+      value: 'bottom_left',
+      label: 'Bottom left',
+      description: 'Above the taskbar, expanding upwards (Floating style).',
+      disabled: isNook,
+    },
+    {
+      value: 'bottom_center',
+      label: 'Bottom centre',
+      description: 'Centred above the taskbar, expanding upwards (Floating style).',
+      disabled: isNook,
+    },
+    {
+      value: 'bottom_right',
+      label: 'Bottom right',
+      description: 'Above the notification area, expanding upwards (Floating style).',
+      disabled: isNook,
+    },
+  ]);
+
+  const placements: { value: NotchPlacement; label: string; description: string; badge?: string }[] = [
+    {
+      value: 'drag_snap',
+      label: 'Drag & snap',
+      badge: 'Default',
+      description: 'Drag the pill or card to any anchor on any display. Press Esc to cancel.',
+    },
+    {
+      value: 'fixed',
+      label: 'Fixed position',
+      description: 'Only move the notch from Settings or the tray menu.',
+    },
   ];
 
   const nowPlayingModes: { value: NowPlayingPill; label: string; description: string; badge?: string }[] = [
@@ -106,13 +153,27 @@
 
   <Section
     title="Display"
-    description="Pick the display and where on its top edge the notch sits. It follows Windows’ scaling on each one and stays clear of a taskbar at the top."
+    description="Pick the display, screen position, and whether the notch can be dragged between slots. It follows Windows’ scaling on each screen and stays clear of the taskbar."
   >
     <ChoiceGroup
       label="Position"
-      value={settings.notchAnchor}
+      value={isNook ? effectiveTopAnchor(settings.notchAnchor) : settings.notchAnchor}
       choices={anchors}
+      columns={3}
       onchange={(anchor) => client.apply({ type: 'setNotchAnchor', anchor })}
+    />
+    {#if isNook}
+      <InfoBar
+        tone="info"
+        title="Bottom positions require Floating style."
+        text="Edge Nook docks flush to the top bezel, so bottom anchors stay disabled until you switch Notch style to Floating."
+      />
+    {/if}
+    <ChoiceGroup
+      label="Movement"
+      value={settings.notchPlacement}
+      choices={placements}
+      onchange={(placement) => client.apply({ type: 'setNotchPlacement', placement })}
     />
     {#if pinnedMissing}
       <InfoBar

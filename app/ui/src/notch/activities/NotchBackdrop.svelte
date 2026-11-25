@@ -14,6 +14,8 @@
     boxW?: number;
     boxH?: number;
     topPad?: number;
+    isBottom?: boolean;
+    bottomPad?: number;
   }
 
   let {
@@ -25,6 +27,8 @@
     boxW = 392,
     boxH = 164,
     topPad = 6,
+    isBottom = false,
+    bottomPad = 24,
   }: Props = $props();
 
   let loadedId = $state<string | null>(null);
@@ -122,7 +126,8 @@
       class:compact-pill={compactPill}
       class:ambient-active={ambientState !== 'stopped'}
       class:ambient-paused={ambientState === 'paused'}
-      style:top={`${topPad}px`}
+      style:top={isBottom ? undefined : `${topPad}px`}
+      style:bottom={isBottom ? `${bottomPad}px` : undefined}
       style:width={`${boxW}px`}
       style:height={`${boxH}px`}
     >
@@ -136,7 +141,7 @@
       </div>
     </div>
   {:else}
-    <div class="accent-glow" class:instant></div>
+    <div class="accent-glow" class:instant class:bottom={isBottom}></div>
   {/if}
 </div>
 
@@ -282,6 +287,10 @@
     opacity: 0.28;
     background: radial-gradient(62% 44% at 50% 0%, var(--ice-active-glow, var(--ice-accent-glow)), transparent 72%);
     transition: opacity 400ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .accent-glow.bottom {
+    background: radial-gradient(62% 44% at 50% 100%, var(--ice-active-glow, var(--ice-accent-glow)), transparent 72%);
   }
 
   .accent-glow.instant { transition: none; }

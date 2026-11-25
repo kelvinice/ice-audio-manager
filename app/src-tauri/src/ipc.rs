@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 pub use ice_core::appearance::{IdleStyle, NotchStyle, SpringPreset, ThemeKind};
+pub use ice_core::placement::NotchAnchor;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case")]
@@ -61,6 +62,8 @@ pub struct NotchSnapshot {
     pub theme: ThemeKind,
     pub idle_style: IdleStyle,
     pub notch_style: NotchStyle,
+    /// D-20: the anchor in use (Edge Nook maps a bottom anchor to the top); a bottom one makes the notch grow upwards.
+    pub anchor: NotchAnchor,
     pub expanded: bool,
     pub suspended: bool,
     pub hidden_for_bench: bool,
@@ -111,8 +114,8 @@ mod tests {
             "// Auto-generated from Rust IPC types via `cargo test -p ice-audio-manager export_ts_bindings`.",
             "// Do not edit manually.",
             "",
-            "import type { IdleStyle, NotchStyle, SpringPreset, ThemeKind } from './engine';",
-            "export type { IdleStyle, NotchStyle, SpringPreset, ThemeKind } from './engine';",
+            "import type { IdleStyle, NotchAnchor, NotchStyle, SpringPreset, ThemeKind } from './engine';",
+            "export type { IdleStyle, NotchAnchor, NotchStyle, SpringPreset, ThemeKind } from './engine';",
             "",
             &format!("export {}", ActivityKind::decl(&cfg)),
             "",
@@ -145,6 +148,8 @@ mod tests {
             &format!("export {}", ice_core::appearance::HibernateLook::decl(&cfg)),
             "",
             &format!("export {}", ice_core::placement::NotchAnchor::decl(&cfg)),
+            "",
+            &format!("export {}", ice_core::placement::NotchPlacement::decl(&cfg)),
             "",
             &format!("export {}", ice_core::appearance::Appearance::decl(&cfg)),
             "",

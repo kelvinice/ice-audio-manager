@@ -8,17 +8,19 @@ use windows::Win32::Graphics::Dwm::{
     DWM_SYSTEMBACKDROP_TYPE, DWM_WINDOW_CORNER_PREFERENCE, DWMSBT_MAINWINDOW, DWMWA_SYSTEMBACKDROP_TYPE,
     DWMWA_USE_IMMERSIVE_DARK_MODE, DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_ROUND, DwmSetWindowAttribute,
 };
+use windows::Win32::UI::Input::KeyboardAndMouse::{GetAsyncKeyState, VK_ESCAPE, VK_LBUTTON, VK_RBUTTON};
 use windows::Win32::UI::Shell::{DefSubclassProc, RemoveWindowSubclass, SetWindowSubclass};
 use windows::Win32::UI::WindowsAndMessaging::{
-    GWL_EXSTYLE, GetCursorPos, GetForegroundWindow, GetWindowLongPtrW, GetWindowRect, HWND_TOPMOST, MA_NOACTIVATE,
-    SPI_GETCLIENTAREAANIMATION, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOOWNERZORDER, SWP_NOSENDCHANGING,
-    SWP_NOSIZE, SWP_NOZORDER, SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS, SetWindowDisplayAffinity, SetWindowLongPtrW,
-    SetWindowPos, SystemParametersInfoW, WDA_EXCLUDEFROMCAPTURE, WDA_NONE, WM_MOUSEACTIVATE, WM_NCDESTROY,
-    WS_EX_APPWINDOW, WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_EX_TRANSPARENT,
+    GWL_EXSTYLE, GetCursorPos, GetForegroundWindow, GetSystemMetrics, GetWindowLongPtrW, GetWindowRect, HWND_TOPMOST,
+    MA_NOACTIVATE, SM_CXDRAG, SM_CYDRAG, SM_SWAPBUTTON, SPI_GETCLIENTAREAANIMATION, SWP_ASYNCWINDOWPOS,
+    SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOOWNERZORDER, SWP_NOSENDCHANGING, SWP_NOSIZE, SWP_NOZORDER,
+    SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS, SetWindowDisplayAffinity, SetWindowLongPtrW, SetWindowPos,
+    SystemParametersInfoW, WDA_EXCLUDEFROMCAPTURE, WDA_NONE, WM_MOUSEACTIVATE, WM_NCDESTROY, WS_EX_APPWINDOW,
+    WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_EX_TRANSPARENT,
 };
 use windows::core::{BOOL, Result};
 
-use ice_core::placement::{Area, NOTCH_CANVAS_W, NotchAnchor, anchor_origin};
+use ice_core::placement::{Area, NOTCH_CANVAS_H, NOTCH_CANVAS_W, NotchAnchor, anchor_origin, canvas_edge_offset};
 
 use crate::monitors::MonitorInfo;
 
@@ -136,38 +138,50 @@ pub fn set_capture_excluded(hwnd: isize, exclude: bool) -> Result<()> {
     unsafe { SetWindowDisplayAffinity(hwnd, affinity) }
 }
 
-/// Where a `logical_w`-wide notch box goes on `monitor` for `anchor` (D-20): centred on the anchor's point in the work
-/// area, which reserves the full notch canvas, `top_offset_logical` below the work area's top. Physical px.
-/// Shared by the WebView notch and the native pill, so both sit on one centre (`ice_core::placement`).
+/// The monitor's work area (the screen minus the taskbar), which every anchor is measured in.
 #[must_use]
-pub fn notch_origin(monitor: &MonitorInfo, anchor: NotchAnchor, logical_w: i32, top_offset_logical: i32) -> (i32, i32) {
-    let area =
-        Area { left: monitor.work_left, top: monitor.work_top, width: monitor.work_width, height: monitor.work_height };
-    anchor_origin(
-        anchor,
-        area,
-        monitor.logical_to_physical(NOTCH_CANVAS_W),
-        monitor.logical_to_physical(logical_w),
-        monitor.logical_to_physical(top_offset_logical),
-    )
+pub const fn work_area(monitor: &MonitorInfo) -> Area {
+    Area { left: monitor.work_left, top: monitor.work_top, width: monitor.work_width, height: monitor.work_height }
 }
 
-/// Positions and sizes the overlay window at `anchor` on `monitor` (D-20), from logical coordinates.
-///
-/// # Errors
-/// Fails if `hwnd` is null or `SetWindowPos` returns an OS error.
-pub fn move_notch(
-    hwnd: isize,
+/// Where a `logical_w` × `logical_h` notch box goes on `monitor` for `anchor` (D-20): centred on the anchor's point in
+/// the work area, which reserves the full notch canvas, `edge_offset_logical` in from the anchored edge (the top, or
+/// the bottom above the taskbar). Physical px. Shared by the WebView notch and the native pill, so both sit on one
+/// centre (`ice_core::placement`).
+#[must_use]
+pub fn notch_origin(
     monitor: &MonitorInfo,
     anchor: NotchAnchor,
     logical_w: i32,
     logical_h: i32,
-    top_offset_logical: i32,
-) -> Result<()> {
+    edge_offset_logical: i32,
+) -> (i32, i32) {
+    anchor_origin(
+        anchor,
+        work_area(monitor),
+        monitor.logical_to_physical(NOTCH_CANVAS_W),
+        monitor.logical_to_physical(logical_w),
+        monitor.logical_to_physical(logical_h),
+        monitor.logical_to_physical(edge_offset_logical),
+    )
+}
+
+/// Where the WebView notch canvas (`NOTCH_CANVAS_W` × `NOTCH_CANVAS_H`) goes for `anchor`: flush at a top anchor,
+/// overhanging the taskbar by the shadow room at a bottom one (`ice_core::placement::canvas_edge_offset`).
+#[must_use]
+pub fn canvas_origin(monitor: &MonitorInfo, anchor: NotchAnchor) -> (i32, i32) {
+    notch_origin(monitor, anchor, NOTCH_CANVAS_W, NOTCH_CANVAS_H, canvas_edge_offset(anchor))
+}
+
+/// Positions and sizes the WebView notch canvas at `anchor` on `monitor` (D-20).
+///
+/// # Errors
+/// Fails if `hwnd` is null or `SetWindowPos` returns an OS error.
+pub fn move_notch(hwnd: isize, monitor: &MonitorInfo, anchor: NotchAnchor) -> Result<()> {
     let hwnd = to_hwnd(hwnd)?;
-    let phys_w = monitor.logical_to_physical(logical_w);
-    let phys_h = monitor.logical_to_physical(logical_h);
-    let (x, y) = notch_origin(monitor, anchor, logical_w, top_offset_logical);
+    let phys_w = monitor.logical_to_physical(NOTCH_CANVAS_W);
+    let phys_h = monitor.logical_to_physical(NOTCH_CANVAS_H);
+    let (x, y) = canvas_origin(monitor, anchor);
     // SAFETY: `hwnd` is valid; `SWP_NOACTIVATE | SWP_NOSENDCHANGING` prevents activation or redundant frame flashes.
     unsafe {
         SetWindowPos(
@@ -200,6 +214,17 @@ pub fn ensure_topmost(hwnd: isize) -> Result<()> {
             SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER | SWP_NOSENDCHANGING,
         )
     }
+}
+
+/// Moves a window owned by another thread to `(x, y)` without waiting for that thread (`SWP_ASYNCWINDOWPOS`), never
+/// activating it. The D-20 drag loop moves the WebView notch with it every frame.
+///
+/// # Errors
+/// Fails if `hwnd` is null or `SetWindowPos` fails.
+pub fn move_window_async(hwnd: isize, x: i32, y: i32) -> Result<()> {
+    let hwnd = to_hwnd(hwnd)?;
+    // SAFETY: `hwnd` is valid; the move is posted to its thread, so this call never blocks on it.
+    unsafe { SetWindowPos(hwnd, None, x, y, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_ASYNCWINDOWPOS) }
 }
 
 /// Moves an already-sized window to `(x, y)` without changing size or Z-order.
@@ -252,6 +277,33 @@ pub fn cursor_pos() -> Option<(i32, i32)> {
     // SAFETY: stack `POINT` pointer is valid.
     unsafe { GetCursorPos(&raw mut pt) }.ok()?;
     Some((pt.x, pt.y))
+}
+
+/// Whether the primary mouse button is down right now (the D-20 drag loop's "still dragging" check). Reads the async
+/// key state: no hook, nothing installed (code-practices §1.1). Honours swapped buttons.
+#[must_use]
+pub fn primary_button_down() -> bool {
+    // SAFETY: plain reads of system metrics and key state; no pointers.
+    let swapped = unsafe { GetSystemMetrics(SM_SWAPBUTTON) } != 0;
+    let key = if swapped { VK_RBUTTON } else { VK_LBUTTON };
+    // SAFETY: as above.
+    let state = unsafe { GetAsyncKeyState(i32::from(key.0)) };
+    state < 0
+}
+
+/// Whether Esc is down right now (cancels a drag). Async key state, no hook.
+#[must_use]
+pub fn escape_down() -> bool {
+    // SAFETY: plain read of the key state.
+    let state = unsafe { GetAsyncKeyState(i32::from(VK_ESCAPE.0)) };
+    state < 0
+}
+
+/// Windows' drag threshold (`SM_CXDRAG`, `SM_CYDRAG`, physical px): a press that moves further is a drag, not a click.
+#[must_use]
+pub fn drag_threshold() -> (i32, i32) {
+    // SAFETY: plain reads of system metrics.
+    unsafe { (GetSystemMetrics(SM_CXDRAG).max(1), GetSystemMetrics(SM_CYDRAG).max(1)) }
 }
 
 /// Returns the physical bounding rectangle `(left, top, right, bottom)` of `hwnd`.

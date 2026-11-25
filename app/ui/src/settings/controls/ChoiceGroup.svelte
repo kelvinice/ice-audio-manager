@@ -6,6 +6,7 @@
     label: string;
     description?: string;
     badge?: string;
+    disabled?: boolean;
   }
 
   interface Props {
@@ -27,11 +28,14 @@
     const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[event.key];
     if (!step) return;
     event.preventDefault();
-    const next = (index + step + choices.length) % choices.length;
-    const choice = choices[next];
-    if (!choice) return;
-    onchange(choice.value);
-    buttons[next]?.focus();
+    for (let offset = 1; offset <= choices.length; offset += 1) {
+      const next = (index + step * offset + choices.length * 2) % choices.length;
+      const choice = choices[next];
+      if (!choice || choice.disabled) continue;
+      onchange(choice.value);
+      buttons[next]?.focus();
+      break;
+    }
   }
 </script>
 
@@ -43,9 +47,13 @@
       type="button"
       role="radio"
       aria-checked={selected}
-      tabindex={selected ? 0 : -1}
+      aria-disabled={choice.disabled ? 'true' : undefined}
+      disabled={choice.disabled}
+      tabindex={selected && !choice.disabled ? 0 : -1}
       class:selected
-      onclick={() => onchange(choice.value)}
+      onclick={() => {
+        if (!choice.disabled) onchange(choice.value);
+      }}
       onkeydown={(e) => onKey(e, index)}
     >
       {#if preview}
@@ -92,8 +100,13 @@
       box-shadow 120ms var(--ice-set-ease);
   }
 
-  button:hover {
+  button:hover:not(:disabled) {
     background: var(--ice-set-card-hover);
+  }
+
+  button:disabled {
+    opacity: 0.48;
+    cursor: not-allowed;
   }
 
   button.selected {

@@ -27,6 +27,7 @@ const baseSettings: SettingsView = {
   performanceProfile: 'instant',
   pinnedMonitor: null,
   notchAnchor: 'top_center',
+  notchPlacement: 'drag_snap',
   defaultRoles: 'both',
   togglePairs: [],
   bindings: [],

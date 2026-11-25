@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { createNotchController } from '../lib/notch/controller.svelte';
-  import { CANVAS_H, CANVAS_W } from '../lib/notch/geometry';
+  import { BOTTOM_PAD, CANVAS_H, CANVAS_W } from '../lib/notch/geometry';
   import ExpandedNotch from './activities/ExpandedNotch.svelte';
   import IdlePill from './activities/IdlePill.svelte';
   import LyricsExtension from './activities/LyricsExtension.svelte';
@@ -30,7 +30,8 @@
 >
   <div
     class="pill-shadow"
-    style:top={`${ctrl.surfaceShape.topPad}px`}
+    style:top={ctrl.isBottomAnchor ? undefined : `${ctrl.surfaceShape.topPad}px`}
+    style:bottom={ctrl.isBottomAnchor ? `${BOTTOM_PAD}px` : undefined}
     style:width={`${ctrl.pillSize.w}px`}
     style:height={`${ctrl.pillSize.h}px`}
     style:border-radius={ctrl.surfaceShape.shadowRadiusCss}
@@ -39,6 +40,7 @@
   <div
     class="pill-clip"
     style:clip-path={ctrl.surfaceShape.clipPath}
+    onpointerdown={ctrl.onPointerDown}
     onpointerenter={ctrl.onPointerEnter}
     onpointerleave={ctrl.onPointerLeave}
     onwheel={ctrl.onWheel}
@@ -70,13 +72,16 @@
         boxW={ctrl.targetBox.w + ctrl.surfaceShape.earRadius * 2}
         boxH={ctrl.targetBox.h}
         topPad={ctrl.surfaceShape.topPad}
+        isBottom={ctrl.isBottomAnchor}
+        bottomPad={BOTTOM_PAD}
       />
       {/if}
       <div
         class="pill-slot"
         class:nook={ctrl.notchStyle === 'nook'}
         class:compact={!ctrl.isExpanded}
-        style:top={`${ctrl.surfaceShape.topPad}px`}
+        style:top={ctrl.isBottomAnchor ? undefined : `${ctrl.surfaceShape.topPad}px`}
+        style:bottom={ctrl.isBottomAnchor ? `${BOTTOM_PAD}px` : undefined}
         style:width={`${ctrl.targetBox.w}px`}
         style:height={`${ctrl.targetBox.h}px`}
       >
@@ -92,7 +97,7 @@
           {:else if ctrl.activeView.kind === 'mic'}
             <MicActivity activity={ctrl.activeView} instant={ctrl.isInstant} />
           {:else if ctrl.activeView.kind === 'track'}
-            <div class="track-with-lyrics">
+            <div class="track-with-lyrics" class:bottom-anchor={ctrl.isBottomAnchor}>
               <div class="track-head">
                 <TrackActivity
                   activity={ctrl.activeView}
@@ -111,6 +116,7 @@
                   instant={ctrl.isInstant}
                   notchVisible={ctrl.isNotchVisible}
                   delayMs={ctrl.lyricsDelayMs}
+                  attachedTop={ctrl.isBottomAnchor}
                 />
               {/if}
             </div>
@@ -189,6 +195,7 @@
             onMediaAction={(action) => ctrl.sendMediaAction(action)}
             onOpenMusicService={ctrl.openMusicService}
             onOpenSettings={ctrl.openSettings}
+            isBottom={ctrl.isBottomAnchor}
           />
         {/if}
       </div>
@@ -215,7 +222,7 @@
     {:else}
       <rect
         x={ctrl.insetLeft + 0.5}
-        y={ctrl.surfaceShape.topPad + 0.5}
+        y={ctrl.surfaceShape.insetTop + 0.5}
         width={Math.max(1, ctrl.pillSize.w - 1)}
         height={Math.max(1, ctrl.pillSize.h - 1)}
         rx={ctrl.pillSize.r}
@@ -247,6 +254,10 @@
     display: flex;
     flex-direction: column;
     justify-content: center;
+  }
+
+  .track-with-lyrics.bottom-anchor {
+    flex-direction: column-reverse;
   }
 
   .track-head {

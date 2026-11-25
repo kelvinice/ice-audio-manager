@@ -427,6 +427,8 @@ pub struct PillState {
     pub interaction: PillInteraction,
     /// D-27 hibernate: a plain silhouette (red dot while the mic is muted), no activities, click-through.
     pub plain: bool,
+    /// D-20: while the pill is being dragged, its window origin (physical px) instead of the anchor's.
+    pub drag_origin: Option<(i32, i32)>,
 }
 
 impl Default for PillState {
@@ -454,6 +456,7 @@ impl PillState {
             theme,
             interaction: PillInteraction::None,
             plain: false,
+            drag_origin: None,
         }
     }
 
@@ -750,6 +753,55 @@ impl NativeDotHandle {
         if let Some(sig) = signal {
             self.shared.post_signal(sig);
         }
+    }
+
+    /// D-20 drag: puts the pill's window at `origin` (physical px), overriding its anchor until [`Self::drag_end`].
+    pub fn drag_move(&self, origin: (i32, i32)) {
+        let signal = {
+            let mut rt = self.shared.lock();
+            if rt.pill.drag_origin == Some(origin) {
+                return;
+            }
+            rt.pill.drag_origin = Some(origin);
+            rt.desired_visible.then_some(ThreadSignal::Sync { restart_timer: false })
+        };
+        if let Some(sig) = signal {
+            self.shared.post_signal(sig);
+        }
+    }
+
+    /// D-20 drag: back to the anchor's position (set the new anchor and monitor first, so it doesn't jump back).
+    pub fn drag_end(&self) {
+        let signal = {
+            let mut rt = self.shared.lock();
+            if rt.pill.drag_origin.take().is_none() {
+                return;
+            }
+            rt.desired_visible.then_some(ThreadSignal::Sync { restart_timer: false })
+        };
+        if let Some(sig) = signal {
+            self.shared.post_signal(sig);
+        }
+    }
+
+    /// Where the pill's window would sit at `anchor` on `monitor` in its current state (physical px): the target of the
+    /// D-20 release animation.
+    #[must_use]
+    pub fn origin_for(&self, monitor: &MonitorInfo, anchor: NotchAnchor) -> (i32, i32) {
+        let rt = self.shared.lock();
+        let metrics = frame_metrics(rt.pill.mode, rt.pill.idle_style, rt.pill.notch_style);
+        crate::overlay_win::notch_origin(monitor, anchor, metrics.total_w(), metrics.body_h, metrics.top_offset)
+    }
+
+    /// The pill window's handle (0 before it exists or after it closed), for reading its rectangle.
+    #[must_use]
+    pub fn hwnd_raw(&self) -> isize {
+        self.shared.hwnd_raw.load(Ordering::Acquire)
+    }
+
+    /// D-20: whether pressing and moving the pill starts a drag (`PillInput::DragStart`) or stays a click.
+    pub fn set_drag_enabled(&self, enabled: bool) {
+        self.shared.lock().input.drag_enabled = enabled;
     }
 
     /// Sets whether the native pill floats below the top bezel or docks flush at the screen edge.
@@ -1091,7 +1143,7 @@ fn dot_thread_main(monitor: MonitorInfo, shared: Arc<SharedState>, ready_tx: mps
     let phys_w = monitor.logical_to_physical(IDLE_W);
     let phys_h = monitor.logical_to_physical(IDLE_H);
     // Created hidden at the default anchor; the first paint moves it to the configured one.
-    let (x, y) = crate::overlay_win::notch_origin(&monitor, NotchAnchor::default(), IDLE_W, LOGICAL_TOP_OFFSET);
+    let (x, y) = crate::overlay_win::notch_origin(&monitor, NotchAnchor::default(), IDLE_W, IDLE_H, LOGICAL_TOP_OFFSET);
 
     // SAFETY: creates the hidden layered window owned by this thread.
     let hwnd = match unsafe {
@@ -1340,7 +1392,10 @@ fn paint_pill(hwnd: HWND, monitor: &MonitorInfo, state: &PillState) -> Result<()
     let w = monitor.logical_to_physical(metrics.total_w()).max(16);
     let h = monitor.logical_to_physical(metrics.body_h).max(8);
     // D-20: one placement rule for both hosts (`overlay_win::notch_origin`, `ice_core::placement`).
-    let (x, y) = crate::overlay_win::notch_origin(monitor, state.anchor, metrics.total_w(), metrics.top_offset);
+    // The edge offset counts from the bottom at a bottom anchor (Floating only; Edge Nook is top-only).
+    let (x, y) = state.drag_origin.unwrap_or_else(|| {
+        crate::overlay_win::notch_origin(monitor, state.anchor, metrics.total_w(), metrics.body_h, metrics.top_offset)
+    });
 
     // SAFETY: creates a memory DC compatible with the screen.
     let dc = unsafe { CreateCompatibleDC(None) };

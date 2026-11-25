@@ -1,4 +1,4 @@
-import type { HitRect, NotchSnapshot, SpringPreset } from '../ipc/types.ts';
+import type { HitRect, NotchAnchor, NotchSnapshot, SpringPreset } from '../ipc/types.ts';
 import { DEFAULT_IDLE_MODE, type ActivityView, type IdleMode } from './scheduler.ts';
 
 // Twin: `NOTCH_CANVAS_W`/`NOTCH_CANVAS_H` in crates/ice-core/src/placement.rs (the side anchors reserve this width, D-20). The canvas keeps ≥ 24 px around the expanded
@@ -6,6 +6,12 @@ import { DEFAULT_IDLE_MODE, type ActivityView, type IdleMode } from './scheduler
 export const CANVAS_W = 648;
 export const CANVAS_H = 292;
 export const TOP_PAD = 6;
+/** Twin: `CANVAS_BOTTOM_OVERHANG` (18 = `BOTTOM_PAD - TOP_PAD`) in `crates/ice-core/src/placement.rs`. */
+export const BOTTOM_PAD = 24;
+
+export function isBottomAnchor(anchor: NotchAnchor | null | undefined): boolean {
+  return anchor === 'bottom_left' || anchor === 'bottom_center' || anchor === 'bottom_right';
+}
 
 /** Expanded card: media block + volume + devices beside a side rail (pin, mic, services, lyrics, settings). */
 export const EXPANDED_W = 392;
@@ -92,24 +98,29 @@ export function idleGeometry(
   return { w: micMutedNow ? 132 : 116, h, r, vol };
 }
 
-export function computeHitRect(target: { w: number; h: number }): HitRect {
+export function computeHitRect(target: { w: number; h: number }, bottom = false): HitRect {
   return {
     x: (CANVAS_W - target.w) / 2,
-    y: TOP_PAD,
+    y: bottom ? Math.max(0, CANVAS_H - BOTTOM_PAD - target.h) : TOP_PAD,
     width: target.w,
     height: target.h,
   };
 }
 
-export function computeClipPath(pillSize: { w: number; h: number; r: number }): {
+export function computeClipPath(
+  pillSize: { w: number; h: number; r: number },
+  bottom = false,
+): {
   insetLeft: number;
+  insetTop: number;
   insetBottom: number;
   clipPath: string;
 } {
   const insetLeft = Math.max(0, (CANVAS_W - pillSize.w) / 2);
-  const insetBottom = Math.max(0, CANVAS_H - TOP_PAD - pillSize.h);
-  const clipPath = `inset(${TOP_PAD}px ${insetLeft.toFixed(2)}px ${insetBottom.toFixed(2)}px ${insetLeft.toFixed(2)}px round ${pillSize.r.toFixed(2)}px)`;
-  return { insetLeft, insetBottom, clipPath };
+  const insetTop = bottom ? Math.max(0, CANVAS_H - BOTTOM_PAD - pillSize.h) : TOP_PAD;
+  const insetBottom = bottom ? BOTTOM_PAD : Math.max(0, CANVAS_H - TOP_PAD - pillSize.h);
+  const clipPath = `inset(${insetTop.toFixed(2)}px ${insetLeft.toFixed(2)}px ${insetBottom.toFixed(2)}px ${insetLeft.toFixed(2)}px round ${pillSize.r.toFixed(2)}px)`;
+  return { insetLeft, insetTop, insetBottom, clipPath };
 }
 
 export function resolveRimStroke(

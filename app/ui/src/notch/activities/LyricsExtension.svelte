@@ -26,6 +26,7 @@
     notchVisible: boolean;
     /** The playing output's delay (`DeviceSummary.lyricsDelayMs`): lines light up when they are heard. */
     delayMs?: number;
+    attachedTop?: boolean;
     onSeek?: (positionMs: number) => void;
   }
 
@@ -38,6 +39,7 @@
     instant,
     notchVisible,
     delayMs = 0,
+    attachedTop = false,
     onSeek = () => {},
   }: Props = $props();
 
@@ -187,7 +189,7 @@
   {/if}
 {/snippet}
 
-<div class="lyrics-ext" class:pill={mode === 'pill'} class:card={mode === 'card'} class:nook={mode === 'nook'} class:instant>
+<div class="lyrics-ext" class:pill={mode === 'pill'} class:card={mode === 'card'} class:nook={mode === 'nook'} class:attached-top={attachedTop} class:instant>
   {#if mode === 'pill'}
     <div class="pill-inner">
       <span class="note-dot" class:playing={isPlaying} aria-hidden="true">♪</span>
@@ -259,6 +261,11 @@
     flex-direction: column;
     justify-content: center;
     overflow: hidden;
+  }
+
+  .lyrics-ext.attached-top {
+    border-top: none;
+    border-bottom: 1px solid var(--ice-control-border);
   }
 
   .lyrics-ext.pill {

@@ -40,6 +40,7 @@
     onMediaAction?: (action: MediaAction) => void;
     onOpenMusicService?: (service: MusicServiceId) => void;
     onOpenSettings: () => void;
+    isBottom?: boolean;
   }
 
   let {
@@ -71,6 +72,7 @@
     onMediaAction = () => {},
     onOpenMusicService = () => {},
     onOpenSettings,
+    isBottom = false,
   }: Props = $props();
 
   const activeMedia = $derived(isMediaActive(media) ? media : null);
@@ -78,7 +80,7 @@
   const lyricsAvailable = $derived(hasAnyLyrics(lyrics));
 </script>
 
-<div class="expanded-shell" class:stagger={!instant}>
+<div class="expanded-shell" class:stagger={!instant} class:bottom-anchor={isBottom}>
   <div class="expanded-card">
     <div class="main">
       {#if activeMedia}
@@ -141,6 +143,7 @@
       {instant}
       {notchVisible}
       delayMs={lyricsDelayMs}
+      attachedTop={isBottom}
       onSeek={(positionMs) => onMediaAction({ seek: { positionMs } })}
     />
   {/if}
@@ -154,8 +157,16 @@
     flex-direction: column;
   }
 
+  .expanded-shell.bottom-anchor {
+    flex-direction: column-reverse;
+  }
+
   .expanded-shell.stagger {
     animation: card-reveal 220ms cubic-bezier(0.22, 1, 0.36, 1) 40ms both;
+  }
+
+  .expanded-shell.stagger.bottom-anchor {
+    animation-name: card-reveal-up;
   }
 
   .expanded-card {
@@ -192,6 +203,17 @@
     from {
       opacity: 0;
       transform: translateY(-3px) scale(0.985);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  @keyframes card-reveal-up {
+    from {
+      opacity: 0;
+      transform: translateY(3px) scale(0.985);
     }
     to {
       opacity: 1;

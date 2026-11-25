@@ -31,6 +31,7 @@ function baseSettings(overrides: Partial<SettingsView> = {}): SettingsView {
     performanceProfile: 'instant',
     pinnedMonitor: null,
     notchAnchor: 'top_center',
+    notchPlacement: 'drag_snap',
     defaultRoles: 'default',
     togglePairs: [],
     bindings: [],

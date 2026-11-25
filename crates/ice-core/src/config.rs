@@ -17,7 +17,7 @@ use crate::engine::{
 use crate::hotkey::Chord;
 use crate::lyrics::{LYRICS_CACHE_MAX_MB, LyricsConfig};
 use crate::media::MusicServices;
-use crate::placement::NotchAnchor;
+use crate::placement::{NotchAnchor, NotchPlacement};
 use crate::resolve::{DeviceRef, MatchMode, resolve};
 
 /// v2: performance profile and pinned monitor. v3: `show_disconnected`. v4: saved notch appearance.
@@ -31,7 +31,8 @@ use crate::resolve::{DeviceRef, MatchMode, resolve};
 /// v13: `appearance.hibernateLook` (D-27 `"plain"` notch or `"hidden"` while hibernating).
 /// v14: `[[device]] lyrics_delay_ms` (per-output lyric delay; absent = automatic, see [`auto_lyrics_delay_ms`]).
 /// v15: `notch_anchor` (D-20 `"top_left"` | `"top_center"` default | `"top_right"`).
-pub const SCHEMA_VERSION: u32 = 15;
+/// v16: bottom `notch_anchor` values (Floating) and `notch_placement` (`"drag_snap"` default | `"fixed"`), D-20.
+pub const SCHEMA_VERSION: u32 = 16;
 
 /// Allowed per-device lyric delay, in ms (negative = lyrics earlier).
 pub const LYRICS_DELAY_MS: std::ops::RangeInclusive<i32> = -1000..=2000;
@@ -70,6 +71,8 @@ pub struct Config {
     pub pinned_monitor: Option<String>,
     /// D-20: where on the pinned monitor's top edge the notch sits.
     pub notch_anchor: NotchAnchor,
+    /// D-20: drag the notch to move it (snaps to an anchor), or only move it from the tray and Settings.
+    pub notch_placement: NotchPlacement,
     /// Roles set by switches that don't specify their own.
     pub default_roles: RoleSet,
     /// Device hotkeys: press → switch to that device.
@@ -107,6 +110,7 @@ impl Default for Config {
             performance_profile: PerformanceProfile::default(),
             pinned_monitor: None,
             notch_anchor: NotchAnchor::default(),
+            notch_placement: NotchPlacement::default(),
             default_roles: RoleSet::Default,
             bindings: Vec::new(),
             toggle_pairs: Vec::new(),
@@ -274,7 +278,8 @@ impl Config {
             // v0–v9 gain `visualizer_spectrum = true`, v0–v10 gain `appearance.notchStyle = "nook"`, and v0–v11 gain
             // `appearance.hibernate = false` with `hibernateHideFromCapture = true`, v0–v12 gain
             // `appearance.hibernateLook = "plain"`, v0–v13 devices an automatic lyrics delay (no
-            // `lyrics_delay_ms`), and v0–v14 gain `notch_anchor = "top_center"`, all via serde defaults.
+            // `lyrics_delay_ms`), v0–v14 gain `notch_anchor = "top_center"`, and v0–v15 gain
+            // `notch_placement = "drag_snap"`, all via serde defaults.
             _ => Ok(Self { schema_version: SCHEMA_VERSION, ..cfg }),
         }
     }
@@ -346,6 +351,7 @@ impl Config {
             performance_profile: self.performance_profile,
             pinned_monitor: self.pinned_monitor.clone(),
             notch_anchor: self.notch_anchor,
+            notch_placement: self.notch_placement,
             toggle_pairs: self
                 .toggle_pairs
                 .iter()
@@ -468,6 +474,7 @@ impl Config {
             }
             Command::SetPerformanceProfile { profile } => next.performance_profile = *profile,
             Command::SetNotchAnchor { anchor } => next.notch_anchor = *anchor,
+            Command::SetNotchPlacement { placement } => next.notch_placement = *placement,
             Command::SetPinnedMonitor { display_path } => {
                 if display_path.trim().is_empty() || display_path.chars().any(char::is_control) {
                     return Err("Choose a connected monitor.".into());
@@ -1084,6 +1091,25 @@ mod tests {
         let saved = Config::from_toml(&config.to_toml()).unwrap();
         assert_eq!(saved.notch_anchor, NotchAnchor::TopLeft);
         assert!(config.to_toml().contains("notch_anchor = \"top_left\""), "{}", config.to_toml());
+    }
+
+    #[test]
+    fn v15_migrates_to_drag_and_snap_and_saves_bottom_anchors() {
+        use crate::placement::{NotchAnchor, NotchPlacement};
+        let mut config = Config::from_toml("schema_version = 15\nnotch_anchor = 'top_right'").unwrap();
+        assert_eq!(config.schema_version, SCHEMA_VERSION);
+        assert_eq!(
+            config.view(&[]).notch_placement,
+            NotchPlacement::DragSnap,
+            "D-20 owner ruling: drag & snap by default"
+        );
+        assert_eq!(config.notch_anchor, NotchAnchor::TopRight, "kept");
+        let bottom = Command::SetNotchAnchor { anchor: NotchAnchor::BottomLeft };
+        let fixed = Command::SetNotchPlacement { placement: NotchPlacement::Fixed };
+        assert_eq!(config.apply_setting(&bottom, &[]), Ok(true));
+        assert_eq!(config.apply_setting(&fixed, &[]), Ok(true));
+        let saved = Config::from_toml(&config.to_toml()).unwrap();
+        assert_eq!((saved.notch_anchor, saved.notch_placement), (NotchAnchor::BottomLeft, NotchPlacement::Fixed));
     }
 
     #[test]

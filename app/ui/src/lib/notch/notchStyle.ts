@@ -36,7 +36,9 @@ export interface GeometryContext {
 
 export interface SurfaceShape {
   insetLeft: number;
+  insetTop: number;
   topPad: number;
+  isBottom: boolean;
   earRadius: number;
   clipPath: string;
   shadowRadiusCss: string;
@@ -54,8 +56,8 @@ export interface NotchStyleStrategy {
   readonly usesSideBySideLyrics: boolean;
   earRadius(box: { h: number }): number;
   targetGeometry(ctx: GeometryContext): PillBox;
-  computeSurfaceShape(pillSize: PillBox): SurfaceShape;
-  computeHitRect(target: { w: number; h: number }): HitRect;
+  computeSurfaceShape(pillSize: PillBox, bottom?: boolean): SurfaceShape;
+  computeHitRect(target: { w: number; h: number }, bottom?: boolean): HitRect;
 }
 
 function clampNookArcs(bodyW: number, h: number, rawR: number, rawEar: number): { left: number; right: number; r: number; e: number } {
@@ -125,11 +127,13 @@ export const floatingStyleStrategy: NotchStyleStrategy = Object.freeze({
       vol: base.vol,
     };
   },
-  computeSurfaceShape(pillSize: PillBox): SurfaceShape {
-    const { insetLeft, clipPath } = computeClipPath(pillSize);
+  computeSurfaceShape(pillSize: PillBox, bottom = false): SurfaceShape {
+    const { insetLeft, insetTop, clipPath } = computeClipPath(pillSize, bottom);
     return {
       insetLeft,
+      insetTop,
       topPad: TOP_PAD,
+      isBottom: bottom,
       earRadius: 0,
       clipPath,
       shadowRadiusCss: `${Math.max(0, pillSize.r).toFixed(2)}px`,
@@ -137,7 +141,8 @@ export const floatingStyleStrategy: NotchStyleStrategy = Object.freeze({
       rimPathD: '',
     };
   },
-  computeHitRect: computeFloatingHitRect,
+  computeHitRect: (target: { w: number; h: number }, bottom = false): HitRect =>
+    computeFloatingHitRect(target, bottom),
 });
 
 function nookEarForHeight(h: number): number {
@@ -188,7 +193,9 @@ export const nookStyleStrategy: NotchStyleStrategy = Object.freeze({
     const rimD = buildNookRimPath(left, right, pillSize.h, r, e);
     return {
       insetLeft: Math.max(0, left),
+      insetTop: 0,
       topPad: 0,
+      isBottom: false,
       earRadius: e,
       clipPath: `path('${fillD}')`,
       shadowRadiusCss: `0 0 ${r.toFixed(2)}px ${r.toFixed(2)}px`,

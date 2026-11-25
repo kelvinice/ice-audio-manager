@@ -96,16 +96,15 @@ Runs between Phase 3 and Phase 4. D-21 Part B (C0) applies: every resource cap s
 review first if still relevant"). Review against the code: every item below is still relevant except R1, which Edge
 Nook vs Floating (`notchStyle`) already is. Edge Nook is flush with the top edge, so drag & snap and bottom anchors only
 apply to Floating; the anchors and their placement rule apply to both.*
-- [ ] Drag & snap with our own pointer capture (`SetCapture` + `SetWindowPos(SWP_NOACTIVATE)`), never the system move loop.
-      WebView notch: Codex. Native pill: Gemini.
-  - Click vs drag via `SM_CXDRAG`/`SM_CYDRAG`. Esc cancels.
-  - Anchor slots shown on every monitor while dragging. Release springs to the nearest slot; reduce motion = instant.
-  - Dropping on another monitor re-pins it there.
+- [x] Drag & snap with our own pointer capture (`SetCapture` + `SetWindowPos(SWP_NOACTIVATE)`), never the system move loop.
+      WebView notch (`start_notch_drag`, `drag.ts`, `controller.svelte.ts`): Gemini; Native pill (`native_dot/input.rs`, `drag_ghosts.rs`, `drag.rs`): Claude.
+  - [x] Click vs drag via `SM_CXDRAG`/`SM_CYDRAG` (native) + `DRAG_THRESHOLD_PX` (UI). Esc cancels.
+  - [x] Anchor slots shown on every monitor while dragging (`DragGhosts` layered windows). Release springs (`snap_path`) to the nearest slot; reduce motion = instant.
+  - [x] Dropping on another monitor re-pins it there; Settings → Notch & tray **"Drag to move"** (`NotchPlacement`, schema v16).
 - [ ] **Release gate:** during and after a drag the foreground app keeps focus and keyboard input, on both hosts, across
       150 %/100 % monitors
-- [ ] Bottom anchors, Floating only (Gemini): the notch sits above the taskbar (work area) and expands upwards (flip
-      `.pill-slot`, clip-path, glow origin). With D-28 the card is a song block + output strip, so at the bottom the
-      strip can sit nearest the edge. `NotchAnchor` gains `Bottom*`; `anchor_origin` measures from the work area's bottom
+- [x] Bottom anchors, Floating only (`BottomLeft`/`BottomCenter`/`BottomRight`): notch sits `6 px` above the taskbar (work area + `CANVAS_BOTTOM_OVERHANG`) and expands upwards (flipped `.pill-slot`, `.pill-shadow`, `clip-path`/`<rect y>`, bottom glow origin, `.expanded-shell` / `.track-with-lyrics` `column-reverse` so `OutputStrip` & `TrackActivity` sit closest to the taskbar edge).
+- [ ] **D-29 (open in planning-discussion.md):** horizontal side-edge anchors (left/right bezels) with drag-and-attach
 - [ ] R2 optional modules (Phase 4 Activities): a disabled module runs no timer, subscription or IPC. *Partly there:
       music services, lyrics and the spectrum each have a switch; per-pop-up switches (volume, switch, track) remain*
 

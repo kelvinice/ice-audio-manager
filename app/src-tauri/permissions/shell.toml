@@ -9,7 +9,7 @@ description = "Operate the notch and its audio controls."
 commands.allow = [
   "get_engine_snapshot", "report_hit_rect", "report_first_paint", "report_event_rendered",
   "adjust_volume", "set_volume", "toggle_mute", "toggle_mic_mute", "trigger_switch", "switch_to_device",
-  "media_command", "open_music_service", "toggle_expand", "request_idle_suspend", "open_settings", "set_hibernate",
+  "media_command", "open_music_service", "toggle_expand", "request_idle_suspend", "open_settings", "set_hibernate", "start_notch_drag",
 ]
 
 [[permission]]

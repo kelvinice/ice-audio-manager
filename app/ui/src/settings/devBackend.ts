@@ -45,6 +45,7 @@ function initialSnapshot(): EngineSnapshot {
       performanceProfile: 'instant',
       pinnedMonitor: 'DISPLAY-PATH-1',
       notchAnchor: 'top_center',
+      notchPlacement: 'drag_snap',
       defaultRoles: 'default',
       togglePairs: [{ id: 'main', hotkey: 'Ctrl+Alt+F12', primary: saved(speakers), secondary: saved(arctis), roles: null }],
       bindings: [{ id: 'binding-1', hotkey: 'Ctrl+Alt+F11', device: saved(lg), roles: null }],
@@ -94,6 +95,7 @@ const notch: NotchSnapshot = {
   theme: 'ice',
   idleStyle: 'mini_pill',
   notchStyle: 'nook',
+  anchor: 'top_center',
   expanded: false,
   suspended: false,
   hiddenForBench: false,
@@ -120,7 +122,8 @@ function applyCommand(s: EngineSnapshot, c: Command): void {
     case 'setHibernateHideFromCapture': st.appearance.hibernateHideFromCapture = c.enabled; break;
     case 'setPerformanceProfile': st.performanceProfile = c.profile; break;
     case 'setPinnedMonitor': st.pinnedMonitor = c.displayPath; break;
-    case 'setNotchAnchor': st.notchAnchor = c.anchor; break;
+    case 'setNotchAnchor': st.notchAnchor = c.anchor; notch.anchor = c.anchor; break;
+    case 'setNotchPlacement': st.notchPlacement = c.placement; break;
     case 'setKnobGestures': st.knobGestures = c.enabled; break;
     case 'setShowDisconnected': st.showDisconnected = c.enabled; break;
     case 'setIdleLinger': st.idleLingerSecs = c.secs; break;

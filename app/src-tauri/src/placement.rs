@@ -133,8 +133,10 @@ fn reconcile(app: &AppHandle, state: &Arc<SharedRuntime>, settings: Option<&Sett
             p.pinned.clone_from(&settings.pinned_monitor);
             repin = true;
         }
-        if p.anchor != settings.notch_anchor {
-            p.anchor = settings.notch_anchor;
+        // The anchor in use: Edge Nook maps a bottom anchor to the top (`NotchAnchor::effective_for`).
+        let anchor = settings.notch_anchor.effective_for(settings.appearance.notch_style);
+        if p.anchor != anchor {
+            p.anchor = anchor;
             repin = true;
         }
     }
@@ -182,6 +184,7 @@ fn reconcile(app: &AppHandle, state: &Arc<SharedRuntime>, settings: Option<&Sett
         }
     }
     state.update_and_emit(app, |view| {
+        view.anchor = anchor;
         view.active_monitor = target.as_ref().map_or(0, |(index, _)| *index);
         if let Some(summaries) = monitor_summaries {
             view.monitors = summaries;
@@ -211,14 +214,7 @@ fn reconcile(app: &AppHandle, state: &Arc<SharedRuntime>, settings: Option<&Sett
     {
         let hwnd = state.notch_hwnd.load(Ordering::Acquire);
         if hwnd != 0
-            && let Err(error) = super::overlay_win::move_notch(
-                hwnd,
-                &monitor,
-                anchor,
-                super::NOTCH_CANVAS_W,
-                super::NOTCH_CANVAS_H,
-                super::NOTCH_TOP_OFFSET,
-            )
+            && let Err(error) = super::overlay_win::move_notch(hwnd, &monitor, anchor)
         {
             tracing::warn!(%error, "Could not reposition notch");
         }

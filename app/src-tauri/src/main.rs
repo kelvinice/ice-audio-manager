@@ -2,6 +2,7 @@
 #![forbid(unsafe_code)]
 
 mod art;
+mod drag;
 mod engine_bridge;
 mod ipc;
 mod logging;
@@ -36,7 +37,6 @@ use crate::ipc::{ActivityKind, HitRect, MonitorSummary, NotchDelta, NotchSnapsho
 // One copy of the canvas size: `ice_core::placement` (twin of `geometry.ts`).
 const NOTCH_CANVAS_W: i32 = ice_core::placement::NOTCH_CANVAS_W;
 const NOTCH_CANVAS_H: i32 = ice_core::placement::NOTCH_CANVAS_H;
-const NOTCH_TOP_OFFSET: i32 = 0;
 
 struct SharedRuntime {
     engine: engine_bridge::EngineSlot,
@@ -44,6 +44,8 @@ struct SharedRuntime {
     bench_mode: bool,
     tray_prompts: Mutex<tray::Prompts>,
     cursor_poll_running: AtomicBool,
+    /// D-20: a notch drag is running (`drag.rs`); a second press can't start another.
+    dragging: AtomicBool,
     notch_opening: AtomicBool,
     settings_opening: AtomicBool,
     notch_suspended: AtomicBool,
@@ -96,6 +98,7 @@ impl SharedRuntime {
             theme: initial.settings.appearance.theme,
             idle_style: initial.settings.appearance.effective_idle_style(),
             notch_style: initial.settings.appearance.notch_style,
+            anchor: initial.settings.notch_anchor.effective_for(initial.settings.appearance.notch_style),
             expanded: false,
             suspended: false,
             hidden_for_bench: false,
@@ -110,6 +113,7 @@ impl SharedRuntime {
             bench_mode,
             tray_prompts: Mutex::default(),
             cursor_poll_running: AtomicBool::new(false),
+            dragging: AtomicBool::new(false),
             notch_opening: AtomicBool::new(false),
             settings_opening: AtomicBool::new(false),
             notch_suspended: AtomicBool::new(false),
@@ -303,6 +307,13 @@ fn toggle_expand(app: AppHandle, state: State<'_, Arc<SharedRuntime>>) {
     });
 }
 
+/// D-20: the notch's pill (or card) was pressed and moved past the drag threshold; the shell runs the drag from here
+/// (`drag.rs`). Does nothing when placement is `fixed`, while hibernating, or while another drag runs.
+#[tauri::command]
+fn start_notch_drag(app: AppHandle, state: State<'_, Arc<SharedRuntime>>) {
+    drag::start(&app, &state, drag::Host::WebView);
+}
+
 /// D-27: the notch's hibernate button. Only this one setting is open to the notch window (least privilege). The card
 /// unpins in `engine_bridge::project` when the setting lands, whichever way it was turned on.
 #[tauri::command]
@@ -407,14 +418,7 @@ pub(crate) fn wake_notch_on_main(app: &AppHandle, state: &Arc<SharedRuntime>, wa
         && let Ok(hw) = win.hwnd()
     {
         let hwnd = hw.0 as isize;
-        let _ = overlay_win::move_notch(
-            hwnd,
-            &mon,
-            state.placement().anchor,
-            NOTCH_CANVAS_W,
-            NOTCH_CANVAS_H,
-            NOTCH_TOP_OFFSET,
-        );
+        let _ = overlay_win::move_notch(hwnd, &mon, state.placement().anchor);
         let _ = win.show();
         let _ = overlay_win::ensure_topmost(hwnd);
         state.notch_hwnd.store(hwnd, Ordering::Release);
@@ -494,9 +498,9 @@ fn create_notch_window(app: &AppHandle, state: &Arc<SharedRuntime>, generation: 
     }
 
     let monitor = state.active_monitor_info().ok_or_else(|| "no active monitor found".to_string())?;
-    let phys_w = f64::from(monitor.logical_to_physical(NOTCH_CANVAS_W));
-    let phys_x = f64::from(monitor.left) + (f64::from(monitor.width) - phys_w) * 0.5;
-    let phys_y = f64::from(monitor.top + monitor.logical_to_physical(NOTCH_TOP_OFFSET));
+    // Created hidden at its anchor (D-20, `overlay_win::canvas_origin`); `move_notch` places it again when shown.
+    let (phys_x, phys_y) = overlay_win::canvas_origin(&monitor, state.placement().anchor);
+    let (phys_x, phys_y) = (f64::from(phys_x), f64::from(phys_y));
 
     let win = WebviewWindowBuilder::new(app, "notch", WebviewUrl::App("index.html".into()))
         .on_page_load(meter::page_load)
@@ -529,15 +533,7 @@ fn create_notch_window(app: &AppHandle, state: &Arc<SharedRuntime>, generation: 
             meter::watch_renderer(&win, &state).map_err(|e| e.to_string())?;
             overlay_win::apply_overlay_styles(hwnd).map_err(|e| e.to_string())?;
             engine_bridge::apply_capture_privacy(app, &state.engine.snapshot().settings.appearance);
-            overlay_win::move_notch(
-                hwnd,
-                &monitor,
-                state.placement().anchor,
-                NOTCH_CANVAS_W,
-                NOTCH_CANVAS_H,
-                NOTCH_TOP_OFFSET,
-            )
-            .map_err(|e| e.to_string())?;
+            overlay_win::move_notch(hwnd, &monitor, state.placement().anchor).map_err(|e| e.to_string())?;
             win.show().map_err(|e| e.to_string())?;
             overlay_win::ensure_topmost(hwnd).map_err(|e| e.to_string())?;
             state.notch_hwnd.store(hwnd, Ordering::Release);
@@ -612,6 +608,10 @@ fn spawn_cursor_poll(app: &AppHandle, state: Arc<SharedRuntime>, benchmark: bool
                 continue;
             }
             last_hwnd = hwnd;
+            if state.dragging.load(Ordering::Acquire) {
+                std::thread::sleep(Duration::from_millis(34));
+                continue;
+            }
 
             let Some((cx, cy)) = overlay_win::cursor_pos() else {
                 std::thread::sleep(Duration::from_millis(100));
@@ -858,9 +858,9 @@ fn spawn_notch_and_measure(app: &AppHandle, state: &Arc<SharedRuntime>) -> Resul
 
     let start = Instant::now();
     let monitor = state.active_monitor_info().ok_or_else(|| "no active monitor found".to_string())?;
-    let phys_w = f64::from(monitor.logical_to_physical(NOTCH_CANVAS_W));
-    let phys_x = f64::from(monitor.left) + (f64::from(monitor.width) - phys_w) * 0.5;
-    let phys_y = f64::from(monitor.top + monitor.logical_to_physical(NOTCH_TOP_OFFSET));
+    // Created hidden at its anchor (D-20, `overlay_win::canvas_origin`); `move_notch` places it again when shown.
+    let (phys_x, phys_y) = overlay_win::canvas_origin(&monitor, state.placement().anchor);
+    let (phys_x, phys_y) = (f64::from(phys_x), f64::from(phys_y));
 
     // Must be called from a non-main thread (`tauri-runtime-wry` dispatches window creation to main loop).
     let win = WebviewWindowBuilder::new(app, "notch", WebviewUrl::App("index.html".into()))
@@ -885,15 +885,7 @@ fn spawn_notch_and_measure(app: &AppHandle, state: &Arc<SharedRuntime>) -> Resul
         move |h| {
             let hwnd = win.hwnd().map_err(|e| e.to_string())?.0 as isize;
             overlay_win::apply_overlay_styles(hwnd).map_err(|e| e.to_string())?;
-            overlay_win::move_notch(
-                hwnd,
-                &mon,
-                st.placement().anchor,
-                NOTCH_CANVAS_W,
-                NOTCH_CANVAS_H,
-                NOTCH_TOP_OFFSET,
-            )
-            .map_err(|e| e.to_string())?;
+            overlay_win::move_notch(hwnd, &mon, st.placement().anchor).map_err(|e| e.to_string())?;
             win.show().map_err(|e| e.to_string())?;
             overlay_win::ensure_topmost(hwnd).map_err(|e| e.to_string())?;
             st.notch_hwnd.store(hwnd, Ordering::Release);
@@ -1320,15 +1312,7 @@ fn cycle_monitor_internal(app: &AppHandle, state: &Arc<SharedRuntime>) -> Result
     if let Some(mon) = state.active_monitor_info() {
         let hwnd = state.notch_hwnd.load(Ordering::Acquire);
         if hwnd != 0 {
-            overlay_win::move_notch(
-                hwnd,
-                &mon,
-                state.placement().anchor,
-                NOTCH_CANVAS_W,
-                NOTCH_CANVAS_H,
-                NOTCH_TOP_OFFSET,
-            )
-            .map_err(|e| e.to_string())?;
+            overlay_win::move_notch(hwnd, &mon, state.placement().anchor).map_err(|e| e.to_string())?;
         }
         if let Some(dot) = state.native_dot.lock().unwrap_or_else(std::sync::PoisonError::into_inner).as_ref() {
             dot.move_to_monitor(mon);
@@ -1402,6 +1386,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             set_volume,
             toggle_mute,
             set_hibernate,
+            start_notch_drag,
             toggle_mic_mute,
             trigger_switch,
             switch_to_device,
