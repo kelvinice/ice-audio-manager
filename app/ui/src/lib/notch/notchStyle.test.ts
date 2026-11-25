@@ -94,10 +94,11 @@ test('hibernate keeps the plain idle shape whatever plays, pops up or is muted',
   }
 });
 
-test('D-20 bottom anchors measure from BOTTOM_PAD in Floating and stay top-only in Edge Nook', () => {
+test('D-20 bottom anchors measure from BOTTOM_PAD in Floating and flush on CANVAS_H in Edge Nook', () => {
   const pill = { w: 116, h: 28, r: 14, vol: 40 };
   const floatBottom = floatingStyleStrategy.computeSurfaceShape(pill, true);
   assert.equal(floatBottom.isBottom, true);
+  assert.equal(floatBottom.bottomPad, BOTTOM_PAD);
   assert.equal(floatBottom.insetTop, CANVAS_H - BOTTOM_PAD - pill.h);
   assert.ok(floatBottom.clipPath.includes(`inset(${floatBottom.insetTop.toFixed(2)}px`));
 
@@ -105,8 +106,11 @@ test('D-20 bottom anchors measure from BOTTOM_PAD in Floating and stay top-only 
   assert.equal(floatBottomHit.y, CANVAS_H - BOTTOM_PAD - 164);
 
   const nookBottom = nookStyleStrategy.computeSurfaceShape(pill, true);
-  assert.equal(nookBottom.isBottom, false);
-  assert.equal(nookBottom.insetTop, 0);
+  assert.equal(nookBottom.isBottom, true);
+  assert.equal(nookBottom.bottomPad, 0);
+  assert.equal(nookBottom.insetTop, CANVAS_H - pill.h);
+  assert.ok(nookBottom.rimPathD.includes(`${CANVAS_H.toFixed(2)}`));
+  assert.ok(nookBottom.rimPathD.includes(`${(CANVAS_H - pill.h).toFixed(2)}`));
   const nookBottomHit = nookStyleStrategy.computeHitRect({ w: 116, h: 30 }, true);
-  assert.equal(nookBottomHit.y, 0);
+  assert.equal(nookBottomHit.y, CANVAS_H - 30);
 });

@@ -45,6 +45,7 @@ function initialSnapshot(): EngineSnapshot {
       performanceProfile: 'instant',
       pinnedMonitor: 'DISPLAY-PATH-1',
       notchAnchor: 'top_center',
+      notchXRatio: null,
       notchPlacement: 'drag_snap',
       defaultRoles: 'default',
       togglePairs: [{ id: 'main', hotkey: 'Ctrl+Alt+F12', primary: saved(speakers), secondary: saved(arctis), roles: null }],
@@ -83,6 +84,7 @@ function initialSnapshot(): EngineSnapshot {
 const notch: NotchSnapshot = {
   revision: 1,
   eventSeq: 0,
+  placedSeq: 0,
   activity: 'idle',
   volumePercent: 42,
   muted: false,
@@ -122,7 +124,8 @@ function applyCommand(s: EngineSnapshot, c: Command): void {
     case 'setHibernateHideFromCapture': st.appearance.hibernateHideFromCapture = c.enabled; break;
     case 'setPerformanceProfile': st.performanceProfile = c.profile; break;
     case 'setPinnedMonitor': st.pinnedMonitor = c.displayPath; break;
-    case 'setNotchAnchor': st.notchAnchor = c.anchor; notch.anchor = c.anchor; break;
+    case 'setNotchAnchor': st.notchAnchor = c.anchor; st.notchXRatio = null; notch.anchor = c.anchor; notch.placedSeq += 1; break;
+    case 'setNotchPosition': st.notchAnchor = c.anchor; st.notchXRatio = c.xRatio; notch.anchor = c.anchor; notch.placedSeq += 1; break;
     case 'setNotchPlacement': st.notchPlacement = c.placement; break;
     case 'setKnobGestures': st.knobGestures = c.enabled; break;
     case 'setShowDisconnected': st.showDisconnected = c.enabled; break;

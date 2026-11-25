@@ -1,5 +1,7 @@
 import type { HitRect, NotchStyle } from '../ipc/types.ts';
 import {
+  BOTTOM_PAD,
+  CANVAS_H,
   CANVAS_W,
   computeClipPath,
   computeHitRect as computeFloatingHitRect,
@@ -38,6 +40,7 @@ export interface SurfaceShape {
   insetLeft: number;
   insetTop: number;
   topPad: number;
+  bottomPad: number;
   isBottom: boolean;
   earRadius: number;
   clipPath: string;
@@ -71,16 +74,40 @@ function clampNookArcs(bodyW: number, h: number, rawR: number, rawEar: number): 
   return { left, right, r, e };
 }
 
-/** Closed clockwise SVG path anchored flush at `y = 0` with concave top ears and rounded bottom corners. */
-export function buildNookFillPath(left: number, right: number, h: number, r: number, ear: number): string {
-  const open = buildNookRimPath(left, right, h, r, ear);
+/** Closed clockwise SVG path anchored flush at `y = 0` (top) or `y = CANVAS_H` (bottom). */
+export function buildNookFillPath(left: number, right: number, h: number, r: number, ear: number, bottom = false): string {
+  const open = buildNookRimPath(left, right, h, r, ear, bottom);
   return `${open} Z`;
 }
 
-/** Open clockwise SVG stroke path along ears, side walls, and bottom corners (omits top bezel line at `y = 0`). */
-export function buildNookRimPath(left: number, right: number, h: number, r: number, ear: number): string {
+/** Open SVG stroke path along ears, side walls, and free rounded corners (omits flushed bezel/taskbar line). */
+export function buildNookRimPath(left: number, right: number, h: number, r: number, ear: number, bottom = false): string {
   const safeH = Math.max(4, h);
   const f = (n: number) => n.toFixed(2);
+  if (bottom) {
+    const baseY = CANVAS_H;
+    const topY = Math.max(0, CANVAS_H - safeH);
+    if (ear < 0.5) {
+      return (
+        `M ${f(left)} ${f(baseY)}` +
+        ` L ${f(left)} ${f(topY + r)}` +
+        ` A ${f(r)} ${f(r)} 0 0 1 ${f(left + r)} ${f(topY)}` +
+        ` L ${f(right - r)} ${f(topY)}` +
+        ` A ${f(r)} ${f(r)} 0 0 1 ${f(right)} ${f(topY + r)}` +
+        ` L ${f(right)} ${f(baseY)}`
+      );
+    }
+    return (
+      `M ${f(left - ear)} ${f(baseY)}` +
+      ` A ${f(ear)} ${f(ear)} 0 0 0 ${f(left)} ${f(baseY - ear)}` +
+      ` L ${f(left)} ${f(topY + r)}` +
+      ` A ${f(r)} ${f(r)} 0 0 1 ${f(left + r)} ${f(topY)}` +
+      ` L ${f(right - r)} ${f(topY)}` +
+      ` A ${f(r)} ${f(r)} 0 0 1 ${f(right)} ${f(topY + r)}` +
+      ` L ${f(right)} ${f(baseY - ear)}` +
+      ` A ${f(ear)} ${f(ear)} 0 0 0 ${f(right + ear)} ${f(baseY)}`
+    );
+  }
   if (ear < 0.5) {
     return (
       `M ${f(left)} 0` +
@@ -133,6 +160,7 @@ export const floatingStyleStrategy: NotchStyleStrategy = Object.freeze({
       insetLeft,
       insetTop,
       topPad: TOP_PAD,
+      bottomPad: BOTTOM_PAD,
       isBottom: bottom,
       earRadius: 0,
       clipPath,
@@ -186,29 +214,30 @@ export const nookStyleStrategy: NotchStyleStrategy = Object.freeze({
         return idleGeometry(ctx.idleMode, ctx.hasMedia, ctx.micMuted, vol, 2, true);
     }
   },
-  computeSurfaceShape(pillSize: PillBox): SurfaceShape {
+  computeSurfaceShape(pillSize: PillBox, bottom = false): SurfaceShape {
     const rawEar = nookEarForHeight(pillSize.h);
     const { left, right, r, e } = clampNookArcs(pillSize.w, pillSize.h, pillSize.r, rawEar);
-    const fillD = buildNookFillPath(left, right, pillSize.h, r, e);
-    const rimD = buildNookRimPath(left, right, pillSize.h, r, e);
+    const fillD = buildNookFillPath(left, right, pillSize.h, r, e, bottom);
+    const rimD = buildNookRimPath(left, right, pillSize.h, r, e, bottom);
     return {
       insetLeft: Math.max(0, left),
-      insetTop: 0,
+      insetTop: bottom ? Math.max(0, CANVAS_H - pillSize.h) : 0,
       topPad: 0,
-      isBottom: false,
+      bottomPad: 0,
+      isBottom: bottom,
       earRadius: e,
       clipPath: `path('${fillD}')`,
-      shadowRadiusCss: `0 0 ${r.toFixed(2)}px ${r.toFixed(2)}px`,
+      shadowRadiusCss: bottom ? `${r.toFixed(2)}px ${r.toFixed(2)}px 0 0` : `0 0 ${r.toFixed(2)}px ${r.toFixed(2)}px`,
       rimKind: 'path',
       rimPathD: rimD,
     };
   },
-  computeHitRect(target: { w: number; h: number }): HitRect {
+  computeHitRect(target: { w: number; h: number }, bottom = false): HitRect {
     const ear = nookEarForHeight(target.h);
     const width = target.w + ear * 2;
     return {
       x: Math.max(0, (CANVAS_W - width) / 2),
-      y: 0,
+      y: bottom ? Math.max(0, CANVAS_H - target.h) : 0,
       width,
       height: target.h,
     };

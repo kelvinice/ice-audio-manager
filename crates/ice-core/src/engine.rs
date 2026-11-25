@@ -285,9 +285,14 @@ pub enum Command {
     SetPerformanceProfile {
         profile: PerformanceProfile,
     },
-    /// D-20: move the notch to another anchor on its monitor's top edge.
+    /// D-20: move the notch to another preset anchor on its monitor (clears any custom horizontal drag offset).
     SetNotchAnchor {
         anchor: NotchAnchor,
+    },
+    /// D-20: place the notch at a preset anchor plus optional continuous horizontal ratio (`0.0..=1.0`).
+    SetNotchPosition {
+        anchor: NotchAnchor,
+        x_ratio: Option<f32>,
     },
     /// D-20: drag and snap the notch, or keep it where the tray and Settings put it.
     SetNotchPlacement {
@@ -373,6 +378,7 @@ impl Command {
             | Self::SetPerformanceProfile { .. }
             | Self::SetPinnedMonitor { .. }
             | Self::SetNotchAnchor { .. }
+            | Self::SetNotchPosition { .. }
             | Self::SetNotchPlacement { .. }
             | Self::SetKnobGestures { .. }
             | Self::SetShowDisconnected { .. }
@@ -460,10 +466,13 @@ pub struct SettingsView {
     pub performance_profile: PerformanceProfile,
     #[serde(default)]
     pub pinned_monitor: Option<String>,
-    /// D-20: where on the pinned monitor's top edge the notch sits.
+    /// D-20: where on the pinned monitor's top or bottom edge the notch sits.
     #[serde(default)]
     pub notch_anchor: NotchAnchor,
-    /// D-20: drag to move (snaps to an anchor) or fixed.
+    /// D-20: optional continuous horizontal offset (`0.0..=1.0`) between Left and Right; `None` = preset `notch_anchor`.
+    #[serde(default)]
+    pub notch_x_ratio: Option<f32>,
+    /// D-20: drag to move along the monitor edge or fixed.
     #[serde(default)]
     pub notch_placement: NotchPlacement,
     pub default_roles: RoleSet,

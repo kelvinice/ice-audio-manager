@@ -43,6 +43,7 @@
     onOpenMusicService?: (service: MusicServiceId) => void;
     onOpenSettings: () => void;
     onHibernate?: () => void;
+    isBottom?: boolean;
   }
 
   let {
@@ -75,6 +76,7 @@
     onOpenMusicService = () => {},
     onOpenSettings,
     onHibernate = () => {},
+    isBottom = false,
   }: Props = $props();
 
   const activeMedia = $derived(isMediaActive(media) ? media : null);
@@ -85,7 +87,7 @@
   const paused = $derived(activeMedia !== null && activeMedia.status !== 'playing');
 </script>
 
-<div class="nook-shell" class:stagger={!instant}>
+<div class="nook-shell" class:stagger={!instant} class:bottom-anchor={isBottom}>
   <header class="nook-top">
     <div class="nook-status">
       {#if source}
@@ -173,8 +175,16 @@
     gap: 6px;
   }
 
+  .nook-shell.bottom-anchor {
+    padding: 10px 6px 6px;
+  }
+
   .nook-shell.stagger {
     animation: nook-reveal 220ms cubic-bezier(0.22, 1, 0.36, 1) 30ms both;
+  }
+
+  .nook-shell.stagger.bottom-anchor {
+    animation-name: nook-reveal-bottom;
   }
 
   .nook-top {
@@ -282,6 +292,17 @@
     from {
       opacity: 0;
       transform: translateY(-3px) scale(0.985);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  @keyframes nook-reveal-bottom {
+    from {
+      opacity: 0;
+      transform: translateY(3px) scale(0.985);
     }
     to {
       opacity: 1;

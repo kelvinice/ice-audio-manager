@@ -74,3 +74,4 @@ created when opened and destroyed when closed (shell: `app/src-tauri/src/setting
 - 2026-11-25 Claude: Devices → a playback device → "Lyrics delay" select (`lyricsDelayChoice` / `lyricsDelayFromChoice` in `model.ts`, + test; Auto shows the automatic value); `devBackend` handles `setLyricsDelay`.
 - 2026-11-25 Claude: Notch → Display: "Position" choice (D-20 anchors, `SetNotchAnchor`); `devBackend` handles it.
 - 2026-11-25 Gemini: D-20 `NotchPage` 6-position anchor grid (bottom slots disabled under Edge Nook, `ChoiceGroup.disabled`) + "Movement" (`Drag & snap` / `Fixed position`, `SetNotchPlacement`); `devBackend` updated.
+- 2026-11-25 Gemini: enabled all six anchors for Edge Nook too, added `"Custom position (N%)"` `InfoBar` when `settings.notchXRatio` is set (`ChoiceGroup` accepts `null`), and updated `devBackend` for `setNotchPosition` and `placedSeq`.

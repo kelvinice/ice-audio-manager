@@ -20,7 +20,10 @@ use windows::Win32::UI::WindowsAndMessaging::{
 };
 use windows::core::{BOOL, Result};
 
-use ice_core::placement::{Area, NOTCH_CANVAS_H, NOTCH_CANVAS_W, NotchAnchor, anchor_origin, canvas_edge_offset};
+use ice_core::appearance::NotchStyle;
+use ice_core::placement::{
+    Area, NOTCH_CANVAS_H, NOTCH_CANVAS_W, NotchAnchor, anchor_origin_at, canvas_edge_offset_for,
+};
 
 use crate::monitors::MonitorInfo;
 
@@ -144,10 +147,8 @@ pub const fn work_area(monitor: &MonitorInfo) -> Area {
     Area { left: monitor.work_left, top: monitor.work_top, width: monitor.work_width, height: monitor.work_height }
 }
 
-/// Where a `logical_w` × `logical_h` notch box goes on `monitor` for `anchor` (D-20): centred on the anchor's point in
-/// the work area, which reserves the full notch canvas, `edge_offset_logical` in from the anchored edge (the top, or
-/// the bottom above the taskbar). Physical px. Shared by the WebView notch and the native pill, so both sit on one
-/// centre (`ice_core::placement`).
+/// Where a `logical_w` × `logical_h` notch box goes on `monitor` for `anchor` and optional `x_ratio` (D-20): centred
+/// horizontally (clamped so the full notch canvas stays on-screen), `edge_offset_logical` in from the anchored edge.
 #[must_use]
 pub fn notch_origin(
     monitor: &MonitorInfo,
@@ -156,8 +157,22 @@ pub fn notch_origin(
     logical_h: i32,
     edge_offset_logical: i32,
 ) -> (i32, i32) {
-    anchor_origin(
+    notch_origin_at(monitor, anchor, None, logical_w, logical_h, edge_offset_logical)
+}
+
+/// Like [`notch_origin`], accepting an optional continuous horizontal ratio (`0.0..=1.0`).
+#[must_use]
+pub fn notch_origin_at(
+    monitor: &MonitorInfo,
+    anchor: NotchAnchor,
+    x_ratio: Option<f32>,
+    logical_w: i32,
+    logical_h: i32,
+    edge_offset_logical: i32,
+) -> (i32, i32) {
+    anchor_origin_at(
         anchor,
+        x_ratio,
         work_area(monitor),
         monitor.logical_to_physical(NOTCH_CANVAS_W),
         monitor.logical_to_physical(logical_w),
@@ -166,22 +181,33 @@ pub fn notch_origin(
     )
 }
 
-/// Where the WebView notch canvas (`NOTCH_CANVAS_W` × `NOTCH_CANVAS_H`) goes for `anchor`: flush at a top anchor,
-/// overhanging the taskbar by the shadow room at a bottom one (`ice_core::placement::canvas_edge_offset`).
+/// Where the WebView notch canvas (`NOTCH_CANVAS_W` × `NOTCH_CANVAS_H`) goes for `(anchor, x_ratio, style)`: flush at
+/// top, flush on taskbar at bottom for Edge Nook, or overhanging by shadow room at bottom for Floating.
 #[must_use]
-pub fn canvas_origin(monitor: &MonitorInfo, anchor: NotchAnchor) -> (i32, i32) {
-    notch_origin(monitor, anchor, NOTCH_CANVAS_W, NOTCH_CANVAS_H, canvas_edge_offset(anchor))
+pub fn canvas_origin(
+    monitor: &MonitorInfo,
+    anchor: NotchAnchor,
+    x_ratio: Option<f32>,
+    style: NotchStyle,
+) -> (i32, i32) {
+    notch_origin_at(monitor, anchor, x_ratio, NOTCH_CANVAS_W, NOTCH_CANVAS_H, canvas_edge_offset_for(anchor, style))
 }
 
-/// Positions and sizes the WebView notch canvas at `anchor` on `monitor` (D-20).
+/// Positions and sizes the WebView notch canvas at `(anchor, x_ratio, style)` on `monitor` (D-20).
 ///
 /// # Errors
 /// Fails if `hwnd` is null or `SetWindowPos` returns an OS error.
-pub fn move_notch(hwnd: isize, monitor: &MonitorInfo, anchor: NotchAnchor) -> Result<()> {
+pub fn move_notch(
+    hwnd: isize,
+    monitor: &MonitorInfo,
+    anchor: NotchAnchor,
+    x_ratio: Option<f32>,
+    style: NotchStyle,
+) -> Result<()> {
     let hwnd = to_hwnd(hwnd)?;
     let phys_w = monitor.logical_to_physical(NOTCH_CANVAS_W);
     let phys_h = monitor.logical_to_physical(NOTCH_CANVAS_H);
-    let (x, y) = canvas_origin(monitor, anchor);
+    let (x, y) = canvas_origin(monitor, anchor, x_ratio, style);
     // SAFETY: `hwnd` is valid; `SWP_NOACTIVATE | SWP_NOSENDCHANGING` prevents activation or redundant frame flashes.
     unsafe {
         SetWindowPos(

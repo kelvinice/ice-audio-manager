@@ -93,17 +93,16 @@ Runs between Phase 3 and Phase 4. D-21 Part B (C0) applies: every resource cap s
 - [ ] Side-by-side visual QA of the native and WebView idle pills (all states, light/dark, 100 %/150 %, both monitors)
 
 **D-20 · placement (owner ruling: both methods, drag & snap by default):** *Resumed 2026-11-25 (owner: "continue …
-review first if still relevant"). Review against the code: every item below is still relevant except R1, which Edge
-Nook vs Floating (`notchStyle`) already is. Edge Nook is flush with the top edge, so drag & snap and bottom anchors only
-apply to Floating; the anchors and their placement rule apply to both.*
-- [x] Drag & snap with our own pointer capture (`SetCapture` + `SetWindowPos(SWP_NOACTIVATE)`), never the system move loop.
-      WebView notch (`start_notch_drag`, `drag.ts`, `controller.svelte.ts`): Gemini; Native pill (`native_dot/input.rs`, `drag_ghosts.rs`, `drag.rs`): Claude.
+review first if still relevant"; updated 2026-11-25 for flexible markless horizontal placement, bottom Edge Nook, and
+landing settle animation). Every item below is in place (the focus gate remains by-hand).*
+- [x] Flexible markless drag & drop with our own pointer capture (`SetCapture` + `SetWindowPos(SWP_NOACTIVATE)`), never the system move loop.
+      WebView notch (`start_notch_drag`, `drag.ts`, `controller.svelte.ts`): Gemini; Native pill (`native_dot/input.rs`, `drag.rs`): Claude & Gemini.
   - [x] Click vs drag via `SM_CXDRAG`/`SM_CYDRAG` (native) + `DRAG_THRESHOLD_PX` (UI). Esc cancels.
-  - [x] Anchor slots shown on every monitor while dragging (`DragGhosts` layered windows). Release springs (`snap_path`) to the nearest slot; reduce motion = instant.
-  - [x] Dropping on another monitor re-pins it there; Settings → Notch & tray **"Drag to move"** (`NotchPlacement`, schema v16).
+  - [x] Continuous horizontal placement (`notch_x_ratio` in schema v17) anywhere between Left and Right without visual slot/ghost marks, clamped to monitor bounds (`NOTCH_CANVAS_W`), with silent 14 px magnet at Left/Centre/Right and compositor-only settle + accent rim flash (`placed_seq` / `flash_placed`). Reduce motion = instant.
+  - [x] Dropping on another monitor re-pins it there; Settings → Notch & tray **"Drag & place"** (`NotchPlacement`, schema v16).
 - [ ] **Release gate:** during and after a drag the foreground app keeps focus and keyboard input, on both hosts, across
       150 %/100 % monitors
-- [x] Bottom anchors, Floating only (`BottomLeft`/`BottomCenter`/`BottomRight`): notch sits `6 px` above the taskbar (work area + `CANVAS_BOTTOM_OVERHANG`) and expands upwards (flipped `.pill-slot`, `.pill-shadow`, `clip-path`/`<rect y>`, bottom glow origin, `.expanded-shell` / `.track-with-lyrics` `column-reverse` so `OutputStrip` & `TrackActivity` sit closest to the taskbar edge).
+- [x] Bottom anchors for **both Floating and Edge Nook** (`BottomLeft`/`BottomCenter`/`BottomRight`): Floating sits `6 px` above the taskbar (`CANVAS_BOTTOM_OVERHANG`); Edge Nook docks pixel-flush on top of the taskbar with inverted concave ears (`sd_nook_notch` mirrored + SVG `buildNookFillPath(..., bottom = true)`) and expands upwards.
 - [ ] **D-29 (open in planning-discussion.md):** horizontal side-edge anchors (left/right bezels) with drag-and-attach
 - [ ] R2 optional modules (Phase 4 Activities): a disabled module runs no timer, subscription or IPC. *Partly there:
       music services, lyrics and the spectrum each have a switch; per-pop-up switches (volume, switch, track) remain*

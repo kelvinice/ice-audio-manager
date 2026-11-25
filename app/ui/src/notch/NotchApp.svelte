@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { createNotchController } from '../lib/notch/controller.svelte';
-  import { BOTTOM_PAD, CANVAS_H, CANVAS_W } from '../lib/notch/geometry';
+  import { CANVAS_H, CANVAS_W } from '../lib/notch/geometry';
   import ExpandedNotch from './activities/ExpandedNotch.svelte';
   import IdlePill from './activities/IdlePill.svelte';
   import LyricsExtension from './activities/LyricsExtension.svelte';
@@ -29,9 +29,15 @@
   style:height={`${CANVAS_H}px`}
 >
   <div
+    class="notch-motion"
+    class:bottom-anchor={ctrl.isBottomAnchor}
+    class:nook={ctrl.notchStyle === 'nook'}
+    class:place-settle={ctrl.placedFlash && !ctrl.isInstant}
+  >
+  <div
     class="pill-shadow"
     style:top={ctrl.isBottomAnchor ? undefined : `${ctrl.surfaceShape.topPad}px`}
-    style:bottom={ctrl.isBottomAnchor ? `${BOTTOM_PAD}px` : undefined}
+    style:bottom={ctrl.isBottomAnchor ? `${ctrl.surfaceShape.bottomPad}px` : undefined}
     style:width={`${ctrl.pillSize.w}px`}
     style:height={`${ctrl.pillSize.h}px`}
     style:border-radius={ctrl.surfaceShape.shadowRadiusCss}
@@ -73,15 +79,16 @@
         boxH={ctrl.targetBox.h}
         topPad={ctrl.surfaceShape.topPad}
         isBottom={ctrl.isBottomAnchor}
-        bottomPad={BOTTOM_PAD}
+        bottomPad={ctrl.surfaceShape.bottomPad}
       />
       {/if}
       <div
         class="pill-slot"
         class:nook={ctrl.notchStyle === 'nook'}
         class:compact={!ctrl.isExpanded}
+        class:bottom-anchor={ctrl.isBottomAnchor}
         style:top={ctrl.isBottomAnchor ? undefined : `${ctrl.surfaceShape.topPad}px`}
-        style:bottom={ctrl.isBottomAnchor ? `${BOTTOM_PAD}px` : undefined}
+        style:bottom={ctrl.isBottomAnchor ? `${ctrl.surfaceShape.bottomPad}px` : undefined}
         style:width={`${ctrl.targetBox.w}px`}
         style:height={`${ctrl.targetBox.h}px`}
       >
@@ -164,6 +171,7 @@
             onOpenMusicService={ctrl.openMusicService}
             onOpenSettings={ctrl.openSettings}
             onHibernate={ctrl.hibernate}
+            isBottom={ctrl.isBottomAnchor}
           />
         {:else if ctrl.notchSnapshot && ctrl.isExpanded}
           <ExpandedNotch
@@ -219,6 +227,18 @@
         stroke-width="2"
         vector-effect="non-scaling-stroke"
       />
+      {#if ctrl.placedFlash && !ctrl.isInstant}
+        {#key ctrl.placedFlashKey}
+          <path
+            class="rim-flash"
+            d={ctrl.surfaceShape.rimPathD}
+            fill="none"
+            stroke="var(--ice-active-accent, var(--ice-accent))"
+            stroke-width="2.5"
+            vector-effect="non-scaling-stroke"
+          />
+        {/key}
+      {/if}
     {:else}
       <rect
         x={ctrl.insetLeft + 0.5}
@@ -232,8 +252,26 @@
         stroke-width="1"
         vector-effect="non-scaling-stroke"
       />
+      {#if ctrl.placedFlash && !ctrl.isInstant}
+        {#key ctrl.placedFlashKey}
+          <rect
+            class="rim-flash"
+            x={ctrl.insetLeft + 0.5}
+            y={ctrl.surfaceShape.insetTop + 0.5}
+            width={Math.max(1, ctrl.pillSize.w - 1)}
+            height={Math.max(1, ctrl.pillSize.h - 1)}
+            rx={ctrl.pillSize.r}
+            ry={ctrl.pillSize.r}
+            fill="none"
+            stroke="var(--ice-active-accent, var(--ice-accent))"
+            stroke-width="1.5"
+            vector-effect="non-scaling-stroke"
+          />
+        {/key}
+      {/if}
     {/if}
   </svg>
+  </div>
 </div>
 
 <style>
@@ -319,9 +357,61 @@
     padding-top: 2px;
   }
 
+  .pill-slot.nook.compact.bottom-anchor {
+    padding-top: 0;
+    padding-bottom: 2px;
+  }
+
   .rim-svg {
     position: absolute;
     inset: 0;
     pointer-events: none;
+  }
+
+  .notch-motion {
+    position: absolute;
+    inset: 0;
+    transform-origin: 50% 18px;
+  }
+
+  .notch-motion.nook {
+    transform-origin: 50% 0%;
+  }
+
+  .notch-motion.bottom-anchor {
+    transform-origin: 50% calc(100% - 24px);
+  }
+
+  .notch-motion.bottom-anchor.nook {
+    transform-origin: 50% 100%;
+  }
+
+  .notch-motion.place-settle {
+    animation: notch-place-settle 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .rim-flash {
+    animation: notch-rim-flash 360ms ease-out both;
+  }
+
+  @keyframes notch-place-settle {
+    0% {
+      transform: scaleX(1.032) scaleY(0.955);
+    }
+    55% {
+      transform: scaleX(0.99) scaleY(1.015);
+    }
+    100% {
+      transform: scaleX(1) scaleY(1);
+    }
+  }
+
+  @keyframes notch-rim-flash {
+    0% {
+      opacity: 0.9;
+    }
+    100% {
+      opacity: 0;
+    }
   }
 </style>

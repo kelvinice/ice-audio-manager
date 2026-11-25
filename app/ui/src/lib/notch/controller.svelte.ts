@@ -63,15 +63,19 @@ export class NotchController {
   private pointerInside = $state(false);
   lyricsCardOpen = $state(true);
   pillSize = $state({ w: 116, h: 30, r: 13, vol: 40 });
+  placedFlash = $state(false);
+  placedFlashKey = $state(0);
 
   private hoverTimer: number | null = null;
   private leaveTimer: number | null = null;
   private activityTimer: number | null = null;
+  private placedFlashTimer: number | null = null;
   private optimisticSeek = $state<OptimisticSeek | null>(null);
   private optimisticSeekTimer: number | null = null;
   private dragCleanup: (() => void) | null = null;
   private lastHitRect: HitRect | null = null;
   private lastReportedSeq = 0;
+  private lastPlacedSeq: number | null = null;
   private resnapshotting = false;
 
   readonly idleMode = $derived(this.notchSnapshot?.idleStyle ?? DEFAULT_IDLE_MODE);
@@ -80,14 +84,9 @@ export class NotchController {
   );
   readonly styleStrategy = $derived(getNotchStyleStrategy(this.notchStyle));
   readonly effectiveAnchor = $derived<NotchAnchor>(
-    this.notchSnapshot?.anchor ??
-      (this.notchStyle === 'nook'
-        ? 'top_center'
-        : (this.engineState.settings?.notchAnchor ?? 'top_center')),
+    this.notchSnapshot?.anchor ?? this.engineState.settings?.notchAnchor ?? 'top_center',
   );
-  readonly isBottomAnchor = $derived(
-    this.notchStyle === 'floating' && isBottomAnchorValue(this.effectiveAnchor),
-  );
+  readonly isBottomAnchor = $derived(isBottomAnchorValue(this.effectiveAnchor));
   /** D-27 hibernate: a plain, click-through silhouette; no activities, no expansion, no media. */
   readonly isHibernating = $derived(this.engineState.settings?.appearance.hibernate ?? false);
   /** How much later lyrics show for the playing output (Bluetooth delay; `DeviceSummary.lyricsDelayMs`). */
@@ -345,7 +344,7 @@ export class NotchController {
     }
     const style = snap?.notchStyle ?? this.engineState.settings?.appearance.notchStyle;
     const anchor = snap?.anchor ?? this.engineState.settings?.notchAnchor;
-    const isBottom = style === 'floating' && isBottomAnchorValue(anchor);
+    const isBottom = isBottomAnchorValue(anchor);
     const nextRect = hibernating ? NO_HIT_RECT : strategy.computeHitRect(target, isBottom);
     if (
       !this.lastHitRect ||
@@ -398,9 +397,31 @@ export class NotchController {
     this.syncGeometry(instant || wasSuspended !== next.suspended || flippedEdge);
     this.scheduleNextTick();
 
+    if (this.lastPlacedSeq === null) {
+      this.lastPlacedSeq = next.placedSeq;
+    } else if (next.placedSeq !== this.lastPlacedSeq) {
+      this.lastPlacedSeq = next.placedSeq;
+      if (!this.isInstant && !this.isHibernating && !next.suspended) {
+        this.triggerPlacedFlash();
+      }
+    }
+
     if (next.eventSeq > this.lastReportedSeq && !next.suspended) {
       this.acknowledgeRenderedSeq(next.eventSeq);
     }
+  }
+
+  private triggerPlacedFlash(): void {
+    if (this.placedFlashTimer !== null) {
+      clearTimeout(this.placedFlashTimer);
+      this.placedFlashTimer = null;
+    }
+    this.placedFlashKey += 1;
+    this.placedFlash = true;
+    this.placedFlashTimer = window.setTimeout(() => {
+      this.placedFlashTimer = null;
+      this.placedFlash = false;
+    }, 380);
   }
 
   private applyEngineSnapshot(snapshot: EngineSnapshot): void {
@@ -593,6 +614,10 @@ export class NotchController {
     if (this.leaveTimer !== null) {
       clearTimeout(this.leaveTimer);
       this.leaveTimer = null;
+    }
+    if (this.placedFlashTimer !== null) {
+      clearTimeout(this.placedFlashTimer);
+      this.placedFlashTimer = null;
     }
   }
 

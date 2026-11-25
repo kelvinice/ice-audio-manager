@@ -50,6 +50,8 @@ pub struct NotchSnapshot {
     pub revision: u64,
     #[ts(type = "number")]
     pub event_seq: u64,
+    #[ts(type = "number")]
+    pub placed_seq: u64,
     pub activity: ActivityKind,
     pub volume_percent: u8,
     pub muted: bool,

@@ -1,11 +1,11 @@
-//! D-20 drag & snap: one drag loop for both hosts (the WebView notch and the native pill).
+//! D-20 flexible drag & drop: one drag loop for both hosts (the WebView notch and the native pill).
 //!
 //! A host reports that a press moved past Windows' drag threshold (the WebView through `start_notch_drag`, the native
 //! pill through `PillInput::DragStart`). From then on the shell follows the cursor itself on its own thread: it never
-//! uses the system move loop (`HTCAPTION`/`SC_MOVE`), which activated the window in Codex's D-20 measurement, so the
-//! app you were typing in keeps focus. Ghost slots show on every monitor; the one nearest the cursor lights up.
-//! Releasing the button springs the notch into that slot and saves it (re-pinning the monitor if it changed); Esc
-//! springs it back. Reduce motion = instant.
+//! uses the system move loop (`HTCAPTION`/`SC_MOVE`), so the app you were typing in keeps focus. No slot/target ghost
+//! marks are displayed while dragging; releasing springs the notch cleanly to the top or bottom edge at your chosen
+//! horizontal pixel (strictly clamped within monitor bounds so the notch never clips off-screen, with a subtle silent
+//! magnet near Left, Centre, and Right), and triggers a brief landing settle + rim flash. Esc springs back.
 //!
 //! The loop is a bounded timer (code-practices §2): it ticks at ≈ 120 Hz **only while a drag runs** and stops when the
 //! button is released or Esc is pressed. It reads the button and Esc with `GetAsyncKeyState` (no hook).
@@ -14,9 +14,11 @@ use std::sync::atomic::Ordering;
 use std::sync::{Arc, PoisonError};
 use std::time::{Duration, Instant};
 
+use ice_core::appearance::NotchStyle;
 use ice_core::engine::Command;
-use ice_core::placement::{DropArea, NotchAnchor, NotchPlacement, drop_slots, nearest_slot, snap_path};
-use ice_win::drag_ghosts::DragGhosts;
+use ice_core::placement::{
+    DropArea, NOTCH_CANVAS_H, NOTCH_CANVAS_W, NotchAnchor, NotchPlacement, resolve_drop_target, snap_path,
+};
 use ice_win::monitors::MonitorInfo;
 use ice_win::native_dot::NativeDotHandle;
 use ice_win::overlay_win;
@@ -37,6 +39,14 @@ const FRAME_MS: u32 = 8;
 /// A drag that somehow never ends (a lost button-up) gives up after this long and snaps where it is.
 const MAX_DRAG: Duration = Duration::from_secs(120);
 
+fn same_ratio(a: Option<f32>, b: Option<f32>) -> bool {
+    match (a, b) {
+        (None, None) => true,
+        (Some(x), Some(y)) => (x - y).abs() < 1e-4,
+        _ => false,
+    }
+}
+
 /// Starts a drag of `host` if dragging is on and none is running. Returns at once; the drag runs on its own thread.
 pub(super) fn start(app: &AppHandle, state: &Arc<SharedRuntime>, host: Host) {
     let settings = state.engine.snapshot().settings;
@@ -54,17 +64,21 @@ pub(super) fn start(app: &AppHandle, state: &Arc<SharedRuntime>, host: Host) {
     if hwnd == 0 || state.dragging.swap(true, Ordering::AcqRel) {
         return;
     }
+    let win_w = (right - left).max(1);
     let anchor = state.placement().anchor;
+    let style = settings.appearance.notch_style;
     let grab = if host == Host::WebView {
         let hr = *state.hit_rect.lock().unwrap_or_else(PoisonError::into_inner);
         if hr.height > 70.0 {
-            let scale = f64::from((right - left).max(1)) / f64::from(ice_core::placement::NOTCH_CANVAS_W);
-            let cx = (f64::from(ice_core::placement::NOTCH_CANVAS_W) * 0.5 * scale).round() as i32;
-            let cy = if anchor.is_bottom() {
-                (f64::from(ice_core::placement::NOTCH_CANVAS_H - 24 - 14) * scale).round() as i32
-            } else {
-                (f64::from(6 + 14) * scale).round() as i32
+            let scale = f64::from(win_w) / f64::from(NOTCH_CANVAS_W);
+            let cx = (f64::from(NOTCH_CANVAS_W) * 0.5 * scale).round() as i32;
+            let logical_y = match (anchor.is_bottom(), style) {
+                (false, NotchStyle::Nook) => 15.0,
+                (false, NotchStyle::Floating) => 6.0 + 14.0,
+                (true, NotchStyle::Nook) => f64::from(NOTCH_CANVAS_H - 15),
+                (true, NotchStyle::Floating) => f64::from(NOTCH_CANVAS_H - 24 - 14),
             };
+            let cy = (logical_y * scale).round() as i32;
             (cx, cy)
         } else {
             (cursor.0 - left, cursor.1 - top)
@@ -75,15 +89,18 @@ pub(super) fn start(app: &AppHandle, state: &Arc<SharedRuntime>, host: Host) {
     // The card collapses while it's carried; dropping it shows the pill at its new place.
     state.update_and_emit(app, |s| s.expanded = false);
     let job = Drag {
+        app: app.clone(),
         host,
         hwnd,
+        win_w,
         grab,
         start: (left, top),
         monitors: state.monitors.lock().unwrap_or_else(PoisonError::into_inner).clone(),
-        style: settings.appearance.notch_style,
+        style,
         anchor,
         pinned: settings.pinned_monitor.clone(),
         saved_anchor: settings.notch_anchor,
+        saved_x_ratio: settings.notch_x_ratio,
         reduce_motion: state.snapshot_clone().system_reduce_motion
             || settings.appearance.preset == ice_core::appearance::SpringPreset::Off,
     };
@@ -98,18 +115,21 @@ pub(super) fn start(app: &AppHandle, state: &Arc<SharedRuntime>, host: Host) {
 }
 
 struct Drag {
+    app: AppHandle,
     host: Host,
     hwnd: isize,
+    win_w: i32,
     /// Cursor offset inside the window at the press, kept while it moves.
     grab: (i32, i32),
     /// Where the window was, for Esc.
     start: (i32, i32),
     monitors: Vec<MonitorInfo>,
-    style: ice_core::appearance::NotchStyle,
+    style: NotchStyle,
     /// The anchor in use when the drag began.
     anchor: NotchAnchor,
     pinned: Option<String>,
     saved_anchor: NotchAnchor,
+    saved_x_ratio: Option<f32>,
     reduce_motion: bool,
 }
 
@@ -117,58 +137,73 @@ impl Drag {
     fn run(&self, state: &SharedRuntime) {
         let areas: Vec<DropArea> =
             self.monitors.iter().map(|m| DropArea { area: overlay_win::work_area(m), scale: m.scale_factor }).collect();
-        let slots = drop_slots(&areas, self.style);
-        let mut ghosts = DragGhosts::show(&slots);
         let begun = Instant::now();
         let mut pos = self.start;
         let dropped = loop {
-            DragGhosts::pump();
             if overlay_win::escape_down() {
                 break None;
             }
             let Some(cursor) = overlay_win::cursor_pos() else { break None };
             let released = !overlay_win::primary_button_down() || begun.elapsed() > MAX_DRAG;
-            let nearest = nearest_slot(&slots, cursor);
             if released {
-                break nearest;
+                let drop_point = (pos.0 + self.win_w / 2, cursor.1);
+                break resolve_drop_target(&areas, self.style, drop_point);
             }
             pos = (cursor.0 - self.grab.0, cursor.1 - self.grab.1);
             self.move_host(state, pos);
-            if let Some(slot) = nearest {
-                ghosts.highlight(&slot);
-            }
             std::thread::sleep(FRAME);
         };
-        drop(ghosts);
 
-        let Some(slot) = dropped else {
+        let Some(target_drop) = dropped else {
             // Esc (or no cursor): back where it was, nothing saved.
             self.spring(state, pos, self.start);
             self.end_native(state, None);
             return;
         };
-        let Some(monitor) = self.monitors.get(slot.monitor) else { return };
+        let Some(monitor) = self.monitors.get(target_drop.monitor) else { return };
         let target = match self.host {
-            Host::WebView => overlay_win::canvas_origin(monitor, slot.anchor),
-            Host::Native => with_native(state, |d| d.origin_for(monitor, slot.anchor)).unwrap_or(pos),
+            Host::WebView => overlay_win::canvas_origin(monitor, target_drop.anchor, target_drop.x_ratio, self.style),
+            Host::Native => {
+                with_native(state, |d| d.origin_for(monitor, target_drop.anchor, target_drop.x_ratio)).unwrap_or(pos)
+            }
         };
         // The WebView lays its pill out from the anchored edge, so a top↔bottom change flips the layout: move it in
         // one step and let the new layout land with it, instead of springing a canvas that is still laid out for the
         // old edge.
-        if self.host == Host::WebView && slot.anchor.is_bottom() != self.anchor.is_bottom() {
+        if self.host == Host::WebView && target_drop.anchor.is_bottom() != self.anchor.is_bottom() {
             let _ = overlay_win::move_window_async(self.hwnd, target.0, target.1);
         } else {
             self.spring(state, pos, target);
         }
-        self.end_native(state, Some((monitor, slot.anchor)));
+        self.end_native(state, Some((monitor, target_drop.anchor, target_drop.x_ratio)));
+        match self.host {
+            Host::WebView => {
+                state.update_and_emit(&self.app, |s| {
+                    s.anchor = target_drop.anchor;
+                    s.placed_seq = s.placed_seq.wrapping_add(1);
+                });
+            }
+            Host::Native => {
+                if !self.reduce_motion {
+                    with_native(state, NativeDotHandle::flash_placed);
+                }
+            }
+        }
+
         let repin = self.pinned.as_deref().is_none_or(|p| !p.eq_ignore_ascii_case(&monitor.display_path));
         if repin {
             state.engine.send(Command::SetPinnedMonitor { display_path: monitor.display_path.clone() });
         }
-        if slot.anchor != self.saved_anchor {
-            state.engine.send(Command::SetNotchAnchor { anchor: slot.anchor });
+        if target_drop.anchor != self.saved_anchor || !same_ratio(target_drop.x_ratio, self.saved_x_ratio) {
+            state.engine.send(Command::SetNotchPosition { anchor: target_drop.anchor, x_ratio: target_drop.x_ratio });
         }
-        tracing::debug!(anchor = ?slot.anchor, monitor = slot.monitor, repin, "Notch dropped");
+        tracing::debug!(
+            anchor = ?target_drop.anchor,
+            x_ratio = ?target_drop.x_ratio,
+            monitor = target_drop.monitor,
+            repin,
+            "Notch dropped"
+        );
     }
 
     fn move_host(&self, state: &SharedRuntime, pos: (i32, i32)) {
@@ -190,14 +225,14 @@ impl Drag {
         }
     }
 
-    /// Hands the native pill back to its anchor: the new one first (so it doesn't jump back), then ends the override.
-    fn end_native(&self, state: &SharedRuntime, placed: Option<(&MonitorInfo, NotchAnchor)>) {
+    /// Hands the native pill back to its position: the new one first (so it doesn't jump back), then ends the override.
+    fn end_native(&self, state: &SharedRuntime, placed: Option<(&MonitorInfo, NotchAnchor, Option<f32>)>) {
         if self.host != Host::Native {
             return;
         }
         with_native(state, |dot| {
-            if let Some((monitor, anchor)) = placed {
-                dot.set_anchor(anchor);
+            if let Some((monitor, anchor, x_ratio)) = placed {
+                dot.set_position(anchor, x_ratio);
                 dot.move_to_monitor(monitor.clone());
             }
             dot.drag_end();

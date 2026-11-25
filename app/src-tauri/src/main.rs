@@ -86,6 +86,7 @@ impl SharedRuntime {
         let mut snapshot = NotchSnapshot {
             revision: 1,
             event_seq: 0,
+            placed_seq: 0,
             activity: ActivityKind::Idle,
             volume_percent: 0,
             muted: false,
@@ -98,7 +99,7 @@ impl SharedRuntime {
             theme: initial.settings.appearance.theme,
             idle_style: initial.settings.appearance.effective_idle_style(),
             notch_style: initial.settings.appearance.notch_style,
-            anchor: initial.settings.notch_anchor.effective_for(initial.settings.appearance.notch_style),
+            anchor: initial.settings.notch_anchor,
             expanded: false,
             suspended: false,
             hidden_for_bench: false,
@@ -418,7 +419,11 @@ pub(crate) fn wake_notch_on_main(app: &AppHandle, state: &Arc<SharedRuntime>, wa
         && let Ok(hw) = win.hwnd()
     {
         let hwnd = hw.0 as isize;
-        let _ = overlay_win::move_notch(hwnd, &mon, state.placement().anchor);
+        let (anchor, x_ratio, style) = {
+            let p = state.placement();
+            (p.anchor, p.x_ratio, p.style)
+        };
+        let _ = overlay_win::move_notch(hwnd, &mon, anchor, x_ratio, style);
         let _ = win.show();
         let _ = overlay_win::ensure_topmost(hwnd);
         state.notch_hwnd.store(hwnd, Ordering::Release);
@@ -498,8 +503,12 @@ fn create_notch_window(app: &AppHandle, state: &Arc<SharedRuntime>, generation: 
     }
 
     let monitor = state.active_monitor_info().ok_or_else(|| "no active monitor found".to_string())?;
-    // Created hidden at its anchor (D-20, `overlay_win::canvas_origin`); `move_notch` places it again when shown.
-    let (phys_x, phys_y) = overlay_win::canvas_origin(&monitor, state.placement().anchor);
+    let (anchor, x_ratio, style) = {
+        let p = state.placement();
+        (p.anchor, p.x_ratio, p.style)
+    };
+    // Created hidden at its position (D-20, `overlay_win::canvas_origin`); `move_notch` places it again when shown.
+    let (phys_x, phys_y) = overlay_win::canvas_origin(&monitor, anchor, x_ratio, style);
     let (phys_x, phys_y) = (f64::from(phys_x), f64::from(phys_y));
 
     let win = WebviewWindowBuilder::new(app, "notch", WebviewUrl::App("index.html".into()))
@@ -533,7 +542,11 @@ fn create_notch_window(app: &AppHandle, state: &Arc<SharedRuntime>, generation: 
             meter::watch_renderer(&win, &state).map_err(|e| e.to_string())?;
             overlay_win::apply_overlay_styles(hwnd).map_err(|e| e.to_string())?;
             engine_bridge::apply_capture_privacy(app, &state.engine.snapshot().settings.appearance);
-            overlay_win::move_notch(hwnd, &monitor, state.placement().anchor).map_err(|e| e.to_string())?;
+            let (anchor, x_ratio, style) = {
+                let p = state.placement();
+                (p.anchor, p.x_ratio, p.style)
+            };
+            overlay_win::move_notch(hwnd, &monitor, anchor, x_ratio, style).map_err(|e| e.to_string())?;
             win.show().map_err(|e| e.to_string())?;
             overlay_win::ensure_topmost(hwnd).map_err(|e| e.to_string())?;
             state.notch_hwnd.store(hwnd, Ordering::Release);
@@ -858,8 +871,12 @@ fn spawn_notch_and_measure(app: &AppHandle, state: &Arc<SharedRuntime>) -> Resul
 
     let start = Instant::now();
     let monitor = state.active_monitor_info().ok_or_else(|| "no active monitor found".to_string())?;
-    // Created hidden at its anchor (D-20, `overlay_win::canvas_origin`); `move_notch` places it again when shown.
-    let (phys_x, phys_y) = overlay_win::canvas_origin(&monitor, state.placement().anchor);
+    let (anchor, x_ratio, style) = {
+        let p = state.placement();
+        (p.anchor, p.x_ratio, p.style)
+    };
+    // Created hidden at its position (D-20, `overlay_win::canvas_origin`); `move_notch` places it again when shown.
+    let (phys_x, phys_y) = overlay_win::canvas_origin(&monitor, anchor, x_ratio, style);
     let (phys_x, phys_y) = (f64::from(phys_x), f64::from(phys_y));
 
     // Must be called from a non-main thread (`tauri-runtime-wry` dispatches window creation to main loop).
@@ -885,7 +902,11 @@ fn spawn_notch_and_measure(app: &AppHandle, state: &Arc<SharedRuntime>) -> Resul
         move |h| {
             let hwnd = win.hwnd().map_err(|e| e.to_string())?.0 as isize;
             overlay_win::apply_overlay_styles(hwnd).map_err(|e| e.to_string())?;
-            overlay_win::move_notch(hwnd, &mon, st.placement().anchor).map_err(|e| e.to_string())?;
+            let (anchor, x_ratio, style) = {
+                let p = st.placement();
+                (p.anchor, p.x_ratio, p.style)
+            };
+            overlay_win::move_notch(hwnd, &mon, anchor, x_ratio, style).map_err(|e| e.to_string())?;
             win.show().map_err(|e| e.to_string())?;
             overlay_win::ensure_topmost(hwnd).map_err(|e| e.to_string())?;
             st.notch_hwnd.store(hwnd, Ordering::Release);
@@ -1312,7 +1333,11 @@ fn cycle_monitor_internal(app: &AppHandle, state: &Arc<SharedRuntime>) -> Result
     if let Some(mon) = state.active_monitor_info() {
         let hwnd = state.notch_hwnd.load(Ordering::Acquire);
         if hwnd != 0 {
-            overlay_win::move_notch(hwnd, &mon, state.placement().anchor).map_err(|e| e.to_string())?;
+            let (anchor, x_ratio, style) = {
+                let p = state.placement();
+                (p.anchor, p.x_ratio, p.style)
+            };
+            overlay_win::move_notch(hwnd, &mon, anchor, x_ratio, style).map_err(|e| e.to_string())?;
         }
         if let Some(dot) = state.native_dot.lock().unwrap_or_else(std::sync::PoisonError::into_inner).as_ref() {
             dot.move_to_monitor(mon);

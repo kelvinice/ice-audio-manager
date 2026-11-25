@@ -22,7 +22,7 @@ left: number, top: number, width: number, height: number, scaleFactor: number, r
 
 export type HitRect = { x: number, y: number, width: number, height: number, };
 
-export type NotchSnapshot = { revision: number, eventSeq: number, activity: ActivityKind, volumePercent: number, muted: boolean, micMuted: boolean, activeDevice: string, targetDevice: string, spatialBadge: string | null, preset: SpringPreset, systemReduceMotion: boolean, theme: ThemeKind, idleStyle: IdleStyle, notchStyle: NotchStyle,
+export type NotchSnapshot = { revision: number, eventSeq: number, placedSeq: number, activity: ActivityKind, volumePercent: number, muted: boolean, micMuted: boolean, activeDevice: string, targetDevice: string, spatialBadge: string | null, preset: SpringPreset, systemReduceMotion: boolean, theme: ThemeKind, idleStyle: IdleStyle, notchStyle: NotchStyle,
 /**
  * D-20: the anchor in use (Edge Nook maps a bottom anchor to the top); a bottom one makes the notch grow upwards.
  */

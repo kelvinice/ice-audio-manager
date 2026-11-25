@@ -1,14 +1,12 @@
-//! D-20 notch placement: where the notch sits on its monitor, and the drag-and-snap maths. One rule for both hosts (the
-//! WebView notch window and the native pill).
+//! D-20 notch placement: where the notch sits on its monitor, and flexible horizontal drag-and-drop maths.
+//! One rule for both hosts (the WebView notch window and the native pill).
 //!
-//! Each anchor fixes the notch's **centre** within the monitor's work area (the screen minus the taskbar). Both hosts
-//! centre their own box on it: the WebView window is the full [`NOTCH_CANVAS_W`] canvas (the expanded card included),
-//! the native pill is small. So the side anchors reserve the canvas width from the screen edge, and the widest card
-//! never runs off screen. Top anchors measure down from the work area's top; bottom anchors up from its bottom (above
-//! the taskbar), where the notch grows upwards.
-//!
-//! Edge Nook is flush with the top edge by design, so it only has top anchors: [`NotchAnchor::effective_for`] maps a
-//! bottom anchor to its top counterpart while Edge Nook is the style.
+//! Each position fixes the notch's **centre** within the monitor's work area (the screen minus the taskbar). Both
+//! hosts centre their own box on it: the WebView window is the full [`NOTCH_CANVAS_W`] canvas (expanded card
+//! included), the native pill is small. So left/right clamping reserves the canvas width from both screen edges, and
+//! the widest card never clips outside the monitor. Top anchors sit flush at (Edge Nook) or just below (Floating) the
+//! work area's top; bottom anchors sit flush on (Edge Nook) or just above (Floating) the work area's bottom (above the
+//! taskbar), growing upwards.
 
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "ts")]
@@ -20,13 +18,12 @@ use crate::appearance::NotchStyle;
 pub const NOTCH_CANVAS_W: i32 = 648;
 /// Logical height of the WebView notch canvas. Twin: `CANVAS_H` in `app/ui/src/lib/notch/geometry.ts`.
 pub const NOTCH_CANVAS_H: i32 = 292;
-/// At a bottom anchor the pill sits `BOTTOM_PAD` (24) inside the canvas so its drop shadow has room; the canvas then
-/// overhangs the work area by this much, which leaves the pill the same 6 px from the taskbar as from the top bezel.
+/// At a Floating bottom anchor the pill sits `BOTTOM_PAD` (24) inside the canvas so its drop shadow has room; the
+/// canvas then overhangs the work area by this much, leaving the pill 6 px from the taskbar.
 /// Twin: `BOTTOM_PAD - TOP_PAD` in `geometry.ts`.
 pub const CANVAS_BOTTOM_OVERHANG: i32 = 18;
-/// The idle mini pill (logical), used for the drag slots. Twin: `idleGeometry` mini pill in `geometry.ts`.
-pub const SLOT_W: i32 = 116;
-pub const SLOT_H: i32 = 28;
+/// Logical px magnetic snap radius around Left (0.0), Centre (0.5), and Right (1.0) when dropping without visual marks.
+const SNAP_MAGNET_LOGICAL_PX: f64 = 14.0;
 
 /// Where on its monitor the notch sits (D-20).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
@@ -42,7 +39,7 @@ pub enum NotchAnchor {
     BottomRight,
 }
 
-/// How the notch is moved: dragged and snapped to an anchor (default), or only from the tray and Settings (D-20).
+/// How the notch is moved: dragged freely along the top/bottom edge (default), or only from the tray and Settings (D-20).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[cfg_attr(feature = "ts", derive(TS))]
 #[serde(rename_all = "snake_case")]
@@ -83,24 +80,16 @@ impl NotchAnchor {
         matches!(self, Self::BottomLeft | Self::BottomCenter | Self::BottomRight)
     }
 
-    /// Whether `style` can use this anchor: Edge Nook is top-only.
+    /// Both Edge Nook and Floating support all six anchors (top & bottom bezels/taskbars).
     #[must_use]
-    pub const fn allowed_for(self, style: NotchStyle) -> bool {
-        !(self.is_bottom() && matches!(style, NotchStyle::Nook))
+    pub const fn allowed_for(self, _style: NotchStyle) -> bool {
+        true
     }
 
-    /// The anchor actually used with `style`: a bottom anchor becomes its top counterpart under Edge Nook, so switching
-    /// styles never puts a flush notch on the wrong edge, and switching back restores the saved bottom anchor.
+    /// Anchor actually used with `style`. Both styles support all anchors directly.
     #[must_use]
-    pub const fn effective_for(self, style: NotchStyle) -> Self {
-        if self.allowed_for(style) {
-            return self;
-        }
-        match self.column() {
-            Column::Left => Self::TopLeft,
-            Column::Centre => Self::TopCenter,
-            Column::Right => Self::TopRight,
-        }
+    pub const fn effective_for(self, _style: NotchStyle) -> Self {
+        self
     }
 
     const fn column(self) -> Column {
@@ -110,22 +99,30 @@ impl NotchAnchor {
             Self::TopRight | Self::BottomRight => Column::Right,
         }
     }
+
+    const fn from_edge_column(bottom: bool, col: Column) -> Self {
+        match (bottom, col) {
+            (false, Column::Left) => Self::TopLeft,
+            (false, Column::Centre) => Self::TopCenter,
+            (false, Column::Right) => Self::TopRight,
+            (true, Column::Left) => Self::BottomLeft,
+            (true, Column::Centre) => Self::BottomCenter,
+            (true, Column::Right) => Self::BottomRight,
+        }
+    }
 }
 
-/// How far (logical px) the WebView canvas sits from its anchored edge: flush at the top, overhanging at the bottom.
+/// How far (logical px) the WebView canvas sits from its anchored edge for `style`: flush at top, flush on bottom for
+/// Edge Nook (`0`), and overhanging by drop-shadow room (`-18`) at bottom for Floating.
+#[must_use]
+pub const fn canvas_edge_offset_for(anchor: NotchAnchor, style: NotchStyle) -> i32 {
+    if anchor.is_bottom() && matches!(style, NotchStyle::Floating) { -CANVAS_BOTTOM_OVERHANG } else { 0 }
+}
+
+/// Floating-style shorthand kept for existing callers/tests.
 #[must_use]
 pub const fn canvas_edge_offset(anchor: NotchAnchor) -> i32 {
-    if anchor.is_bottom() { -CANVAS_BOTTOM_OVERHANG } else { 0 }
-}
-
-/// How far (logical px) the idle pill sits from its anchored edge: flush for Edge Nook, a small gap for Floating.
-/// Twin: `frame_metrics` top offset in `crates/ice-win/src/native_dot.rs` and `TOP_PAD` in `geometry.ts`.
-#[must_use]
-pub const fn pill_edge_offset(style: NotchStyle) -> i32 {
-    match style {
-        NotchStyle::Nook => 0,
-        NotchStyle::Floating => 6,
-    }
+    canvas_edge_offset_for(anchor, NotchStyle::Floating)
 }
 
 /// A rectangle in physical pixels (a monitor's work area: the screen minus the taskbar).
@@ -152,6 +149,23 @@ pub const fn anchor_center_x(anchor: NotchAnchor, area: Area, reserve_w: i32) ->
     }
 }
 
+/// Like [`anchor_center_x`], but honours an optional custom horizontal `x_ratio` (`0.0..=1.0`) between Left and Right
+/// while still clamping strictly within `[area.left + reserve_w / 2, area.left + area.width - reserve_w / 2]`.
+#[must_use]
+pub fn anchor_center_x_at(anchor: NotchAnchor, x_ratio: Option<f32>, area: Area, reserve_w: i32) -> i32 {
+    let Some(raw_ratio) = x_ratio else {
+        return anchor_center_x(anchor, area, reserve_w);
+    };
+    let centre = area.left + area.width / 2;
+    if area.width <= reserve_w {
+        return centre;
+    }
+    let ratio = if raw_ratio.is_finite() { raw_ratio.clamp(0.0, 1.0) } else { 0.5 };
+    let min_x = area.left + reserve_w / 2;
+    let max_x = area.left + area.width - reserve_w / 2;
+    min_x + (f64::from(max_x - min_x) * f64::from(ratio)).round() as i32
+}
+
 /// Top-left corner (physical px) of a `box_w` × `box_h` box centred on the anchor, `edge_offset` in from the anchored
 /// edge (the work area's top, or its bottom for a bottom anchor; negative = past the edge).
 #[must_use]
@@ -168,6 +182,22 @@ pub const fn anchor_origin(
     (x, y)
 }
 
+/// Like [`anchor_origin`], supporting an optional continuous horizontal `x_ratio` (`0.0..=1.0`).
+#[must_use]
+pub fn anchor_origin_at(
+    anchor: NotchAnchor,
+    x_ratio: Option<f32>,
+    area: Area,
+    reserve_w: i32,
+    box_w: i32,
+    box_h: i32,
+    edge_offset: i32,
+) -> (i32, i32) {
+    let x = anchor_center_x_at(anchor, x_ratio, area, reserve_w) - box_w / 2;
+    let y = if anchor.is_bottom() { area.top + area.height - edge_offset - box_h } else { area.top + edge_offset };
+    (x, y)
+}
+
 /// One monitor the notch can be dropped on: its work area and its scale (1.0 = 100 %).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct DropArea {
@@ -175,50 +205,89 @@ pub struct DropArea {
     pub scale: f64,
 }
 
-/// Where a dragged notch can land: a monitor (index into the [`DropArea`] list) and an anchor, with the centre and
-/// size of the idle pill there (physical px), which is what the drag shows as a ghost slot.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct DropSlot {
+/// Resolved drop placement on a monitor: edge/semantic anchor plus optional continuous horizontal ratio (`0.0..=1.0`).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct DropTarget {
     pub monitor: usize,
     pub anchor: NotchAnchor,
-    pub x: i32,
-    pub y: i32,
-    pub w: i32,
-    pub h: i32,
+    pub x_ratio: Option<f32>,
 }
 
-impl DropSlot {
-    #[must_use]
-    pub const fn centre(&self) -> (i32, i32) {
-        (self.x + self.w / 2, self.y + self.h / 2)
-    }
+fn dist_sq_to_area(area: Area, point: (i32, i32)) -> i64 {
+    let cx = point.0.clamp(area.left, area.left + area.width);
+    let cy = point.1.clamp(area.top, area.top + area.height);
+    let dx = i64::from(point.0 - cx);
+    let dy = i64::from(point.1 - cy);
+    dx * dx + dy * dy
 }
 
-/// Every slot on every monitor for `style` (Edge Nook: the top three; Floating: all six).
+fn area_contains(area: Area, point: (i32, i32)) -> bool {
+    point.0 >= area.left && point.0 < area.left + area.width && point.1 >= area.top && point.1 < area.top + area.height
+}
+
+/// Resolves a continuous, markless drag drop at physical coordinate `point` (`centre_x, cursor_y`).
+///
+/// Selects the monitor containing (or closest to) `point`, picks top vs bottom edge by vertical midpoint, and clamps
+/// horizontal centre inside `[left + reserve_w / 2, right - reserve_w / 2]` so the notch never clips off-screen.
+/// Drops within a subtle 14 logical px magnet of Left, Centre, or Right snap cleanly to `x_ratio = None`.
 #[must_use]
-pub fn drop_slots(monitors: &[DropArea], style: NotchStyle) -> Vec<DropSlot> {
-    let px = |logical: i32, scale: f64| (f64::from(logical) * scale).round() as i32;
-    let mut slots = Vec::new();
-    for (monitor, m) in monitors.iter().enumerate() {
-        for anchor in NotchAnchor::ALL.into_iter().filter(|a| a.allowed_for(style)) {
-            let (w, h) = (px(SLOT_W, m.scale), px(SLOT_H, m.scale));
-            let (x, y) =
-                anchor_origin(anchor, m.area, px(NOTCH_CANVAS_W, m.scale), w, h, px(pill_edge_offset(style), m.scale));
-            slots.push(DropSlot { monitor, anchor, x, y, w, h });
-        }
+pub fn resolve_drop_target(monitors: &[DropArea], _style: NotchStyle, point: (i32, i32)) -> Option<DropTarget> {
+    if monitors.is_empty() {
+        return None;
     }
-    slots
-}
+    let monitor = monitors
+        .iter()
+        .position(|m| area_contains(m.area, point))
+        .or_else(|| (0..monitors.len()).min_by_key(|&i| dist_sq_to_area(monitors[i].area, point)))?;
+    let m = monitors[monitor];
+    let bottom = point.1 >= m.area.top + m.area.height / 2;
+    let reserve_w = (f64::from(NOTCH_CANVAS_W) * m.scale).round() as i32;
+    if m.area.width <= reserve_w {
+        return Some(DropTarget {
+            monitor,
+            anchor: NotchAnchor::from_edge_column(bottom, Column::Centre),
+            x_ratio: None,
+        });
+    }
 
-/// The slot closest to `point` (physical px, the cursor at release). `None` only for an empty list.
-#[must_use]
-pub fn nearest_slot(slots: &[DropSlot], point: (i32, i32)) -> Option<DropSlot> {
-    let dist = |s: &DropSlot| {
-        let (cx, cy) = s.centre();
-        let (dx, dy) = (i64::from(cx - point.0), i64::from(cy - point.1));
-        dx * dx + dy * dy
+    let min_x = m.area.left + reserve_w / 2;
+    let max_x = m.area.left + m.area.width - reserve_w / 2;
+    let centre_x = m.area.left + m.area.width / 2;
+    let clamped_x = point.0.clamp(min_x, max_x);
+    let magnet = (SNAP_MAGNET_LOGICAL_PX * m.scale).round() as i32;
+
+    if (clamped_x - min_x).abs() <= magnet {
+        return Some(DropTarget {
+            monitor,
+            anchor: NotchAnchor::from_edge_column(bottom, Column::Left),
+            x_ratio: None,
+        });
+    }
+    if (clamped_x - centre_x).abs() <= magnet {
+        return Some(DropTarget {
+            monitor,
+            anchor: NotchAnchor::from_edge_column(bottom, Column::Centre),
+            x_ratio: None,
+        });
+    }
+    if (clamped_x - max_x).abs() <= magnet {
+        return Some(DropTarget {
+            monitor,
+            anchor: NotchAnchor::from_edge_column(bottom, Column::Right),
+            x_ratio: None,
+        });
+    }
+
+    let span = (max_x - min_x).max(1);
+    let ratio = (f64::from(clamped_x - min_x) / f64::from(span)).clamp(0.0, 1.0) as f32;
+    let col = if ratio < 1.0 / 3.0 {
+        Column::Left
+    } else if ratio > 2.0 / 3.0 {
+        Column::Right
+    } else {
+        Column::Centre
     };
-    slots.iter().copied().min_by_key(dist)
+    Some(DropTarget { monitor, anchor: NotchAnchor::from_edge_column(bottom, col), x_ratio: Some(ratio) })
 }
 
 /// Window positions for the release animation from `from` to `to`: a critically damped spring sampled every
@@ -259,7 +328,6 @@ mod tests {
 
     #[test]
     fn centre_is_the_old_top_centre() {
-        // Bottom taskbar (the usual case): the work area starts at the top, so nothing moves for existing users.
         assert_eq!(anchor_origin(NotchAnchor::TopCenter, FULL_HD, 648, 648, 292, 0), (636, 0));
         assert_eq!(anchor_origin(NotchAnchor::TopCenter, FULL_HD, 648, 116, 28, 6), (902, 6));
     }
@@ -275,36 +343,55 @@ mod tests {
     }
 
     #[test]
-    fn bottom_anchors_sit_above_the_taskbar_and_both_hosts_line_up() {
-        // Work area 1040 tall: the taskbar takes the bottom 40 px of 1080.
+    fn bottom_anchors_work_for_both_edge_nook_and_floating() {
+        // Floating: canvas overhangs below work area by 18 px for shadow room; pill sits 6 px above taskbar.
         let pill = anchor_origin(NotchAnchor::BottomCenter, FULL_HD, 648, 116, 28, 6);
-        assert_eq!(pill, (902, 1040 - 6 - 28), "6 px above the taskbar, like 6 px below the top bezel");
-        let canvas = anchor_origin(
+        assert_eq!(pill, (902, 1040 - 6 - 28));
+        let floating_canvas = anchor_origin(
             NotchAnchor::BottomCenter,
             FULL_HD,
             648,
             648,
             292,
-            canvas_edge_offset(NotchAnchor::BottomCenter),
+            canvas_edge_offset_for(NotchAnchor::BottomCenter, NotchStyle::Floating),
         );
-        assert_eq!(
-            canvas.1 + 292,
-            1040 + CANVAS_BOTTOM_OVERHANG,
-            "the canvas overhangs the taskbar by the shadow room"
+        assert_eq!(floating_canvas.1 + 292, 1040 + CANVAS_BOTTOM_OVERHANG);
+        assert_eq!(floating_canvas.1 + 292 - 24, pill.1 + 28);
+
+        // Edge Nook: flush against top of taskbar (edge offset = 0 for both canvas and native pill).
+        assert_eq!(canvas_edge_offset_for(NotchAnchor::BottomCenter, NotchStyle::Nook), 0);
+        let nook_canvas = anchor_origin(
+            NotchAnchor::BottomCenter,
+            FULL_HD,
+            648,
+            648,
+            292,
+            canvas_edge_offset_for(NotchAnchor::BottomCenter, NotchStyle::Nook),
         );
-        // The WebView pill's bottom (canvas bottom − BOTTOM_PAD 24) meets the native pill's bottom.
-        assert_eq!(canvas.1 + 292 - 24, pill.1 + 28);
-        assert_eq!(anchor_origin(NotchAnchor::BottomRight, FULL_HD, 648, 648, 292, 0).0 + 648, 1920);
+        assert_eq!(nook_canvas.1 + 292, 1040, "Edge Nook canvas bottom is flush on taskbar");
+        let nook_pill = anchor_origin(NotchAnchor::BottomCenter, FULL_HD, 648, 132, 30, 0);
+        assert_eq!(nook_pill.1 + 30, 1040, "Edge Nook native pill bottom is flush on taskbar");
+
+        for anchor in NotchAnchor::ALL {
+            assert!(anchor.allowed_for(NotchStyle::Nook));
+            assert!(anchor.allowed_for(NotchStyle::Floating));
+            assert_eq!(anchor.effective_for(NotchStyle::Nook), anchor);
+            assert_eq!(anchor.effective_for(NotchStyle::Floating), anchor);
+        }
     }
 
     #[test]
-    fn edge_nook_is_top_only() {
-        assert_eq!(NotchAnchor::BottomLeft.effective_for(NotchStyle::Nook), NotchAnchor::TopLeft);
-        assert_eq!(NotchAnchor::BottomCenter.effective_for(NotchStyle::Nook), NotchAnchor::TopCenter);
-        assert_eq!(NotchAnchor::BottomRight.effective_for(NotchStyle::Floating), NotchAnchor::BottomRight);
-        assert_eq!(NotchAnchor::TopRight.effective_for(NotchStyle::Nook), NotchAnchor::TopRight);
-        assert_eq!(drop_slots(&[DropArea { area: FULL_HD, scale: 1.0 }], NotchStyle::Nook).len(), 3);
-        assert_eq!(drop_slots(&[DropArea { area: FULL_HD, scale: 1.0 }], NotchStyle::Floating).len(), 6);
+    fn custom_horizontal_ratio_stays_clamped_within_monitor_bounds() {
+        for ratio in [-0.5_f32, 0.0, 0.25, 0.5, 0.75, 1.0, 1.5, f32::NAN] {
+            let canvas = anchor_origin_at(NotchAnchor::TopCenter, Some(ratio), FULL_HD, 648, 648, 292, 0);
+            assert!(canvas.0 >= FULL_HD.left, "ratio {ratio} must not clip left edge");
+            assert!(canvas.0 + 648 <= FULL_HD.left + FULL_HD.width, "ratio {ratio} must not clip right edge");
+        }
+        assert_eq!(anchor_center_x_at(NotchAnchor::TopCenter, Some(0.0), FULL_HD, 648), 324);
+        assert_eq!(anchor_center_x_at(NotchAnchor::TopCenter, Some(0.5), FULL_HD, 648), 960);
+        assert_eq!(anchor_center_x_at(NotchAnchor::TopCenter, Some(1.0), FULL_HD, 648), 1920 - 324);
+        let narrow = Area { left: 0, top: 0, width: 600, height: 800 };
+        assert_eq!(anchor_center_x_at(NotchAnchor::TopLeft, Some(0.2), narrow, 648), 300);
     }
 
     #[test]
@@ -320,30 +407,42 @@ mod tests {
     }
 
     #[test]
-    fn a_narrow_screen_centres_the_notch() {
-        let narrow = Area { left: 0, top: 0, width: 600, height: 800 };
-        for anchor in NotchAnchor::ALL {
-            assert_eq!(anchor_center_x(anchor, narrow, 648), 300);
-        }
-    }
-
-    #[test]
-    fn a_drop_snaps_to_the_nearest_slot_on_any_monitor() {
+    fn continuous_drop_clamps_to_edges_and_picks_arbitrary_horizontal_pixels() {
         let monitors = [
             DropArea { area: FULL_HD, scale: 1.0 },
             DropArea { area: Area { left: 1920, top: 0, width: 2560, height: 1392 }, scale: 1.5 },
         ];
-        let slots = drop_slots(&monitors, NotchStyle::Floating);
-        assert_eq!(slots.len(), 12);
-        let near = |p| nearest_slot(&slots, p).map(|s| (s.monitor, s.anchor));
-        assert_eq!(near((300, 40)), Some((0, NotchAnchor::TopLeft)));
-        assert_eq!(near((960, 1000)), Some((0, NotchAnchor::BottomCenter)));
-        assert_eq!(near((4300, 1300)), Some((1, NotchAnchor::BottomRight)), "dropping on the other monitor re-pins");
-        assert_eq!(near((2100, 30)), Some((1, NotchAnchor::TopLeft)));
-        // Edge Nook: a drop near the bottom goes to the nearest top slot.
-        let nook = drop_slots(&monitors, NotchStyle::Nook);
-        assert_eq!(nearest_slot(&nook, (960, 1000)).map(|s| s.anchor), Some(NotchAnchor::TopCenter));
-        assert_eq!(nearest_slot(&[], (0, 0)), None);
+        // Dropping far left clamps cleanly to TopLeft without visual marks or clipping.
+        let left_drop = resolve_drop_target(&monitors, NotchStyle::Nook, (40, 20)).unwrap();
+        assert_eq!(left_drop.monitor, 0);
+        assert_eq!(left_drop.anchor, NotchAnchor::TopLeft);
+        assert_eq!(left_drop.x_ratio, None);
+
+        // Dropping far right on bottom edge picks BottomRight cleanly for Edge Nook too.
+        let right_bottom = resolve_drop_target(&monitors, NotchStyle::Nook, (1890, 990)).unwrap();
+        assert_eq!(right_bottom.monitor, 0);
+        assert_eq!(right_bottom.anchor, NotchAnchor::BottomRight);
+        assert_eq!(right_bottom.x_ratio, None);
+
+        // Gentle silent magnet near centre.
+        let near_centre = resolve_drop_target(&monitors, NotchStyle::Floating, (952, 40)).unwrap();
+        assert_eq!((near_centre.anchor, near_centre.x_ratio), (NotchAnchor::TopCenter, None));
+
+        // Arbitrary intermediate pixel (e.g. x = 520 between min 324 and max 1596) stores exact continuous ratio.
+        let custom = resolve_drop_target(&monitors, NotchStyle::Nook, (520, 80)).unwrap();
+        assert_eq!(custom.monitor, 0);
+        assert_eq!(custom.anchor, NotchAnchor::TopLeft);
+        let ratio = custom.x_ratio.expect("custom ratio preserved between left and centre");
+        assert!((anchor_center_x_at(custom.anchor, Some(ratio), FULL_HD, 648) - 520).abs() <= 1);
+
+        // Secondary 150 % DPI monitor re-pins and clamps inside [1920 + 486, 4480 - 486].
+        let second_custom = resolve_drop_target(&monitors, NotchStyle::Nook, (2700, 1200)).unwrap();
+        assert_eq!(second_custom.monitor, 1);
+        assert!(second_custom.anchor.is_bottom());
+        let canvas_x =
+            anchor_origin_at(second_custom.anchor, second_custom.x_ratio, monitors[1].area, 972, 972, 438, 0).0;
+        assert!(canvas_x >= 1920 && canvas_x + 972 <= 1920 + 2560);
+        assert_eq!(resolve_drop_target(&[], NotchStyle::Nook, (0, 0)), None);
     }
 
     #[test]

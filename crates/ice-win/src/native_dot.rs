@@ -35,6 +35,8 @@ use crate::monitors::MonitorInfo;
 
 const WM_DOT_CMD: u32 = WM_APP + 1;
 const ACTIVITY_TIMER_ID: usize = 0x4943_4531;
+const PLACED_FLASH_TIMER_ID: usize = 0x4943_4532;
+const PLACED_FLASH_MS: u32 = 240;
 const LOGICAL_TOP_OFFSET: i32 = 6;
 
 // Twin: `app/ui/src/lib/notch/geometry.ts` (size & radius tokens for the idle pill).
@@ -420,13 +422,17 @@ pub struct PillState {
     pub mode: PillMode,
     pub idle_style: IdleStyle,
     pub notch_style: NotchStyle,
-    /// D-20: where on the monitor's top edge the pill sits (shared with the WebView notch).
+    /// D-20: where on the monitor's top or bottom edge the pill sits (shared with the WebView notch).
     pub anchor: NotchAnchor,
+    /// D-20: optional continuous horizontal ratio (`0.0..=1.0`) between Left and Right; `None` = preset anchor.
+    pub x_ratio: Option<f32>,
     pub theme: NativePillTheme,
     /// Pointer state. Owned by the window thread; `show_state` keeps the live value.
     pub interaction: PillInteraction,
     /// D-27 hibernate: a plain silhouette (red dot while the mic is muted), no activities, click-through.
     pub plain: bool,
+    /// Brief accent rim highlight right after a drag drop lands.
+    pub placed_flash: bool,
     /// D-20: while the pill is being dragged, its window origin (physical px) instead of the anchor's.
     pub drag_origin: Option<(i32, i32)>,
 }
@@ -453,9 +459,11 @@ impl PillState {
             idle_style: IdleStyle::default(),
             notch_style: NotchStyle::default(),
             anchor: NotchAnchor::default(),
+            x_ratio: None,
             theme,
             interaction: PillInteraction::None,
             plain: false,
+            placed_flash: false,
             drag_origin: None,
         }
     }
@@ -572,6 +580,8 @@ enum ThreadSignal {
     Hide,
     Idle,
     MoveMonitor,
+    /// Brief accent rim highlight after drag release.
+    PlacedFlash,
     /// D-27: leave the pill out of screen captures (`true`) or not, applied on the window's own thread.
     CaptureExcluded(bool),
 }
@@ -740,15 +750,31 @@ impl NativeDotHandle {
         }
     }
 
-    /// D-20: moves the pill to `anchor` on its monitor's top edge (repaints only while shown).
-    pub fn set_anchor(&self, anchor: NotchAnchor) {
+    /// D-20: moves the pill to `(anchor, x_ratio)` on its monitor (repaints only while shown).
+    pub fn set_position(&self, anchor: NotchAnchor, x_ratio: Option<f32>) {
         let signal = {
             let mut rt = self.shared.lock();
-            if rt.pill.anchor == anchor {
+            if rt.pill.anchor == anchor && rt.pill.x_ratio == x_ratio {
                 return;
             }
             rt.pill.anchor = anchor;
+            rt.pill.x_ratio = x_ratio;
             rt.desired_visible.then_some(ThreadSignal::Sync { restart_timer: false })
+        };
+        if let Some(sig) = signal {
+            self.shared.post_signal(sig);
+        }
+    }
+
+    /// Triggers a brief accent rim flash after the user finishes dragging and placing the pill.
+    pub fn flash_placed(&self) {
+        let signal = {
+            let mut rt = self.shared.lock();
+            if rt.pill.plain || !rt.desired_visible {
+                return;
+            }
+            rt.pill.placed_flash = true;
+            Some(ThreadSignal::PlacedFlash)
         };
         if let Some(sig) = signal {
             self.shared.post_signal(sig);
@@ -784,13 +810,20 @@ impl NativeDotHandle {
         }
     }
 
-    /// Where the pill's window would sit at `anchor` on `monitor` in its current state (physical px): the target of the
-    /// D-20 release animation.
+    /// Where the pill's window would sit at `(anchor, x_ratio)` on `monitor` in its current state (physical px): the
+    /// target of the D-20 release animation.
     #[must_use]
-    pub fn origin_for(&self, monitor: &MonitorInfo, anchor: NotchAnchor) -> (i32, i32) {
+    pub fn origin_for(&self, monitor: &MonitorInfo, anchor: NotchAnchor, x_ratio: Option<f32>) -> (i32, i32) {
         let rt = self.shared.lock();
         let metrics = frame_metrics(rt.pill.mode, rt.pill.idle_style, rt.pill.notch_style);
-        crate::overlay_win::notch_origin(monitor, anchor, metrics.total_w(), metrics.body_h, metrics.top_offset)
+        crate::overlay_win::notch_origin_at(
+            monitor,
+            anchor,
+            x_ratio,
+            metrics.total_w(),
+            metrics.body_h,
+            metrics.top_offset,
+        )
     }
 
     /// The pill window's handle (0 before it exists or after it closed), for reading its rectangle.
@@ -1202,6 +1235,21 @@ fn dot_thread_main(monitor: MonitorInfo, shared: Arc<SharedState>, ready_tx: mps
             continue;
         }
 
+        if msg.message == WM_TIMER && msg.hwnd == hwnd && msg.wParam.0 == PLACED_FLASH_TIMER_ID {
+            // SAFETY: one-shot placed flash expiry timer; stop immediately before clearing rim highlight.
+            let _ = unsafe { KillTimer(Some(hwnd), PLACED_FLASH_TIMER_ID) };
+            let (pill, active_mon, still_visible) = {
+                let mut rt = shared.lock();
+                rt.pill.placed_flash = false;
+                (rt.pill.clone(), rt.monitor.clone(), rt.desired_visible)
+            };
+            if still_visible {
+                let _ = paint_pill(hwnd, &active_mon, &pill);
+                reveal_topmost_noactivate(hwnd);
+            }
+            continue;
+        }
+
         if msg.message == WM_DOT_CMD {
             let (signals, pill, active_mon, desired_visible, timeout_ms) = {
                 let mut rt = shared.lock();
@@ -1215,6 +1263,7 @@ fn dot_thread_main(monitor: MonitorInfo, shared: Arc<SharedState>, ready_tx: mps
             let mut need_hide = false;
             let mut want_timer = false;
             let mut kill_timer = false;
+            let mut want_flash_timer = false;
             for sig in signals {
                 match sig {
                     ThreadSignal::Sync { restart_timer } => {
@@ -1240,6 +1289,10 @@ fn dot_thread_main(monitor: MonitorInfo, shared: Arc<SharedState>, ready_tx: mps
                     ThreadSignal::MoveMonitor => {
                         need_paint = true;
                     }
+                    ThreadSignal::PlacedFlash => {
+                        need_paint = true;
+                        want_flash_timer = true;
+                    }
                     ThreadSignal::CaptureExcluded(exclude) => {
                         if let Err(error) = crate::overlay_win::set_capture_excluded(hwnd.0 as isize, exclude) {
                             tracing::debug!(%error, exclude, "Native pill capture affinity not applied");
@@ -1254,8 +1307,11 @@ fn dot_thread_main(monitor: MonitorInfo, shared: Arc<SharedState>, ready_tx: mps
             }
             if need_hide || !desired_visible {
                 input::reset(hwnd, &shared);
-                // SAFETY: hides layered window without changing activation.
-                let _ = unsafe { ShowWindow(hwnd, SW_HIDE) };
+                // SAFETY: hides layered window and cancels any placed-flash timer without changing activation.
+                let _ = unsafe {
+                    let _ = KillTimer(Some(hwnd), PLACED_FLASH_TIMER_ID);
+                    ShowWindow(hwnd, SW_HIDE)
+                };
                 shared.visible.store(false, Ordering::Release);
                 continue;
             }
@@ -1263,6 +1319,10 @@ fn dot_thread_main(monitor: MonitorInfo, shared: Arc<SharedState>, ready_tx: mps
                 let _ = paint_pill(hwnd, &active_mon, &pill);
                 reveal_topmost_noactivate(hwnd);
                 shared.visible.store(true, Ordering::Release);
+            }
+            if want_flash_timer {
+                // SAFETY: installs or replaces a short one-shot flash timer on the thread's own window.
+                let _ = unsafe { SetTimer(Some(hwnd), PLACED_FLASH_TIMER_ID, PLACED_FLASH_MS, None) };
             }
             if want_timer
                 && !matches!(pill.mode, PillMode::Idle)
@@ -1296,9 +1356,10 @@ unsafe extern "system" fn dot_wnd_proc(hwnd: HWND, umsg: u32, wparam: WPARAM, lp
     }
     match umsg {
         WM_CLOSE => {
-            // SAFETY: destroys timer and window on its owning thread.
+            // SAFETY: destroys timers and window on its owning thread.
             unsafe {
                 let _ = KillTimer(Some(hwnd), ACTIVITY_TIMER_ID);
+                let _ = KillTimer(Some(hwnd), PLACED_FLASH_TIMER_ID);
                 let _ = DestroyWindow(hwnd);
             }
             LRESULT(0)
@@ -1391,10 +1452,16 @@ fn paint_pill(hwnd: HWND, monitor: &MonitorInfo, state: &PillState) -> Result<()
     let metrics = frame_metrics(state.mode, state.idle_style, state.notch_style);
     let w = monitor.logical_to_physical(metrics.total_w()).max(16);
     let h = monitor.logical_to_physical(metrics.body_h).max(8);
-    // D-20: one placement rule for both hosts (`overlay_win::notch_origin`, `ice_core::placement`).
-    // The edge offset counts from the bottom at a bottom anchor (Floating only; Edge Nook is top-only).
+    // D-20: one placement rule for both hosts (`overlay_win::notch_origin_at`, `ice_core::placement`).
     let (x, y) = state.drag_origin.unwrap_or_else(|| {
-        crate::overlay_win::notch_origin(monitor, state.anchor, metrics.total_w(), metrics.body_h, metrics.top_offset)
+        crate::overlay_win::notch_origin_at(
+            monitor,
+            state.anchor,
+            state.x_ratio,
+            metrics.total_w(),
+            metrics.body_h,
+            metrics.top_offset,
+        )
     });
 
     // SAFETY: creates a memory DC compatible with the screen.
@@ -1470,14 +1537,15 @@ pub(crate) fn rasterize_pill_frame(pixels: &mut [u32], w: i32, h: i32, scale: f3
     }
     let metrics = frame_metrics(state.mode, state.idle_style, state.notch_style);
     let is_nook = state.notch_style == NotchStyle::Nook;
+    let is_bottom = state.anchor.is_bottom();
     let ear = if is_nook { metrics.ear as f32 } else { 0.0 };
     let body_w = (lw - 2.0 * ear).max(12.0);
     let ox = ear;
 
     let cx = lw * 0.5;
     let shape_cy = lh * 0.5;
-    // Shift interior elements down by 1 px in Edge Nook so content breathes below y = 0.
-    let cy = shape_cy + if is_nook { 1.0 } else { 0.0 };
+    // Shift interior elements away from the flushed bezel/taskbar edge so content breathes.
+    let cy = shape_cy + if is_nook { if is_bottom { -1.0 } else { 1.0 } } else { 0.0 };
     let radius = if is_nook { (lh * 0.44).min(13.0) } else { (lh - 2.0) * 0.5 };
     let half_w = (body_w - 2.0) * 0.5;
     let half_h = (lh - 2.0) * 0.5;
@@ -1589,7 +1657,8 @@ pub(crate) fn rasterize_pill_frame(pixels: &mut [u32], w: i32, h: i32, scale: f3
         for px in 0..w {
             let lx = (px as f32 + 0.5) / scale;
             let sdf = if is_nook {
-                sd_nook_notch(lx, ly, cx, half_w, lh, radius, ear)
+                let nook_ly = if is_bottom { lh - ly } else { ly };
+                sd_nook_notch(lx, nook_ly, cx, half_w, lh, radius, ear)
             } else {
                 sd_round_box(lx, ly, cx, shape_cy, half_w, half_h, radius)
             };
@@ -1612,6 +1681,12 @@ pub(crate) fn rasterize_pill_frame(pixels: &mut [u32], w: i32, h: i32, scale: f3
                 cg = cg * (1.0 - rim_t) + rim_g * rim_t;
                 cb = cb * (1.0 - rim_t) + rim_b * rim_t;
                 alpha = alpha.max(rim_t * coverage);
+            }
+
+            if state.placed_flash && sdf > -1.45 {
+                let flash_t = ((sdf + 1.45) / 1.45).clamp(0.0, 1.0) * 0.85;
+                blend_over(&mut cr, &mut cg, &mut cb, acc_r, acc_g, acc_b, flash_t);
+                alpha = alpha.max(flash_t * coverage);
             }
 
             if state.interaction == PillInteraction::Pressed {
@@ -1739,10 +1814,11 @@ fn rasterize_plain_frame(pixels: &mut [u32], w: i32, h: i32, scale: f32, state: 
     let aa = 0.75 / scale;
     let metrics = frame_metrics(PillMode::Idle, state.idle_style, state.notch_style);
     let is_nook = state.notch_style == NotchStyle::Nook;
+    let is_bottom = state.anchor.is_bottom();
     let ear = if is_nook { metrics.ear as f32 } else { 0.0 };
     let body_w = (lw - 2.0 * ear).max(12.0);
     let cx = lw * 0.5;
-    let cy = lh * 0.5 + if is_nook { 1.0 } else { 0.0 };
+    let cy = lh * 0.5 + if is_nook { if is_bottom { -1.0 } else { 1.0 } } else { 0.0 };
     let radius = if is_nook { (lh * 0.44).min(13.0) } else { (lh - 2.0) * 0.5 };
     let half_w = (body_w - 2.0) * 0.5;
     let half_h = (lh - 2.0) * 0.5;
@@ -1755,7 +1831,8 @@ fn rasterize_plain_frame(pixels: &mut [u32], w: i32, h: i32, scale: f32, state: 
         for px in 0..w {
             let lx = (px as f32 + 0.5) / scale;
             let sdf = if is_nook {
-                sd_nook_notch(lx, ly, cx, half_w, lh, radius, ear)
+                let nook_ly = if is_bottom { lh - ly } else { ly };
+                sd_nook_notch(lx, nook_ly, cx, half_w, lh, radius, ear)
             } else {
                 sd_round_box(lx, ly, cx, lh * 0.5, half_w, half_h, radius)
             };
@@ -2397,5 +2474,41 @@ mod tests {
         assert_eq!(out, EnvelopeOutcome::Updated);
         assert_eq!(dot.pill_state().notch_style, NotchStyle::Floating);
         assert!(!dot.is_visible(), "settings sync must not reveal a hidden native pill");
+    }
+
+    #[test]
+    fn bottom_nook_renders_inverted_ears_and_placed_flash_accents_rim() {
+        let m_nook = frame_metrics(PillMode::Idle, IdleStyle::MiniPill, NotchStyle::Nook);
+        let (w, h) = (m_nook.total_w(), m_nook.body_h);
+        let mut st = PillState::new(NativePillTheme::ice());
+        st.notch_style = NotchStyle::Nook;
+        st.anchor = NotchAnchor::BottomCenter;
+        st.volume = Some(VolumeState { percent: 55, muted: false });
+
+        let mut px = vec![0u32; (w * h) as usize];
+        rasterize_pill_frame(&mut px, w, h, 1.0, &st);
+
+        // Bottom-center sits flush on the taskbar (y = h - 1), while top-left outer corner stays transparent.
+        let bottom_center_a = (px[((h - 1) * w + w / 2) as usize] >> 24) & 0xff;
+        assert!(bottom_center_a >= 180, "expected flush bottom center, got alpha={bottom_center_a}");
+        assert_eq!(px[0], 0, "top-left corner outside body must remain transparent");
+        let ear_inside_a = (px[((h - 1) * w + 6) as usize] >> 24) & 0xff;
+        assert!(ear_inside_a >= 180, "expected inverted bottom concave ear fill, got alpha={ear_inside_a}");
+        assert_eq!(px[((h - 1 - m_nook.ear) * w + 1) as usize], 0, "cutout above bottom ear stays transparent");
+
+        // Placed flash boosts accent colour on the free outer rim (`py = 1`, 1 px inside `bottom_y = h - 1`) compared to normal idle.
+        let rim_idx = (w + w / 2) as usize;
+        let normal_rim_b = px[rim_idx] & 0xff;
+        st.placed_flash = true;
+        rasterize_pill_frame(&mut px, w, h, 1.0, &st);
+        let flash_rim_b = px[rim_idx] & 0xff;
+        assert!(flash_rim_b > normal_rim_b, "expected accent rim flash ({flash_rim_b} > {normal_rim_b})");
+
+        // Plain hibernate bottom Nook also mirrors cleanly.
+        let mut plain_px = vec![0u32; (w * h) as usize];
+        st.set_plain(true);
+        rasterize_plain_frame(&mut plain_px, w, h, 1.0, &st);
+        assert_eq!(plain_px[0], 0);
+        assert!(((plain_px[((h - 1) * w + 6) as usize] >> 24) & 0xff) >= 180);
     }
 }

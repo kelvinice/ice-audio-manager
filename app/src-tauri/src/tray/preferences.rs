@@ -168,16 +168,16 @@ pub(super) fn placement_menus(
         )?)?;
     }
     pinned.append(&PredefinedMenuItem::separator(app)?)?;
-    // The bottom edge is Floating-only (Edge Nook is flush with the top): listed but disabled under Edge Nook, where the
-    // check shows the anchor actually in use.
-    let style = settings.appearance.notch_style;
-    let in_use = settings.notch_anchor.effective_for(style);
+    let in_use = settings.notch_anchor;
     for anchor in NotchAnchor::ALL {
-        let allowed = anchor.allowed_for(style);
-        let label = if allowed { anchor.label().to_string() } else { format!("{} (Floating style)", anchor.label()) };
-        let item = checked_command(app, &label, &Command::SetNotchAnchor { anchor }, in_use == anchor)?;
-        item.set_enabled(allowed)?;
+        let checked = settings.notch_x_ratio.is_none() && in_use == anchor;
+        let item = checked_command(app, anchor.label(), &Command::SetNotchAnchor { anchor }, checked)?;
         pinned.append(&item)?;
+    }
+    if let Some(ratio) = settings.notch_x_ratio {
+        let pct = (ratio.clamp(0.0, 1.0) * 100.0).round() as i32;
+        let info = MenuItem::new(app, format!("Custom position ({pct}%)"), false, None::<&str>)?;
+        pinned.append(&info)?;
     }
     pinned.append(&PredefinedMenuItem::separator(app)?)?;
     let drag = settings.notch_placement == NotchPlacement::DragSnap;

@@ -10,7 +10,7 @@
   }
 
   interface Props {
-    value: T;
+    value: T | null;
     choices: Choice[];
     label: string;
     /** Picture above each choice's text (theme, idle style, animation). */

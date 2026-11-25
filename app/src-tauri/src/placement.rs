@@ -1,5 +1,6 @@
 use std::sync::{Arc, Mutex, PoisonError, atomic::Ordering};
 
+use ice_core::appearance::NotchStyle;
 use ice_core::engine::{Command, PerformanceProfile, SettingsView};
 use ice_core::placement::NotchAnchor;
 use ice_win::fullscreen::{self, FullscreenEvent, FullscreenWatcher};
@@ -12,8 +13,12 @@ use super::{ActivityKind, MonitorSummary, Preview, SharedRuntime, request_previe
 pub(super) struct Placement {
     profile: Option<PerformanceProfile>,
     pinned: Option<String>,
-    /// D-20: where on the pinned monitor's top edge both notch hosts sit (`ice_core::placement`).
+    /// D-20: where on the pinned monitor's top or bottom edge both notch hosts sit (`ice_core::placement`).
     pub(super) anchor: NotchAnchor,
+    /// D-20: optional continuous horizontal offset (`0.0..=1.0`) between Left and Right; `None` = preset anchor.
+    pub(super) x_ratio: Option<f32>,
+    /// D-20: Edge Nook (flush to edge) vs Floating (inset with shadow room).
+    pub(super) style: NotchStyle,
     coverage: Option<fullscreen::Snapshot>,
     pub(super) gaming: bool,
     pub(super) generation: u64,
@@ -133,14 +138,22 @@ fn reconcile(app: &AppHandle, state: &Arc<SharedRuntime>, settings: Option<&Sett
             p.pinned.clone_from(&settings.pinned_monitor);
             repin = true;
         }
-        // The anchor in use: Edge Nook maps a bottom anchor to the top (`NotchAnchor::effective_for`).
-        let anchor = settings.notch_anchor.effective_for(settings.appearance.notch_style);
-        if p.anchor != anchor {
+        let anchor = settings.notch_anchor;
+        let x_ratio = settings.notch_x_ratio;
+        let style = settings.appearance.notch_style;
+        let ratio_changed = match (p.x_ratio, x_ratio) {
+            (None, None) => false,
+            (Some(a), Some(b)) => (a - b).abs() >= 1e-4,
+            _ => true,
+        };
+        if p.anchor != anchor || ratio_changed || p.style != style {
             p.anchor = anchor;
+            p.x_ratio = x_ratio;
+            p.style = style;
             repin = true;
         }
     }
-    let anchor = p.anchor;
+    let (anchor, x_ratio, style) = (p.anchor, p.x_ratio, p.style);
     let Some(profile) = p.profile else { return };
     let monitors = state.monitors.lock().unwrap_or_else(PoisonError::into_inner);
     let target = resolve_target_monitor(&monitors, PlacementMode::Pinned, p.pinned.as_deref(), None);
@@ -200,7 +213,7 @@ fn reconcile(app: &AppHandle, state: &Arc<SharedRuntime>, settings: Option<&Sett
             dot.set_standby_only(true);
             dot.hide();
         }
-        dot.set_anchor(anchor);
+        dot.set_position(anchor, x_ratio);
         if let Some((_, monitor)) = &target {
             dot.move_to_monitor(monitor.clone());
         }
@@ -214,7 +227,7 @@ fn reconcile(app: &AppHandle, state: &Arc<SharedRuntime>, settings: Option<&Sett
     {
         let hwnd = state.notch_hwnd.load(Ordering::Acquire);
         if hwnd != 0
-            && let Err(error) = super::overlay_win::move_notch(hwnd, &monitor, anchor)
+            && let Err(error) = super::overlay_win::move_notch(hwnd, &monitor, anchor, x_ratio, style)
         {
             tracing::warn!(%error, "Could not reposition notch");
         }

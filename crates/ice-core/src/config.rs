@@ -32,7 +32,8 @@ use crate::resolve::{DeviceRef, MatchMode, resolve};
 /// v14: `[[device]] lyrics_delay_ms` (per-output lyric delay; absent = automatic, see [`auto_lyrics_delay_ms`]).
 /// v15: `notch_anchor` (D-20 `"top_left"` | `"top_center"` default | `"top_right"`).
 /// v16: bottom `notch_anchor` values (Floating) and `notch_placement` (`"drag_snap"` default | `"fixed"`), D-20.
-pub const SCHEMA_VERSION: u32 = 16;
+/// v17: `notch_x_ratio` continuous horizontal position (`0.0..=1.0`, absent = preset anchor) and bottom Edge Nook.
+pub const SCHEMA_VERSION: u32 = 17;
 
 /// Allowed per-device lyric delay, in ms (negative = lyrics earlier).
 pub const LYRICS_DELAY_MS: std::ops::RangeInclusive<i32> = -1000..=2000;
@@ -69,9 +70,12 @@ pub struct Config {
     pub performance_profile: PerformanceProfile,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pinned_monitor: Option<String>,
-    /// D-20: where on the pinned monitor's top edge the notch sits.
+    /// D-20: where on the pinned monitor's top or bottom edge the notch sits.
     pub notch_anchor: NotchAnchor,
-    /// D-20: drag the notch to move it (snaps to an anchor), or only move it from the tray and Settings.
+    /// D-20: optional continuous horizontal offset (`0.0..=1.0`) between Left and Right; `None` = preset anchor.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub notch_x_ratio: Option<f32>,
+    /// D-20: drag the notch to move it along the edge, or only move it from the tray and Settings.
     pub notch_placement: NotchPlacement,
     /// Roles set by switches that don't specify their own.
     pub default_roles: RoleSet,
@@ -110,6 +114,7 @@ impl Default for Config {
             performance_profile: PerformanceProfile::default(),
             pinned_monitor: None,
             notch_anchor: NotchAnchor::default(),
+            notch_x_ratio: None,
             notch_placement: NotchPlacement::default(),
             default_roles: RoleSet::Default,
             bindings: Vec::new(),
@@ -269,6 +274,11 @@ impl Config {
                 LYRICS_CACHE_MAX_MB.end()
             )));
         }
+        if let Some(ratio) = cfg.notch_x_ratio
+            && !(ratio.is_finite() && (0.0..=1.0).contains(&ratio))
+        {
+            return Err(ConfigError::Parse(format!("notch_x_ratio = {ratio} must be finite and within 0.0–1.0")));
+        }
         match cfg.schema_version {
             v if v > SCHEMA_VERSION => Err(ConfigError::TooNew(v)),
             // v0/v1 gain the default profile and an initially unassigned monitor pin, v0–v2 gain
@@ -278,8 +288,8 @@ impl Config {
             // v0–v9 gain `visualizer_spectrum = true`, v0–v10 gain `appearance.notchStyle = "nook"`, and v0–v11 gain
             // `appearance.hibernate = false` with `hibernateHideFromCapture = true`, v0–v12 gain
             // `appearance.hibernateLook = "plain"`, v0–v13 devices an automatic lyrics delay (no
-            // `lyrics_delay_ms`), v0–v14 gain `notch_anchor = "top_center"`, and v0–v15 gain
-            // `notch_placement = "drag_snap"`, all via serde defaults.
+            // `lyrics_delay_ms`), v0–v14 gain `notch_anchor = "top_center"`, v0–v15 gain
+            // `notch_placement = "drag_snap"`, and v0–v16 gain `notch_x_ratio = None`, all via serde defaults.
             _ => Ok(Self { schema_version: SCHEMA_VERSION, ..cfg }),
         }
     }
@@ -351,6 +361,7 @@ impl Config {
             performance_profile: self.performance_profile,
             pinned_monitor: self.pinned_monitor.clone(),
             notch_anchor: self.notch_anchor,
+            notch_x_ratio: self.notch_x_ratio,
             notch_placement: self.notch_placement,
             toggle_pairs: self
                 .toggle_pairs
@@ -473,7 +484,17 @@ impl Config {
                 drop_if_default(&mut next.devices, i);
             }
             Command::SetPerformanceProfile { profile } => next.performance_profile = *profile,
-            Command::SetNotchAnchor { anchor } => next.notch_anchor = *anchor,
+            Command::SetNotchAnchor { anchor } => {
+                next.notch_anchor = *anchor;
+                next.notch_x_ratio = None;
+            }
+            Command::SetNotchPosition { anchor, x_ratio } => {
+                if x_ratio.is_some_and(|r| !(r.is_finite() && (0.0..=1.0).contains(&r))) {
+                    return Err("Notch horizontal ratio must be between 0.0 and 1.0.".into());
+                }
+                next.notch_anchor = *anchor;
+                next.notch_x_ratio = *x_ratio;
+            }
             Command::SetNotchPlacement { placement } => next.notch_placement = *placement,
             Command::SetPinnedMonitor { display_path } => {
                 if display_path.trim().is_empty() || display_path.chars().any(char::is_control) {
@@ -1110,6 +1131,40 @@ mod tests {
         assert_eq!(config.apply_setting(&fixed, &[]), Ok(true));
         let saved = Config::from_toml(&config.to_toml()).unwrap();
         assert_eq!((saved.notch_anchor, saved.notch_placement), (NotchAnchor::BottomLeft, NotchPlacement::Fixed));
+    }
+
+    #[test]
+    fn v16_migrates_with_none_x_ratio_and_saves_custom_horizontal_position() {
+        use crate::placement::NotchAnchor;
+        let mut config = Config::from_toml("schema_version = 16\nnotch_anchor = 'bottom_center'").unwrap();
+        assert_eq!(config.schema_version, SCHEMA_VERSION);
+        assert_eq!(config.view(&[]).notch_x_ratio, None);
+
+        let custom = Command::SetNotchPosition { anchor: NotchAnchor::BottomLeft, x_ratio: Some(0.28) };
+        assert_eq!(config.apply_setting(&custom, &[]), Ok(true));
+        assert_eq!(config.apply_setting(&custom, &[]), Ok(false));
+
+        let saved = Config::from_toml(&config.to_toml()).unwrap();
+        assert_eq!(saved.notch_anchor, NotchAnchor::BottomLeft);
+        assert_eq!(saved.notch_x_ratio, Some(0.28));
+
+        assert!(
+            config
+                .apply_setting(&Command::SetNotchPosition { anchor: NotchAnchor::TopCenter, x_ratio: Some(1.2) }, &[])
+                .is_err()
+        );
+        assert!(
+            config
+                .apply_setting(
+                    &Command::SetNotchPosition { anchor: NotchAnchor::TopCenter, x_ratio: Some(f32::NAN) },
+                    &[]
+                )
+                .is_err()
+        );
+        assert!(Config::from_toml("schema_version = 17\nnotch_x_ratio = -0.1").is_err());
+
+        assert_eq!(config.apply_setting(&Command::SetNotchAnchor { anchor: NotchAnchor::TopRight }, &[]), Ok(true));
+        assert_eq!(config.notch_x_ratio, None);
     }
 
     #[test]

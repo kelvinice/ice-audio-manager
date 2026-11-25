@@ -76,6 +76,7 @@ impl Worker {
             | Command::SetPerformanceProfile { .. }
             | Command::SetPinnedMonitor { .. }
             | Command::SetNotchAnchor { .. }
+            | Command::SetNotchPosition { .. }
             | Command::SetNotchPlacement { .. }
             | Command::SetKnobGestures { .. }
             | Command::SetTheme { .. }
