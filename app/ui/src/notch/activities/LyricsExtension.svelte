@@ -101,7 +101,7 @@
         : LADDER.card.inner,
   );
   const highlightActiveWords = $derived(
-    wordHighlight && !instant && frame.activeLine !== null && frame.activeLine.words.length > 0,
+    wordHighlight && frame.activeLine !== null && frame.activeLine.words.length > 0,
   );
   const useWordSpaces = $derived(
     Boolean(frame.activeLine && !/[぀-ヿ一-鿿]/.test(frame.activeLine.text)),
@@ -115,36 +115,43 @@
   // Edge Nook: the tall column wraps the current line (balanced, ≤ 3 rows) instead of shrinking or sliding it, and the
   // other rows are placed around its measured height (`nookLadderY`). Only the current row is observed.
   const wrapMain = $derived(mode === 'nook');
-  let nookMainH = $state<number | null>(null);
+  let cardLadderEl = $state<HTMLDivElement | null>(null);
 
   function rowY(slot: number): number {
-    if (mode === 'pill') return ladderY('pill', slot, hasSub);
-    if (mode === 'nook' && nookMainH !== null) return nookLadderY(slot, nookMainH);
     return ladderY(mode, slot, hasSub);
   }
 
-  /** Reports the current row's height while `enabled`; event-driven (fires only when the size changes). */
-  function trackMainHeight(node: HTMLElement, enabled: boolean) {
-    let observer: ResizeObserver | null = null;
-    const start = () => {
-      observer = new ResizeObserver(() => {
-        nookMainH = node.offsetHeight;
-      });
-      observer.observe(node);
+  // Edge Nook: read the active wrapped row's height BEFORE writing any rung `transform`,
+  // so Chromium commits each row's true Y in a single style recalc with zero `transitioncancel`.
+  $effect(() => {
+    if (!wrapMain || !cardLadderEl) return;
+    void rows;
+    void hasSub;
+    const ladder = cardLadderEl;
+    const mainEl = ladder.querySelector<HTMLElement>('.rung.main');
+    const applyNookY = () => {
+      const h = mainEl ? mainEl.offsetHeight : LADDER.nook.cur + (hasSub ? LADDER.nook.sub : 0);
+      for (const el of ladder.querySelectorAll<HTMLElement>('.rung')) {
+        const slot = Number(el.dataset.slot);
+        if (!Number.isNaN(slot)) {
+          const target = `translateY(${nookLadderY(slot, h)}px)`;
+          if (!el.style.transform) {
+            el.style.transition = 'none';
+            el.style.transform = target;
+            void el.offsetHeight;
+            el.style.transition = '';
+          } else {
+            el.style.transform = target;
+          }
+        }
+      }
     };
-    const stop = () => {
-      observer?.disconnect();
-      observer = null;
-    };
-    if (enabled) start();
-    return {
-      update(next: boolean) {
-        if (next && !observer) start();
-        else if (!next && observer) stop();
-      },
-      destroy: stop,
-    };
-  }
+    applyNookY();
+    if (!mainEl) return;
+    const observer = new ResizeObserver(applyNookY);
+    observer.observe(mainEl);
+    return () => observer.disconnect();
+  });
 
   function romajiWords(text: string): string[] {
     return text.split(/\s+/).filter(Boolean);
@@ -219,18 +226,18 @@
       {doc.plainText}
     </div>
   {:else}
-    <div class="ladder card-ladder" style:height={`${ladderHeight}px`} aria-label="Synced lyrics">
+    <div class="ladder card-ladder" bind:this={cardLadderEl} style:height={`${ladderHeight}px`} aria-label="Synced lyrics">
       {#each rows as row (row.key)}
         <button
           class="rung"
           class:main={row.slot === 0}
           class:gap={row.role === 'gap'}
           class:hidden={hiddenSlot(row.slot)}
+          data-slot={row.slot}
           type="button"
           tabindex={hiddenSlot(row.slot) ? -1 : 0}
           disabled={!row.line}
-          style:transform={`translateY(${rowY(row.slot)}px)`}
-          use:trackMainHeight={wrapMain && row.slot === 0}
+          style:transform={wrapMain ? undefined : `translateY(${rowY(row.slot)}px)`}
           onclick={() => seekTo(row)}
         >
           <span class="rung-enter">
@@ -255,6 +262,8 @@
 
 <style>
   .lyrics-ext {
+    --_word-lift: -1.5px;
+    --_word-scale: 1.12;
     width: 100%;
     border-top: 1px solid var(--ice-control-border);
     display: flex;
@@ -269,6 +278,8 @@
   }
 
   .lyrics-ext.pill {
+    --_word-lift: -1px;
+    --_word-scale: 1.09;
     padding: 5px 4px 4px;
   }
 
@@ -334,7 +345,7 @@
     /* `clip` + a margin as wide as the main row's bleed (`.rung-text.fitted`): the active word's lift and glow aren't
        shaved off at the ladder's edges. */
     overflow: clip;
-    overflow-clip-margin: 4px;
+    overflow-clip-margin: 6px;
   }
 
   .rung {
@@ -344,8 +355,8 @@
     right: 0;
     min-width: 0;
     transition:
-      transform 460ms cubic-bezier(0.22, 1, 0.36, 1),
-      opacity 320ms ease;
+      transform 420ms cubic-bezier(0.22, 1, 0.36, 1),
+      opacity 300ms ease;
   }
 
   .rung.hidden {
@@ -358,8 +369,9 @@
     display: flex;
     flex-direction: column;
     gap: 1px;
+    width: 100%;
     min-width: 0;
-    animation: lyric-enter 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation: lyric-enter 340ms cubic-bezier(0.22, 1, 0.36, 1) both;
   }
 
   .rung-text {
@@ -386,9 +398,9 @@
     overflow-x: clip;
     overflow-y: visible;
     text-overflow: clip;
-    margin: -3px -4px;
-    padding: 3px 4px;
-    max-width: calc(100% + 8px);
+    margin: -4px -6px;
+    padding: 4px 6px;
+    max-width: calc(100% + 12px);
   }
 
   .fit {
@@ -419,11 +431,6 @@
     mask-image: linear-gradient(90deg, transparent, #000 16px, #000 calc(100% - 16px), transparent);
   }
 
-  /* The card's main row spans the full width so `fitLine` measures the row, not the line's own shrink-to-fit width. */
-  .card-ladder .rung-text.fitted {
-    align-self: stretch;
-  }
-
   /* A fitted card line is laid out from the left (a centred line wider than its row overflows on both sides and loses
      its first characters); `fitLine` centres it with the transform. */
   .card-ladder .rung-text.fitted:global(.fitting) {
@@ -436,6 +443,10 @@
   }
 
   /* Rows outside the main slot are smaller and dim; moving into it grows and brightens them. */
+  .rung:not(.main):not(.hidden) {
+    opacity: 0.56;
+  }
+
   .rung:not(.main) .rung-text {
     transform: scale(0.875);
     color: var(--ice-lyric-muted);
@@ -452,11 +463,16 @@
     appearance: none;
     border: none;
     background: transparent;
+    width: 100%;
     padding: 0 4px;
     margin: 0;
     font-family: inherit;
     text-align: center;
     cursor: pointer;
+  }
+
+  .card-ladder .rung:not(.main):not(.hidden) {
+    opacity: 0.48;
   }
 
   .card-ladder .rung:disabled {
@@ -467,7 +483,9 @@
     align-items: center;
   }
 
+  /* Rows span the full card width so `fitLine` always measures the row rather than its shrink-to-fit text width. */
   .card-ladder .rung-text {
+    align-self: stretch;
     font-size: 13px;
     line-height: 18px;
     transform-origin: center center;
@@ -475,6 +493,10 @@
 
   .card-ladder .rung:not(.main) .rung-text {
     transform: scale(0.81);
+  }
+
+  .card-ladder .rung:not(.main):not(.hidden):not(:disabled):hover {
+    opacity: 0.82;
   }
 
   .card-ladder .rung:not(.main):not(:disabled):hover .rung-text {
@@ -490,10 +512,10 @@
     display: inline-block;
     transform-origin: center bottom;
     transition:
-      transform 180ms cubic-bezier(0.22, 1, 0.36, 1),
+      transform 200ms cubic-bezier(0.22, 1, 0.36, 1),
       color 160ms ease,
-      opacity 160ms ease,
-      text-shadow 180ms ease;
+      opacity 180ms ease,
+      filter 200ms ease;
   }
 
   .word.spaced {
@@ -502,19 +524,36 @@
 
   .word.upcoming {
     color: var(--ice-lyric-muted);
+    opacity: 0.65;
     transform: translateY(0) scale(1);
+    filter: none;
   }
 
   .word.active {
     color: var(--ice-lyric-active);
-    transform: translateY(-1px) scale(1.07);
-    text-shadow: 0 0 10px var(--ice-lyric-glow);
+    opacity: 1;
+    transform: translateY(var(--_word-lift)) scale(var(--_word-scale));
+    filter: drop-shadow(0 0 6px var(--ice-lyric-glow));
+    transition:
+      transform 240ms cubic-bezier(0.34, 1.56, 0.64, 1),
+      color 160ms ease,
+      opacity 180ms ease,
+      filter 220ms ease;
+  }
+
+  @starting-style {
+    .word.active {
+      opacity: 0.65;
+      transform: translateY(1px) scale(0.96);
+      filter: drop-shadow(0 0 0 transparent);
+    }
   }
 
   .word.sung {
     color: var(--ice-fg);
-    opacity: 0.88;
+    opacity: 0.78;
     transform: translateY(0) scale(1);
+    filter: none;
   }
 
   /* ---- Subtitle / Romaji: only under the main row; fades in as a line moves into it ---- */
@@ -568,14 +607,19 @@
     animation: none;
   }
 
+  .lyrics-ext.instant .word.active {
+    transform: none;
+    filter: none;
+  }
+
   @keyframes lyric-enter {
     from {
       opacity: 0;
-      transform: translateY(6px);
+      transform: translateY(10px) scale(0.96);
     }
     to {
       opacity: 1;
-      transform: translateY(0);
+      transform: translateY(0) scale(1);
     }
   }
 </style>

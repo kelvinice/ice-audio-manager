@@ -35,4 +35,6 @@ test('the hibernate tokens are global, so the plain notch is drawn on every them
   const root = declaredTokens((sel) => sel === ':root').get(':root');
   assert.ok(root?.has('--ice-hibernate-bg'));
   assert.ok(root?.has('--ice-hibernate-dot'));
+  assert.ok(root?.has('--ice-lyric-glow-mix'));
+  assert.ok(root?.has('--ice-lyric-glow'));
 });

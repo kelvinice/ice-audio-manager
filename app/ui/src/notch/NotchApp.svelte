@@ -341,6 +341,7 @@
     position: absolute;
     inset: 0;
     background: var(--ice-bg);
+    --ice-lyric-glow: color-mix(in srgb, var(--ice-active-accent, var(--ice-accent)) var(--ice-lyric-glow-mix), transparent);
   }
 
   .pill-slot {

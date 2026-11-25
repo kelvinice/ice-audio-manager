@@ -56,7 +56,8 @@
   --ice-lyric-active: #ffffff;
   --ice-lyric-muted: rgba(237, 241, 247, 0.48);
   --ice-lyric-sub: rgba(237, 241, 247, 0.68);
-  --ice-lyric-glow: color-mix(in srgb, var(--ice-active-accent, var(--ice-accent)) 42%, transparent);
+  --ice-lyric-glow-mix: 65%;
+  --ice-lyric-glow: color-mix(in srgb, var(--ice-accent) var(--ice-lyric-glow-mix), transparent);
   /* D-27 hibernate: a plain notch looks like hardware on every theme, so these live here and no theme overrides them.
      Twin: `rasterize_plain_frame` (native_dot.rs). */
   --ice-hibernate-bg: #000;
@@ -97,7 +98,8 @@
   --ice-lyric-active: #0b1220;
   --ice-lyric-muted: rgba(17, 22, 31, 0.46);
   --ice-lyric-sub: rgba(17, 22, 31, 0.68);
-  --ice-lyric-glow: color-mix(in srgb, var(--ice-active-accent, var(--ice-accent)) 28%, transparent);
+  --ice-lyric-glow-mix: 38%;
+  --ice-lyric-glow: color-mix(in srgb, var(--ice-accent) var(--ice-lyric-glow-mix), transparent);
 }
 
 [data-theme='midnight'] {
@@ -153,6 +155,7 @@
   --ice-control-border: var(--ice-border);
   --ice-play-bg: var(--ice-accent-soft);
   --ice-play-fg: var(--ice-accent-strong);
+  --ice-lyric-glow-mix: 0%;
   --ice-lyric-glow: transparent;
 }
 

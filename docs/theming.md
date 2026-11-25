@@ -58,7 +58,8 @@ All `--ice-*` variables are defined with their `Ice` defaults in CSS `:root`. An
 | `--ice-lyric-active` | Lyrics Extension (D-22/V6) | `#ffffff` (`#0b1220` in `ice_light`) | No | Foreground colour for the active lyric word and active line |
 | `--ice-lyric-muted` | Lyrics Extension (D-22/V6) | `rgba(237, 241, 247, 0.48)` (`rgba(17, 22, 31, 0.46)` in `ice_light`) | No | Upcoming words and dimmed previous/next lyric context lines |
 | `--ice-lyric-sub` | Lyrics Extension (D-22/V6) | `rgba(237, 241, 247, 0.68)` (`rgba(17, 22, 31, 0.68)` in `ice_light`) | No | Romaji or dual-timestamp paired subtitle line beneath active lyric |
-| `--ice-lyric-glow` | Lyrics Extension (D-22/V6) | `color-mix(in srgb, var(--ice-active-accent, var(--ice-accent)) 42%, transparent)` (`transparent` in `minimal`) | No | Soft accent text-shadow halo behind the active lyric word |
+| `--ice-lyric-glow-mix` | Lyrics Extension (D-22/V6) | `65%` (`38%` in `ice_light`, `0%` in `minimal`) | No | Percentage mix into transparent used by `--ice-lyric-glow` |
+| `--ice-lyric-glow` | Lyrics Extension (D-22/V6) | `color-mix(in srgb, var(--ice-accent) var(--ice-lyric-glow-mix), transparent)` *(overridden on `.pill-surface` to mix `--ice-active-accent`, `transparent` in `minimal`)* | No | Soft accent `drop-shadow` halo behind the active lyric word, tracking `--ice-active-accent` dynamically |
 | `--ice-hibernate-bg` | Plain notch (D-27 hibernate) | `#000` | No | Fill of the hibernating notch on every theme (a hardware-notch look). Declared in `:root`: a token only one theme declares is undefined (transparent) on the others; `themes.test.ts` checks it. Twin: `rasterize_plain_frame` in `native_dot.rs` |
 | `--ice-hibernate-dot` | Plain notch (D-27 hibernate) | `var(--ice-danger)` | No | The small dot shown while the microphone is muted |
 | `--ice-ok` | Accent & Status | `#4ade80` | Yes | Positive status (device plugged in, mic live) |

@@ -10,10 +10,10 @@
 /** Smallest shrink before sliding instead (keeps the text readable at the pill's 12 px). */
 export const FIT_MIN_SCALE = 0.82;
 /** Room kept free at the edge for the active word's lift and glow. */
-export const FIT_EDGE_PX = 4;
+export const FIT_EDGE_PX = 6;
 /** Horizontal padding of the fitted row (cancelled by an equal negative margin), so its clip/mask box reaches past
  * the text and the first word's lift isn't cut. Twin: `.rung-text.fitted` in `LyricsExtension.svelte`. */
-export const FIT_BLEED_X_PX = 4;
+export const FIT_BLEED_X_PX = 6;
 /** Where the active word's end is kept while sliding, as a share of the visible width. */
 const FOLLOW_AT = 0.7;
 
