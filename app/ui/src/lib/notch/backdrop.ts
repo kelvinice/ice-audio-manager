@@ -83,6 +83,28 @@ export function relativeLuminance(rgb: Rgb): number {
   return 0.2126 * srgbToLinear(rgb.r) + 0.7152 * srgbToLinear(rgb.g) + 0.0722 * srgbToLinear(rgb.b);
 }
 
+function linearToSrgb(v: number): number {
+  const c = clamp(v, 0, 1);
+  return 255 * (c <= 0.0031308 ? c * 12.92 : 1.055 * c ** (1 / 2.4) - 0.055);
+}
+
+/**
+ * Brightest a dark-theme wash orb may be: WCAG relative luminance of its opaque colour (2026-11-25). Orbs stack with
+ * `mix-blend-mode: lighten`, so the wash tends to this, never past it for one hue: over it `--ice-fg` keeps ≥ 4.5:1 and
+ * `--ice-fg-muted` ≥ 3:1. HSL lightness alone didn't hold that (a saturated yellow at L 0.42 is ~0.5 luminance).
+ */
+export const WASH_MAX_LUMINANCE = 0.08;
+
+/** Scales `rgb` down in linear light until its relative luminance is at most `max` (hue and saturation kept). */
+export function capLuminance(rgb: Rgb, max: number): Rgb {
+  const l = relativeLuminance(rgb);
+  if (l <= max || l <= 0) return rgb;
+  const k = max / l;
+  // Floor, so rounding can't push the result back over the cap.
+  const ch = (c: number) => Math.max(0, Math.floor(linearToSrgb(srgbToLinear(c) * k)));
+  return { r: ch(rgb.r), g: ch(rgb.g), b: ch(rgb.b) };
+}
+
 /** WCAG 2.2 contrast ratio (`1.0` .. `21.0`). */
 export function contrastRatio(a: Rgb, b: Rgb): number {
   const la = relativeLuminance(a);
@@ -178,8 +200,9 @@ function tuneWashColor(rgb: Rgb, isLightTheme: boolean): Rgb {
   if (isLightTheme) {
     return hslToRgb(h, s < 0.08 ? 0.2 : clamp(Math.max(s, 0.58), 0.58, 0.9), clamp(l, 0.58, 0.74));
   }
-  // Vivid jewel saturation with capped lightness so overlapping lava-lamp orbs stay lush while holding >= 4.5:1 muted text contrast.
-  return hslToRgb(h, s < 0.08 ? 0.24 : clamp(Math.max(s, 0.68), 0.68, 0.96), clamp(l, 0.3, 0.42));
+  // Vivid jewel saturation, then a luminance cap (not just HSL lightness) so stacked orbs can't wash out the text.
+  const jewel = hslToRgb(h, s < 0.08 ? 0.24 : clamp(Math.max(s, 0.68), 0.68, 0.96), clamp(l, 0.3, 0.42));
+  return capLuminance(jewel, WASH_MAX_LUMINANCE);
 }
 
 function scrimAlphasForLuminance(lum: number, isLightTheme: boolean): { top: number; bottom: number } {
@@ -259,11 +282,13 @@ export function computeArtBackdrop(
   const { top, bottom } = scrimAlphasForLuminance(coverLuminance, isLightTheme);
   const scrimRgb = isLightTheme ? LIGHT_SCRIM_RGB : DARK_SCRIM_RGB;
   const scrimBotRgb = isLightTheme ? { r: 240, g: 243, b: 248 } : { r: 10, g: 13, b: 18 };
-  const primaryAlpha = isLightTheme ? 0.36 : 0.40;
-  const secondaryAlpha = isLightTheme ? 0.32 : 0.36;
-  const tertiaryAlpha = isLightTheme ? 0.30 : 0.34;
-  const quaternaryAlpha = isLightTheme ? 0.28 : 0.32;
-  const highlightAlpha = isLightTheme ? 0.28 : 0.32;
+  // Dark themes: higher alphas on luminance-capped colours, so one orb looks as rich as before while stacked orbs
+  // level off at `WASH_MAX_LUMINANCE` instead of climbing towards white.
+  const primaryAlpha = isLightTheme ? 0.36 : 0.62;
+  const secondaryAlpha = isLightTheme ? 0.32 : 0.56;
+  const tertiaryAlpha = isLightTheme ? 0.30 : 0.54;
+  const quaternaryAlpha = isLightTheme ? 0.28 : 0.5;
+  const highlightAlpha = isLightTheme ? 0.28 : 0.5;
   const baseStart = formatRgbGlowCss(primary, isLightTheme ? 0.14 : 0.18) ?? 'rgba(107, 197, 255, 0.18)';
   const baseMid = formatRgbGlowCss(tertiary, isLightTheme ? 0.10 : 0.14) ?? 'rgba(72, 196, 184, 0.14)';
   const baseEnd = formatRgbGlowCss(quaternary, isLightTheme ? 0.12 : 0.16) ?? 'rgba(88, 118, 226, 0.16)';

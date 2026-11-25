@@ -1,3 +1,11 @@
+/* Lava-lamp orb colours (private to NotchBackdrop.svelte). Registered as `<color>` so a track change cross-fades the
+   palette (a plain custom property can't be transitioned and snapped to the new song in one frame). */
+@property --orb-c1 { syntax: '<color>'; inherits: true; initial-value: transparent; }
+@property --orb-c2 { syntax: '<color>'; inherits: true; initial-value: transparent; }
+@property --orb-c3 { syntax: '<color>'; inherits: true; initial-value: transparent; }
+@property --orb-c4 { syntax: '<color>'; inherits: true; initial-value: transparent; }
+@property --orb-c5 { syntax: '<color>'; inherits: true; initial-value: transparent; }
+
 :root {
   /* Portfolio-seeded Ice defaults (planning-discussion.md §1.6 + D-12) */
   --ice-bg: rgba(14, 17, 22, 0.9);
@@ -33,7 +41,7 @@
   --ice-art-backdrop: 0;
   --ice-art-blur: 28px;
   --ice-art-wash: 1;
-  --ice-ambient-period: 9s;
+  --ice-ambient-period: 30s;
   --ice-scrim: linear-gradient(
     160deg,
     var(--ice-active-scrim-top, rgba(12, 15, 20, 0.56)) 0%,
@@ -70,7 +78,7 @@
   --ice-warn: #b45309;
   --ice-danger: #c94624;
   --ice-art-wash: 0.85;
-  --ice-ambient-period: 9s;
+  --ice-ambient-period: 30s;
   --ice-scrim: linear-gradient(
     160deg,
     var(--ice-active-scrim-top, rgba(246, 247, 249, 0.72)) 0%,
@@ -95,7 +103,7 @@
   --ice-rim: rgba(255, 255, 255, 0.24);
   --ice-accent-glow: rgba(255, 255, 255, 0.12);
   --ice-art-wash: 0.65;
-  --ice-ambient-period: 13s;
+  --ice-ambient-period: 38s;
   --ice-scrim: linear-gradient(160deg, rgba(0, 0, 0, 0.76) 0%, rgba(0, 0, 0, 0.94) 100%);
   --ice-control-bg: rgba(255, 255, 255, 0.08);
   --ice-control-bg-hover: rgba(255, 255, 255, 0.14);
@@ -110,7 +118,7 @@
   --ice-rim: rgba(107, 197, 255, 0.35);
   --ice-accent-glow: rgba(107, 197, 255, 0.2);
   --ice-art-wash: 0.85;
-  --ice-ambient-period: 9s;
+  --ice-ambient-period: 30s;
   --ice-scrim: linear-gradient(
     160deg,
     var(--ice-active-scrim-top, rgba(24, 24, 27, 0.62)) 0%,

@@ -177,6 +177,7 @@ export class BeatShaper {
   private lastBeatMs: number | null = null;
   private smoothedBpm = DEFAULT_BPM;
   private lastMode: 'spectrum' | 'peak' | null = null;
+  private lastKick = 0;
 
   constructor(count = BEAT_BAR_COUNT) {
     this.count = Math.max(1, Math.round(count));
@@ -191,7 +192,14 @@ export class BeatShaper {
     return Math.max(MIN_TEMPO_RATE, Math.min(MAX_TEMPO_RATE, this.smoothedBpm / DEFAULT_BPM));
   }
 
+  /** Kick onset strength (0–1) of the last frame: low bands in spectrum mode, peak onset otherwise. Feeds the
+   *  lava-lamp breath (`ambient.ts`). */
+  get kick(): number {
+    return this.lastKick;
+  }
+
   reset(): void {
+    this.lastKick = 0;
     this.left.reset();
     this.right.reset();
     this.lowBeat.reset();
@@ -259,6 +267,7 @@ export class BeatShaper {
     if (maxBand < SILENT && clamp01(frame.peak) < SILENT) {
       out.fill(0);
       this.armed = true;
+      this.lastKick = 0;
       return out;
     }
 
@@ -271,6 +280,7 @@ export class BeatShaper {
     this.lowBeat.update(lowEnergy, dt);
     this.trackBeatOnset(this.lowBeat.onset, nowMs);
     const kickAccent = this.lowBeat.onset;
+    this.lastKick = kickAccent;
 
     for (let i = 0; i < this.count; i += 1) {
       const raw = clamp01(bands[i] ?? 0);
@@ -301,6 +311,7 @@ export class BeatShaper {
       out.fill(0);
       this.wavePunch.fill(0);
       this.armed = true;
+      this.lastKick = 0;
       return out;
     }
     this.left.update(l, dt);
@@ -308,6 +319,7 @@ export class BeatShaper {
 
     const onset = Math.max(this.left.onset, this.right.onset);
     this.trackBeatOnset(onset, nowMs);
+    this.lastKick = onset;
 
     // Record centre beat punch into the short travelling-wave delay ring (A1 outward ripple).
     this.waveHead = (this.waveHead + 1) % WAVE_HISTORY_LEN;

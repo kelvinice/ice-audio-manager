@@ -3,12 +3,15 @@ import test from 'node:test';
 import type { NowPlaying, Rgb, SettingsView } from '../ipc/engine.ts';
 import {
   adaptAccentForSurface,
+  capLuminance,
   compositeOver,
   computeArtBackdrop,
   contrastRatio,
+  relativeLuminance,
   resolveAmbientMotionState,
   resolveMusicServices,
   type ArtInfoWithPalette,
+  WASH_MAX_LUMINANCE,
 } from './backdrop.ts';
 
 function parseRgba(css: string): { rgb: Rgb; alpha: number } {
@@ -157,4 +160,33 @@ test('resolveAmbientMotionState enforces expanded/music-pill, C1, C2, and C3 lif
   assert.equal(resolveAmbientMotionState({ ...base, hasArt: false }), 'stopped');
   assert.equal(resolveAmbientMotionState({ ...base, isInstant: true }), 'stopped');
   assert.equal(resolveAmbientMotionState({ ...base, movingBackdrop: false }), 'stopped');
+});
+
+test('capLuminance dims a colour to the cap and keeps its hue', () => {
+  const yellow = { r: 210, g: 190, b: 4 };
+  const capped = capLuminance(yellow, WASH_MAX_LUMINANCE);
+  assert.ok(relativeLuminance(capped) <= WASH_MAX_LUMINANCE, `${JSON.stringify(capped)}`);
+  assert.ok(capped.r > capped.b && capped.g > capped.b, 'still yellow');
+  const dark = { r: 40, g: 20, b: 60 };
+  assert.deepEqual(capLuminance(dark, WASH_MAX_LUMINANCE), dark, 'already dark: unchanged');
+});
+
+test('dark-theme lava orbs stay dim enough for text whatever the cover', () => {
+  const fg = { r: 237, g: 241, b: 247 };
+  const muted = { r: 152, g: 164, b: 184 };
+  const covers: Rgb[][] = [
+    [{ r: 250, g: 210, b: 80 }, { r: 240, g: 120, b: 200 }, { r: 120, g: 220, b: 255 }, { r: 255, g: 250, b: 240 }],
+    [{ r: 90, g: 255, b: 60 }, { r: 255, g: 255, b: 0 }, { r: 0, g: 255, b: 255 }, { r: 255, g: 255, b: 255 }],
+  ];
+  for (const palette of covers) {
+    const art: ArtInfoWithPalette = { id: 'a', width: 128, height: 128, accent: palette[0], palette, luminance: 0.9 };
+    const bd = computeArtBackdrop(art, false);
+    for (const css of [bd.washPrimaryCss, bd.washSecondaryCss, bd.washTertiaryCss, bd.washQuaternaryCss, bd.washHighlightCss]) {
+      // `lighten` stacking tends to the opaque colour: that is the worst case behind text.
+      const { rgb } = parseRgba(css);
+      assert.ok(relativeLuminance(rgb) <= WASH_MAX_LUMINANCE + 1e-9, css);
+      assert.ok(contrastRatio(fg, rgb) >= 4.5, `fg on ${css}`);
+      assert.ok(contrastRatio(muted, rgb) >= 3, `muted on ${css}`);
+    }
+  }
 });

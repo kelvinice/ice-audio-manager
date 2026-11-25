@@ -1,5 +1,6 @@
 import type { MeterFrame } from '../ipc/engine.ts';
 import { SPRING_PRESETS, Spring1D, type SpringParams, type SpringPresetId } from '../motion/spring.ts';
+import { BreathEnvelope } from './ambient.ts';
 import { BEAT_BAR_COUNT, BeatShaper } from './beat.ts';
 
 export const DEFAULT_BAR_COUNT = 5;
@@ -264,6 +265,9 @@ class VisualizerController {
   private readonly levelsBuffer = new Array<number>(BANK_BAR_COUNT).fill(0);
   private readonly listeners = new Set<LevelListener>();
   private readonly tempoListeners = new Set<(rate: number) => void>();
+  private readonly breathListeners = new Set<(breath: number) => void>();
+  private readonly breath = new BreathEnvelope();
+  private lastBreath = 0;
   private lastEmittedTempo = 1;
   private lastTempoEmitMs = 0;
   private activeCount = 0;
@@ -356,6 +360,8 @@ class VisualizerController {
       this.bank.snapSilence();
       this.beat.reset();
       this.emitTempo(1, 0, true);
+      this.breath.reset();
+      this.emitBreath(0);
       this.emitValues();
 
       const docHidden = typeof document !== 'undefined' && document.hidden;
@@ -468,11 +474,29 @@ class VisualizerController {
     const now = performance.now();
     const moving = this.bank.setTargets(this.beat.shape(frame, now, this.targets));
     this.emitTempo(this.beat.tempoRate, now, false);
+    if (this.breathListeners.size > 0) this.emitBreath(this.breath.update(this.beat.kick, now));
     if (moving && this.isVisibleAndActive()) {
       this.ensureRaf();
     } else {
       this.stopRaf();
       this.emitValues();
+    }
+  }
+
+  /** Lava-lamp breath (0–1) from low-band kicks; only reported when it changes, from frames that already arrive. */
+  subscribeBreath(onBreath: (breath: number) => void): () => void {
+    this.breathListeners.add(onBreath);
+    onBreath(this.lastBreath);
+    return () => {
+      this.breathListeners.delete(onBreath);
+    };
+  }
+
+  private emitBreath(value: number): void {
+    if (value === this.lastBreath) return;
+    this.lastBreath = value;
+    for (const listener of this.breathListeners) {
+      listener(value);
     }
   }
 
@@ -540,4 +564,9 @@ export function subscribeVisualizer(
 /** Subscribes to smoothed beat-tempo speed multipliers (~0.58–1.65×) from the active meter stream without starting a new stream. */
 export function subscribeTempo(onTempo: (rate: number) => void): () => void {
   return sharedController.subscribeTempo(onTempo);
+}
+
+/** Subscribes to the lava-lamp breath (0–1, kick-driven) from the active meter stream without starting a new stream. */
+export function subscribeBreath(onBreath: (breath: number) => void): () => void {
+  return sharedController.subscribeBreath(onBreath);
 }

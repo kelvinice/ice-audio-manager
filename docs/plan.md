@@ -388,7 +388,16 @@ Items marked *(needs Settings)* wait for the Phase 4 Settings window. The rest c
 - [x] **D1 + D3 + C3 setting and token:** add `--ice-ambient-period` to `base.css` and `docs/theming.md` (`0s` in `Minimal`,
       `28s` in `Midnight`, `22s` in `Ice`/`Fluent`), `appearance.movingBackdrop` (schema v8, default `true`),
       `Command::SetMovingBackdrop`, and the `"Moving background"` switch in Settings → Appearance (Gemini)
-- [ ] **144 Hz measurement gate before shipping:** 60 s on the 144 Hz monitor (process-tree CPU, GPU engine use, private
+- [x] **Lava-lamp refresh** (Claude, 2026-11-25, owner: "do the 1 to 5 improvements"):
+  1. palette cross-fades between songs (registered `<color>` orb colours, 1.4 s) instead of snapping;
+  2. closed orbital loops (each orb circles its own spot, never ping-pongs);
+  3. calmer: 30 s loops (38 s Midnight), tempo nudges only 0.85–1.2× (was up to 1.65× on 9 s half-cycles);
+  4. bass breath: the wash swells ≤ 6 % on low-band kicks and exhales over ~0.4 s (one compositor transform, only
+     while playing, visible, not reduced motion);
+  5. readability: orb colours capped by luminance (not HSL lightness) + `lighten` blending. Measured on a bright
+     cover over 8 frames: worst muted-text contrast 1.24:1 → 3.23:1, primary text ≈ 7:1
+- [ ] By hand: the new loops, cross-fade and breath with real covers (bright and dark) on both monitors
+- [ ] **144 Hz measurement gate before shipping:** (still open; the refresh adds one breath transform per meter frame) 60 s on the 144 Hz monitor (process-tree CPU, GPU engine use, private
       working set vs. static backdrop). If process-tree CPU rises by `> +0.1 %` over static, fall back to a ~30 fps
       JavaScript `transform` driver (`C4`)
 
