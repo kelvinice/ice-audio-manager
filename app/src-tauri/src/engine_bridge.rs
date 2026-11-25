@@ -78,7 +78,7 @@ pub(super) struct EngineSlot(Mutex<Result<EngineRef, String>>);
 
 impl EngineSlot {
     pub(super) fn new(engine: Option<EngineRef>) -> Self {
-        Self(Mutex::new(engine.ok_or_else(|| "Starting Windows audioâ€¦".into())))
+        Self(Mutex::new(engine.ok_or_else(|| "Starting Windows audio…".into())))
     }
 
     pub(super) fn current(&self) -> Option<EngineRef> {
