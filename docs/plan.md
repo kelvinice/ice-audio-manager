@@ -288,13 +288,20 @@ Runs between Phase 3 and Phase 4. Item 1 is a bug fix that comes first. D-21 Par
       (`r=14`) and `36×18` (`r=9`) tokens. Wiring `IdleContent` follows Claude's merge.*
 - [ ] Side-by-side visual QA of the native and WebView idle pills (all states, light/dark, 100 %/150 %, both monitors)
 
-**D-20 · placement (owner ruling: both methods, drag & snap by default):** *Deferred to after Edge Nook is stable
-(owner, 2026-11-25). Edge Nook is flush with the top edge, so drag & snap, bottom anchors and R1 only apply to Floating.
-`anchor_rect` stays useful for Edge (top-left / top-centre / top-right) and can land first.*
-- [ ] `ice_core::anchor_rect(anchor, work_area, size)` and six anchors (top/bottom × left/centre/right), unit-tested with
-      taskbar positions and DPI (Claude). It replaces both copies of the top-centre math (`overlay_win`, `native_dot`)
-- [ ] Config (Claude, schema bump + migration test): `notch.anchor` (default top-centre) and `notch.placement`
-      = `drag_snap` (default) | `fixed`, plus the engine commands to set them
+**D-20 · placement (owner ruling: both methods, drag & snap by default):** *Resumed 2026-11-25 (owner: "continue …
+review first if still relevant"). Review against the code: every item below is still relevant except R1, which Edge
+Nook vs Floating (`notchStyle`) already is. Edge Nook is flush with the top edge, so drag & snap and bottom anchors only
+apply to Floating; the anchors and their placement rule apply to both.*
+- [x] Placement rule and anchors (Claude, 2026-11-25): `ice_core::placement` (`NotchAnchor`, `anchor_origin`, tests with
+      taskbars on every side, a second monitor at 150 %, a narrow screen). Each anchor fixes the notch's **centre** in the
+      monitor's **work area**; side anchors reserve the full 648 px canvas so the widest card stays on screen; both hosts
+      centre their own box on it (`overlay_win::notch_origin`), which replaced both copies of the top-centre math and
+      stops covering a top taskbar. **Top three anchors only**: bottom anchors are added with the upward-growing layout
+      below, so no setting exists that does nothing. Checked on the running app: WebView `(0,0)–(648,292)` top left,
+      `(1272,0)–(1920,292)` top right after a hot edit; native pill centred at 324 / 1596, the same centres
+- [x] Config `notch_anchor` (schema v15 + migration test), `Command::SetNotchAnchor`. `notch.placement` (`drag_snap` |
+      `fixed`) is added with drag & snap, not before
+- [x] Anchor list in the tray ("Notch position": monitors, then the anchors) and Settings → Notch → Display ("Position")
 - [ ] Drag & snap with our own pointer capture (`SetCapture` + `SetWindowPos(SWP_NOACTIVATE)`), never the system move loop.
       WebView notch: Codex. Native pill: Gemini.
   - Click vs drag via `SM_CXDRAG`/`SM_CYDRAG`. Esc cancels.
@@ -302,11 +309,13 @@ Runs between Phase 3 and Phase 4. Item 1 is a bug fix that comes first. D-21 Par
   - Dropping on another monitor re-pins it there.
 - [ ] **Release gate:** during and after a drag the foreground app keeps focus and keyboard input, on both hosts, across
       150 %/100 % monitors
-- [ ] Bottom anchors (Gemini): the notch sits above the taskbar (work area) and expands upwards (flip `.pill-slot`,
-      clip-path, glow origin)
-- [ ] Anchor list in the tray and Settings → Notch, which works in both placement modes (Codex)
-- [ ] R1 "attached vs floating" style (Gemini, Phase 4 Appearance): asymmetric corners via an SVG path and the native SDF
-- [ ] R2 optional modules (Phase 4 Activities): a disabled module runs no timer, subscription or IPC
+- [ ] Bottom anchors, Floating only (Gemini): the notch sits above the taskbar (work area) and expands upwards (flip
+      `.pill-slot`, clip-path, glow origin). With D-28 the card is a song block + output strip, so at the bottom the
+      strip can sit nearest the edge. `NotchAnchor` gains `Bottom*`; `anchor_origin` measures from the work area's bottom
+- [x] R1 "attached vs floating" style: **already done** as Edge Nook (flush, ears) vs Floating (`appearance.notchStyle`,
+      schema v11), on both hosts
+- [ ] R2 optional modules (Phase 4 Activities): a disabled module runs no timer, subscription or IPC. *Partly there:
+      music services, lyrics and the spectrum each have a switch; per-pop-up switches (volume, switch, track) remain*
 
 **D-21.1 (accepted 2026-11-23):**
 - [x] L1 · Idle linger in config, per profile (default 15 s, validated range), replacing `IDLE_SUSPEND_LINGER_MS`

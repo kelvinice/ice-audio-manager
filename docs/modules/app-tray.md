@@ -16,7 +16,7 @@ the Phase 4 Settings window exists. It only builds menus from `EngineSnapshot` a
 ## What the menu offers
 Playback devices (switch; per-device **Show in notch**, spatial sound submenu with `SPATIAL_OPTIONS`) · playback volume line · recording devices ·
 communications mic line · **Toggle pairs** (and "Toggle with the current device…" one-click setup) · **Show disconnected devices** ·
-**Knob gestures** · **Theme / Animation / Idle notch / Now playing pill** submenus (saved in `[appearance]`) · **Performance profile** · **Pinned monitor** · notice/feedback entries
+**Knob gestures** · **Theme / Animation / Idle notch / Now playing pill** submenus (saved in `[appearance]`) · **Performance profile** · **Notch position** (monitors, then Top left / Top centre / Top right) · notice/feedback entries
 (Dismiss, Choose device for X, Cancel) · "Audio unavailable" while the engine is starting.
 
 ## How it works
@@ -44,3 +44,4 @@ Unit tests in `tray.rs` and `preferences.rs` cover id round-trips and favourite 
 - 2026-11-24 Gemini: added `Notch style` (`Floating (default)` / `Edge Nook`) submenu to `appearance_menus`.
 - 2026-11-24 Gemini: updated tray default labels and ordering to `Edge Nook (default)` and `While playing (default)`.
 - 2026-11-25 Claude: "Hibernate notch" check item in the right-click menu (`Command::SetHibernate`), under "Show notch preview"; unchecking it wakes the notch.
+- 2026-11-25 Claude: "Pinned monitor" submenu renamed **Notch position**; after a separator it lists the three D-20 anchors (`Command::SetNotchAnchor`).

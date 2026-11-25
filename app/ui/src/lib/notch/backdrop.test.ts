@@ -26,6 +26,7 @@ const baseSettings: SettingsView = {
   appearance: { theme: 'ice', preset: 'smooth', idleStyle: 'mini_pill', notchStyle: 'floating', nowPlaying: 'brief', movingBackdrop: true, hibernate: false, hibernateLook: 'plain', hibernateHideFromCapture: true },
   performanceProfile: 'instant',
   pinnedMonitor: null,
+  notchAnchor: 'top_center',
   defaultRoles: 'both',
   togglePairs: [],
   bindings: [],

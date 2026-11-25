@@ -144,6 +144,8 @@ mod tests {
             "",
             &format!("export {}", ice_core::appearance::HibernateLook::decl(&cfg)),
             "",
+            &format!("export {}", ice_core::placement::NotchAnchor::decl(&cfg)),
+            "",
             &format!("export {}", ice_core::appearance::Appearance::decl(&cfg)),
             "",
             &format!("export {}", Flow::decl(&cfg)),

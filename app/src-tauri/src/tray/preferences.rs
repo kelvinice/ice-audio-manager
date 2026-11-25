@@ -3,8 +3,9 @@ use std::sync::PoisonError;
 use ice_core::appearance::{Appearance, IdleStyle, NotchStyle, NowPlayingPill, SpringPreset, ThemeKind};
 use ice_core::device::Flow;
 use ice_core::engine::{Command, DeviceSummary, EngineSnapshot, PerformanceProfile, SavedDevice, SettingsView};
+use ice_core::placement::NotchAnchor;
 use tauri::AppHandle;
-use tauri::menu::{CheckMenuItem, Menu, MenuItem, Submenu};
+use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu};
 
 use super::{SharedRuntime, checked_command, menu_text};
 
@@ -155,7 +156,8 @@ pub(super) fn placement_menus(
             ("Lite", SetPerformanceProfile { profile: PerformanceProfile::Lite }),
         ],
     )?;
-    let pinned = Submenu::new(app, "Pinned monitor", available)?;
+    // D-20: which monitor, then where on its top edge.
+    let pinned = Submenu::new(app, "Notch position", available)?;
     for m in state.monitors.lock().unwrap_or_else(PoisonError::into_inner).iter() {
         let selected = settings.pinned_monitor.as_ref().is_some_and(|pin| pin.eq_ignore_ascii_case(&m.display_path));
         pinned.append(&checked_command(
@@ -164,6 +166,11 @@ pub(super) fn placement_menus(
             &Command::SetPinnedMonitor { display_path: m.display_path.clone() },
             selected,
         )?)?;
+    }
+    pinned.append(&PredefinedMenuItem::separator(app)?)?;
+    for anchor in NotchAnchor::ALL {
+        let selected = settings.notch_anchor == anchor;
+        pinned.append(&checked_command(app, anchor.label(), &Command::SetNotchAnchor { anchor }, selected)?)?;
     }
     Ok((pinned, profiles))
 }

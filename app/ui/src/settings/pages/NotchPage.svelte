@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { IdleStyle, NotchStyle, NowPlayingPill } from '../../lib/ipc/engine';
+  import type { IdleStyle, NotchAnchor, NotchStyle, NowPlayingPill } from '../../lib/ipc/engine';
   import type { SettingsClient } from '../../lib/settings/client.svelte';
   import ChoiceGroup from '../controls/ChoiceGroup.svelte';
   import InfoBar from '../controls/InfoBar.svelte';
@@ -40,6 +40,13 @@
     { value: 'mini_pill', label: 'Mini pill', badge: 'Default', description: 'The device and volume, small and readable.' },
     { value: 'dot', label: 'Dot', description: 'Just a dot. It grows when something happens.' },
     { value: 'hidden', label: 'Hidden', description: 'Nothing until the volume, device or track changes.' },
+  ];
+
+  // D-20: where on the display's top edge. Twin: `NotchAnchor::label` in crates/ice-core/src/placement.rs.
+  const anchors: { value: NotchAnchor; label: string; description: string; badge?: string }[] = [
+    { value: 'top_left', label: 'Top left', description: 'Out of the way of centred title bars and tabs.' },
+    { value: 'top_center', label: 'Top centre', badge: 'Default', description: 'Where a hardware notch would be.' },
+    { value: 'top_right', label: 'Top right', description: 'Near the window controls, away from the middle.' },
   ];
 
   const nowPlayingModes: { value: NowPlayingPill; label: string; description: string; badge?: string }[] = [
@@ -99,8 +106,14 @@
 
   <Section
     title="Display"
-    description="The notch sits at the top centre of the display you pick. It follows Windows’ scaling on each one."
+    description="Pick the display and where on its top edge the notch sits. It follows Windows’ scaling on each one and stays clear of a taskbar at the top."
   >
+    <ChoiceGroup
+      label="Position"
+      value={settings.notchAnchor}
+      choices={anchors}
+      onchange={(anchor) => client.apply({ type: 'setNotchAnchor', anchor })}
+    />
     {#if pinnedMissing}
       <InfoBar
         tone="info"

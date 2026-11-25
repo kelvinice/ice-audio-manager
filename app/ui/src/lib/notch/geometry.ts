@@ -1,7 +1,7 @@
 import type { HitRect, NotchSnapshot, SpringPreset } from '../ipc/types.ts';
 import { DEFAULT_IDLE_MODE, type ActivityView, type IdleMode } from './scheduler.ts';
 
-// Twin: `NOTCH_CANVAS_W`/`NOTCH_CANVAS_H` in app/src-tauri/src/main.rs. The canvas keeps ≥ 24 px around the expanded
+// Twin: `NOTCH_CANVAS_W`/`NOTCH_CANVAS_H` in crates/ice-core/src/placement.rs (the side anchors reserve this width, D-20). The canvas keeps ≥ 24 px around the expanded
 // pill (+ bottom lyrics extension or Edge Nook side-by-side split + ears) so `--ice-drop-shadow` is never clipped.
 export const CANVAS_W = 648;
 export const CANVAS_H = 292;

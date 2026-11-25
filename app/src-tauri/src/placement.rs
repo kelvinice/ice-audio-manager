@@ -1,6 +1,7 @@
 use std::sync::{Arc, Mutex, PoisonError, atomic::Ordering};
 
 use ice_core::engine::{Command, PerformanceProfile, SettingsView};
+use ice_core::placement::NotchAnchor;
 use ice_win::fullscreen::{self, FullscreenEvent, FullscreenWatcher};
 use ice_win::monitors::{MonitorInfo, PlacementMode, list_monitors, resolve_target_monitor};
 use tauri::{AppHandle, Manager};
@@ -11,6 +12,8 @@ use super::{ActivityKind, MonitorSummary, Preview, SharedRuntime, request_previe
 pub(super) struct Placement {
     profile: Option<PerformanceProfile>,
     pinned: Option<String>,
+    /// D-20: where on the pinned monitor's top edge both notch hosts sit (`ice_core::placement`).
+    pub(super) anchor: NotchAnchor,
     coverage: Option<fullscreen::Snapshot>,
     pub(super) gaming: bool,
     pub(super) generation: u64,
@@ -130,7 +133,12 @@ fn reconcile(app: &AppHandle, state: &Arc<SharedRuntime>, settings: Option<&Sett
             p.pinned.clone_from(&settings.pinned_monitor);
             repin = true;
         }
+        if p.anchor != settings.notch_anchor {
+            p.anchor = settings.notch_anchor;
+            repin = true;
+        }
     }
+    let anchor = p.anchor;
     let Some(profile) = p.profile else { return };
     let monitors = state.monitors.lock().unwrap_or_else(PoisonError::into_inner);
     let target = resolve_target_monitor(&monitors, PlacementMode::Pinned, p.pinned.as_deref(), None);
@@ -189,6 +197,7 @@ fn reconcile(app: &AppHandle, state: &Arc<SharedRuntime>, settings: Option<&Sett
             dot.set_standby_only(true);
             dot.hide();
         }
+        dot.set_anchor(anchor);
         if let Some((_, monitor)) = &target {
             dot.move_to_monitor(monitor.clone());
         }
@@ -202,9 +211,10 @@ fn reconcile(app: &AppHandle, state: &Arc<SharedRuntime>, settings: Option<&Sett
     {
         let hwnd = state.notch_hwnd.load(Ordering::Acquire);
         if hwnd != 0
-            && let Err(error) = super::overlay_win::move_top_center(
+            && let Err(error) = super::overlay_win::move_notch(
                 hwnd,
                 &monitor,
+                anchor,
                 super::NOTCH_CANVAS_W,
                 super::NOTCH_CANVAS_H,
                 super::NOTCH_TOP_OFFSET,

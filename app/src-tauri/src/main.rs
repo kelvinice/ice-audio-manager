@@ -33,8 +33,9 @@ use crate::ipc::{ActivityKind, HitRect, MonitorSummary, NotchDelta, NotchSnapsho
 
 // Twin: `CANVAS_W`/`CANVAS_H` in app/ui/src/lib/notch/geometry.ts. The margin around the expanded pill leaves room
 // for its drop shadow and Edge Nook concave ears; a tighter canvas clips the shadow at the window edge.
-const NOTCH_CANVAS_W: i32 = 648;
-const NOTCH_CANVAS_H: i32 = 292;
+// One copy of the canvas size: `ice_core::placement` (twin of `geometry.ts`).
+const NOTCH_CANVAS_W: i32 = ice_core::placement::NOTCH_CANVAS_W;
+const NOTCH_CANVAS_H: i32 = ice_core::placement::NOTCH_CANVAS_H;
 const NOTCH_TOP_OFFSET: i32 = 0;
 
 struct SharedRuntime {
@@ -406,7 +407,14 @@ pub(crate) fn wake_notch_on_main(app: &AppHandle, state: &Arc<SharedRuntime>, wa
         && let Ok(hw) = win.hwnd()
     {
         let hwnd = hw.0 as isize;
-        let _ = overlay_win::move_top_center(hwnd, &mon, NOTCH_CANVAS_W, NOTCH_CANVAS_H, NOTCH_TOP_OFFSET);
+        let _ = overlay_win::move_notch(
+            hwnd,
+            &mon,
+            state.placement().anchor,
+            NOTCH_CANVAS_W,
+            NOTCH_CANVAS_H,
+            NOTCH_TOP_OFFSET,
+        );
         let _ = win.show();
         let _ = overlay_win::ensure_topmost(hwnd);
         state.notch_hwnd.store(hwnd, Ordering::Release);
@@ -521,8 +529,15 @@ fn create_notch_window(app: &AppHandle, state: &Arc<SharedRuntime>, generation: 
             meter::watch_renderer(&win, &state).map_err(|e| e.to_string())?;
             overlay_win::apply_overlay_styles(hwnd).map_err(|e| e.to_string())?;
             engine_bridge::apply_capture_privacy(app, &state.engine.snapshot().settings.appearance);
-            overlay_win::move_top_center(hwnd, &monitor, NOTCH_CANVAS_W, NOTCH_CANVAS_H, NOTCH_TOP_OFFSET)
-                .map_err(|e| e.to_string())?;
+            overlay_win::move_notch(
+                hwnd,
+                &monitor,
+                state.placement().anchor,
+                NOTCH_CANVAS_W,
+                NOTCH_CANVAS_H,
+                NOTCH_TOP_OFFSET,
+            )
+            .map_err(|e| e.to_string())?;
             win.show().map_err(|e| e.to_string())?;
             overlay_win::ensure_topmost(hwnd).map_err(|e| e.to_string())?;
             state.notch_hwnd.store(hwnd, Ordering::Release);
@@ -870,8 +885,15 @@ fn spawn_notch_and_measure(app: &AppHandle, state: &Arc<SharedRuntime>) -> Resul
         move |h| {
             let hwnd = win.hwnd().map_err(|e| e.to_string())?.0 as isize;
             overlay_win::apply_overlay_styles(hwnd).map_err(|e| e.to_string())?;
-            overlay_win::move_top_center(hwnd, &mon, NOTCH_CANVAS_W, NOTCH_CANVAS_H, NOTCH_TOP_OFFSET)
-                .map_err(|e| e.to_string())?;
+            overlay_win::move_notch(
+                hwnd,
+                &mon,
+                st.placement().anchor,
+                NOTCH_CANVAS_W,
+                NOTCH_CANVAS_H,
+                NOTCH_TOP_OFFSET,
+            )
+            .map_err(|e| e.to_string())?;
             win.show().map_err(|e| e.to_string())?;
             overlay_win::ensure_topmost(hwnd).map_err(|e| e.to_string())?;
             st.notch_hwnd.store(hwnd, Ordering::Release);
@@ -1298,8 +1320,15 @@ fn cycle_monitor_internal(app: &AppHandle, state: &Arc<SharedRuntime>) -> Result
     if let Some(mon) = state.active_monitor_info() {
         let hwnd = state.notch_hwnd.load(Ordering::Acquire);
         if hwnd != 0 {
-            overlay_win::move_top_center(hwnd, &mon, NOTCH_CANVAS_W, NOTCH_CANVAS_H, NOTCH_TOP_OFFSET)
-                .map_err(|e| e.to_string())?;
+            overlay_win::move_notch(
+                hwnd,
+                &mon,
+                state.placement().anchor,
+                NOTCH_CANVAS_W,
+                NOTCH_CANVAS_H,
+                NOTCH_TOP_OFFSET,
+            )
+            .map_err(|e| e.to_string())?;
         }
         if let Some(dot) = state.native_dot.lock().unwrap_or_else(std::sync::PoisonError::into_inner).as_ref() {
             dot.move_to_monitor(mon);

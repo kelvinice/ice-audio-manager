@@ -13,5 +13,6 @@ pub mod hotkey;
 pub mod lyrics;
 pub mod media;
 pub mod meter;
+pub mod placement;
 pub mod resolve;
 pub mod spectrum;

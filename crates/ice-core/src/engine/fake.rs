@@ -389,6 +389,7 @@ impl Engine for FakeEngine {
             | Command::SetDevicePrefs { .. }
             | Command::SetPerformanceProfile { .. }
             | Command::SetPinnedMonitor { .. }
+            | Command::SetNotchAnchor { .. }
             | Command::SetKnobGestures { .. }
             | Command::SetTheme { .. }
             | Command::SetPreset { .. }

@@ -44,6 +44,7 @@ function initialSnapshot(): EngineSnapshot {
       appearance: { theme: 'ice', preset: 'bouncy', idleStyle: 'mini_pill', notchStyle: 'nook', nowPlaying: 'while_playing', movingBackdrop: true, hibernate: false, hibernateLook: 'plain', hibernateHideFromCapture: true },
       performanceProfile: 'instant',
       pinnedMonitor: 'DISPLAY-PATH-1',
+      notchAnchor: 'top_center',
       defaultRoles: 'default',
       togglePairs: [{ id: 'main', hotkey: 'Ctrl+Alt+F12', primary: saved(speakers), secondary: saved(arctis), roles: null }],
       bindings: [{ id: 'binding-1', hotkey: 'Ctrl+Alt+F11', device: saved(lg), roles: null }],
@@ -119,6 +120,7 @@ function applyCommand(s: EngineSnapshot, c: Command): void {
     case 'setHibernateHideFromCapture': st.appearance.hibernateHideFromCapture = c.enabled; break;
     case 'setPerformanceProfile': st.performanceProfile = c.profile; break;
     case 'setPinnedMonitor': st.pinnedMonitor = c.displayPath; break;
+    case 'setNotchAnchor': st.notchAnchor = c.anchor; break;
     case 'setKnobGestures': st.knobGestures = c.enabled; break;
     case 'setShowDisconnected': st.showDisconnected = c.enabled; break;
     case 'setIdleLinger': st.idleLingerSecs = c.secs; break;

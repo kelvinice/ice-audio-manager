@@ -80,6 +80,7 @@ function sampleSnapshot(): EngineSnapshot {
       devices: [],
       performanceProfile: 'instant',
       pinnedMonitor: null,
+      notchAnchor: 'top_center',
       knobGestures: false,
       showDisconnected: false,
       idleLingerSecs: 15,

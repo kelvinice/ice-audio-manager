@@ -18,6 +18,8 @@ use windows::Win32::UI::WindowsAndMessaging::{
 };
 use windows::core::{BOOL, Result};
 
+use ice_core::placement::{Area, NOTCH_CANVAS_W, NotchAnchor, anchor_origin};
+
 use crate::monitors::MonitorInfo;
 
 const OVERLAY_SUBCLASS_ID: usize = 0x4943_4530; // "ICE0"
@@ -134,13 +136,30 @@ pub fn set_capture_excluded(hwnd: isize, exclude: bool) -> Result<()> {
     unsafe { SetWindowDisplayAffinity(hwnd, affinity) }
 }
 
-/// Positions and sizes the overlay window centered along the top edge of `monitor` using logical coordinates.
+/// Where a `logical_w`-wide notch box goes on `monitor` for `anchor` (D-20): centred on the anchor's point in the work
+/// area, which reserves the full notch canvas, `top_offset_logical` below the work area's top. Physical px.
+/// Shared by the WebView notch and the native pill, so both sit on one centre (`ice_core::placement`).
+#[must_use]
+pub fn notch_origin(monitor: &MonitorInfo, anchor: NotchAnchor, logical_w: i32, top_offset_logical: i32) -> (i32, i32) {
+    let area =
+        Area { left: monitor.work_left, top: monitor.work_top, width: monitor.work_width, height: monitor.work_height };
+    anchor_origin(
+        anchor,
+        area,
+        monitor.logical_to_physical(NOTCH_CANVAS_W),
+        monitor.logical_to_physical(logical_w),
+        monitor.logical_to_physical(top_offset_logical),
+    )
+}
+
+/// Positions and sizes the overlay window at `anchor` on `monitor` (D-20), from logical coordinates.
 ///
 /// # Errors
 /// Fails if `hwnd` is null or `SetWindowPos` returns an OS error.
-pub fn move_top_center(
+pub fn move_notch(
     hwnd: isize,
     monitor: &MonitorInfo,
+    anchor: NotchAnchor,
     logical_w: i32,
     logical_h: i32,
     top_offset_logical: i32,
@@ -148,9 +167,7 @@ pub fn move_top_center(
     let hwnd = to_hwnd(hwnd)?;
     let phys_w = monitor.logical_to_physical(logical_w);
     let phys_h = monitor.logical_to_physical(logical_h);
-    let phys_offset = monitor.logical_to_physical(top_offset_logical);
-    let x = monitor.left + (monitor.width - phys_w) / 2;
-    let y = monitor.top + phys_offset;
+    let (x, y) = notch_origin(monitor, anchor, logical_w, top_offset_logical);
     // SAFETY: `hwnd` is valid; `SWP_NOACTIVATE | SWP_NOSENDCHANGING` prevents activation or redundant frame flashes.
     unsafe {
         SetWindowPos(

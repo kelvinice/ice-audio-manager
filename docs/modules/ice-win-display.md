@@ -10,7 +10,7 @@ integration and autostart. All `unsafe` stays here. No hooks into other processe
 ## Files
 | File | What it does |
 |---|---|
-| `overlay_win.rs` | `apply_overlay_styles` (transparent, topmost, `WS_EX_NOACTIVATE`/tool window, `MA_NOACTIVATE`), `remove_overlay_subclass`, `set_click_through`, `move_top_center`, `ensure_topmost`, `move_pos_no_resize`, `apply_settings_mica`, `cursor_pos`, `window_rect`, `foreground_hwnd`, `reduce_motion_enabled` |
+| `overlay_win.rs` | `apply_overlay_styles` (transparent, topmost, `WS_EX_NOACTIVATE`/tool window, `MA_NOACTIVATE`), `remove_overlay_subclass`, `set_click_through`, `notch_origin` / `move_notch` (D-20 anchor in the work area, shared with the native pill), `ensure_topmost`, `move_pos_no_resize`, `apply_settings_mica`, `cursor_pos`, `window_rect`, `foreground_hwnd`, `reduce_motion_enabled` |
 | `monitors.rs` | `MonitorInfo` (id, persistent display path, size, DPI scale, refresh Hz, work area), `list_monitors`, `resolve_target_monitor`, `PlacementMode` (`Pinned` default, `Primary`, `Cursor`) |
 | `fullscreen.rs` | `FullscreenWatcher::start(sink)` on a hidden-window thread: WinEvent notifications + `WM_DISPLAYCHANGE` → `FullscreenEvent::{Changed, DisplaysChanged}`; `snapshot()`, `is_monitor_covered(snapshot, monitor)`. `SHQueryUserNotificationState` is a hint only |
 | `session_watch.rs` | `SessionWatcher::start(sink)`: same hidden top-level window pattern; `WTSRegisterSessionNotification` + `WM_POWERBROADCAST` → `SessionEvent::{Locked, Unlocked, Suspending, Resumed}` (2026-11-24, for the notch pin) |
@@ -31,7 +31,7 @@ integration and autostart. All `unsafe` stays here. No hooks into other processe
   / private working set (D-15.1).
 
 ## Traps
-- Top-centre placement math exists twice (`overlay_win::move_top_center`, native pill). D-20 replaces both with `ice_core::anchor_rect`.
+- Placement has one rule (`ice_core::placement` via `overlay_win::notch_origin`) for the WebView notch and the native pill; never compute a notch position anywhere else.
 - `reduce_motion_enabled` reads the Windows setting; the UI must honour it as well as `prefers-reduced-motion` (§5).
 - `fullscreen.rs` is 585 lines; split before adding features (§11.2).
 
@@ -43,3 +43,4 @@ and `examples/fullscreen_spike.rs`.
 - 2026-11-23 Claude: initial recap.
 - 2026-11-25 Claude: `overlay_win::set_capture_excluded` (`SetWindowDisplayAffinity`, `WDA_EXCLUDEFROMCAPTURE` / `WDA_NONE`) for D-27 hibernate.
 - 2026-11-25 Claude: `overlay_win::ignores_cursor` (both `WS_EX_TRANSPARENT` and `WS_EX_LAYERED` set); `set_click_through` documented as for already-layered windows only (the native pill).
+- 2026-11-25 Claude: `move_top_center` → `notch_origin` / `move_notch` (D-20 anchors; work area, so a top taskbar is no longer covered).

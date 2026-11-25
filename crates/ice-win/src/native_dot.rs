@@ -15,6 +15,7 @@ use std::time::Duration;
 
 use ice_core::engine::{Engine, EngineEvent, EngineSnapshot, Envelope, VolumeState};
 use ice_core::media::PlaybackStatus;
+use ice_core::placement::NotchAnchor;
 use windows::Win32::Foundation::{COLORREF, HWND, LPARAM, LRESULT, POINT, SIZE, WPARAM};
 use windows::Win32::Graphics::Gdi::{
     AC_SRC_ALPHA, AC_SRC_OVER, BI_RGB, BITMAPINFO, BITMAPINFOHEADER, BLENDFUNCTION, CreateCompatibleDC,
@@ -419,6 +420,8 @@ pub struct PillState {
     pub mode: PillMode,
     pub idle_style: IdleStyle,
     pub notch_style: NotchStyle,
+    /// D-20: where on the monitor's top edge the pill sits (shared with the WebView notch).
+    pub anchor: NotchAnchor,
     pub theme: NativePillTheme,
     /// Pointer state. Owned by the window thread; `show_state` keeps the live value.
     pub interaction: PillInteraction,
@@ -447,6 +450,7 @@ impl PillState {
             mode: PillMode::Idle,
             idle_style: IdleStyle::default(),
             notch_style: NotchStyle::default(),
+            anchor: NotchAnchor::default(),
             theme,
             interaction: PillInteraction::None,
             plain: false,
@@ -727,6 +731,21 @@ impl NativeDotHandle {
             } else {
                 None
             }
+        };
+        if let Some(sig) = signal {
+            self.shared.post_signal(sig);
+        }
+    }
+
+    /// D-20: moves the pill to `anchor` on its monitor's top edge (repaints only while shown).
+    pub fn set_anchor(&self, anchor: NotchAnchor) {
+        let signal = {
+            let mut rt = self.shared.lock();
+            if rt.pill.anchor == anchor {
+                return;
+            }
+            rt.pill.anchor = anchor;
+            rt.desired_visible.then_some(ThreadSignal::Sync { restart_timer: false })
         };
         if let Some(sig) = signal {
             self.shared.post_signal(sig);
@@ -1071,8 +1090,8 @@ fn dot_thread_main(monitor: MonitorInfo, shared: Arc<SharedState>, ready_tx: mps
     let ex_style = WS_EX_LAYERED | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW | WS_EX_TOPMOST;
     let phys_w = monitor.logical_to_physical(IDLE_W);
     let phys_h = monitor.logical_to_physical(IDLE_H);
-    let x = monitor.left + (monitor.width - phys_w) / 2;
-    let y = monitor.top + monitor.logical_to_physical(LOGICAL_TOP_OFFSET);
+    // Created hidden at the default anchor; the first paint moves it to the configured one.
+    let (x, y) = crate::overlay_win::notch_origin(&monitor, NotchAnchor::default(), IDLE_W, LOGICAL_TOP_OFFSET);
 
     // SAFETY: creates the hidden layered window owned by this thread.
     let hwnd = match unsafe {
@@ -1320,8 +1339,8 @@ fn paint_pill(hwnd: HWND, monitor: &MonitorInfo, state: &PillState) -> Result<()
     let metrics = frame_metrics(state.mode, state.idle_style, state.notch_style);
     let w = monitor.logical_to_physical(metrics.total_w()).max(16);
     let h = monitor.logical_to_physical(metrics.body_h).max(8);
-    let x = monitor.left + (monitor.width - w) / 2;
-    let y = monitor.top + monitor.logical_to_physical(metrics.top_offset);
+    // D-20: one placement rule for both hosts (`overlay_win::notch_origin`, `ice_core::placement`).
+    let (x, y) = crate::overlay_win::notch_origin(monitor, state.anchor, metrics.total_w(), metrics.top_offset);
 
     // SAFETY: creates a memory DC compatible with the screen.
     let dc = unsafe { CreateCompatibleDC(None) };
