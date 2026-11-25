@@ -294,6 +294,46 @@ notch"). Balanced hands the hibernating notch to the native pill after 1 s.
 
 ---
 
+### D-29 · Side-edge anchors (left and right bezels): drag-and-attach vertical dock *(added 2026-11-25, owner request; neutral entry under §0.4)*
+
+**Owner request (2026-11-25):** *"also we will plan and discuss about drag and attach to horizontal part(left or right)"* (docking the notch along the left or right screen edges when dragging or picking an anchor).
+
+**Facts (checked in the code 2026-11-25):**
+- **Current anchors:** `NotchAnchor` (`crates/ice-core/src/placement.rs`) has 6 horizontal-edge slots — `TopLeft`, `TopCenter`, `TopRight`, plus Floating-only `BottomLeft`, `BottomCenter`, `BottomRight`. Edge Nook maps bottom anchors to their top counterparts via `NotchAnchor::effective_for`.
+- **Current canvas & geometry:** The WebView window uses a fixed `NOTCH_CANVAS_W × NOTCH_CANVAS_H` (`648 × 292`) logical canvas sized for wide horizontal cards and top/bottom drop shadows (`BOTTOM_PAD = 24`, `CANVAS_BOTTOM_OVERHANG = 18`). A tall vertical card (`width × height`) would exceed `292 px` vertically unless canvas sizing or dynamic swap is introduced.
+- **Drag & snap infrastructure:** `drag.rs` + `drag_ghosts.rs` spawn click-through layered pill ghost slots (`SLOT_W × SLOT_H = 116 × 28` logical px) across every connected monitor and snap to the slot nearest the release cursor.
+- **Owner's hardware setup (Q-07 / Q-11):** 2 monitors arranged side-by-side (`144 Hz` primary + `75 Hz` secondary), creating a shared **inner vertical seam** between the two displays in addition to the outer left and right bezels.
+- **Prior reference & history:** The Auralis screenshot (`docs/reference/screens/`) shows a vertical rotated card along side screen edges. D-20's earlier late option `A2b` (9 anchors + vertical side card) was rejected (`−3`) before drag & snap and bottom anchors were built.
+
+**Options (vote by score once discussion settles):**
+
+*Part A · Which side-edge anchor positions exist (pick one).*
+- **A0 · None:** keep the 6 top/bottom anchors only.
+- **A1 · Left-middle + right-middle (2 new anchors, 8 total):** one centred vertical dock on the left bezel and one on the right bezel per monitor; preserves discrete slot-to-slot snapping and simple Settings/tray menus.
+- **A2 · Top/middle/bottom on left & right (6 new anchors, 12 total) or free vertical slide:** more vertical placement freedom on tall monitors, at the cost of corner overlap near top-left/top-right and denser drop slots during drag.
+
+*Part B · Orientation and expanded card shape on a side edge (pick one).*
+- **B1 · Full vertical dock & portrait card:** idle pill rotates (`28 × 116`), compact pop-ups stack vertically, and the expanded card becomes a tall portrait layout (requires taller canvas or orientation-swapped canvas bounds, plus vertical native pill rasterizer in `native_dot.rs`).
+- **B2 · Slim vertical idle handle + horizontal slide-out card:** while idle or compact, the side-edge notch stays narrow (`18–28 px` edge handle with vertical mini visualizer/icon); hovering or pinning slides the existing horizontal expanded card out inward from the bezel. Avoids duplicating card/lyrics layouts while changing canvas height/anchoring rules.
+- **B3 · Unrotated horizontal pill anchored to left-middle / right-middle:** keeps identical horizontal geometry for both hosts (`116 × 28` idle, `392`–`572 px` card) at the cost of sitting further into the desktop horizontally.
+
+*Part C · Inner seam between multi-monitor displays during drag (pick one).*
+- **C1 · All left/right edges are drag targets:** both outer bezels and the shared inner seam between monitors show ghost slots during drag.
+- **C2 · Outer bezels during drag (inner edges via Settings/tray only):** prevents the dragged pill from catching magnetically on the inner seam while moving between displays; inner side-edges remain selectable from Settings and the tray.
+
+*Part D · Notch style scope (pick one).*
+- **D1 · Floating only first:** side-edge docking ships on `Floating` style only (Edge Nook stays top-only like bottom anchors).
+- **D2 · Floating + Edge Nook:** add flush left/right bezel Nook silhouettes (vertical concave ears along the side bezel).
+
+**Questions to the owner (before opening sealed votes):**
+1. When attached to the left or right edge, do you picture a **rotated vertical strip** (`B1`/`B2`) or keeping the horizontal pill (`B3`)? And if vertical, should the expanded view rearrange into a tall **portrait card** (`B1`) or slide out the existing horizontal card (`B2`)?
+2. On your two-monitor setup, should dragging across the **middle seam between monitors** offer side-dock slots there (`C1`), or only on the outer left/right edges (`C2`)?
+3. Should side docking start on **Floating only** (`D1`, matching bottom anchors), or also add flush bezel ears for **Edge Nook** (`D2`)?
+
+**Votes:** open for owner discussion; sealed votes open once scope is confirmed.
+
+---
+
 ## 3. Requests to the owner
 
 Questions Q-01–Q-12 are answered and resource requests R-01–R-05 are done; both tables are in the
@@ -350,3 +390,4 @@ Full entries of every closed decision: [archive/decisions-closed.md](archive/dec
 | D-26 | Visualizer spectrum bands and bar dynamics | **A2 +6 (+2/+2/+2)** with **A1 +3** fallback; **B1 +4 (+2/+2/0)**, **B2 +5 (+1/+2/+2)**, **B4a +5 (+1/+2/+2)**; B3 −3 (−1/−1/−1; Gemini changed after reveal from +2); B4b +1 (0/0/+1) | **Closed 2026-11-24 (owner)** | Accepted with all amendments: 4th-order `f32` IIR bands on existing 30 Hz `ice-meter` tick, separate `MeterFrame.bands` in `differs`, rebind reset, low-band beat accent, `B1` audible-energy gate, §1 audio-stream rule, Settings → Privacy disclosure + meter-only switch, Win11 mic-indicator & CPU QA gates. Moved to plan.md |
 | D-27 | Hibernate mode: plain notch for meetings / screen sharing | Not voted; owner asked for Claude's recommendations | **Built 2026-11-25 (owner request); revised the same day (always start awake, plain or hidden look); hotkey, timer, auto-entry open** | Options A1–A3 look, B1–B2 suppression, C1–C3 capture exclusion (`WDA_EXCLUDEFROMCAPTURE`), D1–D4 entry/wake, E1–E3 exit; 3 owner questions |
 | D-28 | Volume vs track progress in the notch | Not voted to the end; owner ruled on Claude's sealed recommendation | **Closed 2026-11-25 (owner ruling), built the same day** | A2 song block + output strip (chip fallback), B1 two looks, B2 no jump on click, C1 % leads the pop-up. Not built: A1, A3 default, A4, B3–B5. Entry: [archive](archive/decisions-closed.md#d-28--volume-vs-track-progress-in-the-notch-what-the-user-sees-and-touches-added-2026-11-25-owner-request-neutral-entry-under-04) |
+| D-29 | Side-edge anchors (left/right vertical dock) | Pending discussion & sealed votes | **Open 2026-11-25 (owner request)** | Exploring A0–A2 side slots, B1–B3 orientation/card layout, C1–C2 multi-monitor inner seam behaviour, D1–D2 Floating vs Nook scope |
