@@ -657,6 +657,54 @@ pub fn segmented_kana_to_romaji(spaced_kana: &str) -> String {
         .join(" ")
 }
 
+/// Joins dictionary word breaks of a kana line (e.g. ICU's) into space-separated kana, keeping only the breaks
+/// that are safe without a reader, so the result is never worse than unspaced kana:
+/// - between two words of 2+ characters (`いったい|このまま|いつ|まで`);
+/// - where the script changes (katakana ↔ hiragana ↔ anything else: `ダンボール|を`);
+/// - on both sides of を, which is almost always the object particle.
+///
+/// Single-character pieces otherwise stay glued to their neighbours: a dictionary without the Japanese language data
+/// chops unknown hiragana words into single characters (`な|ま|え`), and spacing those would split words.
+#[must_use]
+pub fn join_confident_kana_words<S: AsRef<str>>(words: &[S]) -> String {
+    let mut out = String::new();
+    let mut prev: Option<&str> = None;
+    for word in words.iter().map(AsRef::as_ref).map(str::trim).filter(|w| !w.is_empty()) {
+        if let Some(p) = prev
+            && confident_break(p, word)
+        {
+            out.push(' ');
+        }
+        out.push_str(word);
+        prev = Some(word);
+    }
+    out
+}
+
+fn confident_break(left: &str, right: &str) -> bool {
+    let long = |w: &str| w.chars().count() >= 2;
+    let script_change = match (left.chars().last(), right.chars().next()) {
+        (Some(a), Some(b)) => kana_script(a) != kana_script(b),
+        _ => false,
+    };
+    (long(left) && long(right)) || script_change || left == "を" || right == "を"
+}
+
+#[derive(PartialEq, Eq)]
+enum KanaScript {
+    Hiragana,
+    Katakana,
+    Other,
+}
+
+fn kana_script(c: char) -> KanaScript {
+    match c {
+        '\u{3041}'..='\u{309F}' => KanaScript::Hiragana,
+        '\u{30A0}'..='\u{30FF}' => KanaScript::Katakana,
+        _ => KanaScript::Other,
+    }
+}
+
 fn katakana_to_hiragana(c: char) -> char {
     if ('\u{30A1}'..='\u{30F6}').contains(&c) { char::from_u32(c as u32 - 0x60).unwrap_or(c) } else { c }
 }
@@ -858,6 +906,26 @@ mod tests {
         // Inside a word, は/へ keep their normal reading.
         assert_eq!(segmented_kana_to_romaji("はな へや"), "hana heya");
         assert_eq!(segmented_kana_to_romaji("  "), "");
+    }
+
+    #[test]
+    fn joins_only_confident_word_breaks() {
+        // ICU's actual breaks on Windows without the Japanese language data (owner's screenshot line first).
+        let join = |w: &[&str]| join_confident_kana_words(w);
+        assert_eq!(join(&["いったい", "このまま", "いつ", "まで"]), "いったい このまま いつ まで");
+        assert_eq!(
+            segmented_kana_to_romaji(&join(&["いったい", "このまま", "いつ", "まで"])),
+            "ittai konomama itsu made"
+        );
+        // Unknown words chopped into single characters stay whole: never worse than unspaced.
+        assert_eq!(join(&["きみの", "な", "ま", "え", "は"]), "きみのなまえは");
+        assert_eq!(join(&["わたし", "は", "が", "っ", "こうへい", "く"]), "わたしはがっこうへいく");
+        // Script changes and を always break.
+        assert_eq!(join(&["ダンボール", "を", "か", "か", "えて"]), "ダンボール を かかえて");
+        assert_eq!(join(&["ながれる", "ほ", "し", "を", "み", "てい", "た"]), "ながれるほし を みていた");
+        assert_eq!(join(&["ずっと", "そば", "に", "い", "て", "ほしい"]), "ずっと そばにいてほしい");
+        assert_eq!(join(&[]), "");
+        assert_eq!(join(&[" ", "うた", "　"]), "うた");
         assert!(contains_japanese("アイドル"));
         assert!(!contains_kanji("アイドル"));
         assert!(contains_kanji("無敵の笑顔"));

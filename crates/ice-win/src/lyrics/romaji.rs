@@ -5,7 +5,9 @@
 //! 1. `Windows.Globalization.JapanesePhoneticAnalyzer`: word-by-word readings. The supported modern API.
 //! 2. `IFELanguage::GetJMorphResult` (`MSIME.Japan`): kept for PCs where it still answers (e.g. the "previous
 //!    version" Microsoft IME). The new IME (Windows 10 2004+) returns `S_FALSE` for reverse conversion.
-//! 3. Kana only: the Hepburn table, unspaced. Kanji can't be read without 1 or 2.
+//! 3. Kana only: the Hepburn table, spaced at ICU's confident word breaks (`super::words`). Kanji can't be read without
+//!    1 or 2; Settings → Activities links to Windows' language settings, and [`JapaneseRomaji::recheck`] notices the
+//!    install on the next song, without a restart.
 //!
 //! **Both Windows backends are single-threaded (STA) classes:** created on an MTA thread, `IFELanguage`'s
 //! QueryInterface fails (`E_NOINTERFACE`: no proxy) and the analyzer refuses to activate. The `ice-lyrics` thread is
@@ -15,7 +17,9 @@
 
 use std::ffi::c_void;
 
-use ice_core::lyrics::{contains_japanese, contains_kanji, kana_to_romaji, segmented_kana_to_romaji};
+use ice_core::lyrics::{
+    contains_japanese, contains_kanji, join_confident_kana_words, kana_to_romaji, segmented_kana_to_romaji,
+};
 use windows::Globalization::JapanesePhoneticAnalyzer;
 use windows::Win32::System::Com::{CLSCTX_INPROC_SERVER, CLSIDFromProgID, CoCreateInstance, CoTaskMemFree};
 use windows::core::{GUID, HRESULT, HSTRING, IUnknown, Interface, PCWSTR};
@@ -123,12 +127,26 @@ impl JapaneseRomaji {
                 return Some(rom);
             }
         }
-        // No Windows reading: kana converts directly (unspaced); kanji can't be read.
+        // No Windows reading: kanji can't be read. Kana converts directly, spaced at ICU's confident word breaks
+        // (`super::words`, in every Windows 11) so it doesn't run together.
         if contains_kanji(line) {
             return None;
         }
-        let rom = kana_to_romaji(line);
+        let rom = match super::words::japanese_words(line) {
+            Some(words) => segmented_kana_to_romaji(&join_confident_kana_words(&words)),
+            None => kana_to_romaji(line),
+        };
         (!rom.is_empty() && rom != line.trim()).then_some(rom)
+    }
+
+    /// While only kana can be read, checks again whether Windows reads kanji now (the user may have added Japanese
+    /// since the app started; Settings links there). One cheap analyzer call per loaded song, nothing otherwise.
+    pub fn recheck(&mut self) {
+        if self.backend() != RomajiBackend::KanaOnly || !analyzer_words(PROBE).is_some_and(|w| !w.is_empty()) {
+            return;
+        }
+        self.analyzer = true;
+        tracing::info!(backend = ?self.backend(), "Romaji backend now reads kanji");
     }
 
     fn close_ime(&mut self) {

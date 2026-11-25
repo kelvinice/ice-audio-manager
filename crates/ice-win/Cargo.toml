@@ -20,6 +20,7 @@ workspace = true
 features = [
     "Globalization",
     "Win32_Devices_Display",
+    "Win32_Globalization",
     "Win32_Graphics_Dwm",
     "Win32_Graphics_Gdi",
     "Win32_Networking_WinHttp",

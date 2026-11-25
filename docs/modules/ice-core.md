@@ -82,3 +82,4 @@ Inline `#[cfg(test)]` in each file. `resolve.rs` is built from the owner's real 
 - 2026-11-24 Gemini: updated defaults to `NotchStyle::Nook` and `NowPlayingPill::WhilePlaying`.
 - 2026-11-25 Claude: schema v12, D-27 hibernate: `Appearance.hibernate` (off) + `hibernate_hide_from_capture` (on), `Appearance::exclude_from_capture()`, `Command::SetHibernate` / `SetHibernateHideFromCapture`.
 - 2026-11-25 Claude: schema v13: `HibernateLook` (`plain` default / `hidden`), `Appearance.hibernate_look`, `Appearance::effective_idle_style()` (`Hidden` while hibernating with the hidden look), `Command::SetHibernateLook`. Hibernate is session state: `ConfigStore::load` (start only) clears it and `Config::keep_session_state` carries the live value over a re-read file.
+- 2026-11-25 Claude: `lyrics::join_confident_kana_words`: keeps a dictionary word break only between two 2+-character words, at a script change, or around を (never worse than unspaced kana).

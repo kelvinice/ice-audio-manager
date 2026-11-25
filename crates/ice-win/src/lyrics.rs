@@ -5,6 +5,7 @@
 pub mod cache;
 pub mod lrclib;
 pub mod romaji;
+pub mod words;
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -14,7 +15,7 @@ use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
 use ice_core::lyrics::{
-    LyricsConfig, LyricsDocument, LyricsState, LyricsStatus, LyricsStorageStats, TrackQuery, track_key,
+    LyricsConfig, LyricsDocument, LyricsState, LyricsStatus, LyricsStorageStats, TrackQuery, contains_kanji, track_key,
 };
 use ice_core::media::{NowPlaying, PlaybackStatus};
 use windows::Win32::UI::Shell::ShellExecuteW;
@@ -148,9 +149,23 @@ pub fn romaji_reads_kanji() -> bool {
 /// Fails if the directory cannot be created.
 pub fn open_custom_folder() -> Result<(), String> {
     let dir = ensure_custom_dir(&default_lyrics_root())?;
+    shell_open(&HSTRING::from(dir.as_os_str())).map_err(|()| "could not open lyrics folder in Explorer".into())
+}
+
+/// Windows' Language & region settings page, where the user adds Japanese so Romaji can read kanji
+/// ([`romaji::JapaneseRomaji::recheck`] picks it up on the next song). A fixed target: the app never installs anything
+/// itself (no admin, code-practices §1).
+///
+/// # Errors
+/// Fails if Windows can't open the Settings page.
+pub fn open_language_settings() -> Result<(), String> {
+    shell_open(&HSTRING::from("ms-settings:regionlanguage"))
+        .map_err(|()| "could not open Windows language settings".into())
+}
+
+fn shell_open(target: &HSTRING) -> Result<(), ()> {
     let verb = HSTRING::from("open");
-    let target = HSTRING::from(dir.as_os_str());
-    // SAFETY: valid null-terminated UTF-16 verb and directory path; ShellExecuteW launches Explorer asynchronously.
+    // SAFETY: valid null-terminated UTF-16 verb and target; ShellExecuteW opens it asynchronously.
     let rc = unsafe {
         ShellExecuteW(
             None,
@@ -161,10 +176,8 @@ pub fn open_custom_folder() -> Result<(), String> {
             SW_SHOWNORMAL,
         )
     };
-    if (rc.0 as isize) <= 32 {
-        return Err("could not open lyrics folder in Explorer".into());
-    }
-    Ok(())
+    // ShellExecute reports success as a value above 32.
+    if (rc.0 as isize) <= 32 { Err(()) } else { Ok(()) }
 }
 
 struct InflightGuard(Arc<AtomicUsize>);
@@ -225,7 +238,7 @@ fn run(
     // fail from an MTA (no proxy for `IFELanguage`; the analyzer refuses to activate). Nothing here needs a message
     // pump: every COM call is synchronous on this thread, and WinHTTP and file I/O aren't COM.
     let _com = ComGuard::init_sta().ok();
-    let romaji = JapaneseRomaji::new();
+    let mut romaji = JapaneseRomaji::new();
     let inflight = Arc::new(AtomicUsize::new(0));
 
     let mut current_media: Option<NowPlaying> = None;
@@ -323,7 +336,8 @@ fn run(
                     if !clear_requested {
                         write_cache(&root, &query, Some(&doc), config.cache_max_mb);
                     }
-                    if is_current && apply_romaji_cancellable(&mut doc, config.romaji, &romaji, &active_gen, epoch) {
+                    if is_current && apply_romaji_cancellable(&mut doc, config.romaji, &mut romaji, &active_gen, epoch)
+                    {
                         emit(LyricsState {
                             status: LyricsStatus::Ready,
                             track_key: Some(query.track_key),
@@ -379,7 +393,7 @@ fn run(
 
         // 1. Option B: local custom `.lrc` override (always offline, checked first).
         if let Some(mut doc) = load_local_lrc(&root, &query) {
-            if apply_romaji_cancellable(&mut doc, config.romaji, &romaji, &active_gen, current_gen) {
+            if apply_romaji_cancellable(&mut doc, config.romaji, &mut romaji, &active_gen, current_gen) {
                 emit(LyricsState {
                     status: LyricsStatus::Ready,
                     track_key: Some(query.track_key),
@@ -392,7 +406,7 @@ fn run(
         // 2. Option B: managed LRU disk cache.
         match read_cache(&root, &query) {
             CacheLookup::Hit(mut doc) => {
-                if apply_romaji_cancellable(&mut doc, config.romaji, &romaji, &active_gen, current_gen) {
+                if apply_romaji_cancellable(&mut doc, config.romaji, &mut romaji, &active_gen, current_gen) {
                     emit(LyricsState {
                         status: LyricsStatus::Ready,
                         track_key: Some(query.track_key),
@@ -440,10 +454,13 @@ fn active_track_query(m: &NowPlaying) -> Option<TrackQuery> {
 fn apply_romaji_cancellable(
     doc: &mut LyricsDocument,
     enabled: bool,
-    romaji: &JapaneseRomaji,
+    romaji: &mut JapaneseRomaji,
     active_gen: &AtomicU64,
     expected_gen: u64,
 ) -> bool {
+    if enabled && doc.lines.iter().any(|l| l.subtitle.is_none() && contains_kanji(&l.text)) {
+        romaji.recheck();
+    }
     for line in &mut doc.lines {
         if active_gen.load(Ordering::Acquire) != expected_gen {
             return false;
