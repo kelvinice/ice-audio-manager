@@ -11,6 +11,7 @@ import {
   nookLadderY,
   resolveLyricFrame,
   romajiLitCount,
+  shouldHighlightWords,
   shouldShowCardLyrics,
   shouldShowPillLyrics,
 } from './lyrics.ts';
@@ -80,6 +81,7 @@ test('shouldShowPillLyrics and shouldShowCardLyrics honour config, sync kind, an
     showOnPill: true,
     showOnCard: true,
     wordHighlight: true,
+    estimatedWordSync: false,
     romaji: true,
     cacheMaxMb: 50,
   };
@@ -162,4 +164,17 @@ test('lyrics follow the output delay: later on Bluetooth, earlier when negative,
   assert.equal(lyricClockMs(10_000, -150), 10_150);
   assert.equal(lyricClockMs(100, 200), 0);
   assert.equal(lyricClockMs(5_000, Number.NaN), 5_000);
+});
+
+test('shouldHighlightWords highlights word-synced LRC always and gates line-synced LRC behind estimatedWordSync', () => {
+  const lineDoc: LyricsDocument = { ...sampleDoc, syncKind: 'line' };
+  const plainDoc: LyricsDocument = { ...sampleDoc, syncKind: 'plain', lines: [], plainText: 'Line one' };
+
+  assert.equal(shouldHighlightWords(sampleDoc, true, false), true);
+  assert.equal(shouldHighlightWords(sampleDoc, true, true), true);
+  assert.equal(shouldHighlightWords(sampleDoc, false, true), false);
+  assert.equal(shouldHighlightWords(lineDoc, true, false), false);
+  assert.equal(shouldHighlightWords(lineDoc, true, true), true);
+  assert.equal(shouldHighlightWords(lineDoc, false, true), false);
+  assert.equal(shouldHighlightWords(plainDoc, true, true), false);
 });

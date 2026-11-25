@@ -120,7 +120,7 @@
     <SettingCard
       icon="bolt"
       title="Active word highlight"
-      description="Gently lift and illuminate the current word as the line plays (uses Enhanced LRC timings or weighted phrase cadence)."
+      description="Highlights each word as it's sung on word-synced (Enhanced LRC) lyrics. Standard line-synced tracks highlight the whole line unless Estimated word highlight is turned on in Experimental."
     >
       {#snippet control()}
         <Toggle

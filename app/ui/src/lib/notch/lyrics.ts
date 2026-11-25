@@ -163,6 +163,20 @@ export function shouldShowCardLyrics(
   return Boolean(hasMedia && config?.enabled && config.showOnCard && drawerOpen && hasAnyLyrics(lyrics));
 }
 
+/**
+ * True when per-word karaoke highlighting should run: always for true word-synced Enhanced LRC (`syncKind === 'word'`)
+ * while `wordHighlight` is on, and for line-synced LRC (`syncKind === 'line'`) only when `estimatedWordSync` is also on.
+ */
+export function shouldHighlightWords(
+  doc: LyricsDocument | null | undefined,
+  wordHighlight: boolean,
+  estimatedWordSync: boolean,
+): boolean {
+  if (!wordHighlight || !doc || doc.instrumental || doc.syncKind === 'plain') return false;
+  if (doc.syncKind === 'word') return true;
+  return estimatedWordSync;
+}
+
 /** Resolves the active lyric line, neighbour context lines, active word index, and next boundary delay. */
 export function resolveLyricFrame(
   doc: LyricsDocument | null | undefined,

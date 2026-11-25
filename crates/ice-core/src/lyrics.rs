@@ -30,8 +30,10 @@ pub struct LyricsConfig {
     pub show_on_pill: bool,
     /// Attach the 3-line bottom lyrics extension under the expanded card.
     pub show_on_card: bool,
-    /// Highlight the active word across each synced line (Enhanced LRC or weighted phrase cadence).
+    /// Highlight the active word across each synced line (Enhanced LRC, or estimated cadence when enabled).
     pub word_highlight: bool,
+    /// Experimental: estimate word-by-word highlight timing for line-synced LRC files without word timestamps.
+    pub estimated_word_sync: bool,
     /// Generate an offline Romaji subtitle line underneath Japanese lyric lines.
     pub romaji: bool,
     /// Maximum managed lyrics cache size on disk, in MiB ([`LYRICS_CACHE_MAX_MB`]).
@@ -46,6 +48,7 @@ impl Default for LyricsConfig {
             show_on_pill: true,
             show_on_card: true,
             word_highlight: true,
+            estimated_word_sync: false,
             romaji: true,
             cache_max_mb: LYRICS_CACHE_MAX_MB_DEFAULT,
         }
@@ -453,16 +456,20 @@ pub fn estimate_word_timings(text: &str, start_ms: u64, end_ms: u64) -> Vec<Lyri
     let total_span = end_ms.saturating_sub(start_ms).max(200);
     let weights: Vec<u64> = tokens.iter().map(|t| token_weight(t)).collect();
     let total_weight: u64 = weights.iter().sum::<u64>().max(1);
+    let max_sing_ms =
+        (tokens.len() as u64).saturating_mul(180).saturating_add(total_weight.saturating_mul(110)).clamp(1_200, 6_500);
+    let sing_span = total_span.min(max_sing_ms);
+    let sing_end = start_ms.saturating_add(sing_span);
 
     let mut out = Vec::with_capacity(tokens.len());
     let mut acc_weight = 0u64;
     for (idx, (token, weight)) in tokens.into_iter().zip(weights).enumerate() {
-        let w_start = start_ms.saturating_add(total_span.saturating_mul(acc_weight) / total_weight);
+        let w_start = start_ms.saturating_add(sing_span.saturating_mul(acc_weight) / total_weight);
         acc_weight = acc_weight.saturating_add(weight);
         let w_end = if idx + 1 == out.capacity() {
-            end_ms.max(w_start.saturating_add(60))
+            sing_end.max(w_start.saturating_add(60))
         } else {
-            start_ms.saturating_add(total_span.saturating_mul(acc_weight) / total_weight).max(w_start + 40)
+            start_ms.saturating_add(sing_span.saturating_mul(acc_weight) / total_weight).max(w_start + 40)
         };
         out.push(LyricWord { start_ms: w_start, end_ms: w_end, text: token });
     }
@@ -936,5 +943,18 @@ mod tests {
         assert_eq!(normalize_query_title("Instant Crush (feat. Julian Casablancas) - Remastered"), "Instant Crush");
         assert_eq!(normalize_query_title("Idol [Official Video]"), "Idol");
         assert_eq!(sanitize_filename("A/B: C*D?"), "A_B_ C_D_");
+    }
+
+    #[test]
+    fn estimate_word_timings_caps_long_gaps_and_preserves_short_spans() {
+        let long = estimate_word_timings("i'll wait for your love", 200_000, 225_000);
+        assert_eq!(long.len(), 5);
+        assert_eq!(long[0].start_ms, 200_000);
+        let long_span = long.last().unwrap().end_ms - long[0].start_ms;
+        assert!(long_span <= 6_500, "expected capped singing span, got {long_span} ms");
+
+        let short = estimate_word_timings("we can't be friends", 10_000, 11_500);
+        assert_eq!(short[0].start_ms, 10_000);
+        assert_eq!(short.last().unwrap().end_ms, 11_500);
     }
 }

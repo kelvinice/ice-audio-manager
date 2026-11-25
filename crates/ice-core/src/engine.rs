@@ -338,6 +338,10 @@ pub enum Command {
         word_highlight: Option<bool>,
         romaji: Option<bool>,
     },
+    /// Experimental: toggle estimated word-by-word highlight for line-synced lyrics (off by default).
+    SetLyricsEstimatedWordSync {
+        enabled: bool,
+    },
     /// D-22 Storage: set maximum managed lyrics disk cache size in MiB (`5..=500`).
     SetLyricsCacheMaxMb {
         max_mb: u16,
@@ -396,6 +400,7 @@ impl Command {
             | Self::SetLyricsEnabled { .. }
             | Self::SetLyricsOnlineLookup { .. }
             | Self::SetLyricsDisplay { .. }
+            | Self::SetLyricsEstimatedWordSync { .. }
             | Self::SetLyricsCacheMaxMb { .. }
             | Self::DisableAllNetworkFeatures
             | Self::SetVisualizerSpectrum { .. }

@@ -13,6 +13,7 @@
   import AppearancePage from './pages/AppearancePage.svelte';
   import CallModePage from './pages/CallModePage.svelte';
   import DevicesPage from './pages/DevicesPage.svelte';
+  import ExperimentalPage from './pages/ExperimentalPage.svelte';
   import GeneralPage from './pages/GeneralPage.svelte';
   import HibernatePage from './pages/HibernatePage.svelte';
   import NotchPage from './pages/NotchPage.svelte';
@@ -37,6 +38,7 @@
     | 'appearance'
     | 'privacy'
     | 'storage'
+    | 'experimental'
     | 'about';
   const PAGES: { id: PageId; title: string; icon: IconName | 'notch' }[] = [
     { id: 'general', title: 'General', icon: 'settings' },
@@ -49,6 +51,7 @@
     { id: 'appearance', title: 'Appearance', icon: 'color' },
     { id: 'privacy', title: 'Privacy', icon: 'shield' },
     { id: 'storage', title: 'Storage', icon: 'storage' },
+    { id: 'experimental', title: 'Experimental', icon: 'flask' },
     { id: 'about', title: 'About', icon: 'info' },
   ];
   const STORAGE_KEY = 'ice-settings-page';
@@ -213,6 +216,8 @@
               <PrivacyPage {client} />
             {:else if page === 'storage'}
               <StoragePage {client} />
+            {:else if page === 'experimental'}
+              <ExperimentalPage {client} />
             {:else}
               <AboutPage version={client.version} />
             {/if}

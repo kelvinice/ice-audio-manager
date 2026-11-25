@@ -15,7 +15,8 @@ use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
 use ice_core::lyrics::{
-    LyricsConfig, LyricsDocument, LyricsState, LyricsStatus, LyricsStorageStats, TrackQuery, contains_kanji, track_key,
+    LyricsConfig, LyricsDocument, LyricsState, LyricsStatus, LyricsStorageStats, LyricsSyncKind, TrackQuery,
+    contains_kanji, estimate_word_timings, track_key,
 };
 use ice_core::media::{NowPlaying, PlaybackStatus};
 use windows::Win32::UI::Shell::ShellExecuteW;
@@ -406,6 +407,7 @@ fn run(
         // 2. Option B: managed LRU disk cache.
         match read_cache(&root, &query) {
             CacheLookup::Hit(mut doc) => {
+                refresh_line_word_cadence(&mut doc);
                 if apply_romaji_cancellable(&mut doc, config.romaji, &mut romaji, &active_gen, current_gen) {
                     emit(LyricsState {
                         status: LyricsStatus::Ready,
@@ -447,6 +449,21 @@ fn active_track_query(m: &NowPlaying) -> Option<TrackQuery> {
         album: m.album.clone(),
         duration_ms: m.duration_ms,
     })
+}
+
+/// Refreshes estimated word timings for cached line-synced documents so cadence improvements apply without
+/// invalidating the offline cache.
+fn refresh_line_word_cadence(doc: &mut LyricsDocument) {
+    if doc.sync_kind != LyricsSyncKind::Line {
+        return;
+    }
+    for line in &mut doc.lines {
+        if line.text.trim().is_empty() {
+            continue;
+        }
+        let end_ms = line.end_ms.unwrap_or_else(|| line.start_ms.saturating_add(5_000));
+        line.words = estimate_word_timings(&line.text, line.start_ms, end_ms);
+    }
 }
 
 /// Fills `LyricLine::romaji` (never `subtitle`, which is the source's own paired line) once per loaded song,

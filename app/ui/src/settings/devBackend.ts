@@ -72,6 +72,7 @@ function initialSnapshot(): EngineSnapshot {
         showOnPill: true,
         showOnCard: true,
         wordHighlight: true,
+        estimatedWordSync: false,
         romaji: true,
         cacheMaxMb: 50,
       },
@@ -149,6 +150,7 @@ function applyCommand(s: EngineSnapshot, c: Command): void {
         romaji: c.romaji ?? st.lyrics.romaji,
       };
       break;
+    case 'setLyricsEstimatedWordSync': st.lyrics = { ...st.lyrics, estimatedWordSync: c.enabled }; break;
     case 'setLyricsCacheMaxMb': st.lyrics = { ...st.lyrics, cacheMaxMb: c.maxMb }; break;
     case 'disableAllNetworkFeatures': st.lyrics = { ...st.lyrics, onlineLookup: false }; break;
     case 'setVisualizerSpectrum': st.visualizerSpectrum = c.enabled; break;

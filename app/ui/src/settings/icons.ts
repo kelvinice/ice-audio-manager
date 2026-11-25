@@ -39,6 +39,8 @@ export const GLYPHS = {
   call: '',
   // QuietHours (a crescent moon), the notch toolbar's hibernate symbol.
   moon: '',
+  // TestBeaker (Experimental settings tab).
+  flask: '\uF1AD',
 } as const;
 
 export type IconName = keyof typeof GLYPHS;

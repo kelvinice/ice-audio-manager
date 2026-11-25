@@ -35,7 +35,8 @@ use crate::resolve::{DeviceRef, MatchMode, resolve};
 /// v16: bottom `notch_anchor` values (Floating) and `notch_placement` (`"drag_snap"` default | `"fixed"`), D-20.
 /// v17: `notch_x_ratio` continuous horizontal position (`0.0..=1.0`, absent = preset anchor) and bottom Edge Nook.
 /// v18: `[call_mode]` (D-30: lower the music while people talk on a call; off by default).
-pub const SCHEMA_VERSION: u32 = 18;
+/// v19: `lyrics.estimated_word_sync` (Experimental: estimated word highlight on line-synced lyrics; off by default).
+pub const SCHEMA_VERSION: u32 = 19;
 
 /// Allowed per-device lyric delay, in ms (negative = lyrics earlier).
 pub const LYRICS_DELAY_MS: std::ops::RangeInclusive<i32> = -1000..=2000;
@@ -295,8 +296,9 @@ impl Config {
             // `appearance.hibernate = false` with `hibernateHideFromCapture = true`, v0–v12 gain
             // `appearance.hibernateLook = "plain"`, v0–v13 devices an automatic lyrics delay (no
             // `lyrics_delay_ms`), v0–v14 gain `notch_anchor = "top_center"`, v0–v15 gain
-            // `notch_placement = "drag_snap"`, v0–v16 gain `notch_x_ratio = None`, and v0–v17 gain `[call_mode]`
-            // (off, Discord's builds as call apps), all via serde defaults.
+            // `notch_placement = "drag_snap"`, v0–v16 gain `notch_x_ratio = None`, v0–v17 gain `[call_mode]`
+            // (off, Discord's builds as call apps), and v0–v18 gain `lyrics.estimated_word_sync = false`, all via
+            // serde defaults.
             _ => Ok(Self { schema_version: SCHEMA_VERSION, ..cfg }),
         }
     }
@@ -548,6 +550,7 @@ impl Config {
                     next.lyrics.romaji = *v;
                 }
             }
+            Command::SetLyricsEstimatedWordSync { enabled } => next.lyrics.estimated_word_sync = *enabled,
             Command::SetLyricsCacheMaxMb { max_mb } => {
                 if !LYRICS_CACHE_MAX_MB.contains(max_mb) {
                     return Err(format!(
@@ -1219,6 +1222,21 @@ mod tests {
         assert!(config.apply_setting(&bad, &[]).is_err());
         assert_eq!(config.call_mode.duck_percent, 20, "a rejected setting changes nothing");
         assert!(Config::from_toml("schema_version = 18\n[call_mode]\nholdSecs = 60").is_err());
+    }
+
+    #[test]
+    fn v18_gains_estimated_word_sync_off_and_saves_setting() {
+        let mut config = Config::from_toml("schema_version = 18\n[lyrics]\nenabled = true").unwrap();
+        assert_eq!(config.schema_version, SCHEMA_VERSION);
+        assert!(!config.lyrics.estimated_word_sync);
+        assert!(!config.view(&[]).lyrics.estimated_word_sync);
+
+        let set = Command::SetLyricsEstimatedWordSync { enabled: true };
+        assert_eq!(config.apply_setting(&set, &[]), Ok(true));
+        assert_eq!(config.apply_setting(&set, &[]), Ok(false));
+
+        let saved = Config::from_toml(&config.to_toml()).unwrap();
+        assert!(saved.lyrics.estimated_word_sync);
     }
 
     #[test]

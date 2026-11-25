@@ -154,6 +154,7 @@
           media={activeMedia}
           mode="nook"
           wordHighlight={lyricsConfig?.wordHighlight ?? true}
+          estimatedWordSync={lyricsConfig?.estimatedWordSync ?? false}
           showRomaji={lyricsConfig?.romaji ?? true}
           {instant}
           {notchVisible}

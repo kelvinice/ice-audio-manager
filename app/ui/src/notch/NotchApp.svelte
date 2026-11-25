@@ -119,6 +119,7 @@
                   media={ctrl.effectiveMedia ?? ctrl.activeView.media}
                   mode="pill"
                   wordHighlight={ctrl.engineState.settings?.lyrics.wordHighlight ?? true}
+                  estimatedWordSync={ctrl.engineState.settings?.lyrics.estimatedWordSync ?? false}
                   showRomaji={ctrl.engineState.settings?.lyrics.romaji ?? true}
                   instant={ctrl.isInstant}
                   notchVisible={ctrl.isNotchVisible}

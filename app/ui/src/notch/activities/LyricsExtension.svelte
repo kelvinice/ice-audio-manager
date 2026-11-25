@@ -10,6 +10,7 @@
     nookLadderY,
     resolveLyricFrame,
     romajiLitCount,
+    shouldHighlightWords,
     type LyricRow,
   } from '../../lib/notch/lyrics';
   import { fitLine } from '../../lib/notch/fitLine';
@@ -21,6 +22,7 @@
     media: NowPlaying;
     mode: 'pill' | 'card' | 'nook';
     wordHighlight: boolean;
+    estimatedWordSync?: boolean;
     showRomaji: boolean;
     instant: boolean;
     notchVisible: boolean;
@@ -35,6 +37,7 @@
     media,
     mode,
     wordHighlight,
+    estimatedWordSync = false,
     showRomaji,
     instant,
     notchVisible,
@@ -65,8 +68,9 @@
     }
   });
 
+  const effectiveWordHighlight = $derived(shouldHighlightWords(doc, wordHighlight, estimatedWordSync));
   const elapsedMs = $derived(lyricClockMs(liveMediaPositionMs(media, nowEpochMs, fallbackAnchorMs), delayMs));
-  const frame = $derived(resolveLyricFrame(doc, elapsedMs, wordHighlight));
+  const frame = $derived(resolveLyricFrame(doc, elapsedMs, effectiveWordHighlight));
 
   // Event-aligned wake: sleeps until the next word or line boundary, zero polling when paused/hidden.
   $effect(() => {
@@ -75,7 +79,7 @@
     let timerId: number | null = null;
     const schedule = () => {
       const currentMs = lyricClockMs(liveMediaPositionMs(media, Date.now(), fallbackAnchorMs), delayMs);
-      const next = resolveLyricFrame(doc, currentMs, wordHighlight);
+      const next = resolveLyricFrame(doc, currentMs, effectiveWordHighlight);
       if (next.nextWakeDelayMs === null) return;
       timerId = window.setTimeout(() => {
         nowEpochMs = Date.now();
@@ -101,7 +105,7 @@
         : LADDER.card.inner,
   );
   const highlightActiveWords = $derived(
-    wordHighlight && frame.activeLine !== null && frame.activeLine.words.length > 0,
+    effectiveWordHighlight && frame.activeLine !== null && frame.activeLine.words.length > 0,
   );
   const useWordSpaces = $derived(
     Boolean(frame.activeLine && !/[぀-ヿ一-鿿]/.test(frame.activeLine.text)),

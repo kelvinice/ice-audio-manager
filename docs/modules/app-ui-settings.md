@@ -13,7 +13,7 @@ created when opened and destroyed when closed (shell: `app/src-tauri/src/setting
 |---|---|
 | `src/settings/main.ts` | Picks the backend (Tauri, or `devBackend.ts` in a plain browser during `npm run dev`), mounts `SettingsApp` |
 | `src/settings/SettingsApp.svelte` | Frame: navigation (spring-driven indicator), page title + "Saved" flash, pinned error banner, page switch (`#page` hash or last page in `localStorage`) |
-| `src/settings/pages/*Page.svelte` | General · Devices · Shortcuts · Notch · Hibernate · Call mode · Activities · Appearance · Privacy · Storage · About |
+| `src/settings/pages/*Page.svelte` | General · Devices · Shortcuts · Notch · Hibernate · Call mode · Activities · Appearance · Privacy · Storage · Experimental · About |
 | `src/settings/pages/DeviceCard.svelte` | One device: star = show in notch, alias, spatial sound, hide |
 | `src/settings/pages/ShortcutCard.svelte` | A toggle pair or device shortcut, saved or a new draft (draft stays open if the engine refuses it) |
 | `src/settings/controls/*` | `SettingCard` (expander), `Row`, `Toggle`, `Select` (native), `ChoiceGroup` (radio cards with preview), `HotkeyField` (recorder), `KeyCaps`, `InfoBar`, `Section`, `Icon` (Segoe Fluent glyphs, `icons.ts`), `BrandMark` (snowflake SVG) |
@@ -36,6 +36,7 @@ created when opened and destroyed when closed (shell: `app/src-tauri/src/setting
 | Activities | Music services (`Spotify`, `YouTube Music`); Synced lyrics display (`Show synced lyrics`, pill/card extensions, active word highlight, Japanese Romaji) | `SetMusicService`; `SetLyricsEnabled`; `SetLyricsDisplay` |
 | Privacy | Master network off switch; opt-in LRCLIB (`lrclib.net`) disclosure & toggle; local audio loopback spectrum visualizer disclosure & meter-only fallback switch | `DisableAllNetworkFeatures`; `SetLyricsOnlineLookup`; `SetVisualizerSpectrum` |
 | Storage | Live lyrics cache usage bar, max cache size (`5–500 MB`), clear cache, open local `.lrc` overrides folder | `SetLyricsCacheMaxMb`; `get_lyrics_storage_stats`; `clear_lyrics_cache`; `open_lyrics_folder` |
+| Experimental | Estimated word highlight for line-synced lyrics (off by default) | `SetLyricsEstimatedWordSync` |
 | About | Version, trust promises | `plugin:app|version` |
 
 ## How it works
@@ -77,3 +78,4 @@ created when opened and destroyed when closed (shell: `app/src-tauri/src/setting
 - 2026-11-25 Gemini: D-20 `NotchPage` 6-position anchor grid (bottom slots disabled under Edge Nook, `ChoiceGroup.disabled`) + "Movement" (`Drag & snap` / `Fixed position`, `SetNotchPlacement`); `devBackend` updated.
 - 2026-11-25 Claude: D-30 **Call mode** page (`CallModePage.svelte`, nav after Hibernate, `call` glyph U+E717): switch, level, hold, sensitivity, call-app list; `devBackend` handles `setCallMode`.
 - 2026-11-25 Gemini: enabled all six anchors for Edge Nook too, added `"Custom position (N%)"` `InfoBar` when `settings.notchXRatio` is set (`ChoiceGroup` accepts `null`), and updated `devBackend` for `setNotchPosition` and `placedSeq`.
+- 2026-11-25 Gemini: added **Experimental** page (`ExperimentalPage.svelte`, `flask` icon) with `SetLyricsEstimatedWordSync` toggle; updated `ActivitiesPage` word-highlight copy and `devBackend`.

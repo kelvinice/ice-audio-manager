@@ -139,6 +139,7 @@
       media={activeMedia}
       mode="card"
       wordHighlight={lyricsConfig?.wordHighlight ?? true}
+      estimatedWordSync={lyricsConfig?.estimatedWordSync ?? false}
       showRomaji={lyricsConfig?.romaji ?? true}
       {instant}
       {notchVisible}

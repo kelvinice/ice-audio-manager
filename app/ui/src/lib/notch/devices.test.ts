@@ -43,7 +43,7 @@ function baseSettings(overrides: Partial<SettingsView> = {}): SettingsView {
     showDisconnected: false,
     idleLingerSecs: 15,
     musicServices: { spotify: true, youtubeMusic: true },
-    lyrics: { enabled: false, onlineLookup: false, showOnPill: true, showOnCard: true, wordHighlight: true, romaji: true, cacheMaxMb: 50 },
+    lyrics: { enabled: false, onlineLookup: false, showOnPill: true, showOnCard: true, wordHighlight: true, estimatedWordSync: false, romaji: true, cacheMaxMb: 50 },
     visualizerSpectrum: true,
 
     callMode: { enabled: false, apps: ['Discord.exe'], duckPercent: 30, holdSecs: 3, sensitivity: 'normal' },
