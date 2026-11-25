@@ -48,7 +48,11 @@ impl Worker {
         if cfg != self.config {
             let lyrics_changed = cfg.lyrics != self.config.lyrics;
             let spectrum_changed = cfg.visualizer_spectrum != self.config.visualizer_spectrum;
+            let call_mode_changed = cfg.call_mode != self.config.call_mode;
             self.config = cfg;
+            if call_mode_changed {
+                self.sync_call_mode();
+            }
             if lyrics_changed && let Some(lyrics) = &self.lyrics {
                 lyrics.update_config(self.config.lyrics);
             }
@@ -62,6 +66,23 @@ impl Worker {
             self.refresh(true);
         }
         self.publish_notices();
+    }
+
+    /// D-30: the `ice-call` thread runs only while call mode is on. Turning it off drops the service, which puts the
+    /// music back at its own level before the thread ends.
+    pub(super) fn sync_call_mode(&mut self) {
+        let config = &self.config.call_mode;
+        match (&self.call_mode, config.enabled) {
+            (Some(service), true) => service.set_config(config.clone()),
+            (Some(_), false) => self.call_mode = None,
+            (None, true) => {
+                let now_playing = lock(&self.shared).snapshot.media.as_ref().map(|m| m.app_id.clone());
+                self.call_mode = CallModeService::start(config.clone(), now_playing)
+                    .inspect_err(|e| tracing::warn!(error = %e, "call mode thread failed to start"))
+                    .ok();
+            }
+            (None, false) => {}
+        }
     }
 
     /// After a confirmed switch to a re-created endpoint, points every reference to the old endpoint at the new

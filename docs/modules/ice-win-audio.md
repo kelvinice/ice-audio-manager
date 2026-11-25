@@ -26,6 +26,8 @@ global hotkeys, per-device spatial sound and `config.toml` hot reload. The only 
 | `meter.rs` | `MeterHub`: `IAudioMeterInformation` peaks + optional [`loopback::LoopbackCapture`] 14-band spectrum on one `ice-meter` thread (runs only while subscribed; automatic peak-only fallback and rebind reset) |
 | `loopback.rs` | `LoopbackCapture`: shared-mode WASAPI render loopback (`AUDCLNT_STREAMFLAGS_LOOPBACK`, 100 ms buffer) drained non-blockingly on the 30 Hz `ice-meter` tick into `ice_core::spectrum::SpectrumAnalyzer` (§1.9 in-memory reduction only) |
 | `com.rs` | `ComGuard` (MTA init) |
+| `call_mode.rs` | D-30 `CallModeService`: the `ice-call` thread (exists only while call mode is on), the dip (lower the now-playing app's session by `Ducker`'s gain, user change wins), and the crash-restore file `%LOCALAPPDATA%\IceAudioManager\call-mode-restore.json` |
+| `call_mode/sessions.rs` | `SessionWatch` / `Session`: `IAudioSessionManager2` on every active playback device, "session created" + per-call-app "state changed" notifications (signal only), session peak (`IAudioMeterInformation`) and volume (`ISimpleAudioVolume`, own event-context GUID), owner exe via `proc_metrics::process_exe_name` |
 
 ## How it works
 - **One `ice-audio` thread (MTA)** owns every COM object. Everything else posts a `Msg`: `Command`, `Audio(AudioEvent)`, `Mic`,
@@ -42,6 +44,11 @@ global hotkeys, per-device spatial sound and `config.toml` hot reload. The only 
 - **Meter:** `Engine::meter()` hands out a `MeterSubscription`; the `ice-meter` thread starts on the first and exits after the last is dropped,
   re-binding when the default device changes.
 - **Mic:** the communications microphone's volume/mute is watched; Alt+knob changes mic volume in 2% steps.
+- **Call mode (D-30):** `Worker::sync_call_mode` starts `CallModeService` when `call_mode.enabled` turns on and drops it when
+  it turns off (the drop restores the music, then joins). The worker forwards the now-playing `app_id` (only when it changes)
+  and device refreshes. On `ice-call`: blocks on its channel while no call app plays; while one does (or the music is still
+  lowered) it reads the call sessions' peaks every `CALL_TICK` (66 ms) into `ice_core::call_mode::Ducker` and writes
+  `base × gain` to the now-playing app's sessions. Stop condition: no active call session and the ducker at rest.
 - **Art cache:** the last 8 PNGs (`ART_CACHE`) serve `Engine::art`.
 
 ## Traps
@@ -52,6 +59,9 @@ global hotkeys, per-device spatial sound and `config.toml` hot reload. The only 
 - Conflicts (`HotkeyConflict`) are reported as notices, never silent.
 - Show-disconnected lists only *Unplugged* endpoints, never ghosts or disabled ones, and they are never switch targets.
 - New `Command` handling goes through `switching.rs::command` (actions) or `settings.rs` (settings).
+- Call mode: `RegisterSessionNotification` only fires after a first `GetSessionEnumerator` (done in `register_manager`).
+  Session volumes persist in Windows per app, so a dip must always end with `end_dip` (off, quit, device change, music app
+  change); the restore file covers crashes. YouTube Music in a browser lowers that whole browser.
 
 ## Tests
 Unit tests sit in each file; real-device paths use `#[ignore]` tests and the [manual QA checklist](../qa/manual-checklist.md)
@@ -63,3 +73,4 @@ Unit tests sit in each file; real-device paths use `#[ignore]` tests and the [ma
 - 2026-11-24 Gemini: `AudioEngine::send` fast-paths `Command::Media` straight to `MediaService`'s `MediaCommandSender` (`ice-media-cmd`).
 - 2026-11-25 Claude: hot reload and `sync_with_disk` go through `Worker::adopt_disk_config`, which keeps the live D-27 hibernate value (`Config::keep_session_state`); `edit_settings` still uses `set_config` directly. `SetHibernateLook` is a plain setting.
 - 2026-11-25 Claude: `summary_basic` fills `DeviceSummary.lyrics_delay_ms` from `Config::lyrics_delay_for` (playback only); `SetLyricsDelay` is a plain setting.
+- 2026-11-25 Claude: D-30 call mode: `call_mode.rs` + `call_mode/sessions.rs` (`ice-call` thread, session watch, dip, restore file), `Worker::sync_call_mode`, `proc_metrics::process_exe_name`; `SetCallMode` is a plain setting.

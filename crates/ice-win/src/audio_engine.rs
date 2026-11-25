@@ -24,6 +24,7 @@ use ice_core::lyrics::LyricsState;
 use ice_core::resolve::{self, DeviceRef, Resolution, ToggleAction, normalize_name};
 use windows::Win32::Media::Audio::IMMDevice;
 
+use crate::call_mode::CallModeService;
 use crate::com::ComGuard;
 use crate::endpoints::Endpoints;
 use crate::file_watch::DirWatch;
@@ -244,6 +245,8 @@ struct Worker {
     media: Option<MediaService>,
     /// Synced lyrics lookup / local `.lrc` / Romaji worker on its own thread.
     lyrics: Option<LyricsService>,
+    /// D-30 call mode on its own `ice-call` thread; `Some` only while it's switched on.
+    call_mode: Option<CallModeService>,
     // Must drop last: every COM object above is released before COM is uninitialised.
     _com: ComGuard,
 }
@@ -342,8 +345,10 @@ impl Worker {
             knob_at: None,
             media,
             lyrics,
+            call_mode: None,
             _com: com,
         };
+        w.sync_call_mode();
         w.refresh(false);
         w.register_hotkeys();
         w.publish_notices();
@@ -393,6 +398,9 @@ impl Worker {
             self.refresh_at = None;
             self.refresh_first = None;
             self.refresh(true);
+            if let Some(call_mode) = &self.call_mode {
+                call_mode.devices_changed();
+            }
         }
         if self.knob_at.is_some_and(|t| t <= now) {
             self.knob_at = None;
@@ -438,7 +446,11 @@ impl Worker {
                 sh.art.push_back((art.info.id, art.png));
             }
             let changed = sh.snapshot.media != u.media;
+            let app_changed = sh.snapshot.media.as_ref().map(|m| &m.app_id) != u.media.as_ref().map(|m| &m.app_id);
             sh.snapshot.media.clone_from(&u.media);
+            if app_changed && let Some(call_mode) = &self.call_mode {
+                call_mode.set_now_playing(u.media.as_ref().map(|m| m.app_id.clone()));
+            }
             changed
         };
         if changed {

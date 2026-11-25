@@ -9,8 +9,10 @@ use windows::Win32::System::ProcessStatus::{
     GetProcessMemoryInfo, PROCESS_MEMORY_COUNTERS, PROCESS_MEMORY_COUNTERS_EX2,
 };
 use windows::Win32::System::Threading::{
-    GetCurrentProcessId, GetExitCodeProcess, GetProcessTimes, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION,
+    GetCurrentProcessId, GetExitCodeProcess, GetProcessTimes, OpenProcess, PROCESS_NAME_WIN32,
+    PROCESS_QUERY_LIMITED_INFORMATION, QueryFullProcessImageNameW,
 };
+use windows::core::PWSTR;
 
 /// Memory and CPU counter snapshot for a single process.
 #[derive(Debug, Clone)]
@@ -94,6 +96,25 @@ pub fn cpu_percent_between(before: &TreeSnapshot, after: &TreeSnapshot, elapsed:
         delta_100ns = delta_100ns.saturating_add(after_p.cpu_100ns.saturating_sub(prev));
     }
     (delta_100ns as f64 / (elapsed_100ns * cpus)) * 100.0
+}
+
+/// The executable's file name (`Discord.exe`) of a running process, or `None` if it's gone or not ours to query
+/// (protected processes). Limited query access only: never reads the process's memory.
+#[must_use]
+pub fn process_exe_name(pid: u32) -> Option<String> {
+    if pid == 0 {
+        return None;
+    }
+    // SAFETY: opens read-only limited query access to `pid`; wrapped in `OwnedHandle`.
+    let handle = OwnedHandle(unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid).ok()? });
+    let mut buf = [0u16; 1024];
+    let mut len = u32::try_from(buf.len()).ok()?;
+    // SAFETY: `buf` is valid for `len` UTF-16 units and `len` is updated to the written length (no terminator).
+    unsafe {
+        QueryFullProcessImageNameW(handle.0, PROCESS_NAME_WIN32, PWSTR(buf.as_mut_ptr()), &raw mut len).ok()?;
+    }
+    let path = String::from_utf16_lossy(buf.get(..usize::try_from(len).ok()?)?);
+    path.rsplit('\\').next().filter(|n| !n.is_empty()).map(str::to_string)
 }
 
 fn sample_one(pid: u32, kind: &str) -> Option<ProcessSample> {

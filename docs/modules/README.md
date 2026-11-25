@@ -29,8 +29,8 @@ Part of the Definition of Done ([code-practices §10](../code-practices.md#10-de
 
 | Doc | Covers | Paths | Owner (D-14) |
 |---|---|---|---|
-| [ice-core](ice-core.md) | Pure logic and the engine contract: config, device identity, commands/events, media maths, meter | `crates/ice-core/**` | Claude |
-| [ice-win-audio](ice-win-audio.md) | Real engine on Core Audio: switching, volume, hotkeys, spatial sound, config reload | `crates/ice-win/src/{audio_engine*,endpoints,notify,volume,policy,spatial,props,hotkeys,file_watch,meter,com}.rs` | Claude |
+| [ice-core](ice-core.md) | Pure logic and the engine contract: config, device identity, commands/events, media maths, meter, call-mode ducking | `crates/ice-core/**` | Claude |
+| [ice-win-audio](ice-win-audio.md) | Real engine on Core Audio: switching, volume, hotkeys, spatial sound, config reload, call mode | `crates/ice-win/src/{audio_engine*,call_mode*,endpoints,notify,volume,policy,spatial,props,hotkeys,file_watch,meter,com}.rs` | Claude |
 | [ice-win-media](ice-win-media.md) | Now playing via GSMTC, album art, the `ice-media` thread | `crates/ice-win/src/{media,media_service}.rs` | Claude |
 | [ice-win-display](ice-win-display.md) | Overlay window styles, monitors, fullscreen watcher, WebView2 helpers, process metrics, autostart, single instance, music-service launcher | `crates/ice-win/src/{overlay_win,monitors,fullscreen,webview2,proc_metrics,desktop,autostart,music_service}.rs` | Gemini / Codex |
 | [ice-win-native-pill](ice-win-native-pill.md) | The native idle pill (no WebView): window, drawing, input | `crates/ice-win/src/native_dot*` | Gemini |

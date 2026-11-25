@@ -8,6 +8,7 @@
 
 pub mod audio_engine;
 pub mod autostart;
+pub mod call_mode;
 pub mod com;
 pub mod desktop;
 pub mod endpoints;
