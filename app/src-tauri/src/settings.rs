@@ -100,3 +100,9 @@ pub(super) async fn clear_lyrics_cache(
 pub(super) async fn open_lyrics_folder() -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(ice_win::lyrics::open_custom_folder).await.map_err(|e| e.to_string())?
 }
+
+/// Opens Windows' Language & region page so the user can add Japanese for kanji Romaji (fixed target, no input).
+#[tauri::command]
+pub(super) async fn open_language_settings() -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(ice_win::lyrics::open_language_settings).await.map_err(|e| e.to_string())?
+}

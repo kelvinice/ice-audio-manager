@@ -194,6 +194,7 @@ export function createDevBackend(): Backend {
             romajiReadsKanji: false,
           } as T;
         case 'open_lyrics_folder':
+        case 'open_language_settings':
           return undefined as T;
         case 'apply_setting': {
           const c = args.command as Command;

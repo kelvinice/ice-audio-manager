@@ -92,6 +92,15 @@ export class SettingsClient {
     }
   }
 
+  /** Opens Windows' Language & region page (adding Japanese lets Romaji read kanji); the app installs nothing itself. */
+  async openLanguageSettings(): Promise<void> {
+    try {
+      await this.backend.invoke('open_language_settings');
+    } catch (error) {
+      this.banner = { tone: 'error', title: 'Couldn’t open Windows language settings', text: String(error) };
+    }
+  }
+
   async clearLyricsCache(): Promise<void> {
     try {
       this.lyricsStorage = await this.backend.invoke<LyricsStorageStats>('clear_lyrics_cache');

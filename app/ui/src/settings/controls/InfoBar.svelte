@@ -1,20 +1,28 @@
 <script lang="ts">
+  import type { Snippet } from 'svelte';
   import Icon from './Icon.svelte';
 
   interface Props {
     tone: 'info' | 'warning' | 'error';
     title: string;
     text?: string;
+    /** Buttons under the text, e.g. a link to the Windows setting the message is about (`.btn` from settings.css). */
+    actions?: Snippet;
     ondismiss?: () => void;
   }
 
-  let { tone, title, text, ondismiss }: Props = $props();
+  let { tone, title, text, actions, ondismiss }: Props = $props();
   const glyph = $derived(tone === 'error' ? 'error' : tone === 'warning' ? 'warning' : 'info');
 </script>
 
 <div class="bar {tone}" role={tone === 'info' ? 'status' : 'alert'}>
   <span class="glyph"><Icon name={glyph} size={16} /></span>
-  <p><strong>{title}</strong>{#if text}&ensp;{text}{/if}</p>
+  <div class="body">
+    <p><strong>{title}</strong>{#if text}&ensp;{text}{/if}</p>
+    {#if actions}
+      <div class="actions">{@render actions()}</div>
+    {/if}
+  </div>
   {#if ondismiss}
     <button type="button" aria-label="Dismiss" onclick={ondismiss}><Icon name="close" size={12} /></button>
   {/if}
@@ -58,9 +66,22 @@
     color: var(--ice-set-danger);
   }
 
-  p {
+  .body {
     flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  p {
     margin: 0;
+  }
+
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
   }
 
   strong {

@@ -1388,6 +1388,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             settings::get_lyrics_storage_stats,
             settings::clear_lyrics_cache,
             settings::open_lyrics_folder,
+            settings::open_language_settings,
         ])
         .setup(move |app| {
             let handle = app.handle().clone();

@@ -150,9 +150,16 @@
     {#if settings.lyrics.enabled && settings.lyrics.romaji && client.lyricsStorage && !client.lyricsStorage.romajiReadsKanji}
       <InfoBar
         tone="info"
-        title="Romaji only covers kana lines on this PC."
-        text="Windows needs its Japanese language data to read kanji. Add Japanese in Windows Settings → Time & language → Language & region, then reopen this page."
-      />
+        title="Lines with kanji get no Romaji on this PC."
+        text="Windows needs its Japanese language data to read kanji. Add Japanese under Language & region (free, from Microsoft; you don't have to switch your display language). Romaji appears from the next song, no restart needed."
+      >
+        {#snippet actions()}
+          <button class="btn accent" type="button" onclick={() => void client.openLanguageSettings()}>
+            Open language settings
+          </button>
+          <button class="btn" type="button" onclick={() => void client.refreshLyricsStorage()}>Check again</button>
+        {/snippet}
+      </InfoBar>
     {/if}
 
     {#if settings.lyrics.enabled && !settings.lyrics.onlineLookup}
