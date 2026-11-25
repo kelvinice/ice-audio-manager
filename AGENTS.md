@@ -34,7 +34,7 @@ crates/ice-core (`#![forbid(unsafe_code)]`, pure domain logic, config schema, co
 | Format check | `cargo fmt --all -- --check` |
 | Lint | `cargo clippy --workspace --all-targets -- -D warnings` |
 | Rust tests | `cargo test --workspace` |
-| Regenerate TS IPC types | `cargo test -p ice-core --all-features` *(writes `app/ui/src/lib/ipc/engine.ts` only if changed; never hand-edit generated IPC files)* |
+| Regenerate TS IPC types | `cargo test -p ice-audio-manager export_ts_bindings` *(writes `app/ui/src/lib/ipc/engine.ts` only if changed; never hand-edit generated IPC files)* |
 | UI check / test / build | `npm --prefix app/ui run check`, `npm --prefix app/ui test`, `npm --prefix app/ui run build` |
 | Run with fake audio devices | `target\debug\ice-audio-manager.exe --fake-engine` *(also `--start-minimized`, `--verbose`, `--show-notch`)* |
 

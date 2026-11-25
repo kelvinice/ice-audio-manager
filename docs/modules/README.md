@@ -59,7 +59,7 @@ tray, hotkeys and native pill must work with **no WebView alive** (D-15). Quick 
 |---|---|
 | Everything CI runs | `build check` (from `build.cmd`) |
 | Rust only | `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace` |
-| TS bindings | `cargo test -p ice-core --all-features` (rewrites `app/ui/src/lib/ipc/engine.ts` only when content changes) |
+| TS bindings | `cargo test -p ice-audio-manager export_ts_bindings` (rewrites `app/ui/src/lib/ipc/engine.ts` only when content changes) |
 | UI | in `app/ui`: `npm run check`, `npm test`, `npm run build` |
 | Run with fake devices | app exe with `--fake-engine` (also `--start-minimized`, `--verbose`, `--show-notch`) |
 
