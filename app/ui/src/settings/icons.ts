@@ -35,6 +35,8 @@ export const GLYPHS = {
   music: '',
   storage: '',
   lyrics: '',
+  // Phone (D-30 call mode).
+  call: '',
   // QuietHours (a crescent moon), the notch toolbar's hibernate symbol.
   moon: '',
 } as const;

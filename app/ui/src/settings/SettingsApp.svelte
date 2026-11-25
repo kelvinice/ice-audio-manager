@@ -11,6 +11,7 @@
   import AboutPage from './pages/AboutPage.svelte';
   import ActivitiesPage from './pages/ActivitiesPage.svelte';
   import AppearancePage from './pages/AppearancePage.svelte';
+  import CallModePage from './pages/CallModePage.svelte';
   import DevicesPage from './pages/DevicesPage.svelte';
   import GeneralPage from './pages/GeneralPage.svelte';
   import HibernatePage from './pages/HibernatePage.svelte';
@@ -31,6 +32,7 @@
     | 'shortcuts'
     | 'notch'
     | 'hibernate'
+    | 'calls'
     | 'activities'
     | 'appearance'
     | 'privacy'
@@ -42,6 +44,7 @@
     { id: 'shortcuts', title: 'Shortcuts', icon: 'keyboard' },
     { id: 'notch', title: 'Notch', icon: 'notch' },
     { id: 'hibernate', title: 'Hibernate', icon: 'moon' },
+    { id: 'calls', title: 'Call mode', icon: 'call' },
     { id: 'activities', title: 'Activities', icon: 'music' },
     { id: 'appearance', title: 'Appearance', icon: 'color' },
     { id: 'privacy', title: 'Privacy', icon: 'shield' },
@@ -200,6 +203,8 @@
               <NotchPage {client} />
             {:else if page === 'hibernate'}
               <HibernatePage {client} />
+            {:else if page === 'calls'}
+              <CallModePage {client} />
             {:else if page === 'activities'}
               <ActivitiesPage {client} />
             {:else if page === 'appearance'}

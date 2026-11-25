@@ -13,7 +13,7 @@ created when opened and destroyed when closed (shell: `app/src-tauri/src/setting
 |---|---|
 | `src/settings/main.ts` | Picks the backend (Tauri, or `devBackend.ts` in a plain browser during `npm run dev`), mounts `SettingsApp` |
 | `src/settings/SettingsApp.svelte` | Frame: navigation (spring-driven indicator), page title + "Saved" flash, pinned error banner, page switch (`#page` hash or last page in `localStorage`) |
-| `src/settings/pages/*Page.svelte` | General · Devices · Shortcuts · Notch · Hibernate · Activities · Appearance · Privacy · Storage · About |
+| `src/settings/pages/*Page.svelte` | General · Devices · Shortcuts · Notch · Hibernate · Call mode · Activities · Appearance · Privacy · Storage · About |
 | `src/settings/pages/DeviceCard.svelte` | One device: star = show in notch, alias, spatial sound, hide |
 | `src/settings/pages/ShortcutCard.svelte` | A toggle pair or device shortcut, saved or a new draft (draft stays open if the engine refuses it) |
 | `src/settings/controls/*` | `SettingCard` (expander), `Row`, `Toggle`, `Select` (native), `ChoiceGroup` (radio cards with preview), `HotkeyField` (recorder), `KeyCaps`, `InfoBar`, `Section`, `Icon` (Segoe Fluent glyphs, `icons.ts`), `BrandMark` (snowflake SVG) |
@@ -31,6 +31,7 @@ created when opened and destroyed when closed (shell: `app/src-tauri/src/setting
 | Shortcuts | Toggle pairs, device shortcuts (devices, chord, roles, remove); knob gestures | `SetTogglePair`/`RemoveTogglePair`; `SetBinding`/`RemoveBinding`; `SetKnobGestures` |
 | Notch | Notch style (`Edge Nook` default vs `Floating`); idle style; Now playing (`While playing` default, `Brief, then small`, `Off`); Display: 6-slot position (Top + Floating-only Bottom), movement (`Drag & snap` default vs `Fixed position`), and pinned display | `SetNotchStyle`; `SetIdleStyle`; `SetNowPlayingPill`; `SetNotchAnchor`; `SetNotchPlacement`; `SetPinnedMonitor` (display path) |
 | Hibernate | Hibernate notch (session only: the app always starts awake); while hibernating: `Plain notch` (default) or `Hide the notch`; hide from screen sharing | `SetHibernate`; `SetHibernateLook`; `SetHibernateHideFromCapture` |
+| Call mode | Lower music during calls (off by default; Discord Attenuation hint); music level while talking (Silent–70 %, 30 default); back to full after (1–15 s, 3 default); sensitivity (Low / Normal / High); call apps list (remove, add by exe name) | `SetCallMode` (patch) |
 | Appearance | Theme (`Ice`, `Ice Light`, `Midnight`, `Fluent`, `Minimal`); animation preset (`Bouncy` first with `Default` badge); Background → `Moving background` toggle | `SetTheme`; `SetPreset`; `SetMovingBackdrop` |
 | Activities | Music services (`Spotify`, `YouTube Music`); Synced lyrics display (`Show synced lyrics`, pill/card extensions, active word highlight, Japanese Romaji) | `SetMusicService`; `SetLyricsEnabled`; `SetLyricsDisplay` |
 | Privacy | Master network off switch; opt-in LRCLIB (`lrclib.net`) disclosure & toggle; local audio loopback spectrum visualizer disclosure & meter-only fallback switch | `DisableAllNetworkFeatures`; `SetLyricsOnlineLookup`; `SetVisualizerSpectrum` |
@@ -74,4 +75,5 @@ created when opened and destroyed when closed (shell: `app/src-tauri/src/setting
 - 2026-11-25 Claude: Devices → a playback device → "Lyrics delay" select (`lyricsDelayChoice` / `lyricsDelayFromChoice` in `model.ts`, + test; Auto shows the automatic value); `devBackend` handles `setLyricsDelay`.
 - 2026-11-25 Claude: Notch → Display: "Position" choice (D-20 anchors, `SetNotchAnchor`); `devBackend` handles it.
 - 2026-11-25 Gemini: D-20 `NotchPage` 6-position anchor grid (bottom slots disabled under Edge Nook, `ChoiceGroup.disabled`) + "Movement" (`Drag & snap` / `Fixed position`, `SetNotchPlacement`); `devBackend` updated.
+- 2026-11-25 Claude: D-30 **Call mode** page (`CallModePage.svelte`, nav after Hibernate, `call` glyph U+E717): switch, level, hold, sensitivity, call-app list; `devBackend` handles `setCallMode`.
 - 2026-11-25 Gemini: enabled all six anchors for Edge Nook too, added `"Custom position (N%)"` `InfoBar` when `settings.notchXRatio` is set (`ChoiceGroup` accepts `null`), and updated `devBackend` for `setNotchPosition` and `placedSeq`.
