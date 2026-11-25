@@ -93,6 +93,7 @@
           showLyricsToggle={Boolean(lyricsConfig?.enabled && lyricsConfig?.showOnCard)}
           lyricsOpen={lyricsDrawerOpen}
           {lyricsAvailable}
+          wavyProgress={settings?.appearance.wavyProgress ?? false}
           {onToggleLyrics}
           {onMediaAction}
         />

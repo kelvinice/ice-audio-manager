@@ -14,10 +14,12 @@
     notchVisible: boolean;
     instant: boolean;
     preset: SpringPreset;
+    /** Experimental wavy progress line (`appearance.wavyProgress`). */
+    wavyProgress?: boolean;
     onMediaAction: (action: MediaAction) => void;
   }
 
-  let { media, notchVisible, instant, preset, onMediaAction }: Props = $props();
+  let { media, notchVisible, instant, preset, wavyProgress = false, onMediaAction }: Props = $props();
 
   /** Cover edge; the meta column (title, artist, transport) is exactly this tall. */
   const COVER_PX = 84;
@@ -65,6 +67,7 @@
     {instant}
     showRemaining
     size="large"
+    wavy={wavyProgress}
     onSeek={(positionMs) => onMediaAction({ seek: { positionMs } })}
   />
 </div>

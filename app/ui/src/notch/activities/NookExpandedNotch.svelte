@@ -121,7 +121,14 @@
   <div class="nook-body">
     <div class="left-pane">
       {#if activeMedia}
-        <NookMediaPanel media={activeMedia} {notchVisible} {instant} {preset} {onMediaAction} />
+        <NookMediaPanel
+          media={activeMedia}
+          {notchVisible}
+          {instant}
+          {preset}
+          wavyProgress={settings?.appearance.wavyProgress ?? false}
+          {onMediaAction}
+        />
       {:else}
         <ExpandedEmptyCard
           services={musicServices}

@@ -80,6 +80,22 @@
     {/if}
   </Section>
 
+  <Section title="Song progress" description="How the seek bar on the open card shows the time already played.">
+    <SettingCard
+      icon="flask"
+      title="Wavy progress line"
+      description="While music plays, the played part of the seek bar becomes a gently moving wave in the song’s colour. It flattens when you pause. Still when Windows animation effects are off."
+    >
+      {#snippet control()}
+        <Toggle
+          label="Wavy progress line"
+          checked={settings.appearance.wavyProgress}
+          onchange={(enabled) => client.apply({ type: 'setWavyProgress', enabled })}
+        />
+      {/snippet}
+    </SettingCard>
+  </Section>
+
   <Section
     title="Drag & drop"
     description="Extra effects when you pick the notch up and drop it somewhere else (the animated notch only). Off when Windows animation effects are off."

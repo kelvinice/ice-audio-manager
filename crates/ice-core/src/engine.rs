@@ -348,6 +348,10 @@ pub enum Command {
         jelly_landing: Option<bool>,
         carry_glow: Option<bool>,
     },
+    /// Experimental: the card's seek bar shows played time as a travelling wave while music plays.
+    SetWavyProgress {
+        enabled: bool,
+    },
     /// D-22 Storage: set maximum managed lyrics disk cache size in MiB (`5..=500`).
     SetLyricsCacheMaxMb {
         max_mb: u16,
@@ -408,6 +412,7 @@ impl Command {
             | Self::SetLyricsDisplay { .. }
             | Self::SetLyricsEstimatedWordSync { .. }
             | Self::SetDragEffects { .. }
+            | Self::SetWavyProgress { .. }
             | Self::SetLyricsCacheMaxMb { .. }
             | Self::DisableAllNetworkFeatures
             | Self::SetVisualizerSpectrum { .. }

@@ -37,7 +37,8 @@ use crate::resolve::{DeviceRef, MatchMode, resolve};
 /// v18: `[call_mode]` (D-30: lower the music while people talk on a call; off by default).
 /// v19: `lyrics.estimated_word_sync` (Experimental: estimated word highlight on line-synced lyrics; off by default).
 /// v20: `appearance.dragEffects` (Experimental: landing ripple, jelly landing, carry glow; all off).
-pub const SCHEMA_VERSION: u32 = 20;
+/// v21: `appearance.wavyProgress` (Experimental: the played part of the seek bar is a travelling wave; off).
+pub const SCHEMA_VERSION: u32 = 21;
 
 /// Allowed per-device lyric delay, in ms (negative = lyrics earlier).
 pub const LYRICS_DELAY_MS: std::ops::RangeInclusive<i32> = -1000..=2000;
@@ -298,8 +299,9 @@ impl Config {
             // `appearance.hibernateLook = "plain"`, v0–v13 devices an automatic lyrics delay (no
             // `lyrics_delay_ms`), v0–v14 gain `notch_anchor = "top_center"`, v0–v15 gain
             // `notch_placement = "drag_snap"`, v0–v16 gain `notch_x_ratio = None`, v0–v17 gain `[call_mode]`
-            // (off, Discord's builds as call apps), v0–v18 gain `lyrics.estimated_word_sync = false`, and v0–v19
-            // gain `appearance.dragEffects` (all off), all via serde defaults.
+            // (off, Discord's builds as call apps), v0–v18 gain `lyrics.estimated_word_sync = false`, v0–v19 gain
+            // `appearance.dragEffects` (all off), and v0–v20 gain `appearance.wavyProgress = false`, all via serde
+            // defaults.
             _ => Ok(Self { schema_version: SCHEMA_VERSION, ..cfg }),
         }
     }
@@ -558,6 +560,7 @@ impl Config {
                 fx.jelly_landing = jelly_landing.unwrap_or(fx.jelly_landing);
                 fx.carry_glow = carry_glow.unwrap_or(fx.carry_glow);
             }
+            Command::SetWavyProgress { enabled } => next.appearance.wavy_progress = *enabled,
             Command::SetLyricsCacheMaxMb { max_mb } => {
                 if !LYRICS_CACHE_MAX_MB.contains(max_mb) {
                     return Err(format!(
@@ -1260,6 +1263,17 @@ mod tests {
         let fx = saved.appearance.drag_effects;
         assert!(fx.landing_ripple && fx.carry_glow && !fx.jelly_landing);
         assert!(saved.view(&[]).appearance.drag_effects.landing_ripple);
+    }
+
+    #[test]
+    fn v20_gains_wavy_progress_off_and_saves_it() {
+        let mut config = Config::from_toml("schema_version = 20\n[appearance]\ntheme = 'fluent'").unwrap();
+        assert_eq!(config.schema_version, SCHEMA_VERSION);
+        assert!(!config.appearance.wavy_progress);
+        let set = Command::SetWavyProgress { enabled: true };
+        assert_eq!(config.apply_setting(&set, &[]), Ok(true));
+        assert_eq!(config.apply_setting(&set, &[]), Ok(false));
+        assert!(Config::from_toml(&config.to_toml()).unwrap().view(&[]).appearance.wavy_progress);
     }
 
     #[test]

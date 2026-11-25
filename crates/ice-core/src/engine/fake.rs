@@ -411,6 +411,7 @@ impl Engine for FakeEngine {
             | Command::SetLyricsDisplay { .. }
             | Command::SetLyricsEstimatedWordSync { .. }
             | Command::SetDragEffects { .. }
+            | Command::SetWavyProgress { .. }
             | Command::SetLyricsCacheMaxMb { .. }
             | Command::DisableAllNetworkFeatures
             | Command::SetVisualizerSpectrum { .. }

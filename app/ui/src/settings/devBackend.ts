@@ -41,7 +41,7 @@ function initialSnapshot(): EngineSnapshot {
     media: null,
     lyrics: { status: 'disabled', trackKey: null, document: null },
     settings: {
-      appearance: { theme: 'ice', preset: 'bouncy', idleStyle: 'mini_pill', notchStyle: 'nook', nowPlaying: 'while_playing', movingBackdrop: true, hibernate: false, hibernateLook: 'plain', hibernateHideFromCapture: true, dragEffects: { landingRipple: false, jellyLanding: false, carryGlow: false } },
+      appearance: { theme: 'ice', preset: 'bouncy', idleStyle: 'mini_pill', notchStyle: 'nook', nowPlaying: 'while_playing', movingBackdrop: true, hibernate: false, hibernateLook: 'plain', hibernateHideFromCapture: true, dragEffects: { landingRipple: false, jellyLanding: false, carryGlow: false }, wavyProgress: false },
       performanceProfile: 'instant',
       pinnedMonitor: 'DISPLAY-PATH-1',
       notchAnchor: 'top_center',
@@ -153,6 +153,9 @@ function applyCommand(s: EngineSnapshot, c: Command): void {
       };
       break;
     case 'setLyricsEstimatedWordSync': st.lyrics = { ...st.lyrics, estimatedWordSync: c.enabled }; break;
+
+    case 'setWavyProgress': st.appearance.wavyProgress = c.enabled; break;
+
 
     case 'setDragEffects':
 

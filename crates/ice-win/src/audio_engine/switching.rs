@@ -97,6 +97,7 @@ impl Worker {
             | Command::SetLyricsDisplay { .. }
             | Command::SetLyricsEstimatedWordSync { .. }
             | Command::SetDragEffects { .. }
+            | Command::SetWavyProgress { .. }
             | Command::SetLyricsCacheMaxMb { .. }
             | Command::DisableAllNetworkFeatures
             | Command::SetVisualizerSpectrum { .. }

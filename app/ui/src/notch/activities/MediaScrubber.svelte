@@ -8,6 +8,7 @@
     pointerSeekMs,
     stepSeekMs,
   } from '../../lib/notch/scrubber';
+  import { PROGRESS_WAVE, sineStripPath } from '../../lib/notch/waves';
 
   interface Props {
     media: NowPlaying;
@@ -17,6 +18,8 @@
     showRemaining?: boolean;
     /** `large`: Edge Nook's roomier song block (5 px rail, bigger times); `regular`: the Floating card. */
     size?: 'regular' | 'large';
+    /** Experimental (`appearance.wavyProgress`): the played part is a travelling wave while playing. */
+    wavy?: boolean;
     onSeek: (positionMs: number) => void;
   }
 
@@ -26,8 +29,14 @@
     instant = false,
     showRemaining = false,
     size = 'regular',
+    wavy = false,
     onSeek,
   }: Props = $props();
+
+  let trackW = $state(0);
+  const wave = $derived(PROGRESS_WAVE[size]);
+  const waveH = $derived(Math.ceil(wave.amp * 2 + wave.stroke + 2));
+  const wavePath = $derived(sineStripPath(trackW, wave.wavelength, wave.amp, waveH / 2));
 
   const SEEK_STEP_MS = 5_000;
   const SEEK_PAGE_MS = 15_000;
@@ -173,6 +182,7 @@
     class:interactive={canSeek}
     class:dragging={dragMs !== null}
     bind:this={trackEl}
+    bind:clientWidth={trackW}
     role="slider"
     tabindex={canSeek ? 0 : -1}
     aria-label="Seek track progress"
@@ -187,9 +197,37 @@
     onpointercancel={onScrubPointerCancel}
     onkeydown={onScrubKeyDown}
   >
-    <div class="scrubber-rail">
-      <div class="scrubber-fill" style:transform={`scaleX(${scrubberScale.toFixed(4)})`}></div>
-    </div>
+    {#if wavy}
+      <!-- Experimental wavy progress: the flat rail shows only the unplayed part; the played part is a sine line that
+           slides right (one `transform` animation), clipped at the playhead. Paused: flattened and frozen. -->
+      <div class="scrubber-rail" style:clip-path={`inset(0 0 0 ${(scrubberScale * 100).toFixed(2)}%)`}></div>
+      <div class="wave-clip" style:clip-path={`inset(-8px ${(100 - scrubberScale * 100).toFixed(2)}% -8px 0)`}>
+        <div class="wave-amp" class:flat={!isPlaying} style:height={`${waveH}px`}>
+          <svg
+            class="wave"
+            class:running={isPlaying && notchVisible}
+            width={trackW + wave.wavelength}
+            height={waveH}
+            viewBox={`0 0 ${trackW + wave.wavelength} ${waveH}`}
+            style:left={`-${wave.wavelength}px`}
+            style:--wave-len={`${wave.wavelength}px`}
+            aria-hidden="true"
+          >
+            <path
+              d={wavePath}
+              fill="none"
+              stroke-width={wave.stroke}
+              stroke-linecap="round"
+              vector-effect="non-scaling-stroke"
+            />
+          </svg>
+        </div>
+      </div>
+    {:else}
+      <div class="scrubber-rail">
+        <div class="scrubber-fill" style:transform={`scaleX(${scrubberScale.toFixed(4)})`}></div>
+      </div>
+    {/if}
     {#if canSeek}
       <div class="scrubber-thumb" style:left={`${(scrubberScale * 100).toFixed(2)}%`}></div>
     {/if}
@@ -268,6 +306,59 @@
 
   .scrubber-row.instant .scrubber-rail,
   .scrubber-row.instant .scrubber-thumb {
+    transition: none;
+  }
+
+  .wave-clip {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+
+  /* Pausing flattens the wave into a near-straight line (and playing lets it swell back). */
+  .wave-amp {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%) scaleY(1);
+    transition: transform 420ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .wave-amp.flat {
+    transform: translateY(-50%) scaleY(0.12);
+  }
+
+  .wave {
+    position: absolute;
+    top: 0;
+    overflow: visible;
+    stroke: var(--ice-active-accent, var(--ice-accent));
+    /* ~12 px/s: one wavelength every 1.5 s. Paused (not playing, or the notch is hidden) rather than removed, so the
+       wave never jumps back. */
+    animation: scrub-wave-travel 1.5s linear infinite;
+    animation-play-state: paused;
+  }
+
+  .wave.running {
+    animation-play-state: running;
+  }
+
+  @keyframes scrub-wave-travel {
+    from {
+      transform: translateX(0);
+    }
+    to {
+      transform: translateX(var(--wave-len));
+    }
+  }
+
+  /* Reduce motion / preset off: a still wave, no travel or swell. */
+  .scrubber-row.instant .wave {
+    animation: none;
+  }
+
+  .scrubber-row.instant .wave-amp {
     transition: none;
   }
 

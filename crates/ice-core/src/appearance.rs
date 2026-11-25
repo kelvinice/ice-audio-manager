@@ -96,6 +96,9 @@ pub struct Appearance {
     pub hibernate_hide_from_capture: bool,
     /// Experimental (owner, 2026-11-26): extra drag & drop effects on the WebView notch. All off by default.
     pub drag_effects: DragEffects,
+    /// Experimental (owner, 2026-11-26): the played part of the card's seek bar is a slowly travelling wave while
+    /// music plays (flat when paused). Off by default.
+    pub wavy_progress: bool,
 }
 
 /// Experimental drag & drop effects (WebView notch only; the native pill keeps the plain lift and rim flash).
@@ -143,6 +146,7 @@ impl Default for Appearance {
             hibernate_look: HibernateLook::default(),
             hibernate_hide_from_capture: true,
             drag_effects: DragEffects::default(),
+            wavy_progress: false,
         }
     }
 }

@@ -17,6 +17,8 @@
     lyricsOpen?: boolean;
     lyricsAvailable?: boolean;
     onToggleLyrics?: () => void;
+    /** Experimental wavy progress line (`appearance.wavyProgress`). */
+    wavyProgress?: boolean;
     onMediaAction: (action: MediaAction) => void;
   }
 
@@ -30,6 +32,7 @@
     lyricsOpen = false,
     lyricsAvailable = false,
     onToggleLyrics = () => {},
+    wavyProgress = false,
     onMediaAction,
   }: Props = $props();
 
@@ -90,6 +93,7 @@
     {media}
     {notchVisible}
     {instant}
+    wavy={wavyProgress}
     onSeek={(positionMs) => onMediaAction({ seek: { positionMs } })}
   />
 </div>
