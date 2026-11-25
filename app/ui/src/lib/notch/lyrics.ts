@@ -282,3 +282,12 @@ function clampWakeDelay(deltaMs: number): number {
   if (!Number.isFinite(deltaMs)) return 250;
   return Math.max(45, Math.min(2_000, Math.ceil(deltaMs) + 15));
 }
+
+/**
+ * The position the lyrics follow: the player's position minus the output's delay (`DeviceSummary.lyricsDelayMs`, e.g.
+ * ~200 ms on Bluetooth), so a line lights up when it is heard, not when Windows plays it. Never below 0.
+ */
+export function lyricClockMs(positionMs: number, delayMs: number): number {
+  const delay = Number.isFinite(delayMs) ? delayMs : 0;
+  return Math.max(0, positionMs - delay);
+}

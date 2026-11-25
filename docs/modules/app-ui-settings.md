@@ -27,7 +27,7 @@ created when opened and destroyed when closed (shell: `app/src-tauri/src/setting
 | Page | Settings | Command |
 |---|---|---|
 | General | Launch at sign-in; performance profile; default roles; show disconnected | `set_launch_at_sign_in`; `SetPerformanceProfile`; `SetDefaultRoles`; `SetShowDisconnected` |
-| Devices | Notch order (up/down/remove); per device: star, alias, spatial, hide; hidden list → Show | `SetFavourites`; `SetDevicePrefs` |
+| Devices | Notch order (up/down/remove); per device: star, alias, spatial, lyrics delay (playback; Auto / −200 … +1000 ms), hide; hidden list → Show | `SetFavourites`; `SetDevicePrefs`; `SetLyricsDelay` |
 | Shortcuts | Toggle pairs, device shortcuts (devices, chord, roles, remove); knob gestures | `SetTogglePair`/`RemoveTogglePair`; `SetBinding`/`RemoveBinding`; `SetKnobGestures` |
 | Notch | Notch style (`Edge Nook` default vs `Floating`); idle style; Now playing (`While playing` default, `Brief, then small`, `Off`); pinned display | `SetNotchStyle`; `SetIdleStyle`; `SetNowPlayingPill`; `SetPinnedMonitor` (display path) |
 | Hibernate | Hibernate notch (session only: the app always starts awake); while hibernating: `Plain notch` (default) or `Hide the notch`; hide from screen sharing | `SetHibernate`; `SetHibernateLook`; `SetHibernateHideFromCapture` |
@@ -71,3 +71,4 @@ created when opened and destroyed when closed (shell: `app/src-tauri/src/setting
 - 2026-11-25 Claude: Notch page: "Hibernate" section (Hibernate notch, Hide from screen sharing toggles); `devBackend` handles both commands.
 - 2026-11-25 Claude: Hibernate moved to its own **Hibernate** page (`HibernatePage.svelte`, nav after Notch, new `moon` glyph U+E708): hibernate toggle, "While hibernating" choice (`Plain notch` / `Hide the notch`, `SetHibernateLook`), hide from screen sharing; `devBackend` handles `setHibernateLook`.
 - 2026-11-25 Claude: `InfoBar` takes an optional `actions` snippet (buttons under the text). Activities → Romaji hint: "Open language settings" (`client.openLanguageSettings` → `open_language_settings`) and "Check again" (`refreshLyricsStorage`). Pattern for anything outside the app the user must install: explain, then link to the exact Windows page.
+- 2026-11-25 Claude: Devices → a playback device → "Lyrics delay" select (`lyricsDelayChoice` / `lyricsDelayFromChoice` in `model.ts`, + test; Auto shows the automatic value); `devBackend` handles `setLyricsDelay`.

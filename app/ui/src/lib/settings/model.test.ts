@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { EngineSnapshot, Envelope, SettingsView } from '../ipc/engine.ts';
-import { applyEnvelope, moveItem, nextId, recordKeys } from './model.ts';
+import { applyEnvelope, lyricsDelayChoice, lyricsDelayFromChoice, moveItem, nextId, recordKeys } from './model.ts';
 
 const settings: SettingsView = {
   appearance: { theme: 'ice', preset: 'smooth', idleStyle: 'mini_pill', notchStyle: 'floating', nowPlaying: 'brief', movingBackdrop: true, hibernate: false, hibernateLook: 'plain', hibernateHideFromCapture: true },
@@ -71,4 +71,18 @@ test('moves list items within bounds and picks unused ids', () => {
   assert.deepEqual(moveItem(['a', 'b', 'c'], 2, -1), ['a', 'c', 'b']);
   assert.equal(moveItem(['a', 'b'], 0, -1), null);
   assert.equal(nextId('pair', ['pair-2', 'main']), 'pair-3');
+});
+
+test('lyrics delay select: Auto shows the automatic value, a hand-saved value stays listed', () => {
+  const auto = lyricsDelayChoice(null, 200);
+  assert.equal(auto.value, 'auto');
+  assert.equal(auto.options[0]?.label, 'Auto (+200 ms)');
+  assert.ok(auto.options.some((o) => o.value === '0' && o.label === 'None (0 ms)'));
+  const custom = lyricsDelayChoice(180, 180);
+  assert.equal(custom.value, '180');
+  assert.equal(custom.options[0]?.label, 'Auto');
+  assert.ok(custom.options.some((o) => o.value === '180' && o.label === '+180 ms'), 'kept');
+  assert.equal(lyricsDelayFromChoice('auto'), null);
+  assert.equal(lyricsDelayFromChoice('-100'), -100);
+  assert.equal(lyricsDelayFromChoice('x'), null);
 });

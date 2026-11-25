@@ -78,6 +78,8 @@ export class NotchController {
   readonly styleStrategy = $derived(getNotchStyleStrategy(this.notchStyle));
   /** D-27 hibernate: a plain, click-through silhouette; no activities, no expansion, no media. */
   readonly isHibernating = $derived(this.engineState.settings?.appearance.hibernate ?? false);
+  /** How much later lyrics show for the playing output (Bluetooth delay; `DeviceSummary.lyricsDelayMs`). */
+  readonly lyricsDelayMs = $derived(this.engineState.activeDevice?.lyricsDelayMs ?? 0);
   readonly isExpanded = $derived(
     !this.isHibernating && ((this.notchSnapshot?.expanded ?? false) || this.hoverExpanded),
   );

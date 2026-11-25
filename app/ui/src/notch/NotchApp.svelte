@@ -110,6 +110,7 @@
                   showRomaji={ctrl.engineState.settings?.lyrics.romaji ?? true}
                   instant={ctrl.isInstant}
                   notchVisible={ctrl.isNotchVisible}
+                  delayMs={ctrl.lyricsDelayMs}
                 />
               {/if}
             </div>
@@ -138,6 +139,7 @@
             muted={ctrl.effectiveVolumeMuted}
             barPercent={ctrl.pillSize.vol}
             micMuted={ctrl.effectiveMicMuted}
+            lyricsDelayMs={ctrl.lyricsDelayMs}
             media={ctrl.effectiveMedia}
             lyrics={ctrl.engineState.lyrics}
             showLyrics={ctrl.showCardLyrics}
@@ -169,6 +171,7 @@
             muted={ctrl.effectiveVolumeMuted}
             barPercent={ctrl.pillSize.vol}
             micMuted={ctrl.effectiveMicMuted}
+            lyricsDelayMs={ctrl.lyricsDelayMs}
             media={ctrl.effectiveMedia}
             lyrics={ctrl.engineState.lyrics}
             showLyrics={ctrl.showCardLyrics}

@@ -24,6 +24,8 @@
     muted: boolean;
     barPercent: number;
     micMuted: boolean;
+    /** The playing output's lyric delay (`DeviceSummary.lyricsDelayMs`). */
+    lyricsDelayMs?: number;
     media?: NowPlaying | null;
     lyrics?: LyricsState;
     showLyrics?: boolean;
@@ -55,6 +57,7 @@
     muted,
     barPercent,
     micMuted,
+    lyricsDelayMs = 0,
     media = null,
     lyrics = { status: 'disabled', trackKey: null, document: null },
     showLyrics = false,
@@ -143,6 +146,7 @@
           showRomaji={lyricsConfig?.romaji ?? true}
           {instant}
           {notchVisible}
+          delayMs={lyricsDelayMs}
           onSeek={(positionMs) => onMediaAction({ seek: { positionMs } })}
         />
       </div>

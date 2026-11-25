@@ -2,7 +2,7 @@
   import type { DeviceSummary, SpatialMode } from '../../lib/ipc/engine';
   import { isDeviceFavourite, toggleFavouriteDeviceIds } from '../../lib/notch/devices';
   import type { SettingsClient } from '../../lib/settings/client.svelte';
-  import { deviceLabel, prefsFor } from '../../lib/settings/model';
+  import { deviceLabel, lyricsDelayChoice, lyricsDelayFromChoice, prefsFor } from '../../lib/settings/model';
   import DeviceIcon from '../../notch/activities/DeviceIcon.svelte';
   import Icon from '../controls/Icon.svelte';
   import Row from '../controls/Row.svelte';
@@ -46,6 +46,8 @@
       ? [...SPATIAL, { value: prefs.spatial, label: prefs.spatial }]
       : SPATIAL,
   );
+
+  const lyricsDelay = $derived(lyricsDelayChoice(prefs?.lyricsDelayMs, device.lyricsDelayMs));
 
   let expanded = $state(false);
   let draftAlias = $state('');
@@ -108,6 +110,18 @@
           options={spatialOptions}
           onchange={(spatial) =>
             client.apply({ type: 'setDevicePrefs', deviceId: device.id, spatial, alias: null, hidden: null })}
+        />
+      </Row>
+      <Row
+        label="Lyrics delay"
+        description="Shows lyrics later so they match what you hear. Bluetooth audio arrives late; Auto uses 200 ms for Bluetooth devices and 0 for others."
+      >
+        <Select
+          label="Lyrics delay"
+          value={lyricsDelay.value}
+          options={lyricsDelay.options}
+          onchange={(choice) =>
+            client.apply({ type: 'setLyricsDelay', deviceId: device.id, delayMs: lyricsDelayFromChoice(choice) })}
         />
       </Row>
     {/if}

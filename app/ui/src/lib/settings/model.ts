@@ -159,3 +159,35 @@ export function recordKeys(e: KeyInput): RecordedKeys {
 export function chordParts(chord: string | null | undefined): string[] {
   return chord ? chord.split('+').map((p) => p.trim()).filter(Boolean) : [];
 }
+
+/** Choices for a playback device's lyrics delay (Settings → Devices). `'auto'` = the engine decides (Bluetooth 200 ms). */
+export const LYRICS_DELAY_STEPS_MS = [-200, -100, 0, 100, 150, 200, 250, 300, 400, 500, 750, 1000] as const;
+
+/**
+ * The lyrics-delay select: "Auto (N ms)" while nothing is saved (N = the device's current automatic value), then the
+ * steps. A value saved by hand that isn't a step stays visible, like the spatial select.
+ */
+export function lyricsDelayChoice(
+  savedMs: number | null | undefined,
+  effectiveMs: number,
+): { value: string; options: { value: string; label: string }[] } {
+  const ms = (n: number) => (n > 0 ? `+${n} ms` : `${n} ms`);
+  const auto = savedMs === null || savedMs === undefined;
+  const steps: number[] = [...LYRICS_DELAY_STEPS_MS];
+  if (!auto && !steps.includes(savedMs)) steps.push(savedMs);
+  steps.sort((a, b) => a - b);
+  return {
+    value: auto ? 'auto' : String(savedMs),
+    options: [
+      { value: 'auto', label: auto ? `Auto (${ms(effectiveMs)})` : 'Auto' },
+      ...steps.map((n) => ({ value: String(n), label: n === 0 ? 'None (0 ms)' : ms(n) })),
+    ],
+  };
+}
+
+/** The `SetLyricsDelay` value for a select choice: `null` = automatic. */
+export function lyricsDelayFromChoice(choice: string): number | null {
+  if (choice === 'auto') return null;
+  const n = Number(choice);
+  return Number.isFinite(n) ? Math.round(n) : null;
+}

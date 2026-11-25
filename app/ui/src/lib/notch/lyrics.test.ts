@@ -6,6 +6,7 @@ import {
   LADDER,
   ladderY,
   lineSubtitle,
+  lyricClockMs,
   lyricRows,
   nookLadderY,
   resolveLyricFrame,
@@ -154,4 +155,11 @@ test('nookLadderY centres a wrapped current line and keeps its neighbours in the
   // Taller than 3 rows + subtitle is clamped, so the next line never leaves the column.
   assert.equal(nookLadderY(1, 400), nookLadderY(1, mainMax));
   assert.equal(nookLadderY(0, 0), nookLadderY(0, LADDER.nook.cur), 'unmeasured = one row');
+});
+
+test('lyrics follow the output delay: later on Bluetooth, earlier when negative, never before 0', () => {
+  assert.equal(lyricClockMs(10_000, 200), 9_800);
+  assert.equal(lyricClockMs(10_000, -150), 10_150);
+  assert.equal(lyricClockMs(100, 200), 0);
+  assert.equal(lyricClockMs(5_000, Number.NaN), 5_000);
 });

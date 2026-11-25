@@ -5,6 +5,7 @@
     ladderY,
     LADDER,
     lineSubtitle,
+    lyricClockMs,
     lyricRows,
     nookLadderY,
     resolveLyricFrame,
@@ -23,6 +24,8 @@
     showRomaji: boolean;
     instant: boolean;
     notchVisible: boolean;
+    /** The playing output's delay (`DeviceSummary.lyricsDelayMs`): lines light up when they are heard. */
+    delayMs?: number;
     onSeek?: (positionMs: number) => void;
   }
 
@@ -34,6 +37,7 @@
     showRomaji,
     instant,
     notchVisible,
+    delayMs = 0,
     onSeek = () => {},
   }: Props = $props();
 
@@ -59,7 +63,7 @@
     }
   });
 
-  const elapsedMs = $derived(liveMediaPositionMs(media, nowEpochMs, fallbackAnchorMs));
+  const elapsedMs = $derived(lyricClockMs(liveMediaPositionMs(media, nowEpochMs, fallbackAnchorMs), delayMs));
   const frame = $derived(resolveLyricFrame(doc, elapsedMs, wordHighlight));
 
   // Event-aligned wake: sleeps until the next word or line boundary, zero polling when paused/hidden.
@@ -68,7 +72,7 @@
     nowEpochMs = Date.now();
     let timerId: number | null = null;
     const schedule = () => {
-      const currentMs = liveMediaPositionMs(media, Date.now(), fallbackAnchorMs);
+      const currentMs = lyricClockMs(liveMediaPositionMs(media, Date.now(), fallbackAnchorMs), delayMs);
       const next = resolveLyricFrame(doc, currentMs, wordHighlight);
       if (next.nextWakeDelayMs === null) return;
       timerId = window.setTimeout(() => {
