@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { sineStripPath, wavyEllipse } from './waves.ts';
+import { taperedWavePath, wavyEllipse } from './waves.ts';
 
 const points = (d: string): [number, number][] =>
   [...d.matchAll(/[ML] (-?[\d.]+) (-?[\d.]+)/g)].map((m) => [Number(m[1]), Number(m[2])]);
@@ -21,9 +21,20 @@ test('a top-docked half ring stays below its edge and is open', () => {
   assert.ok(points(bottom.d).every(([, y]) => y <= 292.01), 'bottom-docked: never below the taskbar edge');
 });
 
-test('the progress sine covers the width plus one wavelength, so sliding it loops seamlessly', () => {
-  const d = sineStripPath(300, 20, 2.5, 6);
-  const xs = [...d.matchAll(/ T ([\d.]+) /g)].map((m) => Number(m[1]));
-  assert.ok(Math.max(...xs) >= 320);
-  assert.ok(d.startsWith('M 0 6.00 Q 5.00 1.00 10.00 6.00'), 'first half wave peaks 2.5 px above the middle');
+test('the played wave starts and stops on the centre line, whatever the phase (round caps, no clipping)', () => {
+  for (const phase of [0, 3.3, 7.9, 19.5]) {
+    const pts = points(taperedWavePath(2.5, 180, 6, { wavelength: 20, amp: 2.6, phase }));
+    const [first, last] = [pts[0], pts[pts.length - 1]];
+    assert.deepEqual(first, [2.5, 6], `starts on the centre line at phase ${phase}`);
+    assert.deepEqual(last, [180, 6], `ends at the playhead on the centre line at phase ${phase}`);
+    assert.ok(pts.every(([, y]) => Math.abs(y - 6) <= 2.6 + 1e-9), 'never taller than the amplitude');
+    assert.ok(pts.some(([, y]) => Math.abs(y - 6) > 2), 'but really wavy in the middle');
+  }
+});
+
+test('a paused wave is a straight line, and a tiny played part stays flat', () => {
+  const paused = points(taperedWavePath(2.5, 180, 6, { wavelength: 20, amp: 2.6, phase: 4, ampScale: 0 }));
+  assert.ok(paused.every(([, y]) => y === 6));
+  const tiny = points(taperedWavePath(2.5, 6, 6, { wavelength: 20, amp: 2.6, phase: 4 }));
+  assert.ok(tiny.every(([, y]) => Math.abs(y - 6) < 1), 'a few px of progress barely ripples');
 });

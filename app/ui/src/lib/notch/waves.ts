@@ -39,20 +39,44 @@ export function wavyEllipse(
 }
 
 /**
- * A smooth sine line from `x = 0` to at least `width + wavelength`, centred on `midY`. Each half wave is one quadratic
- * curve (`T` mirrors the control point), so the line can slide left/right by exactly one `wavelength` and loop
- * seamlessly.
+ * Wave sizes for the progress line, per scrubber size: gentle enough to watch, never busy. `stroke` equals the flat
+ * rail's thickness (`MediaScrubber`) so the wave runs straight into the unplayed line. `speed` is px/s.
  */
-export function sineStripPath(width: number, wavelength: number, amp: number, midY: number): string {
-  const half = Math.max(2, wavelength / 2);
-  const end = Math.max(0, width) + wavelength;
-  let d = `M 0 ${f(midY)} Q ${f(half / 2)} ${f(midY - 2 * amp)} ${f(half)} ${f(midY)}`;
-  for (let x = half * 2; x <= end + 1e-6; x += half) d += ` T ${f(x)} ${f(midY)}`;
-  return d;
-}
-
-/** Wave sizes for the progress line, per scrubber size: gentle enough to watch, never busy. */
 export const PROGRESS_WAVE = Object.freeze({
-  regular: { wavelength: 16, amp: 2, stroke: 3 },
-  large: { wavelength: 20, amp: 2.6, stroke: 4 },
+  regular: { wavelength: 16, amp: 2, stroke: 4, speed: 12 },
+  large: { wavelength: 20, amp: 2.6, stroke: 5, speed: 12 },
 });
+
+const smoothstep = (t: number): number => {
+  const x = Math.max(0, Math.min(1, t));
+  return x * x * (3 - 2 * x);
+};
+
+/**
+ * The played part of the wavy progress line (owner, 2026-11-26: round ends, nothing clipped): a sine from `x0` to
+ * `x1` whose height tapers to zero over about one wavelength at both ends, so the line starts and stops exactly on
+ * `midY` and a round line cap finishes it (and meets the flat unplayed line seamlessly). `phase` (px) slides the
+ * crests under the fixed ends; `ampScale` (0–1) flattens it (paused).
+ */
+export function taperedWavePath(
+  x0: number,
+  x1: number,
+  midY: number,
+  opts: { wavelength: number; amp: number; phase: number; ampScale?: number; step?: number },
+): string {
+  const len = Math.max(0, x1 - x0);
+  const step = Math.max(0.5, opts.step ?? 1.5);
+  const taper = Math.max(1, Math.min(opts.wavelength * 0.85, len / 2));
+  const k = (Math.PI * 2) / Math.max(2, opts.wavelength);
+  // A short played part (the song just started) grows its wave in over ~1.5 wavelengths instead of one sharp bump.
+  const amp = opts.amp * Math.max(0, Math.min(1, opts.ampScale ?? 1)) * smoothstep(len / (opts.wavelength * 1.5));
+  const n = Math.max(1, Math.ceil(len / step));
+  const parts: string[] = [];
+  for (let i = 0; i <= n; i += 1) {
+    const x = x0 + (len * i) / n;
+    const env = smoothstep((x - x0) / taper) * smoothstep((x1 - x) / taper);
+    const y = midY - amp * env * Math.sin(k * (x - x0 - opts.phase));
+    parts.push(`${i === 0 ? 'M' : 'L'} ${f(x)} ${f(y)}`);
+  }
+  return parts.join(' ');
+}
