@@ -151,6 +151,10 @@ Remake Ice Audio Manager into an audio manager that is **as great and as cool as
 | **Echo-Music** (`EchoMusicApp/Echo-Music`) | Android YouTube Music client (Kotlin): InnerTube playback, offline downloads, synced lyrics (LRCLIB, KuGou, BetterLyrics, SimpMusic, …), Shazam-style recognition, Genius "Music DNA" | Kotlin · **GPL-3.0** | **Ideas only** (GPL): how it queries LRCLIB (`lrclib/.../LrcLib.kt`: search, no key, duration ±2 s → ±5 s). Note it ships Firebase Analytics/Crashlytics, which our §1.5 forbids. Cloned to `docs/reference/Echo-Music` |
 | **Auralys** (Android, v4.1.0) | Android music app: "listen together" rooms with a session code (real-time shared playback), two switchable UI styles ("Editorial" and "Liquid Glass"), song share cards for stories | Unknown · **no public source found** | **Screenshot only** (`docs/reference/screens/auralys-android-promo-v4.1.0.png`). Style as a user choice, separate from colour themes (D-23). Listen-together needs a server, which is outside D-05 and §1.5 |
 
+**Added 2026-11-26:** **VIVI Music** (`vivizzz007/vivi-music`, Android YouTube Music client, Kotlin, **GPL-3.0** plus
+per-file reuse bans; ideas only). Cloned to `docs/reference/vivi-music`. Recap with greenlight / grey area / redline
+lists: [research/vivi-music.md](research/vivi-music.md).
+
 *§1.3 (why DynamicWin is called malware) and §1.4 (the replaced Python codebase) are in the [archive](archive/decisions-closed.md#context-history).*
 
 ### 1.5 Owner constraints (from §7.1 answers)
