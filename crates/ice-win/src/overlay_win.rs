@@ -14,7 +14,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
     SPI_GETCLIENTAREAANIMATION, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOOWNERZORDER, SWP_NOSENDCHANGING,
     SWP_NOSIZE, SWP_NOZORDER, SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS, SetWindowDisplayAffinity, SetWindowLongPtrW,
     SetWindowPos, SystemParametersInfoW, WDA_EXCLUDEFROMCAPTURE, WDA_NONE, WM_MOUSEACTIVATE, WM_NCDESTROY,
-    WS_EX_APPWINDOW, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_EX_TRANSPARENT,
+    WS_EX_APPWINDOW, WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_EX_TRANSPARENT,
 };
 use windows::core::{BOOL, Result};
 
@@ -89,7 +89,22 @@ unsafe extern "system" fn noactivate_subclass(
     unsafe { DefSubclassProc(hwnd, umsg, wparam, lparam) }
 }
 
-/// Toggles `WS_EX_TRANSPARENT` click-through on the overlay window.
+/// Whether clicks pass through `hwnd` to the windows below: both `WS_EX_TRANSPARENT` and `WS_EX_LAYERED` are set.
+/// `WS_EX_TRANSPARENT` alone doesn't do it for a non-layered window (the WebView notch): it kept catching every click
+/// on its 648 × 292 canvas. False for a null or dead handle.
+#[must_use]
+pub fn ignores_cursor(hwnd: isize) -> bool {
+    let Ok(hwnd) = to_hwnd(hwnd) else {
+        return false;
+    };
+    let both = (WS_EX_TRANSPARENT.0 | WS_EX_LAYERED.0) as isize;
+    // SAFETY: reading a window's extended style has no side effects; a dead handle returns 0.
+    let current = unsafe { GetWindowLongPtrW(hwnd, GWL_EXSTYLE) };
+    current & both == both
+}
+
+/// Toggles `WS_EX_TRANSPARENT` click-through on an **already layered** window (the native pill). The WebView notch is
+/// not layered and is driven through tao's `set_ignore_cursor_events` instead (see the shell's cursor poll).
 ///
 /// # Errors
 /// Fails if `hwnd` is null.

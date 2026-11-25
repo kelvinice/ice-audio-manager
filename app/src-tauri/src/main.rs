@@ -251,7 +251,7 @@ fn report_event_rendered(event_seq: u64, app: AppHandle, state: State<'_, Arc<Sh
                 dot.set_standby_only(true);
                 dot.hide();
             }
-            spawn_cursor_poll(Arc::clone(&state), false);
+            spawn_cursor_poll(&app, Arc::clone(&state), false);
         }
     }
 }
@@ -455,7 +455,7 @@ fn request_preview(app: &AppHandle, state: &Arc<SharedRuntime>, preview: Preview
     tauri::async_runtime::spawn_blocking(move || {
         let result = match preview {
             Preview::Notch => create_notch_window(&app, &state, generation).map(|_| {
-                spawn_cursor_poll(Arc::clone(&state), false);
+                spawn_cursor_poll(&app, Arc::clone(&state), false);
             }),
             Preview::Settings => settings::create_window(&app, &state),
         };
@@ -508,6 +508,9 @@ fn create_notch_window(app: &AppHandle, state: &Arc<SharedRuntime>, generation: 
         .resizable(false)
         .shadow(false)
         .focused(false)
+        // In tao's own flags too: its style rewrites (every show/hide and click-through change) then keep
+        // `WS_EX_NOACTIVATE`, so the notch never takes focus (code-practices §1).
+        .focusable(false)
         .visible(false)
         .data_directory(state.wv2_data_dir.clone())
         .build()
@@ -539,15 +542,44 @@ fn create_notch_window(app: &AppHandle, state: &Arc<SharedRuntime>, generation: 
     })
 }
 
-fn spawn_cursor_poll(state: Arc<SharedRuntime>, benchmark: bool) {
+/// Makes the WebView notch click-through or not. Click-through needs `WS_EX_TRANSPARENT | WS_EX_LAYERED`; tao's
+/// `set_ignore_cursor_events` sets both and keeps them in its own window flags, so its later style rewrites (every
+/// `show`/`hide`) keep them too. Setting the bits by hand did neither: only `WS_EX_TRANSPARENT` was set, so the
+/// whole canvas around the pill (and the hibernating notch) caught clicks.
+struct ClickThrough {
+    app: AppHandle,
+    /// Last request and when, so a request still queued on the main thread isn't repeated every 34 ms tick.
+    requested: Option<(bool, Instant)>,
+}
+
+impl ClickThrough {
+    const RETRY: Duration = Duration::from_millis(250);
+
+    fn set(&mut self, hwnd: isize, ignore: bool) {
+        // The real window style is the truth: no cached state can drift from it.
+        if overlay_win::ignores_cursor(hwnd) == ignore {
+            return;
+        }
+        if self.requested.is_some_and(|(want, at)| want == ignore && at.elapsed() < Self::RETRY) {
+            return;
+        }
+        self.requested = Some((ignore, Instant::now()));
+        if let Some(win) = self.app.get_webview_window("notch")
+            && let Err(error) = win.set_ignore_cursor_events(ignore)
+        {
+            tracing::debug!(%error, ignore, "Notch click-through not applied");
+        }
+    }
+}
+
+fn spawn_cursor_poll(app: &AppHandle, state: Arc<SharedRuntime>, benchmark: bool) {
     if state.cursor_poll_running.swap(true, Ordering::AcqRel) {
         return;
     }
     let poll_state = Arc::clone(&state);
+    let mut click_through = ClickThrough { app: app.clone(), requested: None };
     let worker = std::thread::Builder::new().name("ice-cursor-poll".into()).spawn(move || {
         let state = poll_state;
-        // `set_click_through` reads the window's real `WS_EX_TRANSPARENT` bit and writes only on a change, so it runs every
-        // tick instead of trusting a cached value: a style reset elsewhere can't leave the window catching clicks.
         let mut last_hwnd = 0;
         loop {
             let hwnd = state.notch_hwnd.load(Ordering::Acquire);
@@ -555,7 +587,7 @@ fn spawn_cursor_poll(state: Arc<SharedRuntime>, benchmark: bool) {
             if hwnd == 0 || !visible {
                 // Hidden or gone: leave it click-through, so it can't come back catching clicks before the next poll.
                 if last_hwnd != 0 {
-                    let _ = overlay_win::set_click_through(last_hwnd, true);
+                    click_through.set(last_hwnd, true);
                     last_hwnd = 0;
                 }
                 if !benchmark {
@@ -583,7 +615,7 @@ fn spawn_cursor_poll(state: Arc<SharedRuntime>, benchmark: bool) {
 
             let near = cx >= wl - 64 && cx <= wr + 64 && cy >= wt - 32 && cy <= wb + 64;
             if !near {
-                let _ = overlay_win::set_click_through(hwnd, true);
+                click_through.set(hwnd, true);
                 std::thread::sleep(Duration::from_millis(100));
                 continue;
             }
@@ -606,7 +638,7 @@ fn spawn_cursor_poll(state: Arc<SharedRuntime>, benchmark: bool) {
 
             // An empty rect (D-27 hibernate: the plain notch takes no input) keeps the whole window click-through.
             let inside = hr.width > 0.0 && hr.height > 0.0 && cx >= pl && cx <= pr && cy >= pt && cy <= pb;
-            let _ = overlay_win::set_click_through(hwnd, !inside);
+            click_through.set(hwnd, !inside);
             std::thread::sleep(Duration::from_millis(if benchmark { 16 } else { 34 }));
         }
     });
@@ -1366,7 +1398,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         .setup(move |app| {
             let handle = app.handle().clone();
             if bench_mode {
-                spawn_cursor_poll(Arc::clone(&setup_state), true);
+                spawn_cursor_poll(&handle, Arc::clone(&setup_state), true);
                 let st = Arc::clone(&setup_state);
                 std::thread::Builder::new()
                     .name("ice-bench-driver".into())

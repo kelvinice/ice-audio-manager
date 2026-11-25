@@ -48,8 +48,11 @@ state to the UI, and exposes a small set of Tauri commands. Thin by rule: valida
 
 ## Traps
 - Cursor poll (`spawn_cursor_poll`): the hit rect is scaled by the notch window's own width / `NOTCH_CANVAS_W`, never a
-  stored monitor `scale_factor` (stale after topology/DPI changes → clicks beside the pill were swallowed). It re-applies
-  `set_click_through` every tick (no cached state) and leaves the window click-through when it stops.
+  stored monitor `scale_factor`. Click-through goes through **tao's `set_ignore_cursor_events`** (`ClickThrough`), never
+  hand-set bits: Windows needs `WS_EX_TRANSPARENT | WS_EX_LAYERED`, and tao rewrites the whole extended style from its
+  own flags on every show/hide, so only a flag tao knows survives. Each tick compares the real style
+  (`overlay_win::ignores_cursor`) and asks tao only on a mismatch. The notch is built `.focusable(false)` so those
+  rewrites keep `WS_EX_NOACTIVATE`.
 - Never keep logic here that the app needs while the WebView is released; the engine, tray, hotkeys and native pill must work alone.
 - Every `update_and_emit` bumps `NotchSnapshot.revision`; the UI drops older ones.
 - `iceart://` must stay in the production CSP and serve nothing but engine-cached IDs.
@@ -73,3 +76,4 @@ Unit tests in `art.rs`, `engine_bridge.rs`, `ipc.rs`, `meter.rs`, `placement.rs`
 - 2026-11-25 Claude: cursor poll scales the hit rect from the window width, re-checks `WS_EX_TRANSPARENT` every tick and resets it on exit (fix: clicks around the pill / music pill blocked); UI resends `report_hit_rect` after wake or a failed send.
 - 2026-11-25 Claude: D-27 hibernate: `engine_bridge` drops every activity while hibernating (no pop-up, no WebView wake), syncs the native pill (`native_dot_appearance`) and applies capture exclusion to the notch window (`apply_capture_privacy`, also on window creation); the cursor poll treats an empty hit rect as fully click-through.
 - 2026-11-25 Claude: `set_hibernate` command (notch-controls permission): sends `Command::SetHibernate` and unpins the card; the only setting the notch window may change.
+- 2026-11-25 Claude: click-through fixed for real: the poll set only `WS_EX_TRANSPARENT`, which doesn't pass clicks through a non-layered window, so the whole 648 × 292 canvas (and the hibernating notch) blocked clicks. Now `ClickThrough` drives tao's `set_ignore_cursor_events` (TRANSPARENT + LAYERED, kept in tao's flags); notch window `.focusable(false)`. Verified on the running app with `WindowFromPoint` beside the pill: old build = notch, new build = window below.

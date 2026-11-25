@@ -488,6 +488,12 @@ criteria below pass on both monitors. Items come from Claude's review of the Edg
 - [x] Clicks right around the pill and the music pill were swallowed (Claude): the cursor poll scaled the hit rect with a
       stored monitor scale that can go stale (topology/DPI change, other monitor); it now uses the window's own size,
       re-applies click-through every tick and resets it when it stops; the UI resends the rect after a wake or failed send
+- [x] **Root cause found and fixed** (Claude, 2026-11-25, owner: "the notch area still cannot be clicked, in pill mode
+      and hibernate"): click-through set only `WS_EX_TRANSPARENT`, which Windows ignores for mouse routing on a
+      non-layered window, so the whole 648 × 292 canvas blocked clicks (it never worked; the Phase 0.2 check only tested
+      that the call returned OK). Now tao's `set_ignore_cursor_events` (`TRANSPARENT | LAYERED`, kept across tao's style
+      rewrites) and `.focusable(false)`. Verified on the running app: three points beside the pill → window below
+      (old build: notch)
 - [ ] By hand: click just beside the idle pill and the music pill on both monitors (100 % and 150 %), after moving the
       notch between monitors and after changing display scale
 
