@@ -476,7 +476,7 @@ criteria below pass on both monitors. Items come from Claude's review of the Edg
 **Open discussion, for later (owner, 2026-11-25):**
 - [x] **D-27 · Hibernate mode, first cut** (Claude, 2026-11-25, owner asked for it with Claude's recommendations): plain
       black notch + red mic-muted dot, no pop-ups, click-through, hidden from screen captures while on (switchable),
-      saved; Settings → Notch → Hibernate and the tray's "Hibernate notch"
+      Settings → Hibernate and the tray's "Hibernate notch"
 - [x] Hibernate button (moon) in the Edge Nook card's toolbar (Claude, 2026-11-25); also unpins the card. The Floating
       side rail is full (5 buttons max), so it waits for the Floating pass
 - [x] Edge Nook card refresh (Claude, 2026-11-25, owner: "modernize/improve the UI/UX"): header names the player
@@ -484,6 +484,14 @@ criteria below pass on both monitors. Items come from Claude's review of the Edg
       capsule; 64 px cover with the scrubber beside it and the transport centred under it; fading lyrics divider; no
       duplicate device name in the empty card. Checked in a headless-Edge harness (dark/light, JA/EN, empty)
 - [ ] By hand: the refreshed card on both monitors at 100 % / 150 %, all 4 themes, real album art
+- [x] Hibernate follow-up (Claude, 2026-11-25, owner: "separate setting, never start hibernated, the static notch
+      doesn't show, let me hide it completely"): **root cause** of the missing plain notch: `--ice-hibernate-*` sat in
+      the Minimal theme's block, so on every other theme the fill was transparent (now `:root`, plus a test that no
+      theme declares a token `:root` lacks). Hibernate is session state (every start is awake, a hot reload keeps the
+      live value); schema v13 `hibernateLook` = plain notch / hide the notch; own Settings page "Hibernate"; Balanced
+      hands over to the native pill 1 s after hibernating; hibernating from the tray or Settings unpins the card too.
+      Checked on the running app (scratch `APPDATA`): starts awake from a hibernated file; plain notch drawn (WebView on
+      Instant, native pill on Balanced); hidden look shows nothing on both; waking restores the idle pill and its input
 - [ ] By hand: hibernate in Instant / Balanced / Lite; screen-share test in Teams, Zoom, Meet (Chrome/Edge) and OBS with
       "Hide from screen sharing" on and off; mic mute shows the dot; tray uncheck wakes the notch
 - [ ] D-27 still open: a hibernate hotkey, timed hibernate (30 min / 1 h), auto-enter on presentation mode, releasing the

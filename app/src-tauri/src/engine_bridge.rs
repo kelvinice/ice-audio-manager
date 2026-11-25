@@ -36,6 +36,11 @@ pub(super) fn project(snapshot: &EngineSnapshot, view: &mut NotchSnapshot) {
     view.volume_percent = snapshot.volume.map_or(0, |volume| volume.percent);
     view.muted = snapshot.volume.is_some_and(|volume| volume.muted);
     view.mic_muted = snapshot.mic_muted.unwrap_or(false);
+    // D-27: hibernating (from the tray, Settings or the notch) unpins the card, so Balanced can hand over to the
+    // native pill and waking later doesn't pop it open.
+    if snapshot.settings.appearance.hibernate {
+        view.expanded = false;
+    }
 }
 
 /// What makes a track "new" for the notch: the app and the track's names (art and position don't count;

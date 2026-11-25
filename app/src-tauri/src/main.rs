@@ -302,17 +302,11 @@ fn toggle_expand(app: AppHandle, state: State<'_, Arc<SharedRuntime>>) {
     });
 }
 
-/// D-27: the notch's hibernate button. Only this one setting is open to the notch window (least privilege); it also
-/// unpins the card so waking later doesn't pop it open.
+/// D-27: the notch's hibernate button. Only this one setting is open to the notch window (least privilege). The card
+/// unpins in `engine_bridge::project` when the setting lands, whichever way it was turned on.
 #[tauri::command]
-fn set_hibernate(enabled: bool, app: AppHandle, state: State<'_, Arc<SharedRuntime>>) {
+fn set_hibernate(enabled: bool, state: State<'_, Arc<SharedRuntime>>) {
     state.engine.send(Command::SetHibernate { enabled });
-    if enabled && state.snapshot_clone().expanded {
-        state.update_and_emit(&app, |s| {
-            s.expanded = false;
-            s.event_seq = s.event_seq.saturating_add(1);
-        });
-    }
 }
 
 #[tauri::command]

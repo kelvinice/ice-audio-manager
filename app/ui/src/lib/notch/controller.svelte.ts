@@ -44,6 +44,11 @@ import { resolveDisplayedView } from './nowPlaying';
 
 /** D-27 hibernate shows only the idle shape. */
 const IDLE_VIEW: ActivityView = Object.freeze({ kind: 'idle' });
+/**
+ * D-27: hibernating in Balanced hands over to the native pill (same plain notch, or nothing) once the plain shape has
+ * settled, without the idle linger: nothing can pop up, and music playing would otherwise keep re-arming the linger.
+ */
+const HIBERNATE_HANDOVER_MS = 1000;
 
 export class NotchController {
   private readonly scheduler = new NotchActivityScheduler(Date.now());
@@ -247,6 +252,10 @@ export class NotchController {
     this.clearActivityTimer();
     const snap = this.notchSnapshot;
     if (!snap || snap.hiddenForBench || snap.suspended || this.benchOverride !== null) return;
+    if (this.engineState.settings?.appearance.hibernate) {
+      if (this.suspendsOnIdle) this.scheduleHibernateHandover();
+      return;
+    }
     const holdOpen = snap.expanded || this.hoverExpanded || this.pointerInside;
     const delay = this.scheduler.nextTickDelayMs(Date.now(), holdOpen);
     if (delay === null) return;
@@ -267,6 +276,16 @@ export class NotchController {
       }
       this.scheduleNextTick();
     }, delay);
+  }
+
+  /** One-shot (stops on wake, suspend or leaving hibernate): the shell re-checks the profile and the window state. */
+  private scheduleHibernateHandover(): void {
+    this.activityTimer = window.setTimeout(() => {
+      this.activityTimer = null;
+      const snap = this.notchSnapshot;
+      if (!snap || snap.suspended || !this.engineState.settings?.appearance.hibernate || !this.suspendsOnIdle) return;
+      void invoke('request_idle_suspend');
+    }, HIBERNATE_HANDOVER_MS);
   }
 
   private syncGeometry(instantMove: boolean): void {
