@@ -196,6 +196,24 @@ WebView idle silhouettes match. Then Floating work resumes (D-20 drag & snap, bo
 
 ---
 
+## Call mode (D-30, built 2026-11-25)
+
+Lowers the now-playing app while a call app (Discord by default) is talking; Settings → Call mode, off by default. Module
+docs: [ice-win-audio](modules/ice-win-audio.md), [ice-core](modules/ice-core.md), [app-ui-settings](modules/app-ui-settings.md).
+
+- [ ] By hand: Discord call + Spotify, Discord's Attenuation off: the music dips within ~0.3 s of her talking and comes
+      back ~3 s after; nothing happens outside calls; tune the default sensitivity from what you hear
+- [ ] By hand: Arctis Nova 7 (Discord on Chat, Spotify on Game) and Speakers (both on one device); unplug during a call
+- [ ] By hand: move Spotify's volume during a dip (yours wins); turn call mode off mid-dip and quit mid-dip (music back at
+      once); kill the process mid-dip (Task Manager), restart: Spotify's level comes back
+- [ ] By hand: YouTube Music in Chrome/Edge (the browser is lowered); Firefox / Media Player (nothing lowered, as designed)
+- [ ] Measure in the Phase 6 pass: `ice-call` CPU during a 10-minute call (estimate +0.005–0.01 %), zero CPU and no
+      thread with call mode off
+- [ ] Open (D-30 not built): a call glyph on the notch (F2, native twin), mic-level detection (A3, §1.9 amendment),
+      tray/hotkey toggle (D2); answers to the four owner questions may revise the defaults
+
+---
+
 ## Phase 4: Settings & customization
 
 **Features:** F19–F23.

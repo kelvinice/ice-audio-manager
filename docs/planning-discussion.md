@@ -1,6 +1,6 @@
 # Ice Audio Manager: Planning Discussion
 
-> **Status:** D-01–D-26 and D-28 closed (entries in [archive/decisions-closed.md](archive/decisions-closed.md)); D-27 partly open · **Opened:** 2026-11-22 · **Moderator:** the owner (kelvinice)
+> **Status:** D-01–D-26 and D-28 closed (entries in [archive/decisions-closed.md](archive/decisions-closed.md)); D-27 partly open; D-29 and D-30 open · **Opened:** 2026-11-22 · **Moderator:** the owner (kelvinice)
 > **Participants:** Claude (Anthropic), Gemini (Antigravity), Codex (OpenAI)
 >
 > Companion docs: [plan.md](plan.md) (phased implementation plan) ·
@@ -334,6 +334,144 @@ notch"). Balanced hands the hibernating notch to the native pill after 1 s.
 
 ---
 
+### D-30 · Call mode: lower the music while people talk on a call *(added 2026-11-25, owner request; neutral entry under §0.4; ideation)*
+
+**Owner request (2026-11-25):** *"Ideation about call mode. I often call my girlfriend on Discord while music plays. Is it
+possible that when we're talking (there's sound from the call), the song volume goes lower, and goes back up after we
+haven't talked for some time?"* This is audio "ducking" with a hold time: lower the music while there's speech, then bring
+it back after a stretch of silence.
+
+**Facts (checked in the code 2026-11-25 unless labelled):**
+- **What the app can hear today:** `MeterHub` (`crates/ice-win/src/meter.rs`) reads one peak (`IAudioMeterInformation`)
+  for the **default playback device** at 30 Hz, and only while a visualizer is visible (the `ice-meter` thread ends with its
+  last subscription). That peak is everything on the device mixed together, Spotify and Discord alike, so it can't tell
+  a voice from the music.
+- **No per-app audio code yet:** `grep IAudioSessionManager` in `crates/` = 0 hits. The Phase 5 mixer (F24, plan.md) plans
+  `IAudioSessionManager2`, `ISimpleAudioVolume` and session events.
+- **Per-app levels and volumes exist in Windows** (sourced: Core Audio docs): each app's audio session has its own peak
+  meter (`IAudioMeterInformation`, queried from the session control), its own volume (`ISimpleAudioVolume`), and state
+  events (active, inactive, expired). All documented, user-mode, no hooks or injection (§1). **Peak values have no change
+  event:** reading them is polling, so §2's bounded-timer rule applies (rate, plus an explicit stop condition).
+- **A session volume is the app's slider in the Windows Volume Mixer**, and Windows remembers it per app across restarts
+  (sourced; to confirm on the owner's PC). If the app exits or crashes while Spotify is lowered, Spotify stays low until
+  something restores it.
+- **Built-in alternatives (sourced, not tried on the owner's PC):**
+  - **Discord** has *Attenuation* (User Settings → Voice & Video): it lowers other apps by a chosen % when others speak
+    and/or when you speak, and restores them afterwards.
+  - **Windows** has *Communications* ducking (`mmsys.cpl` → Communications tab: reduce other sounds by 80 % / 50 %,
+    mute, or do nothing). It reacts to a communications stream being open, so it lasts for the whole call rather than
+    following speech. Whether Discord triggers it is untested.
+- **The owner's headset (Q-12, Arctis Nova 7):** its USB dongle shows up as two playback devices, *Game* and *Chat*,
+  mixed by the ChatMix dial (sourced: SteelSeries docs; not checked here). If Discord plays to *Chat* and Spotify to
+  *Game*, a meter on the *Chat* device hears only the call, without any per-app code. On Speakers (Realtek) both apps share
+  one device.
+- **"We talk" has two directions.** Her voice comes out of Discord (measurable as above). Your voice goes into the mic:
+  reading its level touches a capture device. code-practices §1.9 says the app "never opens a capture/microphone
+  endpoint" (written for the D-26 loopback). A peak meter on the mic isn't a capture stream, but whether it lights the
+  Windows 11 mic indicator is untested, and it would need a §1.9 amendment either way.
+- **Matching "the music app":** the GSMTC now-playing `appId` is `Spotify.exe` for Spotify, but a browser's ID for YouTube
+  Music on the web. Audio sessions are per process, so lowering YouTube Music in Chrome lowers all of Chrome's audio,
+  including a Discord *web* call in the same browser.
+
+**Options.**
+
+*Part 0 · Build it at all (pick one).*
+- **N0 · Don't build:** document Discord's Attenuation (and Windows' Communications tab) in a help note or Settings link.
+  Zero code, zero polling. Works only in Discord (or apps Windows detects).
+- **N1 · Build "Call mode"** in the app, per Parts A–F.
+
+*Part A · What counts as "talking" (pick one).*
+- **A1 · Call is on:** lower the music for as long as a call app's audio session is active (session state events, no
+  level polling). It doesn't follow speech: the music stays low for the whole call, even in silent stretches, if
+  Discord keeps its stream open (untested).
+- **A2 · Their voice:** poll the call app's own session peak (e.g. 10–20 Hz) only while that session is active; above a
+  threshold = talking.
+- **A3 · Their voice + yours:** A2 plus the mic's peak level. Needs the §1.9 amendment and a mic-indicator test.
+- **A4 · A "call device" meter:** meter a whole playback device the user marks as the call device (e.g. Arctis *Chat*).
+  No per-app sessions. Only works when the call and the music use different devices.
+
+*Part B · What gets lowered (pick one).*
+- **B1 · The now-playing app only:** the session that matches the GSMTC `appId` (Spotify). With browsers, lowers the
+  whole browser (see facts).
+- **B2 · Everything except the call apps:** every other session (games and videos too).
+- **B3 · Pause instead of lowering:** GSMTC pause while talking, play after the hold. No volume state to restore; a
+  full stop rather than a softer background.
+
+*Part C · Feel (pick one).*
+- **C1 · Fixed defaults:** lower to ~30 % of the music's own level, fade down ~150 ms, hold ~3 s after the last speech,
+  fade back up ~1 s. Fades run on the engine thread only while moving.
+- **C2 · C1 defaults plus Settings sliders:** amount, hold time and sensitivity (the voice threshold).
+
+*Part D · Turning it on (pick any).*
+- **D1 · Settings switch + call-app list** (Discord preset; Teams, Zoom, … addable by exe name). Off by default.
+- **D2 · Manual:** tray item and an optional hotkey (`RegisterHotKey`, unbound by default).
+- **D3 · Automatic:** armed whenever a listed call app has an active session; idle (no polling) otherwise.
+
+*Part E · Safety (pick any; each adds cost).*
+- **E1 · Restore on exit and crash:** save the pre-duck volume to `%LOCALAPPDATA%` before lowering; put it back on clean
+  exit and on the next start.
+- **E2 · User wins:** if the user moves the music volume while it's lowered (Windows mixer, Spotify's slider), take that
+  as the new level and stop restoring the old one.
+- **E3 · Don't stack ducking:** skip ours while Windows' Communications ducking or Discord's Attenuation is active (no
+  read API for Discord's: a Settings note only).
+
+*Part F · What the notch shows (pick one).*
+- **F1 · Nothing.**
+- **F2 · A small call glyph** in the idle pill and the card header while call mode is armed or ducking (native pill twin).
+
+**Cost and fit (for voters to check):**
+- A2/A3/B1/B2 need audio-session enumeration and events in `ice-win`, the same groundwork as the Phase 5 mixer (F24).
+  Building it here pulls that groundwork forward.
+- Polling (A2/A3/A4) runs on its own thread or tick, only while a call session is active, and stops when it ends (§2).
+- Config: a `[call_mode]` table (schema bump + migration test), commands for the switch and list, an `EngineEvent` for
+  "ducking" if F2 is chosen.
+- No audio content is read: peak levels only, no PCM, nothing logged above `debug` (§1.5, §1.9).
+- Testing on the owner's PC: Discord desktop on Arctis Nova 7 (Game/Chat) and on Speakers, Spotify desktop, YouTube Music
+  in Chrome, and with Discord's Attenuation off and on.
+
+**Performance estimate (2026-11-25; estimated unless marked measured).** Anchor, *measured* in Phase 3: the 30 Hz
+`ice-meter` endpoint peak read costs **0.013 % CPU**. A session peak read is the same kind of call.
+
+| State | CPU | RAM | Notes |
+|---|---|---|---|
+| Off (default) | 0 | 0 | No thread, no subscriptions |
+| On, no call | ~0 | +0.3–1 MB | Session-created/state events on each playback device; no polling. Scales with the number of audio sessions (~20–50) |
+| In a call, A1 | ~0 | same | State events only |
+| In a call, A2 at 15 Hz | +0.005–0.01 % | same | 1–3 Discord sessions per tick; about half the visualizer meter's 30 Hz cost |
+| In a call, A3 / A4 | +0.005–0.01 % more | — | One extra peak read per tick |
+| Fade (each duck/restore) | brief spike, ≪ 0.01 % average | — | ~10–30 `SetMasterVolume` calls over 150 ms–1 s; ignore our own change events (event-context GUID) |
+
+- **Comparison:** Discord itself in a voice call uses ~1–5 % CPU (Opus, noise suppression; estimate). Call mode adds
+  roughly 1/100th to 1/1000th of that, and only during calls.
+- **Budgets (plan.md):** idle CPU (< 0.2 %) is untouched outside calls; idle RAM moves by under 1 MB in every profile.
+  Binary size: tens of KB (the `windows` audio features are already compiled in).
+- **Reaction time:** a 15 Hz poll plus a ~100–150 ms attack (so a cough or a click doesn't trigger it) gives a dip
+  ~150–250 ms after speech starts. 10 Hz saves a little CPU and adds ~30 ms.
+- **Cost traps to avoid:** (1) F2 must not wake a suspended WebView in Balanced/Lite (that's tens of MB). The native
+  pill draws the glyph, or it only shows when the WebView is already awake. (2) E1 should write the saved volume once
+  per call, not once per sentence (hundreds of disk writes per hour otherwise). (3) Wakeups at 15 Hz keep the CPU out of
+  deep sleep states during calls, which costs a little battery on laptops and nothing that matters on a desktop.
+
+**Questions to the owner:**
+1. Have you tried Discord's *Attenuation* (Voice & Video)? If it does what you want, is N0 enough, or do you want it in
+   the app (other call apps, the notch showing it, one switch)?
+2. Should the music duck only while **she** talks, or also while **you** talk (A3 reads your mic level)?
+3. Lower the music, or pause it (B3)? And how long a silence before it comes back (e.g. 2 s, 3 s, 5 s)?
+4. In a call, does Discord play to the Arctis *Chat* device and Spotify to *Game*? (That makes A4 possible.)
+
+**Votes:** not opened; ideation. Sealed votes open when the owner schedules it.
+
+**Update (owner, 2026-11-25): built with Claude's recommendations** ("cook it"; the four questions above stay open and can
+revise it). Shipped: **N1**, **A2** (the call app's own session peaks, ~15 Hz, only while one of its sessions is active;
+idle = session notifications, no timer), **B1** (the now-playing app's sessions; never a call app), **C2** (30 % / 3 s /
+Normal defaults with Settings choices), **D1 + D3** (Settings → Call mode switch, off by default, and a call-app list with
+Discord's three builds; armed by session activity), **E1** (pre-dip level saved once per call, restored on the next start;
+only ever raised), **E2** (a hand-made volume change wins for that dip), and a Settings hint about Discord's Attenuation in
+place of **E3**. Not built: A1, A3 (mic level, needs a §1.9 amendment), A4, B2, B3, D2 (tray/hotkey), **F2** (notch glyph;
+needs a native-pill twin). code-practices §2 lists the new bounded poll.
+
+---
+
 ## 3. Requests to the owner
 
 Questions Q-01–Q-12 are answered and resource requests R-01–R-05 are done; both tables are in the
@@ -391,3 +529,4 @@ Full entries of every closed decision: [archive/decisions-closed.md](archive/dec
 | D-27 | Hibernate mode: plain notch for meetings / screen sharing | Not voted; owner asked for Claude's recommendations | **Built 2026-11-25 (owner request); revised the same day (always start awake, plain or hidden look); hotkey, timer, auto-entry open** | Options A1–A3 look, B1–B2 suppression, C1–C3 capture exclusion (`WDA_EXCLUDEFROMCAPTURE`), D1–D4 entry/wake, E1–E3 exit; 3 owner questions |
 | D-28 | Volume vs track progress in the notch | Not voted to the end; owner ruled on Claude's sealed recommendation | **Closed 2026-11-25 (owner ruling), built the same day** | A2 song block + output strip (chip fallback), B1 two looks, B2 no jump on click, C1 % leads the pop-up. Not built: A1, A3 default, A4, B3–B5. Entry: [archive](archive/decisions-closed.md#d-28--volume-vs-track-progress-in-the-notch-what-the-user-sees-and-touches-added-2026-11-25-owner-request-neutral-entry-under-04) |
 | D-29 | Side-edge anchors (left/right vertical dock) | Pending discussion & sealed votes | **Open 2026-11-25 (owner request)** | Exploring A0–A2 side slots, B1–B3 orientation/card layout, C1–C2 multi-monitor inner seam behaviour, D1–D2 Floating vs Nook scope |
+| D-30 | Call mode: lower the music while people talk | Not voted; owner asked for Claude's recommendations ("cook it") | **Built 2026-11-25 (owner request); owner questions still open** | Built N1 + A2, B1, C2, D1 + D3, E1, E2. Not built: A1, A3 (mic, §1.9), A4, B2, B3, D2, F2 (notch glyph) |
