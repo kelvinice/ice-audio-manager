@@ -62,3 +62,4 @@ Unit tests sit in each file; real-device paths use `#[ignore]` tests and the [ma
 - 2026-11-24 Gemini: D-26 `loopback.rs` shared-mode WASAPI render loopback + `MeterHub::set_spectrum_enabled` (rebind state reset, DRM/silent loopback auto-fallback, Privacy switch wiring).
 - 2026-11-24 Gemini: `AudioEngine::send` fast-paths `Command::Media` straight to `MediaService`'s `MediaCommandSender` (`ice-media-cmd`).
 - 2026-11-25 Claude: hot reload and `sync_with_disk` go through `Worker::adopt_disk_config`, which keeps the live D-27 hibernate value (`Config::keep_session_state`); `edit_settings` still uses `set_config` directly. `SetHibernateLook` is a plain setting.
+- 2026-11-25 Claude: `summary_basic` fills `DeviceSummary.lyrics_delay_ms` from `Config::lyrics_delay_for` (playback only); `SetLyricsDelay` is a plain setting.

@@ -15,6 +15,7 @@ const device = (id: string, name: string, flow: 'render' | 'capture', extra: Par
   formFactor: flow === 'render' ? 1 : 4,
   isVirtual: false,
   spatial: null,
+  lyricsDelayMs: 0,
   ...extra,
 });
 
@@ -49,12 +50,13 @@ function initialSnapshot(): EngineSnapshot {
       favouritesPlayback: [saved(arctis), saved(speakers)],
       favouritesRecording: [],
       devices: [
-        { device: saved(arctis), spatial: 'dolbyAtmosHeadphones', alias: 'Arctis', hidden: false },
+        { device: saved(arctis), spatial: 'dolbyAtmosHeadphones', alias: 'Arctis', hidden: false, lyricsDelayMs: null },
         {
           device: { name: 'Digital Output (Realtek(R) Audio)', flow: 'render', savedId: 'dev-spdif', deviceId: 'dev-spdif' },
           spatial: 'keep',
           alias: null,
           hidden: true,
+          lyricsDelayMs: null,
         },
       ],
       knobGestures: true,
@@ -140,10 +142,16 @@ function applyCommand(s: EngineSnapshot, c: Command): void {
     case 'setFavourites': st.favouritesPlayback = c.deviceIds.map(ref); break;
     case 'setDevicePrefs': {
       let p = st.devices.find((d) => d.device.deviceId === c.deviceId);
-      if (!p) st.devices.push((p = { device: ref(c.deviceId), spatial: 'keep', alias: null, hidden: false }));
+      if (!p) st.devices.push((p = { device: ref(c.deviceId), spatial: 'keep', alias: null, hidden: false, lyricsDelayMs: null }));
       if (c.spatial !== null) p.spatial = c.spatial;
       if (c.alias !== null) p.alias = c.alias.trim() || null;
       if (c.hidden !== null) p.hidden = c.hidden;
+      break;
+    }
+    case 'setLyricsDelay': {
+      let p = st.devices.find((d) => d.device.deviceId === c.deviceId);
+      if (!p) st.devices.push((p = { device: ref(c.deviceId), spatial: 'keep', alias: null, hidden: false, lyricsDelayMs: null }));
+      p.lyricsDelayMs = c.delayMs;
       break;
     }
     case 'setTogglePair': {

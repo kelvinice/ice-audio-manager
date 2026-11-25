@@ -37,6 +37,7 @@ function sampleDevice(overrides: Partial<DeviceSummary> = {}): DeviceSummary {
     isDefaultCommunications: true,
     formFactor: 3,
     isVirtual: false,
+    lyricsDelayMs: 0,
     spatial: 'dolbyAtmosHeadphones',
     ...overrides,
   };

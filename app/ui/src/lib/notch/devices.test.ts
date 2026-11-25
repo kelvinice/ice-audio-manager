@@ -15,6 +15,7 @@ function dev(overrides: Partial<DeviceSummary> & { id: string; name: string }): 
     isDefaultCommunications: false,
     formFactor: 1,
     isVirtual: false,
+    lyricsDelayMs: 0,
     spatial: 'off',
     ...overrides,
   };
@@ -58,7 +59,7 @@ test('buildNotchDeviceRow follows favourites order, uses playback alias name, an
       saved('Headphones (Arctis Nova 7)', 'arctis', 'arctis'),
     ],
     devices: [
-      { device: saved('Speakers (Realtek(R) Audio)', 'realtek', 'realtek'), spatial: 'off', alias: 'Desk Speakers', hidden: false },
+      { device: saved('Speakers (Realtek(R) Audio)', 'realtek', 'realtek'), spatial: 'off', alias: 'Desk Speakers', hidden: false, lyricsDelayMs: null },
     ],
   });
 
@@ -85,7 +86,7 @@ test('disconnected favourites are hidden unless showDisconnected is on, and hidd
     saved('Speakers (Realtek(R) Audio)', 'realtek', 'realtek'),
   ];
   const prefs = [
-    { device: saved('Monitor (Hidden)', 'hidden-hdmi', 'hidden-hdmi'), spatial: 'off' as const, alias: null, hidden: true },
+    { device: saved('Monitor (Hidden)', 'hidden-hdmi', 'hidden-hdmi'), spatial: 'off' as const, alias: null, hidden: true, lyricsDelayMs: null },
   ];
 
   const hiddenOff = buildNotchDeviceRow(

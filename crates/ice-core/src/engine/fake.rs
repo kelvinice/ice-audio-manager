@@ -152,6 +152,7 @@ fn device(id: &str, name: &str, flow: Flow, form_factor: u32, spatial: Option<Sp
         form_factor: Some(form_factor),
         is_virtual: false,
         spatial,
+        lyrics_delay_ms: 0,
     }
 }
 
@@ -397,6 +398,7 @@ impl Engine for FakeEngine {
             | Command::SetMovingBackdrop { .. }
             | Command::SetHibernate { .. }
             | Command::SetHibernateLook { .. }
+            | Command::SetLyricsDelay { .. }
             | Command::SetHibernateHideFromCapture { .. }
             | Command::SetShowDisconnected { .. }
             | Command::SetIdleLinger { .. }

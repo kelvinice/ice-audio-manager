@@ -19,6 +19,8 @@ impl Worker {
             form_factor: e.form_factor,
             is_virtual: e.hardware_key.as_deref().is_some_and(|k| k.starts_with("ROOT\\") || k.starts_with("SWD\\")),
             spatial: None,
+            // Capture devices have no output delay.
+            lyrics_delay_ms: if e.flow == Flow::Render { self.config.lyrics_delay_for(e) } else { 0 },
         }
     }
 

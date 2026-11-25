@@ -111,6 +111,9 @@ pub struct DeviceSummary {
     pub is_virtual: bool,
     /// Active spatial format, when known (`None` for capture devices or unknown).
     pub spatial: Option<SpatialMode>,
+    /// How many ms later lyrics show while this device plays (the user's value or the automatic one; 0 for capture).
+    #[serde(default)]
+    pub lyrics_delay_ms: i32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -242,6 +245,11 @@ pub enum Command {
         alias: Option<String>,
         hidden: Option<bool>,
     },
+    /// Show lyrics `delay_ms` later while this playback device plays (`config::LYRICS_DELAY_MS`); `None` = automatic.
+    SetLyricsDelay {
+        device_id: String,
+        delay_ms: Option<i32>,
+    },
     SetTheme {
         theme: ThemeKind,
     },
@@ -343,6 +351,7 @@ impl Command {
             | Self::RemoveBinding { .. }
             | Self::SetFavourites { .. }
             | Self::SetDevicePrefs { .. }
+            | Self::SetLyricsDelay { .. }
             | Self::SetTheme { .. }
             | Self::SetPreset { .. }
             | Self::SetIdleStyle { .. }
@@ -425,6 +434,8 @@ pub struct DevicePrefsView {
     pub spatial: SpatialMode,
     pub alias: Option<String>,
     pub hidden: bool,
+    /// The user's lyric delay for this device; `None` = automatic (`config::auto_lyrics_delay_ms`).
+    pub lyrics_delay_ms: Option<i32>,
 }
 
 /// The user's settings, resolved against the live devices. Built from `config.toml`; edit it with the settings commands.

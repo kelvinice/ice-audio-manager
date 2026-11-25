@@ -255,6 +255,7 @@ fn make_config(eps: &Endpoints, path: &str) -> AnyResult<()> {
             spatial: SpatialMode::DolbyAtmosHeadphones,
             alias: None,
             hidden: false,
+            lyrics_delay_ms: None,
         }],
         favourites: Favourites { playback: vec![arctis, speakers], ..Favourites::default() },
         knob: KnobGestures { enabled: true, ..KnobGestures::default() },

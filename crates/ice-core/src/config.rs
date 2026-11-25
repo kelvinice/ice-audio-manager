@@ -28,7 +28,29 @@ use crate::resolve::{DeviceRef, MatchMode, resolve};
 /// v11: `appearance.notchStyle` (`"nook"` default flush screen-edge docked style vs `"floating"` pill).
 /// v12: `appearance.hibernate` + `appearance.hibernateHideFromCapture` (D-27 plain notch for meetings; off / on).
 /// v13: `appearance.hibernateLook` (D-27 `"plain"` notch or `"hidden"` while hibernating).
-pub const SCHEMA_VERSION: u32 = 13;
+/// v14: `[[device]] lyrics_delay_ms` (per-output lyric delay; absent = automatic, see [`auto_lyrics_delay_ms`]).
+pub const SCHEMA_VERSION: u32 = 14;
+
+/// Allowed per-device lyric delay, in ms (negative = lyrics earlier).
+pub const LYRICS_DELAY_MS: std::ops::RangeInclusive<i32> = -1000..=2000;
+/// Automatic lyric delay for a Bluetooth output. An estimate, not a measurement: Bluetooth audio (A2DP/LE) typically
+/// reaches the ear 150–300 ms after Windows plays it, and Windows exposes no API for that link's delay.
+pub const BLUETOOTH_LYRICS_DELAY_MS: i32 = 200;
+
+/// The lyric delay an output gets when the user hasn't set one: [`BLUETOOTH_LYRICS_DELAY_MS`] for a Bluetooth device
+/// (its device path starts with `BTHENUM` or `BTHLE`), 0 for everything else. A USB Bluetooth dongle enumerates as USB,
+/// so it stays at 0; the user can set its delay by hand.
+#[must_use]
+pub fn auto_lyrics_delay_ms(endpoint: &EndpointInfo) -> i32 {
+    // Hardware keys look like `BTHENUM\{…}_VID&…`; devnodes like `{1}.BTHENUM\…`.
+    let key = endpoint.hardware_key.as_deref().unwrap_or_default().to_ascii_uppercase();
+    let node = endpoint.devnode.as_deref().unwrap_or_default().to_ascii_uppercase();
+    let on_bluetooth = key.starts_with("BTHENUM")
+        || key.starts_with("BTHLE")
+        || node.contains(".BTHENUM\\")
+        || node.contains(".BTHLE");
+    if on_bluetooth { BLUETOOTH_LYRICS_DELAY_MS } else { 0 }
+}
 
 /// Default seconds the notch WebView stays awake at idle before `Balanced` hands over to the native pill
 /// (`Instant` never does; `Lite` has no WebView).
@@ -130,6 +152,17 @@ pub struct DevicePrefs {
     pub alias: Option<String>,
     #[serde(default)]
     pub hidden: bool,
+    /// Lyrics shown this many ms later while this device plays (its output delay). `None` = automatic
+    /// ([`auto_lyrics_delay_ms`]).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lyrics_delay_ms: Option<i32>,
+}
+
+impl DevicePrefs {
+    /// An entry that changes nothing is left out of the file.
+    fn is_default(&self) -> bool {
+        self.spatial == SpatialMode::Keep && self.alias.is_none() && !self.hidden && self.lyrics_delay_ms.is_none()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
@@ -234,8 +267,9 @@ impl Config {
             // `idle_linger_secs = 15`, v0–v6 gain both music services on, v0–v7 gain
             // `appearance.movingBackdrop = true`, v0–v8 gain `[lyrics]` (off by default, 50 MB cap),
             // v0–v9 gain `visualizer_spectrum = true`, v0–v10 gain `appearance.notchStyle = "nook"`, and v0–v11 gain
-            // `appearance.hibernate = false` with `hibernateHideFromCapture = true`, and v0–v12 gain
-            // `appearance.hibernateLook = "plain"`, all via serde defaults.
+            // `appearance.hibernate = false` with `hibernateHideFromCapture = true`, v0–v12 gain
+            // `appearance.hibernateLook = "plain"`, and v0–v13 devices an automatic lyrics delay (no
+            // `lyrics_delay_ms`), all via serde defaults.
             _ => Ok(Self { schema_version: SCHEMA_VERSION, ..cfg }),
         }
     }
@@ -253,6 +287,12 @@ impl Config {
     /// external edit never hibernates or wakes the notch; only the hibernate command does.
     pub const fn keep_session_state(&mut self, live: &Self) {
         self.appearance.hibernate = live.appearance.hibernate;
+    }
+
+    /// How much later lyrics show while `endpoint` plays: the user's value, else [`auto_lyrics_delay_ms`].
+    #[must_use]
+    pub fn lyrics_delay_for(&self, endpoint: &EndpointInfo) -> i32 {
+        self.prefs_for(endpoint).and_then(|p| p.lyrics_delay_ms).unwrap_or_else(|| auto_lyrics_delay_ms(endpoint))
     }
 
     /// The device preferences entry for a device, if any (matched by the resolver, so it survives re-links).
@@ -331,6 +371,7 @@ impl Config {
                     spatial: d.spatial,
                     alias: d.alias.clone(),
                     hidden: d.hidden,
+                    lyrics_delay_ms: d.lyrics_delay_ms,
                 })
                 .collect(),
             knob_gestures: self.knob.enabled,
@@ -390,18 +431,7 @@ impl Config {
                 if spatial.is_some_and(|m| m != SpatialMode::Keep) && e.flow != Flow::Render {
                     return Err("spatial sound only applies to playback devices".into());
                 }
-                let one = std::slice::from_ref(e);
-                let i = if let Some(i) = next.devices.iter().position(|p| resolve(&p.device, one).target().is_some()) {
-                    i
-                } else {
-                    next.devices.push(DevicePrefs {
-                        device: DeviceRef::from_endpoint(e, MatchMode::SameModel),
-                        spatial: SpatialMode::Keep,
-                        alias: None,
-                        hidden: false,
-                    });
-                    next.devices.len() - 1
-                };
+                let i = prefs_entry(&mut next.devices, e);
                 let prefs = &mut next.devices[i];
                 if let Some(m) = spatial {
                     prefs.spatial = *m;
@@ -412,10 +442,23 @@ impl Config {
                 if let Some(h) = hidden {
                     prefs.hidden = *h;
                 }
-                // An entry back at all defaults is noise in the file.
-                if prefs.spatial == SpatialMode::Keep && prefs.alias.is_none() && !prefs.hidden {
-                    next.devices.remove(i);
+                drop_if_default(&mut next.devices, i);
+            }
+            Command::SetLyricsDelay { device_id, delay_ms } => {
+                let e = live(endpoints, device_id)?;
+                if e.flow != Flow::Render {
+                    return Err("the lyrics delay only applies to playback devices".into());
                 }
+                if delay_ms.is_some_and(|d| !LYRICS_DELAY_MS.contains(&d)) {
+                    return Err(format!(
+                        "the lyrics delay must be {} to {} ms",
+                        LYRICS_DELAY_MS.start(),
+                        LYRICS_DELAY_MS.end()
+                    ));
+                }
+                let i = prefs_entry(&mut next.devices, e);
+                next.devices[i].lyrics_delay_ms = *delay_ms;
+                drop_if_default(&mut next.devices, i);
             }
             Command::SetPerformanceProfile { profile } => next.performance_profile = *profile,
             Command::SetPinnedMonitor { display_path } => {
@@ -536,6 +579,29 @@ fn live<'a>(endpoints: &'a [EndpointInfo], id: &str) -> Result<&'a EndpointInfo,
         .iter()
         .find(|e| e.id.eq_ignore_ascii_case(id) && e.state == DeviceState::Active)
         .ok_or_else(|| format!("device {id} is not connected"))
+}
+
+/// Index of `e`'s device preferences, added with defaults if it has none yet (matched by the resolver).
+fn prefs_entry(devices: &mut Vec<DevicePrefs>, e: &EndpointInfo) -> usize {
+    let one = std::slice::from_ref(e);
+    if let Some(i) = devices.iter().position(|p| resolve(&p.device, one).target().is_some()) {
+        return i;
+    }
+    devices.push(DevicePrefs {
+        device: DeviceRef::from_endpoint(e, MatchMode::SameModel),
+        spatial: SpatialMode::Keep,
+        alias: None,
+        hidden: false,
+        lyrics_delay_ms: None,
+    });
+    devices.len() - 1
+}
+
+/// An entry back at all defaults is noise in the file.
+fn drop_if_default(devices: &mut Vec<DevicePrefs>, i: usize) {
+    if devices[i].is_default() {
+        devices.remove(i);
+    }
 }
 
 fn display(e: &EndpointInfo) -> String {
@@ -718,6 +784,7 @@ mod tests {
                 spatial: SpatialMode::DolbyAtmosHeadphones,
                 alias: None,
                 hidden: false,
+                lyrics_delay_ms: None,
             }],
             ..Config::default()
         }
@@ -958,6 +1025,44 @@ mod tests {
         let wake = Command::SetHibernate { enabled: false };
         assert_eq!(config.apply_setting(&wake, &[]), Ok(true));
         assert_eq!(config.appearance.effective_idle_style(), IdleStyle::Dot, "awake: the chosen idle style again");
+    }
+
+    #[test]
+    fn lyrics_delay_is_automatic_for_bluetooth_and_settable_per_device() {
+        let mut buds = live_ep("buds", "Headphones (soundcore Liberty 5)", Flow::Render, 3);
+        buds.hardware_key = Some(r"BTHENUM\{0000110B-0000-1000-8000-00805F9B34FB}_VID&000102B0_PID&0000".into());
+        let mut dongle = live_ep("dongle", "Headset Earphone (BTD 700)", Flow::Render, 5);
+        dongle.hardware_key = Some(r"USB\VID_3542&PID_3001&MI_02".into());
+        let mut le = live_ep("le", "Headphones (LE)", Flow::Render, 3);
+        le.hardware_key = None;
+        le.devnode = Some(r"{1}.BTHLEDevice\{0000184e-0000-1000-8000-00805f9b34fb}_Dev_VID".into());
+        let mic = live_ep("mic", "Microphone (Realtek(R) Audio)", Flow::Capture, 4);
+        assert_eq!(auto_lyrics_delay_ms(&buds), BLUETOOTH_LYRICS_DELAY_MS, "classic Bluetooth");
+        assert_eq!(auto_lyrics_delay_ms(&le), BLUETOOTH_LYRICS_DELAY_MS, "Bluetooth LE");
+        assert_eq!(auto_lyrics_delay_ms(&dongle), 0, "a USB dongle enumerates as USB");
+
+        let devs = vec![buds.clone(), dongle.clone(), mic];
+        let mut cfg = Config::default();
+        let set = |id: &str, delay_ms| Command::SetLyricsDelay { device_id: id.into(), delay_ms };
+        assert_eq!(cfg.apply_setting(&set("dongle", Some(120)), &devs), Ok(true));
+        assert_eq!(cfg.lyrics_delay_for(&dongle), 120);
+        assert_eq!(cfg.view(&devs).devices[0].lyrics_delay_ms, Some(120));
+        assert_eq!(cfg.apply_setting(&set("buds", Some(-150)), &devs), Ok(true));
+        assert_eq!(cfg.lyrics_delay_for(&buds), -150, "the user's value beats automatic");
+        assert!(cfg.apply_setting(&set("buds", Some(5_000)), &devs).is_err(), "out of range");
+        assert!(cfg.apply_setting(&set("mic", Some(100)), &devs).is_err(), "playback only");
+        let saved = Config::from_toml(&cfg.to_toml()).unwrap();
+        assert_eq!(saved.lyrics_delay_for(&dongle), 120, "saved");
+        // Back to automatic: the entry has nothing left to say and leaves the file.
+        assert_eq!(cfg.apply_setting(&set("dongle", None), &devs), Ok(true));
+        assert_eq!(cfg.apply_setting(&set("buds", None), &devs), Ok(true));
+        assert!(cfg.devices.is_empty());
+        assert_eq!(cfg.lyrics_delay_for(&buds), BLUETOOTH_LYRICS_DELAY_MS);
+        // v13 files migrate with every device on automatic.
+        let v13 = "schema_version = 13\n[[device]]\nspatial = 'keep'\nalias = 'Desk'\n[device.device]\nendpoint_id = 'buds'\nflow = 'render'\ndisplay_name = 'Buds'";
+        let migrated = Config::from_toml(v13).unwrap();
+        assert_eq!(migrated.schema_version, SCHEMA_VERSION);
+        assert_eq!(migrated.devices[0].lyrics_delay_ms, None);
     }
 
     #[test]

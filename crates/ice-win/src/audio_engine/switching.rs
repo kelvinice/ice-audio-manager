@@ -84,6 +84,7 @@ impl Worker {
             | Command::SetMovingBackdrop { .. }
             | Command::SetHibernate { .. }
             | Command::SetHibernateLook { .. }
+            | Command::SetLyricsDelay { .. }
             | Command::SetHibernateHideFromCapture { .. }
             | Command::SetShowDisconnected { .. }
             | Command::SetIdleLinger { .. }
