@@ -15,6 +15,8 @@
     instant?: boolean;
     /** Edge Nook shows remaining time (`-mm:ss`) like NotchNook; Floating shows total duration. */
     showRemaining?: boolean;
+    /** `large`: Edge Nook's roomier song block (5 px rail, bigger times); `regular`: the Floating card. */
+    size?: 'regular' | 'large';
     onSeek: (positionMs: number) => void;
   }
 
@@ -23,6 +25,7 @@
     notchVisible,
     instant = false,
     showRemaining = false,
+    size = 'regular',
     onSeek,
   }: Props = $props();
 
@@ -163,7 +166,7 @@
   }
 </script>
 
-<div class="scrubber-row" class:dragging={dragMs !== null} class:instant>
+<div class="scrubber-row" class:dragging={dragMs !== null} class:instant class:large={size === 'large'}>
   <span class="timecode">{elapsedLabel}</span>
   <div
     class="scrubber-track"
@@ -278,5 +281,35 @@
 
   .timecode.end {
     text-align: right;
+  }
+
+  /* Still thicker than the 3 px neutral volume rail (D-28 B1). */
+  .scrubber-row.large {
+    gap: 10px;
+    height: 16px;
+  }
+
+  .large .scrubber-track {
+    height: 22px;
+  }
+
+  .large .scrubber-rail {
+    height: 5px;
+  }
+
+  .large .scrubber-track.interactive:hover .scrubber-rail,
+  .large .scrubber-track.dragging .scrubber-rail,
+  .large .scrubber-track.interactive:focus-visible .scrubber-rail {
+    height: 7px;
+  }
+
+  .large .scrubber-thumb {
+    width: 12px;
+    height: 12px;
+  }
+
+  .large .timecode {
+    min-width: 34px;
+    font-size: 10.5px;
   }
 </style>

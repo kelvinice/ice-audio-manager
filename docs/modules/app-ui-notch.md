@@ -45,11 +45,12 @@ any time (D-15). Heavy work (image decode, colour extraction, device sorting) ha
 **Expanded layout (D-28: song block, then output strip).** Both cards put the **song** on top: art, title/artist,
 transport, and the seek scrubber (`MediaScrubber`, the card's only accent bar, 4 px, times at both ends; pointer capture +
 keyboard `±5s`/`±15s`/`Home`/`End` via `MediaAction` `seek`, 1 Hz interpolation while playing and visible). On Edge Nook
-(`NookMediaPanel`) the transport sits beside the title and the scrubber runs full width under them; Floating keeps
+(`NookMediaPanel`) a 78 px cover sits beside title/artist with the transport (34/40 px) under them, and the scrubber
+(`size="large"`: 5 px rail, 10.5 px times) runs full width below; Floating keeps
 `ExpandedMediaCard` beside the `NotchSideRail` (pin, mic, services, settings). Below a soft divider, the **output strip**
 (`OutputStrip`): device chips (`ExpandedDeviceRow`) and a small neutral volume control (`ExpandedVolumeRow`, 3 px grey rail,
 speaker, %). When the chips need the room (`volumeFitsInline` in `volume.ts`), the volume becomes a chip that opens a full-strip
-slider (✕ or Esc closes). The volume never jumps on a click: dragging is relative to the press, a click steps ±2 %
+slider (✕ or Esc closes); the chip carries a read-only 3 px neutral level rail. The volume never jumps on a click: dragging is relative to the press, a click steps ±2 %
 (`volumeDragPercent` / `volumeClickPercent`, `set_volume` throttled to 40 ms). There is no device picker in the notch:
 Settings → Devices chooses and orders the chips. Card heights are fixed constants (`geometry.ts`, `notchStyle.ts`).
 
@@ -109,3 +110,4 @@ Settings → Devices chooses and orders the chips. Card heights are fixed consta
 - 2026-11-25 Gemini: D-20 bottom anchors (`BOTTOM_PAD = 24`, upward growth across `NotchApp`, `NotchBackdrop`, `ExpandedNotch`, `LyricsExtension`, `geometry.ts`, `notchStyle.ts`) and WebView drag & snap (`drag.ts` + `drag.test.ts`, `controller.svelte.ts` `onPointerDown` → `start_notch_drag` with interactive-control guards).
 - 2026-11-25 Gemini: bottom `Edge Nook` inverted concave-ear paths (`buildNookRimPath`/`buildNookFillPath` with `bottom = true`, `SurfaceShape.bottomPad = 0`, `NookExpandedNotch` `isBottom` reveal) and compositor-only `placed_seq` settle + accent rim flash (`notch-place-settle`, `notch-rim-flash`, skipped when `isInstant`).
 - 2026-11-25 Gemini: fixed lyrics row-change transitions and active-word highlight across pill/card/nook (`--ice-lyric-glow` resolved on `.pill-surface` with `--ice-lyric-glow-mix`, Edge Nook measure-before-transform `$effect` preventing `transitioncancel`, full-width card `.rung`/`.rung-enter`, `FIT_BLEED_X_PX = 6`, compositor `drop-shadow` + `@starting-style` springy `cubic-bezier` word pop transitions, and static word colors preserved when `instant`).
+- 2026-11-25 Claude: Edge Nook song block fills the card (owner): `NookMediaPanel` 78 px cover, transport moved under title/artist and enlarged (34 px prev/next, 40 px play), 15 px title on the full row; `MediaScrubber` `size="large"` (5 px rail, 7 px hover, 10.5 px times; Floating stays `regular`); `OutputStrip` volume chip shows a neutral 3 px level rail.

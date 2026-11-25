@@ -60,7 +60,10 @@
       aria-label={muted ? 'Volume muted. Adjust volume' : `Volume ${volumePercent} percent. Adjust volume`}
       onclick={() => (sliderOpen = true)}
     >
-      <DeviceIcon kind={muted ? 'speaker-muted' : 'speaker'} size={12} />
+      <DeviceIcon kind={muted ? 'speaker-muted' : 'speaker'} size={13} />
+      <span class="mini-rail" aria-hidden="true">
+        <span class="mini-fill" style:transform={`scaleX(${Math.max(0, Math.min(1, barPercent / 100)).toFixed(4)})`}></span>
+      </span>
       <span class="pct">{muted ? 'Muted' : `${volumePercent}%`}</span>
     </button>
   {/if}
@@ -109,8 +112,30 @@
 
   .vol-chip {
     height: 24px;
-    gap: 5px;
-    padding: 0 9px 0 8px;
+    gap: 7px;
+    padding: 0 10px 0 9px;
+  }
+
+  /* A read-only level in the chip: neutral and 3 px like the volume rail, never the accent (D-28 B1). */
+  .mini-rail {
+    width: 36px;
+    height: 3px;
+    border-radius: var(--ice-radius-pill);
+    background: var(--ice-track);
+    overflow: hidden;
+  }
+
+  .mini-fill {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border-radius: var(--ice-radius-pill);
+    transform-origin: left center;
+    background: currentColor;
+  }
+
+  .vol-chip.muted .mini-fill {
+    opacity: 0.45;
   }
 
   .close {
