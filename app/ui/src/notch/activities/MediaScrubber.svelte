@@ -216,9 +216,10 @@
     cursor: pointer;
   }
 
+  /* D-28 B1: the seek bar is the card's one accent bar and thicker than the volume rail (3 px, neutral). */
   .scrubber-rail {
     width: 100%;
-    height: 3px;
+    height: 4px;
     border-radius: var(--ice-radius-pill);
     background: var(--ice-track);
     overflow: hidden;
@@ -228,7 +229,7 @@
   .scrubber-track.interactive:hover .scrubber-rail,
   .scrubber-track.dragging .scrubber-rail,
   .scrubber-track.interactive:focus-visible .scrubber-rail {
-    height: 5px;
+    height: 6px;
   }
 
   .scrubber-fill {

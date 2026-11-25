@@ -500,13 +500,22 @@ criteria below pass on both monitors. Items come from Claude's review of the Edg
       for meetings and screen sharing the notch turns into a plain notch (no track, art, lyrics or pop-ups), with a
       deliberate way to wake it. Options include leaving the notch out of screen captures (`WDA_EXCLUDEFROMCAPTURE`).
       Votes open once the Edge track is stable; no code before the owner closes it
-- [ ] **D-28 · Volume vs track progress** ([entry](planning-discussion.md#d-28--volume-vs-track-progress-in-the-notch-what-the-user-sees-and-touches-added-2026-11-25-owner-request-neutral-entry-under-04)):
-      owner report: the card's volume bar is mistaken for progress and changed by accident. Options A1–A4 (where volume
-      lives), B1–B5 (look and accident guards), C1–C2 (compact states); mockups on the design canvas. Votes sealed in
-      `docs/votes/D-28/` (Claude's in). Then D-20 placement is revisited with the card's song/output split in mind
-- [ ] Lyrics sometimes out of sync (owner, 2026-11-25): no output-latency compensation (Bluetooth adds ~0.15–0.3 s,
-      typical figure, not measured) and word timing is estimated unless the LRC has word stamps. Waiting on the owner:
-      early, late or random? Candidate fix: per-device lyric offset (auto default for Bluetooth, adjustable in Settings)
+- [x] **D-28 · Volume vs track progress** ([entry](planning-discussion.md#d-28--volume-vs-track-progress-in-the-notch-what-the-user-sees-and-touches-added-2026-11-25-owner-request-neutral-entry-under-04)):
+      built 2026-11-25 on the owner's ruling (A2 + B1 + B2 + C1, chip fallback amendment). Both cards: song block on
+      top (the only accent bar, 4 px, times at both ends), output strip below (device chips + small grey volume, or a
+      volume chip that opens the slider when the chips need the room); a click on the volume only steps ±2 %; the volume
+      pop-up (WebView and native) leads with the %. Checked on the running app: two chips → inline slider; a click near
+      the top of the rail at 40 % → 42 %
+- [ ] By hand: the new card at 100 %/150 %, all themes, 3–4 favourite devices (chip mode), the lyrics split (572 px),
+      Floating; keyboard (Tab to the volume, arrows, Esc closes the opened slider)
+- [ ] D-20 placement, revisited with the card's song/output split: at bottom anchors the strip could sit nearest the edge
+- [x] Lyrics out of sync (owner, 2026-11-25): **per-device lyrics delay** (schema v14 `[[device]] lyrics_delay_ms`,
+      `Command::SetLyricsDelay`, Settings → Devices → a playback device → Lyrics delay). Auto = 200 ms on Bluetooth
+      (`BTHENUM`/`BTHLE`, an estimate: Windows has no API for the link's delay), 0 elsewhere; −1000…+2000 ms. The lyric
+      clock is the player's position minus the playing output's delay (`lyricClockMs`). Word timing stays estimated
+      unless the LRC has word stamps
+- [ ] By hand: lyrics on the Liberty 5 (Bluetooth, auto 200 ms) vs the BTD 700 dongle (USB, auto 0): tune each so a
+      line lights up as it is sung, and consider a better default from those two numbers
 
 **Fixed (2026-11-25):**
 - [x] Clicks right around the pill and the music pill were swallowed (Claude): the cursor poll scaled the hit rect with a

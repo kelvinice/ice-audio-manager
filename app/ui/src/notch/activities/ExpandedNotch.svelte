@@ -4,10 +4,9 @@
   import type { MusicServiceId, MusicServiceItem } from '../../lib/notch/backdrop';
   import { hasAnyLyrics } from '../../lib/notch/lyrics';
   import { isMediaActive } from '../../lib/notch/scheduler';
-  import ExpandedDeviceRow from './ExpandedDeviceRow.svelte';
   import ExpandedEmptyCard from './ExpandedEmptyCard.svelte';
   import ExpandedMediaCard from './ExpandedMediaCard.svelte';
-  import ExpandedVolumeRow from './ExpandedVolumeRow.svelte';
+  import OutputStrip from './OutputStrip.svelte';
   import LyricsExtension from './LyricsExtension.svelte';
   import NotchSideRail from './NotchSideRail.svelte';
 
@@ -104,9 +103,19 @@
         />
       {/if}
 
-      <div class="controls">
-        <ExpandedVolumeRow {volumePercent} {muted} {barPercent} {onToggleMute} {onSetVolume} />
-        <ExpandedDeviceRow {playback} {settings} {disconnected} {onSwitchDevice} />
+      <div class="output">
+        <div class="divider" aria-hidden="true"></div>
+        <OutputStrip
+          {playback}
+          {settings}
+          {disconnected}
+          {volumePercent}
+          {muted}
+          {barPercent}
+          {onToggleMute}
+          {onSetVolume}
+          {onSwitchDevice}
+        />
       </div>
     </div>
 
@@ -167,10 +176,16 @@
     gap: 10px;
   }
 
-  .controls {
+  /* D-28: the output strip sits below a soft divider that fades out at both ends. */
+  .output {
     display: flex;
     flex-direction: column;
     gap: 6px;
+  }
+
+  .divider {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--ice-control-border) 20%, var(--ice-control-border) 80%, transparent);
   }
 
   @keyframes card-reveal {

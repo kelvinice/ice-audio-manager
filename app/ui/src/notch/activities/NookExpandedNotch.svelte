@@ -6,9 +6,8 @@
   import { mediaSource } from '../../lib/notch/mediaSource';
   import { isMediaActive } from '../../lib/notch/scheduler';
   import DeviceIcon from './DeviceIcon.svelte';
-  import ExpandedDeviceRow from './ExpandedDeviceRow.svelte';
   import ExpandedEmptyCard from './ExpandedEmptyCard.svelte';
-  import ExpandedVolumeRow from './ExpandedVolumeRow.svelte';
+  import OutputStrip from './OutputStrip.svelte';
   import LyricsExtension from './LyricsExtension.svelte';
   import NookMediaPanel from './NookMediaPanel.svelte';
   import NookToolbar from './NookToolbar.svelte';
@@ -130,9 +129,19 @@
         />
       {/if}
 
-      <div class="controls">
-        <ExpandedVolumeRow {volumePercent} {muted} {barPercent} {onToggleMute} {onSetVolume} />
-        <ExpandedDeviceRow {playback} {settings} {disconnected} {onSwitchDevice} />
+      <div class="output">
+        <div class="divider" aria-hidden="true"></div>
+        <OutputStrip
+          {playback}
+          {settings}
+          {disconnected}
+          {volumePercent}
+          {muted}
+          {barPercent}
+          {onToggleMute}
+          {onSetVolume}
+          {onSwitchDevice}
+        />
       </div>
     </div>
 
@@ -237,10 +246,16 @@
     gap: 6px;
   }
 
-  .controls {
+  /* D-28: the output strip sits below a soft divider that fades out at both ends. */
+  .output {
     display: flex;
     flex-direction: column;
-    gap: 5px;
+    gap: 6px;
+  }
+
+  .divider {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--ice-control-border) 20%, var(--ice-control-border) 80%, transparent);
   }
 
   /* A soft divider that fades out at both ends instead of a hard full-height rule. */

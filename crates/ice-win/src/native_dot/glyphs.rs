@@ -21,6 +21,7 @@ use windows::core::{PCWSTR, w};
 /// Horizontal alignment inside a logical bounding box.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Align {
+    Left,
     Center,
     Right,
 }
@@ -195,6 +196,7 @@ impl GlyphMask {
         let left_px = (box_x * self.scale).round() as i32;
         let width_px = (box_w * self.scale).round() as i32;
         let x = match align {
+            Align::Left => left_px,
             Align::Center => left_px + (width_px - extent.cx) / 2,
             Align::Right => left_px + (width_px - extent.cx),
         };

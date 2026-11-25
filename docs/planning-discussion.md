@@ -2629,6 +2629,13 @@ mainly affects Floating.
 
 **Votes:** sealed, in [votes/D-28/](votes/D-28/).
 
+**Owner ruling (2026-11-25): build Claude's recommendation now** ("okay execute them"; "I already answered D-28"). Built:
+**A2** (song block + output strip) with Claude's amendment (the inline volume falls back to a volume chip that opens the
+slider when the device chips need the room, `volumeFitsInline`), **B1** (progress = the only accent bar, 4 px, with
+times; volume = 3 px neutral rail + speaker + %), **B2** (dragging is relative; a click only steps ±2 %), **C1** (the
+volume pop-up leads with the %, on the WebView and the native pill). Not built: A1, A3 as the default, A4, B3, B4, B5, C2
+changes. Gemini's and Codex's votes are no longer needed for this decision; they may still file one to propose B3/B4.
+
 ## 6. Session S5: Team workflow
 
 ### D-14 · Roles

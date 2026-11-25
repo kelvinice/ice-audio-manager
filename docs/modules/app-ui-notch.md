@@ -33,18 +33,24 @@ any time (D-15). Heavy work (image decode, colour extraction, device sorting) ha
 | `notch/activities/NotchBackdrop.svelte` | V2 default 9-orb orbital lava-lamp `.art-wash` (`wash-base` + `screen` blending on dark themes, `normal` on `ice_light`, scaled smoothly by `subscribeTempo` and paused via `animation-play-state`) + opt-in V1 blurred cover & `.art-scrim` gated by `--ice-art-backdrop` |
 | `notch/activities/AlbumArtTile.svelte` | Album art / placeholder tile with crossfade and optional `radius` prop (defaults to `--ice-radius-md` / `--ice-radius-sm`; track pill passes `size={34}` `radius="16px"`) |
 | `notch/scrubber.ts` | Pure media-scrubber maths: `clampSeekPositionMs`, `liveMediaPositionMs` (extrapolates from `positionUpdatedMs`), `pointerSeekMs`, `stepSeekMs`, `nextSecondTickDelayMs`, and unified optimistic seek overlay (`applyOptimisticSeek`, `shouldClearOptimisticSeek`) |
+| `notch/volume.ts` | D-28 card volume maths: `volumeDragPercent` (relative drag), `volumeClickPercent` (a click steps ±2 %), `volumeFitsInline` (inline slider or volume chip in the output strip) |
 | `notch/lyrics.ts` | Pure lyrics frame resolver (`resolveLyricFrame`, `shouldShowPillLyrics`, `shouldShowCardLyrics`): active line, neighbour lines, active word index, and next boundary wake delay (plus `fitLine.ts` cached per-line word measurements for zero-reflow word highlighting); `nookLadderY` places Edge Nook rows around the wrapped current line's measured height |
 | `notch/activities/LyricsExtension.svelte` | Seamless bottom extension under the compact music pill (1 active line + Romaji/subtitle) and expanded card (3-line focus band, click-to-seek, active-word lift/glow via `--ice-lyric-*` tokens, plain fallback) |
 
 ## `src/notch/activities/` (one component per job)
-`IdlePill`, `VolumeActivity`, `SwitchActivity`, `PlugActivity`, `MicActivity`, `TrackActivity`, `ExpandedNotch` (`Floating` container), `NookExpandedNotch` (`Edge Nook` flush top-edge split container, composed of `NookToolbar` + `NookMediaPanel`), `ExpandedMediaCard`,
+`IdlePill`, `VolumeActivity`, `SwitchActivity`, `PlugActivity`, `MicActivity`, `TrackActivity`, `ExpandedNotch` (`Floating` container), `NookExpandedNotch` (`Edge Nook` flush top-edge split container, composed of `NookToolbar` + `NookMediaPanel` + `OutputStrip`), `OutputStrip`, `ExpandedMediaCard`,
 `ExpandedEmptyCard`, `MediaScrubber`, `ExpandedVolumeRow`, `ExpandedDeviceRow`, `NotchSideRail`, `MusicServicesWidget`, `AlbumArtTile`, `NotchBackdrop`, `VisualizerBars`, `DeviceIcon`.
 
-**Expanded layout** (`EXPANDED_W` × `EXPANDED_H_MEDIA`/`EXPANDED_H_EMPTY` in `geometry.ts`): a main column (media or empty card, then
-volume row and device chips) beside a side rail (`NotchSideRail`: pin, mic, music services while media plays, settings). The media card holds
-only art, title/artist, transport and an interactive seek scrubber (`ExpandedMediaCard`, pointer capture + keyboard `±5s`/`±15s`/`Home`/`End` via `MediaAction` `seek`, live 1 Hz interpolation while playing and visible). The volume bar is a click/drag slider (`set_volume`, throttled to 40 ms). There is no
-device picker in the notch: Settings → Devices chooses and orders the chips. The card heights are fixed, so changing a row's height means
-updating the constants.
+**Expanded layout (D-28: song block, then output strip).** Both cards put the **song** on top: art, title/artist,
+transport, and the seek scrubber (`MediaScrubber`, the card's only accent bar, 4 px, times at both ends; pointer capture +
+keyboard `±5s`/`±15s`/`Home`/`End` via `MediaAction` `seek`, 1 Hz interpolation while playing and visible). On Edge Nook
+(`NookMediaPanel`) the transport sits beside the title and the scrubber runs full width under them; Floating keeps
+`ExpandedMediaCard` beside the `NotchSideRail` (pin, mic, services, settings). Below a soft divider, the **output strip**
+(`OutputStrip`): device chips (`ExpandedDeviceRow`) and a small neutral volume control (`ExpandedVolumeRow`, 3 px grey rail,
+speaker, %). When the chips need the room (`volumeFitsInline` in `volume.ts`), the volume becomes a chip that opens a full-strip
+slider (✕ or Esc closes). The volume never jumps on a click: dragging is relative to the press, a click steps ±2 %
+(`volumeDragPercent` / `volumeClickPercent`, `set_volume` throttled to 40 ms). There is no device picker in the notch:
+Settings → Devices chooses and orders the chips. Card heights are fixed constants (`geometry.ts`, `notchStyle.ts`).
 
 ## How it works
 - **Wake protocol:** on load, register listeners first, buffer deltas, fetch `get_engine_snapshot` + `get_notch_snapshot`, apply only newer revisions,
@@ -98,3 +104,4 @@ updating the constants.
 - 2026-11-25 Claude: lava-lamp refresh (`NotchBackdrop.svelte`, `ambient.ts` + test): orb colours are registered `--orb-c1…5` and cross-fade 1.4 s between songs; 9 closed orbital loops (generated, plain-px compositor keyframes, `--ice-ambient-period` 30 s per loop, no `alternate` ping-pong) inside a statically scaled `.orb-layer` (compact pill shrinks paths too); calmer tempo (`ambientTempoRate` 0.85–1.2×, `updatePlaybackRate`); bass breath (`BeatShaper.kick` → `BreathEnvelope` → `subscribeBreath`, one `scale()` on `.orb-field`, only while running and not instant); readability: `lighten` blend + `capLuminance(WASH_MAX_LUMINANCE = 0.08)` with higher dark orb alphas (measured worst muted-text contrast 1.24 → 3.23:1).
 - 2026-11-25 Claude: fix: the plain notch was invisible on every theme but Minimal (`--ice-hibernate-*` were declared in the `[data-theme=minimal]` block, so the fill fell back to transparent); now in `:root`, guarded by `themes/themes.test.ts` (no theme may declare a token `:root` lacks). Hibernating in Balanced hands over to the native pill after `HIBERNATE_HANDOVER_MS` (1 s) instead of waiting for the idle linger (`scheduleHibernateHandover`). The hidden look arrives as `idleStyle: hidden` (shell), so `isIdleHidden` hides the stage.
 - 2026-11-25 Claude: backdrop colours follow the cover (owner): `computeArtBackdrop` fills the orbs from `ArtInfo.palette` (missing slots = lighter/darker tones of the cover's own colours, no hue rotation) and the scrim from `luminancePct`; `tuneWashColor` keeps each colour's chroma when moving it into the readable lightness band (neutrals stay neutral; no forced "jewel" saturation), still under `WASH_MAX_LUMINANCE`. `ArtInfoWithPalette` and `deriveSecondaryStop` removed; the hue-rotated set remains only for the no-art brand wash. New test: a pastel cover yields only its own hues.
+- 2026-11-25 Claude: D-28 (owner ruling: A2 + B1 + B2 + C1): song block + output strip on both cards (`OutputStrip`, `NookMediaPanel` restructured, scrubber 4 px), `ExpandedVolumeRow` rewritten as the small neutral volume (relative drag, click steps; `volume.ts` + test), volume chip fallback (`volumeFitsInline`, budgets measured on the running notch), `VolumeActivity` leads with the % (C1; native twin too), `DeviceIcon` `close`. Lyrics follow the playing output's delay: `lyricClockMs` (+ test), `LyricsExtension.delayMs`, `controller.lyricsDelayMs` from `activeDevice.lyricsDelayMs`.

@@ -20,7 +20,8 @@
     | 'pin'
     | 'lyrics'
     | 'settings'
-    | 'moon';
+    | 'moon'
+    | 'close';
 
   interface Props {
     kind?: IconKind;
@@ -117,6 +118,8 @@
     <path d="M3 4.2h10M3 7.8h7.2M3 11.4h5.2" />
     <path d="M12.5 11.6V7.4l2-.5" />
     <circle cx="11.4" cy="11.8" r="1.2" />
+  {:else if resolved === 'close'}
+    <path d="M4 4l8 8M12 4l-8 8" />
   {:else if resolved === 'moon'}
     <path d="M13 9.6A5.4 5.4 0 0 1 6.4 3a5.4 5.4 0 1 0 6.6 6.6Z" />
   {:else if resolved === 'settings'}

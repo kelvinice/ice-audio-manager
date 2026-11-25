@@ -38,6 +38,11 @@
       <span class="chan-tag">Mic</span>
     {/if}
 
+    <!-- D-28 C1: the value leads, so the pop-up reads as "volume 13 %", never as a song's progress bar. -->
+    <span class="pct" class:muted={activity.muted}>
+      {activity.muted ? 'Mute' : `${activity.percent}%`}
+    </span>
+
     <div class="bar-track" class:mic-channel={activity.channel === 'mic'}>
       <div
         class="bar-fill"
@@ -45,10 +50,6 @@
         style:transform={`scaleX(${clampedScale.toFixed(4)})`}
       ></div>
     </div>
-
-    <span class="pct" class:muted={activity.muted}>
-      {activity.muted ? 'Mute' : `${activity.percent}%`}
-    </span>
   </div>
 {/key}
 
@@ -119,11 +120,11 @@
   }
 
   .pct {
-    min-width: 32px;
-    text-align: right;
+    min-width: 38px;
+    text-align: left;
     font-family: var(--ice-mono);
-    font-size: 11px;
-    font-weight: 600;
+    font-size: 14px;
+    font-weight: 650;
     color: var(--ice-fg);
     flex-shrink: 0;
   }

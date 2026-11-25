@@ -1468,10 +1468,13 @@ pub(crate) fn rasterize_pill_frame(pixels: &mut [u32], w: i32, h: i32, scale: f3
         PillMode::Volume { percent, muted } | PillMode::MicVolume { percent, muted } => {
             label_buf = if muted { "MUTE".to_string() } else { format!("{}%", percent.min(100)) };
             label_str = &label_buf;
-            label_x = ox + 141.0;
-            label_w = 40.0;
+            // D-28 C1: the value leads, then the bar. Twin: `VolumeActivity.svelte`.
+            label_x = ox + 34.0;
+            label_w = 42.0;
+            label_h = 13.0;
+            label_align = Align::Left;
             label_color = if muted { (dng_r, dng_g, dng_b) } else { (fg_r, fg_g, fg_b) };
-            bar_bounds = Some((ox + 34.0, ox + 134.0, f32::from(percent.min(100)) / 100.0, muted));
+            bar_bounds = Some((ox + 82.0, ox + 180.0, f32::from(percent.min(100)) / 100.0, muted));
         }
         PillMode::MicMute { muted } => {
             label_str = if muted { "MIC OFF" } else { "MIC ON" };

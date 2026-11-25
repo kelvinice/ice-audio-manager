@@ -1,6 +1,6 @@
 <script lang="ts">
-  // Edge Nook media block: a larger (64 px) cover with title, artist and the scrubber beside it, then one transport row with
-  // an accent play button. Keeping the scrubber in the meta column frees the height the bigger cover needs.
+  // Edge Nook song block (D-28, owner 2026-11-25): cover, title/artist and transport on one row, then the full-width
+  // seek bar with both times: the card's only accent bar, so it can't be mistaken for the volume in the output strip.
   import type { MediaAction, NowPlaying } from '../../lib/ipc/engine';
   import type { SpringPreset } from '../../lib/ipc/types';
   import AlbumArtTile from './AlbumArtTile.svelte';
@@ -24,7 +24,7 @@
 <div class="media">
   <div class="head">
     <div class="cover">
-      <AlbumArtTile art={media.art} size={64} radius="var(--ice-radius-md)" {instant} />
+      <AlbumArtTile art={media.art} size={60} radius="var(--ice-radius-md)" {instant} />
     </div>
     <div class="meta">
       <div class="title-row">
@@ -34,48 +34,46 @@
         {/if}
       </div>
       <span class="artist" title={media.artist}>{media.artist || 'Unknown artist'}</span>
-      <div class="scrub">
-        <MediaScrubber
-          {media}
-          {notchVisible}
-          {instant}
-          showRemaining
-          onSeek={(positionMs) => onMediaAction({ seek: { positionMs } })}
-        />
-      </div>
+    </div>
+    <div class="transport" role="group" aria-label="Media transport">
+      <button class="t-btn" type="button" aria-label="Previous track" onclick={() => onMediaAction('previous')}>
+        <DeviceIcon kind="prev" size={13} />
+      </button>
+      <button
+        class="t-btn t-play"
+        type="button"
+        aria-label={isPlaying ? 'Pause' : 'Play'}
+        onclick={() => onMediaAction('playPause')}
+      >
+        <DeviceIcon kind={isPlaying ? 'pause' : 'play'} size={14} />
+      </button>
+      <button class="t-btn" type="button" aria-label="Next track" onclick={() => onMediaAction('next')}>
+        <DeviceIcon kind="next" size={13} />
+      </button>
     </div>
   </div>
 
-  <div class="transport" role="group" aria-label="Media transport">
-    <button class="t-btn" type="button" aria-label="Previous track" onclick={() => onMediaAction('previous')}>
-      <DeviceIcon kind="prev" size={13} />
-    </button>
-    <button
-      class="t-btn t-play"
-      type="button"
-      aria-label={isPlaying ? 'Pause' : 'Play'}
-      onclick={() => onMediaAction('playPause')}
-    >
-      <DeviceIcon kind={isPlaying ? 'pause' : 'play'} size={14} />
-    </button>
-    <button class="t-btn" type="button" aria-label="Next track" onclick={() => onMediaAction('next')}>
-      <DeviceIcon kind="next" size={13} />
-    </button>
-  </div>
+  <MediaScrubber
+    {media}
+    {notchVisible}
+    {instant}
+    showRemaining
+    onSeek={(positionMs) => onMediaAction({ seek: { positionMs } })}
+  />
 </div>
 
 <style>
   .media {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 8px;
   }
 
   .head {
     display: flex;
     align-items: center;
     gap: 12px;
-    height: 64px;
+    height: 60px;
   }
 
   .cover {
@@ -121,18 +119,11 @@
     white-space: nowrap;
   }
 
-  .scrub {
-    margin-top: 5px;
-  }
-
-  /* Centred under the title/scrubber column (cover 64 + gap 12), so the controls line up with the scrubber. */
   .transport {
+    flex-shrink: 0;
     display: flex;
     align-items: center;
-    justify-content: center;
-    gap: 18px;
-    height: 32px;
-    padding-left: 76px;
+    gap: 4px;
   }
 
   .t-btn {
