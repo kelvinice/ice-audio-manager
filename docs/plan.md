@@ -312,6 +312,43 @@ every feature phase. Phases 1–5 focus on features and UI/UX.
   - *UI style as a setting* (Editorial vs Glass), separate from colour themes. Related to D-23.
   - Not for us: "listen together" rooms. They need a server and real-time sync, outside D-05 and §1.5.
 
+### Listening experiments for Pandora and Ice
+
+Ideas for discussion, 2026-11-27. **Try the lyric loop first.** One local song with timed lyrics is enough to find out
+whether selecting a phrase makes it easier to practise than dragging the seek bar. [Pandora prototype](pandora.md)
+
+**Pandora**
+
+- **Loop a lyric.** Select the first and last lines of a chorus and repeat that passage at the chosen playback speed.
+  Try a fast verse at normal and reduced speed. Keep the interaction if the listener can practise three repeats without
+  touching the seek bar, then turn looping off and hear the song continue from that line.
+- **Take a one-song detour.** While listening to an album, audition a recommendation and return to the exact spot you
+  left. Try it halfway through a local track with shuffle on. Both finishing the detour and choosing “Back to album”
+  should restore the playhead and preserve the upcoming track order. Compare the effort with rebuilding the queue by hand.
+
+**Ice Audio Manager**
+
+- **Where did my sound go?** Show the Windows defaults and their mute state when someone opens the tray. For example,
+  “Default media output · Arctis Game (muted)” and “Default call output · Arctis Chat.” Give someone a split Game/Chat
+  setup and a muted output in Lite mode. Can they explain why the call is audible and their music is silent without
+  opening Windows Sound settings?
+- **Undo my last output switch.** After an Ice switch, offer one tray action to restore the previous device for each
+  role Ice changed. Try it with separate music and call defaults, then repeat after unplugging the old headset or changing
+  a default in Windows. Undo should restore the original split, explain when a device is unavailable, and leave any role
+  the user subsequently changed alone. [Device switch flow](modules/data-flows.md#1-hotkey-switch-speakers--arctis)
+
+**Pandora with Ice**
+
+- **Replay what a call covered.** When Ice starts lowering Pandora for a call, let Pandora remember the current track and
+  position in memory. When the volume returns, offer “Replay from here” in the player. Try two speech bursts during one
+  verse, then skip tracks during a third. One click should recover the start of the interrupted passage. Skipping should
+  clear the offer, and ignoring it should let playback continue. [Call mode](#call-mode-d-30-built-2026-11-25)
+- **Tune lyric timing by ear for each output.** Play a local clip in Pandora with a sung count and known lyric timestamps.
+  Let the listener compare two offsets on the Ice notch and save the preferred one for that output using Ice's existing
+  per-device lyric delay. Switch between speakers and a Bluetooth headset, then repeat the comparison with the order
+  reversed. Keep the guided setup if the listener consistently prefers the saved timing over the default on the delayed
+  device and switching back recalls the speakers' timing. [Lyrics design](lyrics.md)
+
 ## Cleanup backlog
 
 Known debt under [code-practices §11](code-practices.md#11-code-hygiene-duplication-cleanliness-bloat). Each item is fixed in its
