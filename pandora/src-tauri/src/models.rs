@@ -138,6 +138,8 @@ pub struct PandoraSettings {
     pub wavy_progress: bool,
     #[serde(default)]
     pub spinning_cover: bool,
+    #[serde(default)]
+    pub close_to_tray: bool,
 }
 
 impl Default for PandoraSettings {
@@ -154,6 +156,7 @@ impl Default for PandoraSettings {
             show_ice_card_in_sidebar: true,
             wavy_progress: true,
             spinning_cover: false,
+            close_to_tray: false,
         }
     }
 }
@@ -268,4 +271,30 @@ pub struct PandoraLyrics {
     pub lines: Vec<PandoraLyricLine>,
     pub plain_text: Option<String>,
     pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlaylistImportResult {
+    pub library: LibraryState,
+    pub playlist_id: String,
+    pub playlist_name: String,
+    /// `"ytmusic" | "spotify" | "text"`
+    pub source: String,
+    pub total_tracks: usize,
+    pub imported_tracks: usize,
+    pub unmatched_tracks: Vec<String>,
+    pub note: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlaylistImportProgress {
+    /// `"fetching" | "matching" | "done" | "cancelled" | "error"`
+    pub stage: String,
+    pub source: String,
+    pub completed: usize,
+    pub total: usize,
+    pub matched: usize,
+    pub current_track: Option<String>,
 }

@@ -4,6 +4,7 @@
   import HomeView from "./components/HomeView.svelte";
   import IceHubView from "./components/IceHubView.svelte";
   import Icon from "./components/Icon.svelte";
+  import ImportPlaylistModal from "./components/ImportPlaylistModal.svelte";
   import LibraryView from "./components/LibraryView.svelte";
   import NowPlayingOverlay from "./components/NowPlayingOverlay.svelte";
   import PlayerBar from "./components/PlayerBar.svelte";
@@ -62,6 +63,7 @@
   let showEq = $state(false);
   let playlistModalOpen = $state(false);
   let playlistModalTrack = $state<Track | null>(null);
+  let importModalOpen = $state(false);
   let statusNotice = $state<string | null>(null);
   let noticeTimer: number | null = null;
 
@@ -301,6 +303,7 @@
       showIceCard={library.settings.showIceCardInSidebar}
       onNavigate={navigate}
       onOpenNewPlaylist={() => openPlaylistModal(null)}
+      onOpenImportPlaylist={() => (importModalOpen = true)}
     />
 
     <main class="content">
@@ -372,6 +375,7 @@
             navigate("search", null);
           }}
           onToggleLike={(track) => void handleToggleLike(track)}
+          onAddToPlaylist={(track) => openPlaylistModal(track)}
           onHistoryChange={(next) => (library = next)}
           onNotify={showNotice}
         />
@@ -416,6 +420,7 @@
           }}
           onSelectPlaylist={(id) => navigate("library", id)}
           onOpenNewPlaylist={() => openPlaylistModal(null)}
+          onOpenImportPlaylist={() => (importModalOpen = true)}
           onOpenPlaylistPicker={(track) => openPlaylistModal(track)}
           onRenamePlaylist={async (id, name) => {
             library = await renamePlaylist(id, name);
@@ -514,6 +519,19 @@
   onClose={() => (playlistModalOpen = false)}
   onCreatePlaylist={handleCreatePlaylist}
   onToggleTrackInPlaylist={handleToggleTrackInPlaylist}
+/>
+
+<ImportPlaylistModal
+  open={importModalOpen}
+  onClose={() => (importModalOpen = false)}
+  onImported={(res) => {
+    library = res.library;
+    showNotice(`Imported "${res.playlistName}" (${res.importedTracks} tracks)`);
+  }}
+  onOpenPlaylist={(id) => {
+    importModalOpen = false;
+    navigate("library", id);
+  }}
 />
 
 <style>

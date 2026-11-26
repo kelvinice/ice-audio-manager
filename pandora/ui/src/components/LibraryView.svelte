@@ -1,6 +1,7 @@
 <script lang="ts">
   import { resolveArtworkUrl } from "../lib/theme";
-  import type { LibraryState, Track } from "../lib/types";
+  import type { LibraryState, Playlist, Track } from "../lib/types";
+  import ConfirmModal from "./ConfirmModal.svelte";
   import Icon from "./Icon.svelte";
 
   interface Props {
@@ -21,6 +22,7 @@
     onClearCache: () => void;
     onSelectPlaylist: (playlistId: string | null) => void;
     onOpenNewPlaylist: () => void;
+    onOpenImportPlaylist: () => void;
     onOpenPlaylistPicker: (track: Track) => void;
     onRenamePlaylist: (playlistId: string, name: string) => Promise<void>;
     onDeletePlaylist: (playlistId: string) => void;
@@ -45,6 +47,7 @@
     onClearCache,
     onSelectPlaylist,
     onOpenNewPlaylist,
+    onOpenImportPlaylist,
     onOpenPlaylistPicker,
     onRenamePlaylist,
     onDeletePlaylist,
@@ -54,6 +57,14 @@
   let folderInput = $state("");
   let renaming = $state(false);
   let renameInput = $state("");
+  let playlistQuery = $state("");
+  let pendingDeletePlaylist = $state<Playlist | null>(null);
+
+  $effect(() => {
+    void selectedPlaylistId;
+    playlistQuery = "";
+    renaming = false;
+  });
 
   let activePlaylist = $derived(
     selectedPlaylistId ? library.playlists.find((p) => p.id === selectedPlaylistId) ?? null : null,
@@ -65,6 +76,23 @@
       .map((id) => library.tracksIndex[id])
       .filter((t): t is Track => Boolean(t));
   });
+
+  let filteredPlaylistTracks = $derived.by(() => {
+    const q = playlistQuery.trim().toLowerCase();
+    if (!q) return playlistTracks;
+    return playlistTracks.filter(
+      (t) =>
+        t.title.toLowerCase().includes(q) ||
+        t.artist.toLowerCase().includes(q) ||
+        t.album.toLowerCase().includes(q),
+    );
+  });
+
+  let heroCovers = $derived(
+    activePlaylist ? playlistArtworkList(activePlaylist.trackIds) : [],
+  );
+
+  let heroTotalDuration = $derived(formatTotalDuration(playlistTracks));
 
   let cachedTracks = $derived.by(() =>
     library.cachedIds
@@ -92,12 +120,36 @@
     renaming = false;
   }
 
-  function playlistCover(trackIds: string[]): string | null {
+  function playlistArtworkList(trackIds: string[]): string[] {
+    const seen = new Set<string>();
+    const out: string[] = [];
     for (const id of trackIds) {
       const url = resolveArtworkUrl(library.tracksIndex[id]?.artworkUrl ?? null, proxyPort);
-      if (url) return url;
+      if (url && !seen.has(url)) {
+        seen.add(url);
+        out.push(url);
+        if (out.length === 4) break;
+      }
     }
-    return null;
+    return out;
+  }
+
+  function formatTrackDuration(ms: number | null): string {
+    if (!ms || ms <= 0) return "—";
+    const totalSec = Math.floor(ms / 1000);
+    const min = Math.floor(totalSec / 60);
+    const sec = totalSec % 60;
+    return `${min}:${sec.toString().padStart(2, "0")}`;
+  }
+
+  function formatTotalDuration(tracks: Track[]): string | null {
+    const totalMs = tracks.reduce((sum, t) => sum + (t.durationMs ?? 0), 0);
+    if (totalMs <= 0) return null;
+    const totalMin = Math.round(totalMs / 60_000);
+    if (totalMin < 1) return "< 1 min";
+    const hrs = Math.floor(totalMin / 60);
+    const mins = totalMin % 60;
+    return hrs > 0 ? `${hrs} hr ${mins} min` : `${mins} min`;
   }
 
   function formatMb(bytes: number): string {
@@ -107,8 +159,35 @@
 
 <div class="page">
   {#if activePlaylist}
-    <div class="header-row">
-      <div>
+    <div class="pl-top-nav">
+      <button
+        class="back-btn"
+        onclick={() => {
+          onSelectPlaylist(null);
+          onTabChange("playlists");
+        }}
+      >
+        <Icon name="arrow-left" size={14} />
+        <span>All Playlists</span>
+      </button>
+    </div>
+
+    <section class="pl-hero card-glass">
+      <div class="pl-hero-art">
+        {#if heroCovers.length >= 4}
+          <div class="mosaic">
+            {#each heroCovers as src (src)}
+              <img {src} alt={activePlaylist.name} loading="lazy" />
+            {/each}
+          </div>
+        {:else if heroCovers.length > 0}
+          <img src={heroCovers[0]} alt={activePlaylist.name} />
+        {:else}
+          <Icon name="list-music" size={44} />
+        {/if}
+      </div>
+
+      <div class="pl-hero-body">
         <div class="pill-badge">Playlist</div>
         {#if renaming}
           <form class="rename-form" onsubmit={submitRename}>
@@ -117,47 +196,96 @@
             <button type="button" class="btn-ghost" onclick={() => (renaming = false)}>Cancel</button>
           </form>
         {:else}
-          <h1>{activePlaylist.name}</h1>
+          <h1 class="pl-title">{activePlaylist.name}</h1>
         {/if}
-        <p class="sub">{playlistTracks.length} tracks</p>
-      </div>
-      <div class="head-actions">
-        {#if playlistTracks.length > 0}
-          <button class="btn-primary" onclick={() => onPlay(playlistTracks[0], playlistTracks)}>
-            <Icon name="play" size={14} />
-            <span>Play All</span>
-          </button>
-          <button class="btn-ghost" onclick={() => onPlayShuffled(playlistTracks)}>
-            <Icon name="shuffle" size={14} />
-            <span>Shuffle</span>
-          </button>
-        {/if}
-        {#if !renaming}
-          <button class="btn-ghost" onclick={startRename}>
-            <Icon name="edit" size={14} />
-            <span>Rename</span>
-          </button>
-        {/if}
-        <button class="btn-ghost danger" onclick={() => onDeletePlaylist(activePlaylist.id)}>
-          <Icon name="trash" size={14} />
-          <span>Delete</span>
-        </button>
-      </div>
-    </div>
+        <p class="pl-meta-line">
+          {playlistTracks.length} {playlistTracks.length === 1 ? "track" : "tracks"}
+          {#if heroTotalDuration}
+            • {heroTotalDuration}
+          {/if}
+        </p>
 
-    <div class="list card-glass">
+        <div class="pl-hero-actions">
+          {#if playlistTracks.length > 0}
+            <button class="btn-primary" onclick={() => onPlay(playlistTracks[0], playlistTracks)}>
+              <Icon name="play" size={14} />
+              <span>Play</span>
+            </button>
+            <button class="btn-ghost" onclick={() => onPlayShuffled(playlistTracks)}>
+              <Icon name="shuffle" size={14} />
+              <span>Shuffle</span>
+            </button>
+          {/if}
+          {#if !renaming}
+            <button class="btn-ghost" onclick={startRename}>
+              <Icon name="edit" size={14} />
+              <span>Rename</span>
+            </button>
+          {/if}
+          <button
+            class="btn-ghost danger"
+            onclick={() => (pendingDeletePlaylist = activePlaylist)}
+          >
+            <Icon name="trash" size={14} />
+            <span>Delete</span>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <section class="pl-tracks-panel card-glass">
+      {#if playlistTracks.length >= 6}
+        <div class="pl-filter-bar">
+          <Icon name="search" size={14} />
+          <input
+            type="text"
+            placeholder="Filter tracks in playlist..."
+            bind:value={playlistQuery}
+          />
+          {#if playlistQuery}
+            <button
+              class="clear-filter"
+              aria-label="Clear filter"
+              onclick={() => (playlistQuery = "")}
+            >
+              <Icon name="x" size={13} />
+            </button>
+          {/if}
+        </div>
+      {/if}
+
       {#if playlistTracks.length === 0}
-        <div class="empty">This playlist is empty.</div>
+        <div class="empty">This playlist is empty. Add songs from Home, Search, or Identify.</div>
+      {:else if filteredPlaylistTracks.length === 0}
+        <div class="empty">No tracks match "{playlistQuery}".</div>
       {:else}
-        {#each playlistTracks as track (track.id)}
+        <div class="pl-table-head">
+          <span class="col-num">#</span>
+          <span>Title</span>
+          <span class="col-album">Album</span>
+          <span class="col-dur">Time</span>
+          <span></span>
+        </div>
+
+        {#each filteredPlaylistTracks as track, idx (track.id)}
           {@const isLiked = likedIds.has(track.id)}
-          <div class="row" class:playing={currentTrackId === track.id}>
-            <button class="row-main" onclick={() => onPlay(track, playlistTracks)}>
+          {@const isPlayingTrack = currentTrackId === track.id}
+          {@const art = resolveArtworkUrl(track.artworkUrl, proxyPort)}
+          <div class="pl-table-row" class:playing={isPlayingTrack}>
+            <span class="col-num">
+              {#if isPlayingTrack}
+                <Icon name="play" size={12} />
+              {:else}
+                {idx + 1}
+              {/if}
+            </span>
+
+            <button class="pl-row-main" onclick={() => onPlay(track, playlistTracks)}>
               <div class="thumb">
-                {#if resolveArtworkUrl(track.artworkUrl, proxyPort)}
-                  <img src={resolveArtworkUrl(track.artworkUrl, proxyPort)} alt={track.title} />
+                {#if art}
+                  <img src={art} alt={track.title} loading="lazy" />
                 {:else}
-                  <Icon name="music" size={18} />
+                  <Icon name="music" size={17} />
                 {/if}
               </div>
               <div class="meta">
@@ -165,33 +293,51 @@
                 <div class="sub">{track.artist}</div>
               </div>
             </button>
-            <button
-              class="act"
-              class:liked={isLiked}
-              title={isLiked ? "Remove from Favorites" : "Add to Favorites"}
-              aria-label={isLiked ? "Remove from Favorites" : "Add to Favorites"}
-              onclick={() => onToggleLike(track)}
-            >
-              <Icon name={isLiked ? "heart-filled" : "heart"} size={14} />
-            </button>
-            <button
-              class="act"
-              title="Remove from playlist"
-              aria-label="Remove from playlist"
-              onclick={() => onRemoveFromPlaylist(activePlaylist.id, track.id)}
-            >
-              <Icon name="x" size={14} />
-            </button>
+
+            <span class="col-album">{track.album || "—"}</span>
+            <span class="col-dur">{formatTrackDuration(track.durationMs)}</span>
+
+            <div class="pl-row-acts">
+              <button
+                class="act"
+                class:liked={isLiked}
+                title={isLiked ? "Remove from Favorites" : "Add to Favorites"}
+                aria-label={isLiked ? "Remove from Favorites" : "Add to Favorites"}
+                onclick={() => onToggleLike(track)}
+              >
+                <Icon name={isLiked ? "heart-filled" : "heart"} size={14} />
+              </button>
+              <button
+                class="act"
+                title="Add to Playlist"
+                aria-label="Add to Playlist"
+                onclick={() => onOpenPlaylistPicker(track)}
+              >
+                <Icon name="list-plus" size={14} />
+              </button>
+              <button
+                class="act"
+                title="Remove from playlist"
+                aria-label="Remove from playlist"
+                onclick={() => onRemoveFromPlaylist(activePlaylist.id, track.id)}
+              >
+                <Icon name="x" size={14} />
+              </button>
+            </div>
           </div>
         {/each}
       {/if}
-    </div>
+    </section>
   {:else}
     <div class="header-row">
       <div>
         <h1>Your Library</h1>
       </div>
       <div class="head-actions">
+        <button class="btn-ghost" onclick={onOpenImportPlaylist}>
+          <Icon name="link" size={14} />
+          <span>Import</span>
+        </button>
         <button class="btn-primary" onclick={onOpenNewPlaylist}>
           <Icon name="plus" size={14} />
           <span>New Playlist</span>
@@ -282,7 +428,7 @@
       {:else}
         <div class="pl-grid">
           {#each library.playlists as pl (pl.id)}
-            {@const cover = playlistCover(pl.trackIds)}
+            {@const covers = playlistArtworkList(pl.trackIds)}
             {@const tracks = pl.trackIds.map((id) => library.tracksIndex[id]).filter((t): t is Track => Boolean(t))}
             <div
               class="pl-card"
@@ -297,8 +443,14 @@
               }}
             >
               <div class="pl-cover">
-                {#if cover}
-                  <img src={cover} alt={pl.name} loading="lazy" />
+                {#if covers.length >= 4}
+                  <div class="mosaic">
+                    {#each covers as src (src)}
+                      <img {src} alt={pl.name} loading="lazy" />
+                    {/each}
+                  </div>
+                {:else if covers.length > 0}
+                  <img src={covers[0]} alt={pl.name} loading="lazy" />
                 {:else}
                   <Icon name="list-music" size={32} />
                 {/if}
@@ -309,7 +461,7 @@
                   aria-label="Delete playlist"
                   onclick={(e) => {
                     e.stopPropagation();
-                    onDeletePlaylist(pl.id);
+                    pendingDeletePlaylist = pl;
                   }}
                 >
                   <Icon name="trash" size={13} />
@@ -505,6 +657,21 @@
     {/if}
   {/if}
 </div>
+
+<ConfirmModal
+  open={Boolean(pendingDeletePlaylist)}
+  title="Delete Playlist?"
+  message={pendingDeletePlaylist
+    ? `Delete "${pendingDeletePlaylist.name}" (${pendingDeletePlaylist.trackIds.length} tracks)? Tracks inside it won't be deleted from Favorites or Local Files.`
+    : ""}
+  confirmLabel="Delete Playlist"
+  onCancel={() => (pendingDeletePlaylist = null)}
+  onConfirm={() => {
+    const target = pendingDeletePlaylist;
+    pendingDeletePlaylist = null;
+    if (target) onDeletePlaylist(target.id);
+  }}
+/>
 
 <style>
   .page {
@@ -871,5 +1038,221 @@
 
   .danger {
     color: var(--p-danger);
+  }
+
+  .pl-top-nav {
+    display: flex;
+    align-items: center;
+  }
+
+  .back-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 6px 12px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--p-text-muted);
+    background: var(--p-fill);
+    border: 1px solid var(--p-border);
+    transition: color 0.15s ease, border-color 0.15s ease;
+  }
+
+  .back-btn:hover {
+    color: var(--p-text);
+    border-color: var(--p-border-strong);
+  }
+
+  .pl-hero {
+    padding: 20px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 22px;
+    background: linear-gradient(135deg, var(--p-surface-tint), var(--p-surface));
+  }
+
+  .pl-hero-art {
+    width: 172px;
+    height: 172px;
+    border-radius: 16px;
+    overflow: hidden;
+    flex-shrink: 0;
+    background: var(--p-fill);
+    border: 1px solid var(--p-border);
+    display: grid;
+    place-items: center;
+    color: var(--p-text-dim);
+    box-shadow: 0 14px 32px rgba(0, 0, 0, 0.3);
+  }
+
+  .pl-hero-art img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  .mosaic {
+    width: 100%;
+    height: 100%;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+  }
+
+  .mosaic img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  .pl-hero-body {
+    flex: 1;
+    min-width: 240px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .pl-title {
+    margin: 0;
+    font-size: clamp(24px, 3vw, 34px);
+    line-height: 1.12;
+    letter-spacing: -0.03em;
+  }
+
+  .pl-meta-line {
+    margin: 0;
+    font-size: 13px;
+    color: var(--p-text-muted);
+  }
+
+  .pl-hero-actions {
+    margin-top: 8px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .pl-tracks-panel {
+    padding: 10px 12px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .pl-filter-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 2px 4px 8px;
+    padding: 7px 12px;
+    border-radius: 10px;
+    background: var(--p-fill);
+    border: 1px solid var(--p-border);
+    color: var(--p-text-muted);
+  }
+
+  .pl-filter-bar input {
+    flex: 1;
+    min-width: 0;
+    border: none;
+    background: transparent;
+    outline: none;
+    font-size: 13px;
+    color: var(--p-text);
+  }
+
+  .clear-filter {
+    color: var(--p-text-muted);
+    display: grid;
+    place-items: center;
+  }
+
+  .pl-table-head,
+  .pl-table-row {
+    display: grid;
+    grid-template-columns: 36px minmax(0, 2fr) minmax(0, 1.1fr) 56px 108px;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 10px;
+    border-radius: 10px;
+  }
+
+  .pl-table-head {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--p-text-dim);
+    border-bottom: 1px solid var(--p-border);
+    border-radius: 0;
+    padding-bottom: 9px;
+    margin-bottom: 2px;
+  }
+
+  .pl-table-row:hover {
+    background: var(--p-fill);
+  }
+
+  .pl-table-row.playing {
+    background: var(--p-accent-soft);
+  }
+
+  .col-num {
+    text-align: center;
+    font-size: 12px;
+    color: var(--p-text-dim);
+    font-variant-numeric: tabular-nums;
+    display: flex;
+    justify-content: center;
+  }
+
+  .pl-table-row.playing .col-num {
+    color: var(--p-accent-bright);
+  }
+
+  .pl-row-main {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    text-align: left;
+  }
+
+  .col-album {
+    min-width: 0;
+    font-size: 12.5px;
+    color: var(--p-text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .col-dur {
+    text-align: right;
+    font-size: 12px;
+    color: var(--p-text-muted);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .pl-row-acts {
+    display: flex;
+    justify-content: flex-end;
+    gap: 5px;
+  }
+
+  @media (max-width: 900px) {
+    .pl-table-head,
+    .pl-table-row {
+      grid-template-columns: 30px minmax(0, 1fr) 48px 104px;
+    }
+
+    .col-album {
+      display: none;
+    }
   }
 </style>

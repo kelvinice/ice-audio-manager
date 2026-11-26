@@ -24,6 +24,7 @@
     onPlay: (track: Track, list?: Track[]) => void;
     onSearchQuery: (query: string) => void;
     onToggleLike: (track: Track) => void;
+    onAddToPlaylist: (track: Track) => void;
     onHistoryChange: (nextLib: LibraryState) => void;
     onNotify: (msg: string) => void;
   }
@@ -35,6 +36,7 @@
     onPlay,
     onSearchQuery,
     onToggleLike,
+    onAddToPlaylist,
     onHistoryChange,
     onNotify,
   }: Props = $props();
@@ -210,6 +212,14 @@
             >
               <Icon name={isLiked ? "heart-filled" : "heart"} size={15} />
             </button>
+            <button
+              class="act-btn"
+              title="Add to Playlist"
+              aria-label="Add to Playlist"
+              onclick={() => onAddToPlaylist(m)}
+            >
+              <Icon name="list-plus" size={15} />
+            </button>
           {/if}
           <button
             class="btn-ghost"
@@ -284,6 +294,14 @@
                   onclick={() => onToggleLike(m)}
                 >
                   <Icon name={isLiked ? "heart-filled" : "heart"} size={14} />
+                </button>
+                <button
+                  class="act-btn"
+                  title="Add to Playlist"
+                  aria-label="Add to Playlist"
+                  onclick={() => onAddToPlaylist(m)}
+                >
+                  <Icon name="list-plus" size={14} />
                 </button>
               {/if}
               <button

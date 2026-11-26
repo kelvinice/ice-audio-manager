@@ -230,6 +230,19 @@
         />
       </label>
 
+      <label class="toggle-row">
+        <div>
+          <div class="row-title">Minimize to System Tray on Close</div>
+          <div class="row-sub">Keep music playing in the tray when clicking the close button</div>
+        </div>
+        <input
+          type="checkbox"
+          checked={settings.closeToTray}
+          onchange={(e) =>
+            onUpdateSettings({ closeToTray: (e.target as HTMLInputElement).checked })}
+        />
+      </label>
+
       <div class="slider-block">
         <div class="slider-top">
           <div>

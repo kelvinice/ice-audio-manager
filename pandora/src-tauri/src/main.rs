@@ -5,6 +5,7 @@ mod ice_bridge;
 mod library;
 mod lyrics;
 mod models;
+mod playlist_import;
 mod proxy;
 mod recognition;
 mod ytmusic;
@@ -13,13 +14,15 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
 use ice_core::engine::{Command, EngineSnapshot, RoleSet, SpatialMode};
-use tauri::{AppHandle, Manager, State};
+use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
+use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+use tauri::{AppHandle, Manager, State, WindowEvent};
 
 use crate::ice_bridge::IceBridge;
 use crate::library::LibraryStore;
 use crate::models::{
     AppPaths, EqState, HomeFeed, IceConfigPatch, IceStatus, LibraryState, PandoraLyrics, PandoraSettings,
-    RecognizedTrack, SearchResponse, Track,
+    PlaylistImportResult, RecognizedTrack, SearchResponse, Track,
 };
 use crate::ytmusic::YtMusicClient;
 
@@ -30,6 +33,8 @@ struct AppState {
     library: Arc<LibraryStore>,
     ice: Arc<IceBridge>,
     recognition_cancel: Arc<AtomicBool>,
+    import_cancel: Arc<AtomicBool>,
+    quitting: Arc<AtomicBool>,
 }
 
 #[tauri::command]
@@ -350,6 +355,52 @@ fn clear_recognition_history(state: State<'_, Arc<AppState>>) -> LibraryState {
     state.library.clear_recognition_history()
 }
 
+#[tauri::command]
+async fn import_playlist(
+    input: String,
+    name_override: Option<String>,
+    app: AppHandle,
+    state: State<'_, Arc<AppState>>,
+) -> Result<PlaylistImportResult, String> {
+    let ytm = Arc::clone(&state.ytm);
+    let lib = Arc::clone(&state.library);
+    let cancel = Arc::clone(&state.import_cancel);
+    tauri::async_runtime::spawn_blocking(move || {
+        playlist_import::import_playlist(&input, name_override.as_deref(), &ytm, &lib, &cancel, &app)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+fn cancel_playlist_import(state: State<'_, Arc<AppState>>) {
+    state
+        .import_cancel
+        .store(true, std::sync::atomic::Ordering::Release);
+}
+
+fn show_main_window(app: &AppHandle) {
+    if let Some(win) = app.get_webview_window("main") {
+        let _ = win.unminimize();
+        let _ = win.show();
+        let _ = win.set_focus();
+    }
+}
+
+fn toggle_main_window(app: &AppHandle) {
+    if let Some(win) = app.get_webview_window("main") {
+        let visible = win.is_visible().unwrap_or(false);
+        let minimized = win.is_minimized().unwrap_or(false);
+        if visible && !minimized {
+            let _ = win.hide();
+        } else {
+            let _ = win.unminimize();
+            let _ = win.show();
+            let _ = win.set_focus();
+        }
+    }
+}
+
 fn main() {
     let _ = tracing_subscriber::fmt()
         .with_max_level(tracing::Level::INFO)
@@ -377,6 +428,8 @@ fn main() {
         library,
         ice: Arc::clone(&ice),
         recognition_cancel: Arc::new(AtomicBool::new(false)),
+        import_cancel: Arc::new(AtomicBool::new(false)),
+        quitting: Arc::new(AtomicBool::new(false)),
     });
 
     tauri::Builder::default()
@@ -396,7 +449,56 @@ fn main() {
             if let Some(win) = app.get_webview_window("main") {
                 ice_bridge::apply_window_backdrop(&win);
             }
+            let show_item = MenuItem::with_id(app, "tray-show", "Show Pandora", true, None::<&str>)?;
+            let sep = PredefinedMenuItem::separator(app)?;
+            let quit_item = MenuItem::with_id(app, "tray-quit", "Quit Pandora", true, None::<&str>)?;
+            let tray_menu = Menu::with_items(app, &[&show_item, &sep, &quit_item])?;
+            let mut tray_builder = TrayIconBuilder::with_id("pandora-tray")
+                .tooltip("Pandora")
+                .menu(&tray_menu)
+                .show_menu_on_left_click(false)
+                .on_menu_event(|app, event| match event.id.as_ref() {
+                    "tray-show" => show_main_window(app),
+                    "tray-quit" => {
+                        app.state::<Arc<AppState>>()
+                            .quitting
+                            .store(true, std::sync::atomic::Ordering::Release);
+                        app.exit(0);
+                    }
+                    _ => {}
+                })
+                .on_tray_icon_event(|tray, event| match event {
+                    TrayIconEvent::Click {
+                        button: MouseButton::Left,
+                        button_state: MouseButtonState::Up,
+                        ..
+                    }
+                    | TrayIconEvent::DoubleClick {
+                        button: MouseButton::Left,
+                        ..
+                    } => toggle_main_window(tray.app_handle()),
+                    _ => {}
+                });
+            if let Some(icon) = app.default_window_icon().cloned() {
+                tray_builder = tray_builder.icon(icon);
+            }
+            if let Err(e) = tray_builder.build(app) {
+                tracing::warn!(error = %e, "Failed to initialize Pandora system tray icon");
+            }
             Ok(())
+        })
+        .on_window_event(|window, event| {
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                if window.label() == "main" {
+                    let state = window.state::<Arc<AppState>>();
+                    if !state.quitting.load(std::sync::atomic::Ordering::Acquire)
+                        && state.library.close_to_tray()
+                    {
+                        api.prevent_close();
+                        let _ = window.hide();
+                    }
+                }
+            }
         })
         .invoke_handler(tauri::generate_handler![
             get_proxy_port,
@@ -443,6 +545,8 @@ fn main() {
             cancel_recognition,
             delete_recognition_item,
             clear_recognition_history,
+            import_playlist,
+            cancel_playlist_import,
         ])
         .run(tauri::generate_context!())
         .expect("error running Pandora");

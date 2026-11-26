@@ -95,6 +95,7 @@ export interface PandoraSettings {
   showIceCardInSidebar: boolean;
   wavyProgress: boolean;
   spinningCover: boolean;
+  closeToTray: boolean;
 }
 
 export const DEFAULT_PANDORA_SETTINGS: PandoraSettings = {
@@ -109,6 +110,7 @@ export const DEFAULT_PANDORA_SETTINGS: PandoraSettings = {
   showIceCardInSidebar: true,
   wavyProgress: true,
   spinningCover: false,
+  closeToTray: false,
 };
 
 export interface AppPaths {
@@ -254,4 +256,24 @@ export interface PandoraLyrics {
   lines: PandoraLyricLine[];
   plainText: string | null;
   error: string | null;
+}
+
+export interface PlaylistImportResult {
+  library: LibraryState;
+  playlistId: string;
+  playlistName: string;
+  source: "ytmusic" | "spotify" | "text" | string;
+  totalTracks: number;
+  importedTracks: number;
+  unmatchedTracks: string[];
+  note: string | null;
+}
+
+export interface PlaylistImportProgress {
+  stage: "fetching" | "matching" | "done" | "cancelled" | "error";
+  source: string;
+  completed: number;
+  total: number;
+  matched: number;
+  currentTrack: string | null;
 }

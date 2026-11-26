@@ -173,6 +173,40 @@ impl LibraryStore {
         guard.clone()
     }
 
+    pub fn create_playlist_with_tracks(
+        &self,
+        name: &str,
+        tracks: Vec<Track>,
+    ) -> Result<(LibraryState, Playlist), String> {
+        let clean = name.trim();
+        if clean.is_empty() {
+            return Err("Playlist name cannot be empty".into());
+        }
+        let mut guard = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let seq = PLAYLIST_SEQ.fetch_add(1, Ordering::Relaxed);
+        let id = format!("pl-{}-{seq}", now_ms());
+        let mut seen = HashSet::new();
+        let mut track_ids = Vec::with_capacity(tracks.len());
+        for mut track in tracks {
+            if !seen.insert(track.id.clone()) {
+                continue;
+            }
+            track.liked = guard.liked.iter().any(|t| t.id == track.id);
+            track_ids.push(track.id.clone());
+            guard.tracks_index.insert(track.id.clone(), track);
+        }
+        let created = Playlist {
+            id,
+            name: clean.to_string(),
+            track_ids,
+            created_at_ms: now_ms(),
+        };
+        guard.playlists.push(created.clone());
+        sync_track_flags(&self.cache_dir, &mut guard);
+        self.save_locked(&guard);
+        Ok((guard.clone(), created))
+    }
+
     pub fn save_eq(&self, eq: EqState) -> LibraryState {
         let mut guard = self.state.lock().unwrap_or_else(|e| e.into_inner());
         guard.eq = eq;
@@ -204,6 +238,14 @@ impl LibraryStore {
         guard.eq = EqState::default();
         self.save_locked(&guard);
         guard.clone()
+    }
+
+    pub fn close_to_tray(&self) -> bool {
+        self.state
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .settings
+            .close_to_tray
     }
 
     pub fn add_recognition_history(&self, mut item: RecognizedTrack) -> LibraryState {
@@ -604,6 +646,16 @@ mod tests {
         let s5 = store.delete_playlist(&pl_id);
         assert!(s5.playlists.is_empty());
 
+        let t3 = sample_track("trk1");
+        let t4 = sample_track("trk2");
+        let t5 = sample_track("trk3");
+        let (s6, created) = store
+            .create_playlist_with_tracks("  Imported Mix  ", vec![t3, t4.clone(), t4, t5])
+            .unwrap();
+        assert_eq!(created.name, "Imported Mix");
+        assert_eq!(created.track_ids, vec!["trk1", "trk2", "trk3"]);
+        assert!(s6.tracks_index.contains_key("trk3"));
+
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -644,19 +696,23 @@ mod tests {
             show_ice_card_in_sidebar: false,
             wavy_progress: false,
             spinning_cover: true,
+            close_to_tray: true,
         });
         assert!(!updated.settings.dynamic_theme);
         assert!((updated.settings.default_volume - 1.0).abs() < 0.001);
         assert!(updated.settings.auto_launch_ice_notch);
+        assert!(updated.settings.close_to_tray);
 
         let reloaded = LibraryStore::load_at(db_path, dir.join("cache")).snapshot();
         assert_eq!(reloaded.settings.theme, crate::models::PandoraTheme::Daylight);
         assert!(!reloaded.settings.dynamic_theme);
         assert!(reloaded.settings.auto_launch_ice_notch);
+        assert!(reloaded.settings.close_to_tray);
 
         let reset = store.reset_settings();
         assert_eq!(reset.settings.theme, crate::models::PandoraTheme::Midnight);
         assert!(reset.settings.dynamic_theme);
+        assert!(!reset.settings.close_to_tray);
         assert_eq!(reset.eq.preset, "Flat");
         assert_eq!(reset.liked.len(), 1);
 

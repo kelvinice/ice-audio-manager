@@ -210,6 +210,75 @@ impl YtMusicClient {
         tracks
     }
 
+    pub fn fetch_playlist(&self, list_id: &str) -> Result<(String, Vec<Track>), String> {
+        let clean = list_id.trim().trim_start_matches("VL").trim();
+        if clean.is_empty() {
+            return Err("Missing YouTube playlist ID".into());
+        }
+        let browse_id = format!("VL{clean}");
+        let body = json!({
+            "context": web_remix_context(),
+            "browseId": browse_id
+        })
+        .to_string();
+        let headers = [
+            ("Origin", YTM_ORIGIN),
+            ("Referer", "https://music.youtube.com/"),
+            ("X-YouTube-Client-Name", "67"),
+            ("X-YouTube-Client-Version", WEB_REMIX_VERSION),
+        ];
+        let (status, bytes) = http::post_json(
+            "https://music.youtube.com/youtubei/v1/browse?prettyPrint=false",
+            &headers,
+            &body,
+        )?;
+        if !(200..=299).contains(&status) {
+            return Err(format!("YouTube Music playlist request returned HTTP {status}"));
+        }
+        let val: Value = serde_json::from_slice(&bytes)
+            .map_err(|e| format!("Could not parse YouTube playlist JSON: {e}"))?;
+        self.capture_visitor_data(&val);
+
+        let title = extract_playlist_title(&val).unwrap_or_else(|| "YouTube Music Playlist".into());
+        let mut tracks = Vec::new();
+        collect_tracks(&val, &mut tracks);
+
+        let mut next_token = find_continuation_token(&val);
+        let mut seen_tokens = std::collections::HashSet::new();
+        for _ in 0..4 {
+            let Some(tok) = next_token.take() else {
+                break;
+            };
+            if tracks.len() >= 500 || !seen_tokens.insert(tok.clone()) {
+                break;
+            }
+            let cont_body = json!({
+                "context": web_remix_context(),
+                "continuation": tok
+            })
+            .to_string();
+            let Ok((200..=299, cont_bytes)) = http::post_json(
+                "https://music.youtube.com/youtubei/v1/browse?prettyPrint=false",
+                &headers,
+                &cont_body,
+            ) else {
+                break;
+            };
+            let Ok(cont_val) = serde_json::from_slice::<Value>(&cont_bytes) else {
+                break;
+            };
+            collect_tracks(&cont_val, &mut tracks);
+            next_token = find_continuation_token(&cont_val);
+        }
+
+        dedup_tracks(&mut tracks);
+        if tracks.is_empty() {
+            return Err("No tracks found in that YouTube playlist (make sure it is public or unlisted)".into());
+        }
+        tracing::info!(list_id = clean, title = %title, count = tracks.len(), "Fetched YTM playlist");
+        Ok((title, tracks))
+    }
+
     pub fn resolve_stream(&self, video_id: &str) -> Result<ResolvedStream, String> {
         if let Ok(mut guard) = self.stream_cache.lock() {
             if let Some(entry) = guard.get(video_id) {
@@ -699,6 +768,69 @@ pub fn parse_duration_ms(text: &str) -> Option<u64> {
 fn dedup_tracks(tracks: &mut Vec<Track>) {
     let mut seen = std::collections::HashSet::new();
     tracks.retain(|t| seen.insert(t.id.clone()));
+}
+
+fn extract_playlist_title(val: &Value) -> Option<String> {
+    match val {
+        Value::Object(map) => {
+            for key in [
+                "musicResponsiveHeaderRenderer",
+                "musicDetailHeaderRenderer",
+                "musicEditablePlaylistDetailHeaderRenderer",
+            ] {
+                if let Some(hdr) = map.get(key) {
+                    if let Some(title) = runs_text(hdr.get("title")) {
+                        return Some(title);
+                    }
+                    if let Some(title) = runs_text(hdr.pointer("/header/musicResponsiveHeaderRenderer/title")) {
+                        return Some(title);
+                    }
+                    if let Some(title) = runs_text(hdr.pointer("/header/musicDetailHeaderRenderer/title")) {
+                        return Some(title);
+                    }
+                }
+            }
+            for child in map.values() {
+                if let Some(found) = extract_playlist_title(child) {
+                    return Some(found);
+                }
+            }
+            None
+        }
+        Value::Array(arr) => arr.iter().find_map(extract_playlist_title),
+        _ => None,
+    }
+}
+
+fn find_continuation_token(val: &Value) -> Option<String> {
+    match val {
+        Value::Object(map) => {
+            if let Some(tok) = val
+                .pointer("/continuationItemRenderer/continuationEndpoint/continuationCommand/token")
+                .and_then(Value::as_str)
+            {
+                if !tok.is_empty() {
+                    return Some(tok.to_string());
+                }
+            }
+            if let Some(tok) = val
+                .pointer("/continuations/0/nextContinuationData/continuation")
+                .and_then(Value::as_str)
+            {
+                if !tok.is_empty() {
+                    return Some(tok.to_string());
+                }
+            }
+            for child in map.values() {
+                if let Some(found) = find_continuation_token(child) {
+                    return Some(found);
+                }
+            }
+            None
+        }
+        Value::Array(arr) => arr.iter().find_map(find_continuation_token),
+        _ => None,
+    }
 }
 
 #[cfg(test)]

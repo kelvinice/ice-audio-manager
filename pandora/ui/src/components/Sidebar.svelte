@@ -14,6 +14,7 @@
     showIceCard: boolean;
     onNavigate: (tab: NavTab, playlistId?: string | null) => void;
     onOpenNewPlaylist: () => void;
+    onOpenImportPlaylist: () => void;
   }
 
   let {
@@ -25,6 +26,7 @@
     showIceCard,
     onNavigate,
     onOpenNewPlaylist,
+    onOpenImportPlaylist,
   }: Props = $props();
 </script>
 
@@ -96,14 +98,24 @@
 
   <div class="playlists-head">
     <span>Playlists</span>
-    <button
-      class="icon-add"
-      title="Create new playlist"
-      aria-label="Create new playlist"
-      onclick={onOpenNewPlaylist}
-    >
-      <Icon name="plus" size={14} strokeWidth={2.2} />
-    </button>
+    <div class="pl-head-btns">
+      <button
+        class="icon-add"
+        title="Import from Spotify or YouTube Music"
+        aria-label="Import from Spotify or YouTube Music"
+        onclick={onOpenImportPlaylist}
+      >
+        <Icon name="link" size={13} strokeWidth={2.1} />
+      </button>
+      <button
+        class="icon-add"
+        title="Create new playlist"
+        aria-label="Create new playlist"
+        onclick={onOpenNewPlaylist}
+      >
+        <Icon name="plus" size={14} strokeWidth={2.2} />
+      </button>
+    </div>
   </div>
 
   <div class="playlists-list">
@@ -275,6 +287,12 @@
     text-transform: uppercase;
     letter-spacing: 0.08em;
     color: var(--p-text-dim);
+  }
+
+  .pl-head-btns {
+    display: flex;
+    align-items: center;
+    gap: 5px;
   }
 
   .icon-add {

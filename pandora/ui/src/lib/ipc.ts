@@ -12,6 +12,8 @@ import {
   type MeterFrame,
   type PandoraLyrics,
   type PandoraSettings,
+  type PlaylistImportProgress,
+  type PlaylistImportResult,
   type RecognitionProgress,
   type RecognizedTrack,
   type SearchResponse,
@@ -164,6 +166,17 @@ export const cancelRecognition = () => call<void>("cancel_recognition");
 export const deleteRecognitionItem = (id: string) =>
   call<LibraryState>("delete_recognition_item", { id });
 export const clearRecognitionHistory = () => call<LibraryState>("clear_recognition_history");
+
+export const importPlaylist = (input: string, nameOverride: string | null = null) =>
+  call<PlaylistImportResult>("import_playlist", { input, nameOverride });
+export const cancelPlaylistImport = () => call<void>("cancel_playlist_import");
+
+export async function onPlaylistImportProgress(
+  cb: (progress: PlaylistImportProgress) => void,
+): Promise<UnlistenFn> {
+  if (!inTauri) return () => {};
+  return listen<PlaylistImportProgress>("playlist://import/v1", (e) => cb(e.payload));
+}
 
 export async function onRecognitionProgress(
   cb: (progress: RecognitionProgress) => void,
