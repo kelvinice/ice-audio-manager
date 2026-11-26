@@ -128,6 +128,10 @@ button {
 }
 
 .btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   background: var(--p-accent);
   color: #080b12;
   font-weight: 600;
@@ -142,6 +146,10 @@ button {
 }
 
 .btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid var(--p-border);
   color: var(--p-text);

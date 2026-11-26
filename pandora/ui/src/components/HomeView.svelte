@@ -2,14 +2,18 @@
   import { getDemoTracks } from "../lib/demoTracks";
   import { resolveArtworkUrl } from "../lib/theme";
   import type { HomeFeed, Track } from "../lib/types";
+  import Icon from "./Icon.svelte";
 
   interface Props {
     feed: HomeFeed;
     loading: boolean;
     history: Track[];
+    likedIds: Set<string>;
     currentTrackId: string | null;
     proxyPort: number;
     onPlay: (track: Track, list: Track[]) => void;
+    onToggleLike: (track: Track) => void;
+    onOpenPlaylistPicker: (track: Track) => void;
     onRefresh: () => void;
     onGoSearch: () => void;
   }
@@ -18,9 +22,12 @@
     feed,
     loading,
     history,
+    likedIds,
     currentTrackId,
     proxyPort,
     onPlay,
+    onToggleLike,
+    onOpenPlaylistPicker,
     onRefresh,
     onGoSearch,
   }: Props = $props();
@@ -43,11 +50,16 @@
       </p>
       <div class="hero-actions">
         <button class="btn-primary" onclick={() => onPlay(demoTracks[0], demoTracks)}>
-          ▶ Play Instant Demo
+          <Icon name="play" size={14} />
+          <span>Play Instant Demo</span>
         </button>
-        <button class="btn-ghost" onclick={onGoSearch}>Search YouTube Music</button>
+        <button class="btn-ghost" onclick={onGoSearch}>
+          <Icon name="search" size={14} />
+          <span>Search YouTube Music</span>
+        </button>
         <button class="btn-ghost" onclick={onRefresh} disabled={loading}>
-          {loading ? "Refreshing..." : "Refresh Feed"}
+          <Icon name="refresh" size={14} spin={loading} />
+          <span>{loading ? "Refreshing..." : "Refresh Feed"}</span>
         </button>
       </div>
     </div>
@@ -60,10 +72,14 @@
     </div>
     <div class="demo-grid">
       {#each demoTracks as track (track.id)}
-        <button
+        {@const isLiked = likedIds.has(track.id)}
+        <div
           class="demo-card card-glass"
           class:playing={currentTrackId === track.id}
+          role="button"
+          tabindex="0"
           onclick={() => onPlay(track, demoTracks)}
+          onkeydown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onPlay(track, demoTracks); } }}
         >
           {#if art(track)}
             <img src={art(track)} alt={track.title} />
@@ -73,8 +89,29 @@
             <div class="sub">{track.artist}</div>
             <div class="tag">Demo WAV • Synced LRC</div>
           </div>
-          <span class="play-badge">{currentTrackId === track.id ? "♫" : "▶"}</span>
-        </button>
+          <div class="mini-acts">
+            <button
+              class="mini-btn"
+              class:liked={isLiked}
+              title={isLiked ? "Remove from Favorites" : "Add to Favorites"}
+              aria-label={isLiked ? "Remove from Favorites" : "Add to Favorites"}
+              onclick={(e) => { e.stopPropagation(); onToggleLike(track); }}
+            >
+              <Icon name={isLiked ? "heart-filled" : "heart"} size={13} />
+            </button>
+            <button
+              class="mini-btn"
+              title="Add to Playlist"
+              aria-label="Add to Playlist"
+              onclick={(e) => { e.stopPropagation(); onOpenPlaylistPicker(track); }}
+            >
+              <Icon name="list-plus" size={13} />
+            </button>
+          </div>
+          <span class="play-badge">
+            <Icon name={currentTrackId === track.id ? "music" : "play"} size={13} />
+          </span>
+        </div>
       {/each}
     </div>
   </section>
@@ -87,21 +124,44 @@
       </div>
       <div class="cards-row">
         {#each history.slice(0, 8) as track (track.id)}
-          <button
+          {@const isLiked = likedIds.has(track.id)}
+          <div
             class="tile card-glass"
             class:playing={currentTrackId === track.id}
+            role="button"
+            tabindex="0"
             onclick={() => onPlay(track, history)}
+            onkeydown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onPlay(track, history); } }}
           >
             <div class="tile-art">
               {#if art(track)}
                 <img src={art(track)} alt={track.title} />
               {:else}
-                <div class="art-fallback">♫</div>
+                <div class="art-fallback"><Icon name="music" size={28} /></div>
               {/if}
+              <div class="tile-acts">
+                <button
+                  class="mini-btn"
+                  class:liked={isLiked}
+                  title={isLiked ? "Remove from Favorites" : "Add to Favorites"}
+                  aria-label={isLiked ? "Remove from Favorites" : "Add to Favorites"}
+                  onclick={(e) => { e.stopPropagation(); onToggleLike(track); }}
+                >
+                  <Icon name={isLiked ? "heart-filled" : "heart"} size={13} />
+                </button>
+                <button
+                  class="mini-btn"
+                  title="Add to Playlist"
+                  aria-label="Add to Playlist"
+                  onclick={(e) => { e.stopPropagation(); onOpenPlaylistPicker(track); }}
+                >
+                  <Icon name="list-plus" size={13} />
+                </button>
+              </div>
             </div>
             <div class="tile-title">{track.title}</div>
             <div class="tile-sub">{track.artist}</div>
-          </button>
+          </div>
         {/each}
       </div>
     </section>
@@ -119,21 +179,44 @@
     {#if feed.quickPicks.length > 0}
       <div class="cards-row">
         {#each feed.quickPicks.slice(0, 12) as track (track.id)}
-          <button
+          {@const isLiked = likedIds.has(track.id)}
+          <div
             class="tile card-glass"
             class:playing={currentTrackId === track.id}
+            role="button"
+            tabindex="0"
             onclick={() => onPlay(track, feed.quickPicks)}
+            onkeydown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onPlay(track, feed.quickPicks); } }}
           >
             <div class="tile-art">
               {#if art(track)}
                 <img src={art(track)} alt={track.title} />
               {:else}
-                <div class="art-fallback">♫</div>
+                <div class="art-fallback"><Icon name="music" size={28} /></div>
               {/if}
+              <div class="tile-acts">
+                <button
+                  class="mini-btn"
+                  class:liked={isLiked}
+                  title={isLiked ? "Remove from Favorites" : "Add to Favorites"}
+                  aria-label={isLiked ? "Remove from Favorites" : "Add to Favorites"}
+                  onclick={(e) => { e.stopPropagation(); onToggleLike(track); }}
+                >
+                  <Icon name={isLiked ? "heart-filled" : "heart"} size={13} />
+                </button>
+                <button
+                  class="mini-btn"
+                  title="Add to Playlist"
+                  aria-label="Add to Playlist"
+                  onclick={(e) => { e.stopPropagation(); onOpenPlaylistPicker(track); }}
+                >
+                  <Icon name="list-plus" size={13} />
+                </button>
+              </div>
             </div>
             <div class="tile-title">{track.title}</div>
             <div class="tile-sub">{track.artist}</div>
-          </button>
+          </div>
         {/each}
       </div>
     {:else if !loading}
@@ -151,21 +234,44 @@
       </div>
       <div class="cards-row">
         {#each feed.trending.slice(0, 12) as track (track.id)}
-          <button
+          {@const isLiked = likedIds.has(track.id)}
+          <div
             class="tile card-glass"
             class:playing={currentTrackId === track.id}
+            role="button"
+            tabindex="0"
             onclick={() => onPlay(track, feed.trending)}
+            onkeydown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onPlay(track, feed.trending); } }}
           >
             <div class="tile-art">
               {#if art(track)}
                 <img src={art(track)} alt={track.title} />
               {:else}
-                <div class="art-fallback">♫</div>
+                <div class="art-fallback"><Icon name="music" size={28} /></div>
               {/if}
+              <div class="tile-acts">
+                <button
+                  class="mini-btn"
+                  class:liked={isLiked}
+                  title={isLiked ? "Remove from Favorites" : "Add to Favorites"}
+                  aria-label={isLiked ? "Remove from Favorites" : "Add to Favorites"}
+                  onclick={(e) => { e.stopPropagation(); onToggleLike(track); }}
+                >
+                  <Icon name={isLiked ? "heart-filled" : "heart"} size={13} />
+                </button>
+                <button
+                  class="mini-btn"
+                  title="Add to Playlist"
+                  aria-label="Add to Playlist"
+                  onclick={(e) => { e.stopPropagation(); onOpenPlaylistPicker(track); }}
+                >
+                  <Icon name="list-plus" size={13} />
+                </button>
+              </div>
             </div>
             <div class="tile-title">{track.title}</div>
             <div class="tile-sub">{track.artist}</div>
-          </button>
+          </div>
         {/each}
       </div>
     </section>
@@ -325,6 +431,52 @@
     border-radius: 10px;
     overflow: hidden;
     background: rgba(255, 255, 255, 0.05);
+    position: relative;
+  }
+
+  .demo-card,
+  .tile {
+    cursor: pointer;
+  }
+
+  .mini-acts {
+    display: flex;
+    gap: 4px;
+  }
+
+  .tile-acts {
+    position: absolute;
+    right: 6px;
+    bottom: 6px;
+    display: flex;
+    gap: 4px;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+  }
+
+  .tile:hover .tile-acts,
+  .tile-acts:focus-within {
+    opacity: 1;
+  }
+
+  .mini-btn {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: rgba(11, 14, 24, 0.82);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    color: var(--p-text);
+    font-size: 12px;
+    display: grid;
+    place-items: center;
+  }
+
+  .mini-btn:hover {
+    background: rgba(30, 36, 56, 0.95);
+  }
+
+  .mini-btn.liked {
+    color: #fb7185;
   }
 
   .tile-art img {

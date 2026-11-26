@@ -69,6 +69,43 @@ impl Default for EqState {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct PandoraSettings {
+    pub dynamic_theme: bool,
+    pub animated_canvas: bool,
+    pub show_romaji: bool,
+    pub auto_queue_related: bool,
+    pub default_volume: f32,
+    pub media_session_enabled: bool,
+    pub auto_launch_ice_notch: bool,
+    pub show_ice_card_in_sidebar: bool,
+}
+
+impl Default for PandoraSettings {
+    fn default() -> Self {
+        Self {
+            dynamic_theme: true,
+            animated_canvas: true,
+            show_romaji: true,
+            auto_queue_related: true,
+            default_volume: 0.85,
+            media_session_enabled: true,
+            auto_launch_ice_notch: false,
+            show_ice_card_in_sidebar: true,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppPaths {
+    pub library_path: String,
+    pub cache_dir: String,
+    pub ice_config_path: String,
+    pub ice_bridge_path: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LibraryState {
     pub liked: Vec<Track>,
@@ -82,6 +119,8 @@ pub struct LibraryState {
     pub eq: EqState,
     /// `"auto" | "embedded" | "connected"`
     pub ice_mode_pref: String,
+    #[serde(default)]
+    pub settings: PandoraSettings,
 }
 
 impl Default for LibraryState {
@@ -97,6 +136,7 @@ impl Default for LibraryState {
             cache_bytes: 0,
             eq: EqState::default(),
             ice_mode_pref: "auto".into(),
+            settings: PandoraSettings::default(),
         }
     }
 }
@@ -109,6 +149,12 @@ pub struct IceStatus {
     pub standalone_running: bool,
     pub standalone_exe: Option<String>,
     pub config_path: String,
+    pub bridge_connected: bool,
+    pub bridge_port: Option<u16>,
+    pub bridge_pid: Option<u32>,
+    pub notch_expanded: Option<bool>,
+    pub ice_version: Option<String>,
+    pub bridge_info_path: String,
     pub error: Option<String>,
 }
 

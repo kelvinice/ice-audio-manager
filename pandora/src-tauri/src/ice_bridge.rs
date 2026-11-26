@@ -9,9 +9,11 @@
 //!    the Notch overlay. Pandora still switches devices / volume / spatial directly via `ice_win` and
 //!    syncs settings through `%APPDATA%\IceAudioManager\config.toml` (which standalone Ice hot-reloads).
 
-use std::path::PathBuf;
+use std::io::{BufRead, BufReader, Write};
+use std::net::{SocketAddr, TcpStream};
+use std::path::{Path, PathBuf};
 use std::process::Command as ProcessCommand;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -29,6 +31,7 @@ use ice_win::endpoints::Endpoints;
 use ice_win::meter::MeterHub;
 use ice_win::spatial::{self, SpatialFormat};
 use ice_win::{policy, volume};
+use serde::Deserialize;
 use tauri::{AppHandle, Emitter};
 use windows::Win32::Foundation::CloseHandle;
 use windows::Win32::System::Threading::{OpenMutexW, SYNCHRONIZATION_ACCESS_RIGHTS};
@@ -38,13 +41,50 @@ use crate::models::{IceConfigPatch, IceStatus};
 
 const ICE_MUTEX_NAME_SYNC: SYNCHRONIZATION_ACCESS_RIGHTS = SYNCHRONIZATION_ACCESS_RIGHTS(0x0010_0000);
 
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct BridgeDiscoveryFile {
+    version: u32,
+    port: u16,
+    token: String,
+    pid: u32,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct BridgeRemoteStatus {
+    pid: u32,
+    app_version: String,
+    notch_expanded: bool,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct BridgeReply {
+    ok: bool,
+    error: Option<String>,
+    status: Option<BridgeRemoteStatus>,
+    snapshot: Option<EngineSnapshot>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct LiveBridgeInfo {
+    port: u16,
+    pid: u32,
+    app_version: String,
+    notch_expanded: bool,
+}
+
 pub struct IceBridge {
     config_path: PathBuf,
+    bridge_info_path: PathBuf,
     fake_engine: bool,
     pref: Mutex<String>,
     mode: Mutex<String>,
     last_error: Mutex<Option<String>>,
     embedded: Mutex<Option<Arc<dyn Engine>>>,
+    live_bridge: Mutex<Option<LiveBridgeInfo>>,
+    last_bridge_revision: AtomicU64,
     coop_meter: Arc<MeterHub>,
     meter_active: Arc<AtomicBool>,
     meter_generation: Mutex<u64>,
@@ -54,18 +94,30 @@ pub struct IceBridge {
 impl IceBridge {
     pub fn new(initial_pref: String, fake_engine: bool) -> Arc<Self> {
         let config_path = default_ice_config_path();
+        let bridge_info_path = default_ice_bridge_info_path();
         Arc::new(Self {
             config_path,
+            bridge_info_path,
             fake_engine,
             pref: Mutex::new(initial_pref),
             mode: Mutex::new("unavailable".into()),
             last_error: Mutex::new(None),
             embedded: Mutex::new(None),
+            live_bridge: Mutex::new(None),
+            last_bridge_revision: AtomicU64::new(0),
             coop_meter: MeterHub::new(),
             meter_active: Arc::new(AtomicBool::new(false)),
             meter_generation: Mutex::new(0),
             app_handle: Mutex::new(None),
         })
+    }
+
+    pub fn config_path(&self) -> &Path {
+        &self.config_path
+    }
+
+    pub fn bridge_info_path(&self) -> &Path {
+        &self.bridge_info_path
     }
 
     pub fn attach_app(self: &Arc<Self>, app: AppHandle) {
@@ -99,11 +151,18 @@ impl IceBridge {
     pub fn status(&self) -> IceStatus {
         let mode = self.mode.lock().map(|g| g.clone()).unwrap_or_else(|_| "unavailable".into());
         let error = self.last_error.lock().ok().and_then(|g| g.clone());
+        let bridge = self.live_bridge.lock().ok().and_then(|g| g.clone());
         IceStatus {
             mode,
             standalone_running: is_standalone_ice_running(),
             standalone_exe: find_standalone_ice_exe().map(|p| p.display().to_string()),
             config_path: self.config_path.display().to_string(),
+            bridge_connected: bridge.is_some(),
+            bridge_port: bridge.as_ref().map(|b| b.port),
+            bridge_pid: bridge.as_ref().map(|b| b.pid),
+            notch_expanded: bridge.as_ref().map(|b| b.notch_expanded),
+            ice_version: bridge.as_ref().map(|b| b.app_version.clone()),
+            bridge_info_path: self.bridge_info_path.display().to_string(),
             error,
         }
     }
@@ -125,6 +184,7 @@ impl IceBridge {
         let current_has_embedded = self.embedded.lock().map(|g| g.is_some()).unwrap_or(false);
 
         if want_embedded && !current_has_embedded {
+            let _ = self.clear_live_bridge();
             let engine_res: Result<Arc<dyn Engine>, String> = if self.fake_engine {
                 Ok(Arc::new(ice_core::engine::fake::FakeEngine::new()))
             } else {
@@ -161,7 +221,7 @@ impl IceBridge {
                 }
                 changed = true;
             }
-            let target_mode = if standalone { "connected" } else { "connected" };
+            let target_mode = "connected";
             let prev = self.mode.lock().map(|g| g.clone()).unwrap_or_default();
             if prev != target_mode {
                 if let Ok(mut m) = self.mode.lock() {
@@ -170,6 +230,23 @@ impl IceBridge {
                 if let Ok(mut e) = self.last_error.lock() {
                     *e = None;
                 }
+                changed = true;
+            }
+
+            if standalone {
+                let prev_bridge = self.live_bridge.lock().ok().and_then(|g| g.clone());
+                let polled = self.poll_bridge_snapshot();
+                let next_bridge = self.live_bridge.lock().ok().and_then(|g| g.clone());
+                if prev_bridge != next_bridge {
+                    changed = true;
+                }
+                if let Some(snap) = polled {
+                    let prev_rev = self.last_bridge_revision.swap(snap.revision, Ordering::AcqRel);
+                    if snap.revision != prev_rev && !changed {
+                        self.emit_snapshot_value(&snap);
+                    }
+                }
+            } else if self.clear_live_bridge() {
                 changed = true;
             }
         }
@@ -202,9 +279,13 @@ impl IceBridge {
     }
 
     fn emit_snapshot_only(&self, engine: &Arc<dyn Engine>) {
+        self.emit_snapshot_value(&engine.snapshot());
+    }
+
+    fn emit_snapshot_value(&self, snap: &EngineSnapshot) {
         if let Ok(guard) = self.app_handle.lock() {
             if let Some(app) = guard.as_ref() {
-                let _ = app.emit("ice://snapshot/v1", engine.snapshot());
+                let _ = app.emit("ice://snapshot/v1", snap);
             }
         }
     }
@@ -222,6 +303,10 @@ impl IceBridge {
         if let Some(eng) = self.embedded.lock().ok().and_then(|g| g.clone()) {
             return eng.snapshot();
         }
+        if let Some(snap) = self.poll_bridge_snapshot() {
+            self.last_bridge_revision.store(snap.revision, Ordering::Release);
+            return snap;
+        }
         self.coop_snapshot()
     }
 
@@ -230,9 +315,110 @@ impl IceBridge {
             eng.send(cmd);
             return Ok(());
         }
+        if let Ok(reply) = self.call_bridge(serde_json::json!({ "action": "command", "command": &cmd })) {
+            if let Some(snap) = reply.snapshot {
+                self.last_bridge_revision.store(snap.revision, Ordering::Release);
+                self.emit_status_value_and_snapshot(snap);
+            } else {
+                self.emit_status_and_snapshot();
+            }
+            return Ok(());
+        }
         self.execute_coop_command(cmd)?;
         self.emit_status_and_snapshot();
         Ok(())
+    }
+
+    pub fn ping_bridge(self: &Arc<Self>) -> Result<IceStatus, String> {
+        self.reconcile();
+        if is_standalone_ice_running() {
+            let reply = self.call_bridge(serde_json::json!({ "action": "ping" }))?;
+            if let Some(st) = reply.status {
+                tracing::debug!(pid = st.pid, version = %st.app_version, "Ice bridge ping ok");
+            }
+        }
+        self.emit_status_and_snapshot();
+        Ok(self.status())
+    }
+
+    pub fn toggle_notch(self: &Arc<Self>) -> Result<IceStatus, String> {
+        if !is_standalone_ice_running() {
+            return Err("Start standalone Ice Audio Manager to control its desktop Notch.".into());
+        }
+        self.call_bridge(serde_json::json!({ "action": "toggleNotch" }))?;
+        std::thread::sleep(Duration::from_millis(40));
+        let _ = self.call_bridge(serde_json::json!({ "action": "ping" }));
+        self.emit_status_and_snapshot();
+        Ok(self.status())
+    }
+
+    pub fn show_notch(self: &Arc<Self>) -> Result<IceStatus, String> {
+        if !is_standalone_ice_running() {
+            return Err("Start standalone Ice Audio Manager to show its desktop Notch.".into());
+        }
+        self.call_bridge(serde_json::json!({ "action": "showNotch" }))?;
+        std::thread::sleep(Duration::from_millis(40));
+        let _ = self.call_bridge(serde_json::json!({ "action": "ping" }));
+        self.emit_status_and_snapshot();
+        Ok(self.status())
+    }
+
+    pub fn open_ice_settings(self: &Arc<Self>) -> Result<(), String> {
+        if !is_standalone_ice_running() {
+            return Err("Start standalone Ice Audio Manager to open Ice's Settings window.".into());
+        }
+        self.call_bridge(serde_json::json!({ "action": "openSettings" }))?;
+        Ok(())
+    }
+
+    fn emit_status_value_and_snapshot(&self, snap: EngineSnapshot) {
+        if let Ok(guard) = self.app_handle.lock() {
+            if let Some(app) = guard.as_ref() {
+                let _ = app.emit("ice://status/v1", self.status());
+                let _ = app.emit("ice://snapshot/v1", snap);
+            }
+        }
+    }
+
+    fn clear_live_bridge(&self) -> bool {
+        self.live_bridge
+            .lock()
+            .ok()
+            .and_then(|mut g| g.take())
+            .is_some()
+    }
+
+    fn poll_bridge_snapshot(&self) -> Option<EngineSnapshot> {
+        self.call_bridge(serde_json::json!({ "action": "snapshot" }))
+            .ok()
+            .and_then(|r| r.snapshot)
+    }
+
+    fn call_bridge(&self, mut payload: serde_json::Value) -> Result<BridgeReply, String> {
+        let info = read_bridge_discovery(&self.bridge_info_path)
+            .ok_or_else(|| "Ice local bridge file not found (standalone Ice may be older or stopped)".to_string())?;
+        if let Some(obj) = payload.as_object_mut() {
+            obj.insert("token".into(), serde_json::Value::String(info.token.clone()));
+        }
+        let reply = bridge_tcp_call(&info, &payload);
+        match &reply {
+            Ok(rep) if rep.ok => {
+                if let Some(st) = &rep.status {
+                    if let Ok(mut g) = self.live_bridge.lock() {
+                        *g = Some(LiveBridgeInfo {
+                            port: info.port,
+                            pid: st.pid,
+                            app_version: st.app_version.clone(),
+                            notch_expanded: st.notch_expanded,
+                        });
+                    }
+                }
+            }
+            _ => {
+                self.clear_live_bridge();
+            }
+        }
+        reply
     }
 
     pub fn patch_settings(self: &Arc<Self>, patch: IceConfigPatch) -> Result<EngineSnapshot, String> {
@@ -288,6 +474,30 @@ impl IceBridge {
             }
             std::thread::sleep(Duration::from_millis(30));
             return Ok(eng.snapshot());
+        }
+
+        if is_standalone_ice_running() && read_bridge_discovery(&self.bridge_info_path).is_some() {
+            let mut latest_snap = None;
+            let mut bridge_ok = true;
+            for cmd in &cmds {
+                match self.call_bridge(serde_json::json!({ "action": "command", "command": cmd })) {
+                    Ok(rep) => {
+                        if rep.snapshot.is_some() {
+                            latest_snap = rep.snapshot;
+                        }
+                    }
+                    Err(_) => {
+                        bridge_ok = false;
+                        break;
+                    }
+                }
+            }
+            if bridge_ok {
+                let snap = latest_snap.unwrap_or_else(|| self.snapshot());
+                self.last_bridge_revision.store(snap.revision, Ordering::Release);
+                self.emit_status_value_and_snapshot(snap.clone());
+                return Ok(snap);
+            }
         }
 
         for cmd in cmds {
@@ -366,12 +576,18 @@ impl IceBridge {
             .spawn()
             .map_err(|e| format!("Failed to start {}: {e}", exe.display()))?;
 
-        // Wait up to 3s for Ice's single-instance mutex to come up
+        // Wait up to 3s for Ice's single-instance mutex to come up, then wait briefly for bridge.json.
         for _ in 0..15 {
             if is_standalone_ice_running() {
                 break;
             }
             std::thread::sleep(Duration::from_millis(200));
+        }
+        for _ in 0..12 {
+            if self.call_bridge(serde_json::json!({ "action": "ping" })).is_ok() {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(150));
         }
         self.emit_status_and_snapshot();
         Ok(self.status())
@@ -569,6 +785,51 @@ fn default_ice_config_path() -> PathBuf {
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("."));
     base.join("IceAudioManager").join("config.toml")
+}
+
+fn default_ice_bridge_info_path() -> PathBuf {
+    let base = std::env::var_os("LOCALAPPDATA")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("."));
+    base.join("IceAudioManager").join("bridge.json")
+}
+
+fn read_bridge_discovery(path: &Path) -> Option<BridgeDiscoveryFile> {
+    let text = std::fs::read_to_string(path).ok()?;
+    let info: BridgeDiscoveryFile = serde_json::from_str(&text).ok()?;
+    if info.version == 1 && info.port > 0 && !info.token.is_empty() && info.pid > 0 {
+        Some(info)
+    } else {
+        None
+    }
+}
+
+fn bridge_tcp_call(info: &BridgeDiscoveryFile, payload: &serde_json::Value) -> Result<BridgeReply, String> {
+    let addr = SocketAddr::from(([127, 0, 0, 1], info.port));
+    let mut stream = TcpStream::connect_timeout(&addr, Duration::from_millis(350))
+        .map_err(|e| format!("Ice bridge unreachable on port {}: {e}", info.port))?;
+    let _ = stream.set_read_timeout(Some(Duration::from_millis(1200)));
+    let _ = stream.set_write_timeout(Some(Duration::from_millis(1200)));
+
+    let mut req_line = serde_json::to_string(payload).map_err(|e| e.to_string())?;
+    req_line.push('\n');
+    stream
+        .write_all(req_line.as_bytes())
+        .map_err(|e| format!("Ice bridge write error: {e}"))?;
+    stream.flush().map_err(|e| format!("Ice bridge flush error: {e}"))?;
+
+    let mut line = String::new();
+    let mut reader = BufReader::new(stream);
+    reader
+        .read_line(&mut line)
+        .map_err(|e| format!("Ice bridge read error: {e}"))?;
+
+    let reply: BridgeReply =
+        serde_json::from_str(line.trim_end()).map_err(|e| format!("Invalid Ice bridge reply: {e}"))?;
+    if !reply.ok {
+        return Err(reply.error.unwrap_or_else(|| "Ice bridge returned an error".into()));
+    }
+    Ok(reply)
 }
 
 fn find_standalone_ice_exe() -> Option<PathBuf> {

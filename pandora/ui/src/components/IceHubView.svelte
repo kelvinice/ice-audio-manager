@@ -2,17 +2,22 @@
   import { onDestroy, onMount } from "svelte";
   import {
     launchIceStandalone,
+    openIceSettings,
     patchIceSettings,
+    pingIceBridge,
     setIceMeterActive,
     setIceModePref,
     setIceSpatial,
     setIceVolume,
+    showIceNotch,
     stopIceStandalone,
     switchIceDevice,
     toggleIceMicMute,
     toggleIceMute,
+    toggleIceNotch,
   } from "../lib/ipc";
   import type { EngineSnapshot, IceStatus, MeterFrame, SpatialMode } from "../lib/types";
+  import Icon from "./Icon.svelte";
 
   interface Props {
     iceStatus: IceStatus;
@@ -21,6 +26,7 @@
     modePref: "auto" | "embedded" | "connected";
     onStatusChange: (status: IceStatus) => void;
     onSnapshotChange: (snap: EngineSnapshot) => void;
+    onModePrefChange: (pref: "auto" | "embedded" | "connected") => void;
   }
 
   let {
@@ -30,6 +36,7 @@
     modePref,
     onStatusChange,
     onSnapshotChange,
+    onModePrefChange,
   }: Props = $props();
 
   let busy = $state(false);
@@ -48,7 +55,21 @@
     actionError = null;
     try {
       const next = await setIceModePref(pref);
+      onModePrefChange(pref);
       onStatusChange(next);
+    } catch (e) {
+      actionError = e instanceof Error ? e.message : String(e);
+    } finally {
+      busy = false;
+    }
+  }
+
+  async function runRemote(fn: () => Promise<IceStatus | void>) {
+    busy = true;
+    actionError = null;
+    try {
+      const next = await fn();
+      if (next) onStatusChange(next);
     } catch (e) {
       actionError = e instanceof Error ? e.message : String(e);
     } finally {
@@ -110,16 +131,25 @@
   <header class="banner card-glass">
     <div class="banner-left">
       <div class="pill-badge">
-        Ice Audio Manager • {iceStatus.mode === "connected" ? "Connected (Co-op)" : iceStatus.mode === "embedded" ? "Wrapped (Embedded)" : iceStatus.mode}
+        Ice Audio Manager • {iceStatus.bridgeConnected
+          ? `Bridge Live (Port ${iceStatus.bridgePort ?? "?"})`
+          : iceStatus.mode === "connected"
+            ? "Connected (Co-op)"
+            : iceStatus.mode === "embedded"
+              ? "Wrapped (Embedded)"
+              : iceStatus.mode}
       </div>
       <h1>Windows Audio Engine &amp; Notch Bridge</h1>
       <p>
         Pandora reuses <code>ice-core</code> and <code>ice-win</code> directly. When standalone Ice Audio Manager
-        is closed, Pandora wraps its Core Audio engine internally; when standalone Ice is running, Pandora
-        hands off hotkeys &amp; Notch ownership and syncs live via Core Audio + <code>config.toml</code>.
+        is running, Pandora connects over Ice's authenticated loopback bridge (<code>bridge.json</code>) for
+        instant device/Notch/settings sync, falling back cleanly to Core Audio + <code>config.toml</code>.
       </p>
       <div class="meta-line">
         Config: <code>{iceStatus.configPath}</code>
+        {#if iceStatus.bridgeConnected}
+          • Bridge: <code>127.0.0.1:{iceStatus.bridgePort}</code> (v{iceStatus.iceVersion}, PID {iceStatus.bridgePid})
+        {/if}
       </div>
     </div>
 
@@ -129,13 +159,45 @@
         <button class="chip" class:active={modePref === "embedded"} onclick={() => changePref("embedded")}>Wrap</button>
         <button class="chip" class:active={modePref === "connected"} onclick={() => changePref("connected")}>Co-op</button>
       </div>
+      <div class="mini-actions">
+        <button class="btn-ghost" disabled={busy} onclick={() => void runRemote(pingIceBridge)}>
+          <Icon name="refresh" size={14} spin={busy} />
+          <span>Ping Bridge</span>
+        </button>
+        <button
+          class="btn-ghost"
+          disabled={busy || !iceStatus.bridgeConnected}
+          title={iceStatus.bridgeConnected ? "Toggle Ice desktop Notch" : "Launch standalone Ice to control Notch"}
+          onclick={() => void runRemote(toggleIceNotch)}
+        >
+          <Icon name="panel-top" size={14} />
+          <span>{iceStatus.notchExpanded ? "Collapse Notch" : "Toggle Notch"}</span>
+        </button>
+        <button
+          class="btn-ghost"
+          disabled={busy || !iceStatus.bridgeConnected}
+          onclick={() => void runRemote(showIceNotch)}
+        >
+          <span>Show Notch</span>
+        </button>
+        <button
+          class="btn-ghost"
+          disabled={busy || !iceStatus.bridgeConnected}
+          onclick={() => void runRemote(openIceSettings)}
+        >
+          <Icon name="settings" size={14} />
+          <span>Ice Settings</span>
+        </button>
+      </div>
       {#if iceStatus.standaloneRunning}
         <button class="btn-ghost" disabled={busy} onclick={handleStopStandalone}>
-          Stop Standalone Ice &amp; Wrap Internally
+          <Icon name="power" size={14} />
+          <span>Stop Standalone Ice &amp; Wrap Internally</span>
         </button>
       {:else}
         <button class="btn-primary" disabled={busy || !iceStatus.standaloneExe} onclick={handleLaunchStandalone}>
-          ❄ Launch Standalone Ice Notch
+          <Icon name="snowflake" size={15} />
+          <span>Launch Standalone Ice Notch</span>
         </button>
       {/if}
     </div>

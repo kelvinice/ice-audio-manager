@@ -6,7 +6,13 @@ import {
   ytmRelated,
 } from "./ipc";
 import { applyDefaultMaterialTheme, applyMaterialThemeFromArt, resolveArtworkUrl } from "./theme";
-import type { EqState, PandoraLyrics, Track } from "./types";
+import {
+  DEFAULT_PANDORA_SETTINGS,
+  type EqState,
+  type PandoraLyrics,
+  type PandoraSettings,
+  type Track,
+} from "./types";
 
 export const EQ_FREQUENCIES = [32, 64, 125, 250, 500, 1000, 2000, 4000, 8000, 16000];
 
@@ -80,11 +86,22 @@ class PandoraAudioEngine {
   private lastSilenceJumpAt = 0;
   private sleepTimerId: number | null = null;
   private onHistoryRecorded: (() => void) | null = null;
+  private settings: PandoraSettings = { ...DEFAULT_PANDORA_SETTINGS };
 
-  init(proxyPort: number, initialEq: EqState, onHistory: () => void) {
+  init(
+    proxyPort: number,
+    initialEq: EqState,
+    initialSettings: PandoraSettings,
+    onHistory: () => void,
+  ) {
     this.proxyPort = proxyPort;
     this.onHistoryRecorded = onHistory;
-    playerStore.update((s) => ({ ...s, eq: initialEq }));
+    this.settings = { ...DEFAULT_PANDORA_SETTINGS, ...initialSettings };
+    const initialVol = Math.max(0, Math.min(1, this.settings.defaultVolume ?? 0.85));
+    playerStore.update((s) => ({ ...s, eq: initialEq, volume: initialVol }));
+    if (this.gainNode) {
+      this.gainNode.gain.value = get(playerStore).muted ? 0 : initialVol;
+    }
     if (this.audio) return;
 
     const el = new Audio();
@@ -113,12 +130,16 @@ class PandoraAudioEngine {
 
     el.addEventListener("play", () => {
       playerStore.update((st) => ({ ...st, playing: true, error: null }));
-      if ("mediaSession" in navigator) navigator.mediaSession.playbackState = "playing";
+      if (this.settings.mediaSessionEnabled && "mediaSession" in navigator) {
+        navigator.mediaSession.playbackState = "playing";
+      }
     });
 
     el.addEventListener("pause", () => {
       playerStore.update((st) => ({ ...st, playing: false }));
-      if ("mediaSession" in navigator) navigator.mediaSession.playbackState = "paused";
+      if (this.settings.mediaSessionEnabled && "mediaSession" in navigator) {
+        navigator.mediaSession.playbackState = "paused";
+      }
     });
 
     el.addEventListener("ended", () => {
@@ -188,6 +209,30 @@ class PandoraAudioEngine {
     this.applyEqToGraph(st.eq);
   }
 
+  applySettings(next: PandoraSettings) {
+    const prev = this.settings;
+    this.settings = { ...DEFAULT_PANDORA_SETTINGS, ...next };
+    const track = get(playerStore).currentTrack;
+
+    if (prev.dynamicTheme !== this.settings.dynamicTheme) {
+      if (this.settings.dynamicTheme && track) {
+        void applyMaterialThemeFromArt(track.artworkUrl, this.proxyPort);
+      } else if (!this.settings.dynamicTheme) {
+        applyDefaultMaterialTheme();
+      }
+    }
+
+    if (prev.mediaSessionEnabled !== this.settings.mediaSessionEnabled && "mediaSession" in navigator) {
+      if (!this.settings.mediaSessionEnabled) {
+        navigator.mediaSession.metadata = null;
+        navigator.mediaSession.playbackState = "none";
+      } else if (track) {
+        this.updateMediaSessionMetadata(track);
+        navigator.mediaSession.playbackState = get(playerStore).playing ? "playing" : "paused";
+      }
+    }
+  }
+
   private applyEqToGraph(eq: EqState) {
     if (this.audio) {
       this.audio.playbackRate = eq.playbackRate;
@@ -249,8 +294,14 @@ class PandoraAudioEngine {
 
     this.audio.src = src;
     this.audio.playbackRate = get(playerStore).eq.playbackRate;
-    void applyMaterialThemeFromArt(track.artworkUrl, this.proxyPort);
-    this.updateMediaSessionMetadata(track);
+    if (this.settings.dynamicTheme) {
+      void applyMaterialThemeFromArt(track.artworkUrl, this.proxyPort);
+    } else {
+      applyDefaultMaterialTheme();
+    }
+    if (this.settings.mediaSessionEnabled) {
+      this.updateMediaSessionMetadata(track);
+    }
 
     try {
       await this.audio.play();
@@ -267,7 +318,7 @@ class PandoraAudioEngine {
     void recordHistoryTrack(track).then(() => this.onHistoryRecorded?.()).catch(() => {});
     void this.loadLyricsForTrack(track);
 
-    if (track.source === "ytmusic" && queue.length - idx <= 2) {
+    if (this.settings.autoQueueRelated && track.source === "ytmusic" && queue.length - idx <= 2) {
       void ytmRelated(track.id)
         .then((related) => {
           if (related.length === 0) return;
@@ -511,7 +562,7 @@ class PandoraAudioEngine {
   }
 
   private updateMediaSessionMetadata(track: Track) {
-    if (!("mediaSession" in navigator)) return;
+    if (!this.settings.mediaSessionEnabled || !("mediaSession" in navigator)) return;
     const art = resolveArtworkUrl(track.artworkUrl, this.proxyPort);
     navigator.mediaSession.metadata = new MediaMetadata({
       title: track.title,
@@ -522,7 +573,7 @@ class PandoraAudioEngine {
   }
 
   private syncMediaSessionPosition(posMs: number, durMs: number) {
-    if (!("mediaSession" in navigator) || durMs <= 0) return;
+    if (!this.settings.mediaSessionEnabled || !("mediaSession" in navigator) || durMs <= 0) return;
     try {
       navigator.mediaSession.setPositionState({
         duration: durMs / 1000,

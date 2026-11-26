@@ -2,6 +2,7 @@
 #![forbid(unsafe_code)]
 
 mod art;
+mod bridge;
 mod drag;
 mod engine_bridge;
 mod ipc;
@@ -1404,6 +1405,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     runtime.start_minimized.store(args.iter().any(|arg| arg == "--start-minimized"), Ordering::Release);
     let setup_state = Arc::clone(&runtime);
     let exit_flag_ref = Arc::clone(&runtime);
+    let bridge_info_path = app_data.join("bridge.json");
 
     let app = tauri::Builder::default()
         .register_uri_scheme_protocol("iceart", |ctx, request| {
@@ -1467,6 +1469,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 placement::watch(&handle, &setup_state);
                 session::watch(&handle, &setup_state);
                 engine_bridge::watch(handle.clone(), Arc::clone(&setup_state))?;
+                bridge::start(&handle, &setup_state, bridge_info_path);
                 let engine = if fake_engine { "fake" } else { "windows" };
                 tracing::info!(engine, "Ice Audio Manager tray ready");
             }
@@ -1488,6 +1491,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     app.run(move |_app_handle, event| match event {
         tauri::RunEvent::Exit => {
+            bridge::stop();
             meter::released(&exit_flag_ref);
             placement::stop(_app_handle);
             session::stop(_app_handle);

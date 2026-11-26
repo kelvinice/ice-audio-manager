@@ -1,17 +1,20 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import type {
-  EngineSnapshot,
-  EqState,
-  HomeFeed,
-  IceConfigPatch,
-  IceStatus,
-  LibraryState,
-  MeterFrame,
-  PandoraLyrics,
-  SearchResponse,
-  SpatialMode,
-  Track,
+import {
+  DEFAULT_PANDORA_SETTINGS,
+  type AppPaths,
+  type EngineSnapshot,
+  type EqState,
+  type HomeFeed,
+  type IceConfigPatch,
+  type IceStatus,
+  type LibraryState,
+  type MeterFrame,
+  type PandoraLyrics,
+  type PandoraSettings,
+  type SearchResponse,
+  type SpatialMode,
+  type Track,
 } from "./types";
 
 const inTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -97,6 +100,7 @@ export function getLibrary(): Promise<LibraryState> {
         playbackRate: 1,
       },
       iceModePref: "auto",
+      settings: { ...DEFAULT_PANDORA_SETTINGS },
     });
   }
   return call<LibraryState>("get_library");
@@ -104,13 +108,20 @@ export function getLibrary(): Promise<LibraryState> {
 
 export const toggleLikeTrack = (track: Track) => call<LibraryState>("toggle_like", { track });
 export const recordHistoryTrack = (track: Track) => call<LibraryState>("record_history", { track });
-export const createPlaylist = (name: string) => call<LibraryState>("create_playlist", { name });
+export const createPlaylist = (name: string, initialTrack: Track | null = null) =>
+  call<LibraryState>("create_playlist", { name, initialTrack });
+export const renamePlaylist = (playlistId: string, name: string) =>
+  call<LibraryState>("rename_playlist", { playlistId, name });
 export const deletePlaylist = (playlistId: string) => call<LibraryState>("delete_playlist", { playlistId });
 export const addToPlaylist = (playlistId: string, track: Track) =>
   call<LibraryState>("add_to_playlist", { playlistId, track });
 export const removeFromPlaylist = (playlistId: string, trackId: string) =>
   call<LibraryState>("remove_from_playlist", { playlistId, trackId });
 export const saveEqState = (eq: EqState) => call<LibraryState>("save_eq", { eq });
+export const savePandoraSettings = (settings: PandoraSettings) =>
+  call<LibraryState>("save_settings", { settings });
+export const resetPandoraSettings = () => call<LibraryState>("reset_settings");
+export const getAppPaths = () => call<AppPaths>("get_app_paths");
 export const addLocalFolder = (path: string) => call<LibraryState>("add_local_folder", { path });
 export const removeLocalFolder = (path: string) => call<LibraryState>("remove_local_folder", { path });
 export const rescanLocalFolders = () => call<LibraryState>("rescan_local");
@@ -132,6 +143,10 @@ export const patchIceSettings = (patch: IceConfigPatch) => call<EngineSnapshot>(
 export const setIceMeterActive = (active: boolean) => call<void>("ice_set_meter_active", { active });
 export const launchIceStandalone = () => call<IceStatus>("ice_launch_standalone");
 export const stopIceStandalone = () => call<IceStatus>("ice_stop_standalone");
+export const pingIceBridge = () => call<IceStatus>("ice_ping_bridge");
+export const toggleIceNotch = () => call<IceStatus>("ice_toggle_notch");
+export const showIceNotch = () => call<IceStatus>("ice_show_notch");
+export const openIceSettings = () => call<void>("ice_open_settings");
 
 export async function onIceStatus(cb: (status: IceStatus) => void): Promise<UnlistenFn> {
   if (!inTauri) return () => {};

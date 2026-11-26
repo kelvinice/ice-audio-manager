@@ -1,34 +1,32 @@
 <script lang="ts">
   import { ytmSearch } from "../lib/ipc";
   import { resolveArtworkUrl } from "../lib/theme";
-  import type { Playlist, Track } from "../lib/types";
-
+  import type { Track } from "../lib/types";
+  import Icon from "./Icon.svelte";
   interface Props {
     localTracks: Track[];
     likedIds: Set<string>;
     cachedIds: Set<string>;
-    playlists: Playlist[];
     currentTrackId: string | null;
     proxyPort: number;
     onPlay: (track: Track, list: Track[]) => void;
     onEnqueue: (track: Track) => void;
     onToggleLike: (track: Track) => void;
     onDownload: (track: Track) => void;
-    onAddToPlaylist: (playlistId: string, track: Track) => void;
+    onOpenPlaylistPicker: (track: Track) => void;
   }
 
   let {
     localTracks,
     likedIds,
     cachedIds,
-    playlists,
     currentTrackId,
     proxyPort,
     onPlay,
     onEnqueue,
     onToggleLike,
     onDownload,
-    onAddToPlaylist,
+    onOpenPlaylistPicker,
   }: Props = $props();
 
   let query = $state("");
@@ -37,7 +35,6 @@
   let results = $state<Track[]>([]);
   let error = $state<string | null>(null);
   let downloadingId = $state<string | null>(null);
-  let pickerTrackId = $state<string | null>(null);
 
   let displayedTracks = $derived.by(() => {
     if (filter === "local") {
@@ -139,7 +136,7 @@
               {#if resolveArtworkUrl(track.artworkUrl, proxyPort)}
                 <img src={resolveArtworkUrl(track.artworkUrl, proxyPort)} alt={track.title} />
               {:else}
-                <span>♫</span>
+                <Icon name="music" size={18} />
               {/if}
             </div>
             <div class="meta">
@@ -156,48 +153,44 @@
             <button
               class="act"
               class:liked={isLiked}
-              title="Like"
+              title={isLiked ? "Remove from Favorites" : "Add to Favorites"}
+              aria-label={isLiked ? "Remove from Favorites" : "Add to Favorites"}
               onclick={() => onToggleLike(track)}
             >
-              {isLiked ? "♥" : "♡"}
+              <Icon name={isLiked ? "heart-filled" : "heart"} size={14} />
             </button>
-            <button class="act" title="Add to queue" onclick={() => onEnqueue(track)}>+Q</button>
+            <button
+              class="act"
+              title="Add to queue"
+              aria-label="Add to queue"
+              onclick={() => onEnqueue(track)}
+            >
+              <Icon name="queue-plus" size={14} />
+            </button>
             {#if track.source === "ytmusic"}
               <button
                 class="act"
                 class:cached={isCached}
                 disabled={isCached || downloadingId === track.id}
                 title={isCached ? "Cached offline" : "Download for offline"}
+                aria-label={isCached ? "Cached offline" : "Download for offline"}
                 onclick={() => handleDownload(track)}
               >
-                {downloadingId === track.id ? "…" : isCached ? "✓" : "↓"}
+                <Icon
+                  name={downloadingId === track.id ? "loader" : isCached ? "check" : "download"}
+                  size={14}
+                  spin={downloadingId === track.id}
+                />
               </button>
             {/if}
-            {#if playlists.length > 0}
-              <div class="pl-wrap">
-                <button
-                  class="act"
-                  title="Add to playlist"
-                  onclick={() => (pickerTrackId = pickerTrackId === track.id ? null : track.id)}
-                >
-                  ＋
-                </button>
-                {#if pickerTrackId === track.id}
-                  <div class="pl-menu card-glass">
-                    {#each playlists as pl (pl.id)}
-                      <button
-                        onclick={() => {
-                          onAddToPlaylist(pl.id, track);
-                          pickerTrackId = null;
-                        }}
-                      >
-                        {pl.name}
-                      </button>
-                    {/each}
-                  </div>
-                {/if}
-              </div>
-            {/if}
+            <button
+              class="act"
+              title="Add to playlist"
+              aria-label="Add to playlist"
+              onclick={() => onOpenPlaylistPicker(track)}
+            >
+              <Icon name="list-plus" size={14} />
+            </button>
           </div>
         </div>
       {/each}
@@ -355,11 +348,13 @@
   }
 
   .act {
-    padding: 5px 8px;
+    width: 32px;
+    height: 32px;
+    display: grid;
+    place-items: center;
     border-radius: 8px;
-    font-size: 12px;
     color: var(--p-text-muted);
-    background: rgba(255, 255, 255, 0.04);
+    background: rgba(255, 255, 255, 0.05);
   }
 
   .act:hover {
@@ -373,32 +368,5 @@
 
   .act.cached {
     color: var(--p-success);
-  }
-
-  .pl-wrap {
-    position: relative;
-  }
-
-  .pl-menu {
-    position: absolute;
-    right: 0;
-    top: 30px;
-    z-index: 20;
-    min-width: 150px;
-    padding: 6px;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
-
-  .pl-menu button {
-    text-align: left;
-    padding: 7px 10px;
-    border-radius: 8px;
-    font-size: 12px;
-  }
-
-  .pl-menu button:hover {
-    background: rgba(255, 255, 255, 0.1);
   }
 </style>

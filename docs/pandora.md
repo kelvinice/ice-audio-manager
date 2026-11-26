@@ -1,6 +1,6 @@
 # Pandora — Native Windows Music Client Connected to Ice Audio Manager
 
-> **Status:** Working Prototype (`pandora/`) · **Standalone Guarantee:** `ice-audio-manager` (`crates/`, `app/`, root `Cargo.toml`, `build.cmd`) is **100% untouched** and remains completely standalone.
+> **Status:** Working Prototype (`pandora/`) · **Standalone Guarantee:** `ice-audio-manager` still runs **100% standalone** with zero dependency on Pandora (`app/src-tauri/src/bridge.rs` only exposes an optional loopback-only listener that sleeps with 0% CPU if nothing connects).
 
 Pandora is a native Windows desktop music player inspired by **Vivi Music**, built with Rust + Tauri v2 + WebView2 + Web Audio DSP, and wired directly into **Ice Audio Manager**'s core crates (`ice-core` and `ice-win`).
 
@@ -17,7 +17,8 @@ Pandora is a native Windows desktop music player inspired by **Vivi Music**, bui
 | **Lyrics & Romaji** | Synced karaoke lyrics | Reuses `ice-win` LRCLIB + `ice-core` LRC parser & estimated word-sync karaoke + `ice-win` offline Japanese → Romaji |
 | **Offline & Local Files** | Local caching/downloads + offline library | `%LOCALAPPDATA%\Pandora\cache\` byte-range offline audio cache + local Windows folder scanner (`.mp3/.flac/.wav/.ogg/.m4a/.opus`) |
 | **Privacy-First** | Local DB, zero trackers/telemetry | `%APPDATA%\Pandora\library.json` atomic JSON store, zero analytics |
-| **Windows Native Extra** | N/A | **Dual-mode Ice Audio Manager wrapper & connector**: 1-click device switching, Master/Mic mute, Spatial Sound (Sonic/Atmos/DTS), 14-band WASAPI loopback meter, shared Notch & Call Mode controls, and Windows SMTC integration |
+| **Windows Native Extra** | N/A | **Dual-mode Ice Audio Manager wrapper & live local bridge**: authenticated `127.0.0.1` JSON-line bridge (`bridge.json`), instant Notch Toggle / Show / Open Ice Settings, 1-click device switching, Master/Mic mute, Spatial Sound (Sonic/Atmos/DTS), 14-band WASAPI loopback meter, shared Notch & Call Mode controls, and Windows SMTC integration |
+| **Pandora Settings** | Compose settings screens | Dedicated **⚙ Settings** view (`SettingsView.svelte`) saved in `library.json`: Dynamic Material You toggle, Animated Canvas, Romaji Lyrics, Auto-Queue Radio, Startup Volume, SMTC broadcast, Auto-Launch Standalone Ice, Sidebar Ice card, Cache/Local Folder maintenance, and Settings/EQ reset |
 | **Offline Prototype Testing** | Requires network or local files | Includes 3 synthesized WAV **Demo Tracks** with custom SVG art & synced LRC (including Japanese Romaji) |
 
 ---
@@ -52,11 +53,12 @@ Pandora never breaks standalone `ice-audio-manager.exe` and never fights it over
    - Active automatically when standalone `ice-audio-manager.exe` is **not** running (or `--fake-engine` is passed).
    - Pandora starts `ice_win::audio_engine::AudioEngine::start(ConfigStore::new(...))` in-process and subscribes to `Engine::subscribe()` and `Engine::meter()`.
    - Device switching, volume/mic controls, spatial sound, global hotkeys, and Call Mode all work inside Pandora without needing a second app open.
-3. **Connected / Co-op Mode (`mode = "connected"`):**
-   - Active automatically whenever standalone `ice-audio-manager.exe` is running (or when you click **Launch Standalone Ice Notch** in **Ice Audio Hub** — Pandora drops its embedded engine *before* spawning Ice so handoff is clean).
-   - Standalone Ice owns the Notch overlay, global hotkeys, and Call Mode exclusively.
-   - Pandora reads/switches Core Audio devices, volume, spatial audio, and WASAPI loopback meters directly via `ice-win`, and writes Ice Notch settings to `%APPDATA%\IceAudioManager\config.toml` via `ConfigStore::save()`, which standalone Ice hot-reloads via `DirWatch` in ~300 ms.
-   - Pandora publishes track title, artist, album, artwork, and timeline position to Windows SMTC (`navigator.mediaSession`), so standalone Ice's Notch automatically displays whatever Pandora is playing!
+3. **Connected / Co-op & Live Bridge Mode (`mode = "connected"`, `bridgeConnected = true|false`):**
+   - Active automatically whenever standalone `ice-audio-manager.exe` is running (or when you click **Launch Standalone Ice Notch** in **Ice Audio Hub** or **Settings** — Pandora drops its embedded engine *before* spawning Ice so handoff is clean).
+   - Standalone Ice owns the Notch overlay, global hotkeys, and Call Mode exclusively, and exposes an authenticated `127.0.0.1:0` JSON-line bridge (`%LOCALAPPDATA%\IceAudioManager\bridge.json`, deleted cleanly on exit).
+   - Over the live bridge, Pandora sends zero-latency commands directly to Ice (`command`, `ping`, `snapshot`, `toggleNotch`, `showNotch`, `openSettings`) and polls snapshot revisions so Notch/Ice changes sync back into Pandora immediately.
+   - If talking to an older standalone Ice binary without `bridge.json`, Pandora gracefully falls back to direct `ice-win` Core Audio calls + `%APPDATA%\IceAudioManager\config.toml` saves.
+   - When **Broadcast to Windows SMTC / Ice Notch** is enabled in Settings, Pandora publishes track title, artist, album, artwork, and timeline position via `navigator.mediaSession`, so standalone Ice's Notch automatically displays whatever Pandora is playing!
 
 ---
 

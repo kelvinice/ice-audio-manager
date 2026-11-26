@@ -16,7 +16,8 @@ use tauri::{Manager, State};
 use crate::ice_bridge::IceBridge;
 use crate::library::LibraryStore;
 use crate::models::{
-    EqState, HomeFeed, IceConfigPatch, IceStatus, LibraryState, PandoraLyrics, SearchResponse, Track,
+    AppPaths, EqState, HomeFeed, IceConfigPatch, IceStatus, LibraryState, PandoraLyrics, PandoraSettings,
+    SearchResponse, Track,
 };
 use crate::ytmusic::YtMusicClient;
 
@@ -92,8 +93,21 @@ fn record_history(track: Track, state: State<'_, Arc<AppState>>) -> LibraryState
 }
 
 #[tauri::command]
-fn create_playlist(name: String, state: State<'_, Arc<AppState>>) -> Result<LibraryState, String> {
-    state.library.create_playlist(&name)
+fn create_playlist(
+    name: String,
+    initial_track: Option<Track>,
+    state: State<'_, Arc<AppState>>,
+) -> Result<LibraryState, String> {
+    state.library.create_playlist(&name, initial_track)
+}
+
+#[tauri::command]
+fn rename_playlist(
+    playlist_id: String,
+    name: String,
+    state: State<'_, Arc<AppState>>,
+) -> Result<LibraryState, String> {
+    state.library.rename_playlist(&playlist_id, &name)
 }
 
 #[tauri::command]
@@ -122,6 +136,26 @@ fn remove_from_playlist(
 #[tauri::command]
 fn save_eq(eq: EqState, state: State<'_, Arc<AppState>>) -> LibraryState {
     state.library.save_eq(eq)
+}
+
+#[tauri::command]
+fn save_settings(settings: PandoraSettings, state: State<'_, Arc<AppState>>) -> LibraryState {
+    state.library.save_settings(settings)
+}
+
+#[tauri::command]
+fn reset_settings(state: State<'_, Arc<AppState>>) -> LibraryState {
+    state.library.reset_settings()
+}
+
+#[tauri::command]
+fn get_app_paths(state: State<'_, Arc<AppState>>) -> AppPaths {
+    AppPaths {
+        library_path: state.library.db_path().display().to_string(),
+        cache_dir: state.library.cache_dir().display().to_string(),
+        ice_config_path: state.ice.config_path().display().to_string(),
+        ice_bridge_path: state.ice.bridge_info_path().display().to_string(),
+    }
 }
 
 #[tauri::command]
@@ -239,6 +273,38 @@ async fn ice_stop_standalone(state: State<'_, Arc<AppState>>) -> Result<IceStatu
         .map_err(|e| e.to_string())?
 }
 
+#[tauri::command]
+async fn ice_ping_bridge(state: State<'_, Arc<AppState>>) -> Result<IceStatus, String> {
+    let ice = Arc::clone(&state.ice);
+    tauri::async_runtime::spawn_blocking(move || ice.ping_bridge())
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+async fn ice_toggle_notch(state: State<'_, Arc<AppState>>) -> Result<IceStatus, String> {
+    let ice = Arc::clone(&state.ice);
+    tauri::async_runtime::spawn_blocking(move || ice.toggle_notch())
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+async fn ice_show_notch(state: State<'_, Arc<AppState>>) -> Result<IceStatus, String> {
+    let ice = Arc::clone(&state.ice);
+    tauri::async_runtime::spawn_blocking(move || ice.show_notch())
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+async fn ice_open_settings(state: State<'_, Arc<AppState>>) -> Result<(), String> {
+    let ice = Arc::clone(&state.ice);
+    tauri::async_runtime::spawn_blocking(move || ice.open_ice_settings())
+        .await
+        .map_err(|e| e.to_string())?
+}
+
 fn main() {
     let _ = tracing_subscriber::fmt()
         .with_max_level(tracing::Level::INFO)
@@ -247,7 +313,9 @@ fn main() {
     let fake_engine = std::env::args().any(|a| a == "--fake-engine");
     let library = Arc::new(LibraryStore::load());
     let ytm = Arc::new(YtMusicClient::new());
-    let pref = library.snapshot().ice_mode_pref;
+    let initial_lib = library.snapshot();
+    let pref = initial_lib.ice_mode_pref;
+    let auto_launch_ice = initial_lib.settings.auto_launch_ice_notch && !fake_engine;
     let ice = IceBridge::new(pref, fake_engine);
 
     let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
@@ -267,6 +335,16 @@ fn main() {
         .manage(state)
         .setup(move |app| {
             ice.attach_app(app.handle().clone());
+            if auto_launch_ice {
+                let ice_launch = Arc::clone(&ice);
+                std::thread::Builder::new()
+                    .name("pandora-ice-autolaunch".into())
+                    .spawn(move || {
+                        std::thread::sleep(std::time::Duration::from_millis(500));
+                        let _ = ice_launch.launch_standalone();
+                    })
+                    .ok();
+            }
             if let Some(win) = app.get_webview_window("main") {
                 ice_bridge::apply_window_backdrop(&win);
             }
@@ -282,10 +360,14 @@ fn main() {
             toggle_like,
             record_history,
             create_playlist,
+            rename_playlist,
             delete_playlist,
             add_to_playlist,
             remove_from_playlist,
             save_eq,
+            save_settings,
+            reset_settings,
+            get_app_paths,
             add_local_folder,
             remove_local_folder,
             rescan_local,
@@ -304,6 +386,10 @@ fn main() {
             ice_set_meter_active,
             ice_launch_standalone,
             ice_stop_standalone,
+            ice_ping_bridge,
+            ice_toggle_notch,
+            ice_show_notch,
+            ice_open_settings,
         ])
         .run(tauri::generate_context!())
         .expect("error running Pandora");

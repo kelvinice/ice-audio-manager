@@ -45,6 +45,35 @@ export interface EqState {
   playbackRate: number;
 }
 
+export interface PandoraSettings {
+  dynamicTheme: boolean;
+  animatedCanvas: boolean;
+  showRomaji: boolean;
+  autoQueueRelated: boolean;
+  defaultVolume: number;
+  mediaSessionEnabled: boolean;
+  autoLaunchIceNotch: boolean;
+  showIceCardInSidebar: boolean;
+}
+
+export const DEFAULT_PANDORA_SETTINGS: PandoraSettings = {
+  dynamicTheme: true,
+  animatedCanvas: true,
+  showRomaji: true,
+  autoQueueRelated: true,
+  defaultVolume: 0.85,
+  mediaSessionEnabled: true,
+  autoLaunchIceNotch: false,
+  showIceCardInSidebar: true,
+};
+
+export interface AppPaths {
+  libraryPath: string;
+  cacheDir: string;
+  iceConfigPath: string;
+  iceBridgePath: string;
+}
+
 export interface LibraryState {
   liked: Track[];
   playlists: Playlist[];
@@ -56,6 +85,7 @@ export interface LibraryState {
   cacheBytes: number;
   eq: EqState;
   iceModePref: "auto" | "embedded" | "connected";
+  settings: PandoraSettings;
 }
 
 export interface IceStatus {
@@ -63,6 +93,12 @@ export interface IceStatus {
   standaloneRunning: boolean;
   standaloneExe: string | null;
   configPath: string;
+  bridgeConnected: boolean;
+  bridgePort: number | null;
+  bridgePid: number | null;
+  notchExpanded: boolean | null;
+  iceVersion: string | null;
+  bridgeInfoPath: string;
   error: string | null;
 }
 

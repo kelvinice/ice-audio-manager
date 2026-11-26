@@ -3,21 +3,26 @@
   import { switchIceDevice } from "../lib/ipc";
   import { resolveArtworkUrl } from "../lib/theme";
   import type { DeviceSummary, Track } from "../lib/types";
+  import Icon from "./Icon.svelte";
 
   interface Props {
     proxyPort: number;
     playbackDevices: DeviceSummary[];
+    likedIds: Set<string>;
     onOpenNowPlaying: () => void;
     onOpenEq: () => void;
     onToggleLike: (track: Track) => void;
+    onAddToPlaylist: (track: Track) => void;
   }
 
   let {
     proxyPort,
     playbackDevices,
+    likedIds,
     onOpenNowPlaying,
     onOpenEq,
     onToggleLike,
+    onAddToPlaylist,
   }: Props = $props();
 
   let showDevices = $state(false);
@@ -28,66 +33,166 @@
   }
 
   let activeDev = $derived(playbackDevices.find((d) => d.isDefault));
+  let seekPct = $derived(
+    $playerStore.durationMs > 0
+      ? Math.min(100, Math.max(0, ($playerStore.currentTimeMs / $playerStore.durationMs) * 100))
+      : 0,
+  );
+  let volPct = $derived(
+    ($playerStore.muted ? 0 : Math.min(1, Math.max(0, $playerStore.volume))) * 100,
+  );
 </script>
 
 <footer class="player-bar">
   <div class="left">
     {#if $playerStore.currentTrack}
       {@const track = $playerStore.currentTrack}
-      <button class="track-btn" onclick={onOpenNowPlaying}>
+      {@const isLiked = likedIds.has(track.id)}
+      <button class="track-btn" onclick={onOpenNowPlaying} title="Open Now Playing & Lyrics">
         <div class="art">
           {#if resolveArtworkUrl(track.artworkUrl, proxyPort)}
             <img src={resolveArtworkUrl(track.artworkUrl, proxyPort)} alt={track.title} />
           {:else}
-            <span>♫</span>
+            <span class="art-empty"><Icon name="music" size={20} /></span>
           {/if}
+          <span class="art-hover"><Icon name="maximize" size={15} /></span>
         </div>
         <div class="info">
           <div class="title">{track.title}</div>
           <div class="artist">{track.artist}</div>
         </div>
       </button>
-      <button class="icon-btn" title="Like" onclick={() => onToggleLike(track)}>
-        {track.liked ? "♥" : "♡"}
-      </button>
+
+      <div class="left-acts">
+        <button
+          class="dock-icon"
+          class:liked={isLiked}
+          title={isLiked ? "Remove from Favorites" : "Add to Favorites"}
+          aria-label={isLiked ? "Remove from Favorites" : "Add to Favorites"}
+          onclick={() => onToggleLike(track)}
+        >
+          <Icon name={isLiked ? "heart-filled" : "heart"} size={16} />
+        </button>
+        <button
+          class="dock-icon"
+          title="Add to Playlist"
+          aria-label="Add to Playlist"
+          onclick={() => onAddToPlaylist(track)}
+        >
+          <Icon name="list-plus" size={16} />
+        </button>
+      </div>
     {:else}
-      <div class="idle-msg">Pick a demo track, local folder, or YouTube Music song</div>
+      <div class="idle-state">
+        <span class="idle-badge"><Icon name="music" size={15} /></span>
+        <span class="idle-msg">Select a track to start listening</span>
+      </div>
     {/if}
   </div>
 
   <div class="center">
     <div class="transport">
-      <button class="icon-btn" class:lit={$playerStore.shuffle} onclick={() => audioEngine.toggleShuffle()}>
-        ⇄
+      <button
+        class="dock-icon"
+        class:lit={$playerStore.shuffle}
+        title="Shuffle"
+        aria-label="Toggle shuffle"
+        onclick={() => audioEngine.toggleShuffle()}
+      >
+        <Icon name="shuffle" size={16} />
+        {#if $playerStore.shuffle}<span class="dot"></span>{/if}
       </button>
-      <button class="icon-btn" onclick={() => void audioEngine.previous()}>⏮</button>
-      <button class="play-btn" onclick={() => void audioEngine.togglePlayPause()}>
-        {$playerStore.loading ? "…" : $playerStore.playing ? "❚❚" : "▶"}
+
+      <button
+        class="dock-icon"
+        title="Previous track"
+        aria-label="Previous track"
+        onclick={() => void audioEngine.previous()}
+      >
+        <Icon name="skip-back" size={17} />
       </button>
-      <button class="icon-btn" onclick={() => void audioEngine.next()}>⏭</button>
-      <button class="icon-btn" class:lit={$playerStore.repeat !== "off"} onclick={() => audioEngine.cycleRepeat()}>
-        {$playerStore.repeat === "one" ? "↻1" : "↻"}
+
+      <button
+        class="play-btn"
+        title={$playerStore.playing ? "Pause" : "Play"}
+        aria-label={$playerStore.playing ? "Pause" : "Play"}
+        onclick={() => void audioEngine.togglePlayPause()}
+      >
+        {#if $playerStore.loading}
+          <Icon name="loader" size={18} spin={true} />
+        {:else}
+          <Icon name={$playerStore.playing ? "pause" : "play"} size={18} />
+        {/if}
+      </button>
+
+      <button
+        class="dock-icon"
+        title="Next track"
+        aria-label="Next track"
+        onclick={() => void audioEngine.next()}
+      >
+        <Icon name="skip-forward" size={17} />
+      </button>
+
+      <button
+        class="dock-icon"
+        class:lit={$playerStore.repeat !== "off"}
+        title="Cycle repeat mode"
+        aria-label="Cycle repeat mode"
+        onclick={() => audioEngine.cycleRepeat()}
+      >
+        <Icon name={$playerStore.repeat === "one" ? "repeat-1" : "repeat"} size={16} />
+        {#if $playerStore.repeat !== "off"}<span class="dot"></span>{/if}
       </button>
     </div>
 
     <div class="seek-row">
-      <span>{formatMs($playerStore.currentTimeMs)}</span>
+      <span class="time">{formatMs($playerStore.currentTimeMs)}</span>
       <input
+        class="range-track"
+        style="--progress: {seekPct}%"
         type="range"
         min="0"
         max={Math.max(1000, $playerStore.durationMs)}
         value={$playerStore.currentTimeMs}
+        aria-label="Playback position"
         oninput={(e) => audioEngine.seekMs(Number((e.target as HTMLInputElement).value))}
       />
-      <span>{formatMs($playerStore.durationMs)}</span>
+      <span class="time">{formatMs($playerStore.durationMs)}</span>
     </div>
   </div>
 
   <div class="right">
+    <button
+      class="dock-icon"
+      title="Lyrics & Now Playing"
+      aria-label="Lyrics and Now Playing"
+      onclick={onOpenNowPlaying}
+    >
+      <Icon name="lyrics" size={17} />
+    </button>
+
+    <button
+      class="dock-icon"
+      class:lit={$playerStore.eq.enabled}
+      title={$playerStore.eq.enabled ? `Equalizer (${$playerStore.eq.preset})` : "Equalizer (Off)"}
+      aria-label="Equalizer and Audio Effects"
+      onclick={onOpenEq}
+    >
+      <Icon name="sliders" size={17} />
+      {#if $playerStore.eq.enabled}<span class="dot"></span>{/if}
+    </button>
+
     {#if playbackDevices.length > 0}
       <div class="dev-picker-wrap">
-        <button class="btn-chip" onclick={() => (showDevices = !showDevices)}>
-          🎧 {activeDev ? activeDev.name : "Audio Output"}
+        <button
+          class="dock-icon"
+          class:lit={showDevices}
+          title={activeDev ? `Output: ${activeDev.name}` : "Switch Audio Output"}
+          aria-label="Switch Audio Output"
+          onclick={() => (showDevices = !showDevices)}
+        >
+          <Icon name="headphones" size={17} />
         </button>
         {#if showDevices}
           <div class="dev-popover card-glass">
@@ -100,8 +205,11 @@
                   showDevices = false;
                 }}
               >
-                <span>{dev.name}</span>
-                {#if dev.isDefault}<span>✓</span>{/if}
+                <span class="dev-row-name">
+                  <Icon name="speaker" size={14} />
+                  <span>{dev.name}</span>
+                </span>
+                {#if dev.isDefault}<Icon name="check" size={14} />{/if}
               </button>
             {/each}
           </div>
@@ -109,21 +217,31 @@
       </div>
     {/if}
 
-    <button class="btn-chip" onclick={onOpenEq}>
-      EQ{$playerStore.eq.enabled ? "" : " (Off)"}
-    </button>
-    <button class="btn-chip" onclick={onOpenNowPlaying}>Lyrics / Canvas</button>
-
     <div class="vol-wrap">
-      <button class="icon-btn" onclick={() => audioEngine.toggleMute()}>
-        {$playerStore.muted || $playerStore.volume === 0 ? "🔇" : "🔊"}
+      <button
+        class="dock-icon"
+        title={$playerStore.muted ? "Unmute" : "Mute"}
+        aria-label={$playerStore.muted ? "Unmute" : "Mute"}
+        onclick={() => audioEngine.toggleMute()}
+      >
+        <Icon
+          name={$playerStore.muted || $playerStore.volume === 0
+            ? "volume-x"
+            : $playerStore.volume < 0.5
+              ? "volume-1"
+              : "volume-2"}
+          size={17}
+        />
       </button>
       <input
+        class="range-track vol-range"
+        style="--progress: {volPct}%"
         type="range"
         min="0"
         max="1"
         step="0.02"
         value={$playerStore.muted ? 0 : $playerStore.volume}
+        aria-label="Player volume"
         oninput={(e) => audioEngine.setVolume(Number((e.target as HTMLInputElement).value))}
       />
     </div>
@@ -132,16 +250,17 @@
 
 <style>
   .player-bar {
-    height: 82px;
+    height: 84px;
     flex-shrink: 0;
     display: grid;
-    grid-template-columns: 1fr 1.2fr 1fr;
+    grid-template-columns: minmax(0, 1fr) minmax(300px, 1.35fr) minmax(0, 1fr);
     align-items: center;
-    gap: 16px;
-    padding: 0 18px;
-    background: rgba(11, 14, 24, 0.88);
-    border-top: 1px solid var(--p-border);
-    backdrop-filter: blur(26px);
+    gap: 18px;
+    padding: 0 20px;
+    background: linear-gradient(180deg, rgba(14, 18, 31, 0.92), rgba(9, 12, 22, 0.95));
+    border-top: 1px solid rgba(255, 255, 255, 0.09);
+    backdrop-filter: blur(28px);
+    box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.32);
     z-index: 10;
   }
 
@@ -161,11 +280,13 @@
   }
 
   .art {
-    width: 50px;
-    height: 50px;
-    border-radius: 10px;
+    position: relative;
+    width: 52px;
+    height: 52px;
+    border-radius: 11px;
     overflow: hidden;
     background: rgba(255, 255, 255, 0.07);
+    border: 1px solid rgba(255, 255, 255, 0.08);
     display: grid;
     place-items: center;
     flex-shrink: 0;
@@ -177,12 +298,31 @@
     object-fit: cover;
   }
 
+  .art-empty {
+    color: var(--p-text-dim);
+  }
+
+  .art-hover {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    background: rgba(8, 11, 20, 0.56);
+    color: #fff;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+  }
+
+  .track-btn:hover .art-hover {
+    opacity: 1;
+  }
+
   .info {
     min-width: 0;
   }
 
   .title {
-    font-size: 13px;
+    font-size: 13.5px;
     font-weight: 650;
     white-space: nowrap;
     overflow: hidden;
@@ -197,83 +337,154 @@
     text-overflow: ellipsis;
   }
 
+  .left-acts {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    margin-left: 2px;
+  }
+
+  .idle-state {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--p-text-dim);
+  }
+
+  .idle-badge {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.05);
+    display: grid;
+    place-items: center;
+  }
+
   .idle-msg {
     font-size: 12px;
-    color: var(--p-text-dim);
   }
 
   .center {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 4px;
+    gap: 6px;
   }
 
   .transport {
     display: flex;
     align-items: center;
-    gap: 14px;
+    gap: 12px;
   }
 
-  .icon-btn {
-    font-size: 15px;
+  .dock-icon {
+    position: relative;
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    display: grid;
+    place-items: center;
     color: var(--p-text-muted);
-    padding: 4px 6px;
+    transition: background 0.15s ease, color 0.15s ease, transform 0.12s ease;
   }
 
-  .icon-btn:hover,
-  .icon-btn.lit {
+  .dock-icon:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--p-text);
+  }
+
+  .dock-icon.lit {
     color: var(--p-accent-bright);
   }
 
-  .play-btn {
-    width: 36px;
-    height: 36px;
+  .dock-icon.liked {
+    color: #fb7185;
+  }
+
+  .dock-icon .dot {
+    position: absolute;
+    bottom: 3px;
+    width: 4px;
+    height: 4px;
     border-radius: 50%;
-    background: var(--p-accent);
+    background: var(--p-accent-bright);
+  }
+
+  .play-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--p-accent-bright), var(--p-accent));
     color: #080b12;
-    font-size: 13px;
-    font-weight: 700;
+    display: grid;
+    place-items: center;
+    box-shadow: 0 4px 16px var(--p-glow-1);
+    transition: transform 0.14s ease, filter 0.14s ease;
+  }
+
+  .play-btn:hover {
+    transform: scale(1.06);
+    filter: brightness(1.06);
   }
 
   .seek-row {
     width: 100%;
-    max-width: 440px;
+    max-width: 460px;
     display: flex;
     align-items: center;
-    gap: 8px;
-    font-size: 11px;
-    color: var(--p-text-dim);
+    gap: 10px;
   }
 
-  .seek-row input {
+  .time {
+    font-size: 11px;
+    color: var(--p-text-dim);
+    font-variant-numeric: tabular-nums;
+    min-width: 32px;
+    text-align: center;
+  }
+
+  .range-track {
+    -webkit-appearance: none;
+    appearance: none;
     flex: 1;
-    accent-color: var(--p-accent);
     height: 4px;
+    border-radius: 999px;
+    background: linear-gradient(
+      to right,
+      var(--p-accent) var(--progress, 0%),
+      rgba(255, 255, 255, 0.14) var(--progress, 0%)
+    );
+    outline: none;
+    cursor: pointer;
+    transition: height 0.12s ease;
+  }
+
+  .range-track:hover {
+    height: 6px;
+  }
+
+  .range-track::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    background: #ffffff;
+    box-shadow: 0 1px 6px rgba(0, 0, 0, 0.5);
+    opacity: 0;
+    transition: opacity 0.15s ease, transform 0.15s ease;
+  }
+
+  .range-track:hover::-webkit-slider-thumb {
+    opacity: 1;
+    transform: scale(1.1);
   }
 
   .right {
     display: flex;
     align-items: center;
     justify-content: flex-end;
-    gap: 8px;
-  }
-
-  .btn-chip {
-    padding: 6px 10px;
-    border-radius: 999px;
-    font-size: 11px;
-    font-weight: 600;
-    background: rgba(255, 255, 255, 0.07);
-    border: 1px solid var(--p-border);
-    max-width: 155px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .btn-chip:hover {
-    background: rgba(255, 255, 255, 0.13);
+    gap: 6px;
   }
 
   .dev-picker-wrap {
@@ -282,14 +493,15 @@
 
   .dev-popover {
     position: absolute;
-    bottom: 40px;
+    bottom: 44px;
     right: 0;
-    width: 260px;
+    width: 268px;
     padding: 8px;
     display: flex;
     flex-direction: column;
     gap: 3px;
-    background: rgba(16, 20, 34, 0.96);
+    background: rgba(15, 19, 33, 0.98);
+    box-shadow: 0 14px 36px rgba(0, 0, 0, 0.52);
     z-index: 30;
   }
 
@@ -299,17 +511,31 @@
     text-transform: uppercase;
     letter-spacing: 0.08em;
     color: var(--p-text-dim);
-    padding: 4px 8px;
+    padding: 4px 8px 6px;
   }
 
   .dev-popover button {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: 8px;
     padding: 8px 10px;
     border-radius: 8px;
     font-size: 12px;
     text-align: left;
+  }
+
+  .dev-row-name {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .dev-row-name span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .dev-popover button:hover {
@@ -324,12 +550,12 @@
   .vol-wrap {
     display: flex;
     align-items: center;
-    gap: 4px;
-    width: 96px;
+    gap: 6px;
+    width: 118px;
+    margin-left: 2px;
   }
 
-  .vol-wrap input {
-    width: 68px;
-    accent-color: var(--p-accent);
+  .vol-range {
+    width: 78px;
   }
 </style>

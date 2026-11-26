@@ -3,19 +3,35 @@
   import { audioEngine, playerStore } from "../lib/audio";
   import { resolveArtworkUrl } from "../lib/theme";
   import type { Track } from "../lib/types";
+  import Icon from "./Icon.svelte";
 
   interface Props {
     open: boolean;
     proxyPort: number;
+    likedIds: Set<string>;
+    showRomaji: boolean;
+    animatedCanvas: boolean;
     onClose: () => void;
     onToggleLike: (track: Track) => void;
+    onAddToPlaylist: (track: Track) => void;
+    onToggleRomaji: () => void;
+    onToggleCanvas: () => void;
   }
 
-  let { open, proxyPort, onClose, onToggleLike }: Props = $props();
+  let {
+    open,
+    proxyPort,
+    likedIds,
+    showRomaji,
+    animatedCanvas,
+    onClose,
+    onToggleLike,
+    onAddToPlaylist,
+    onToggleRomaji,
+    onToggleCanvas,
+  }: Props = $props();
 
   let rightTab = $state<"lyrics" | "queue">("lyrics");
-  let showRomaji = $state(true);
-  let animatedCanvas = $state(true);
   let canvasEl = $state<HTMLCanvasElement | null>(null);
   let lyricsContainer = $state<HTMLDivElement | null>(null);
   let rafId = 0;
@@ -88,6 +104,7 @@
 
 {#if open && $playerStore.currentTrack}
   {@const track = $playerStore.currentTrack}
+  {@const isLiked = likedIds.has(track.id)}
   <div class="overlay">
     {#if animatedCanvas}
       <div class="canvas-backdrop">
@@ -99,11 +116,15 @@
     <div class="top-bar">
       <div class="top-left">
         <span class="pill-badge">Now Playing</span>
-        <button class="btn-ghost" onclick={() => (animatedCanvas = !animatedCanvas)}>
-          Canvas: {animatedCanvas ? "On" : "Off"}
+        <button class="btn-ghost" onclick={onToggleCanvas}>
+          <Icon name="sparkles" size={14} />
+          <span>Canvas: {animatedCanvas ? "On" : "Off"}</span>
         </button>
       </div>
-      <button class="btn-ghost" onclick={onClose}>Close ✕</button>
+      <button class="btn-ghost" onclick={onClose} aria-label="Close Now Playing">
+        <Icon name="x" size={15} />
+        <span>Close</span>
+      </button>
     </div>
 
     <div class="body-grid">
@@ -112,7 +133,7 @@
           {#if resolveArtworkUrl(track.artworkUrl, proxyPort)}
             <img src={resolveArtworkUrl(track.artworkUrl, proxyPort)} alt={track.title} />
           {:else}
-            <div class="cover-empty">♫</div>
+            <div class="cover-empty"><Icon name="music" size={48} /></div>
           {/if}
         </div>
 
@@ -121,9 +142,25 @@
             <h2>{track.title}</h2>
             <p>{track.artist}{track.album ? ` • ${track.album}` : ""}</p>
           </div>
-          <button class="like-btn" onclick={() => onToggleLike(track)}>
-            {track.liked ? "♥" : "♡"}
-          </button>
+          <div class="track-btns">
+            <button
+              class="like-btn"
+              class:liked={isLiked}
+              title={isLiked ? "Remove from Favorites" : "Add to Favorites"}
+              aria-label={isLiked ? "Remove from Favorites" : "Add to Favorites"}
+              onclick={() => onToggleLike(track)}
+            >
+              <Icon name={isLiked ? "heart-filled" : "heart"} size={18} />
+            </button>
+            <button
+              class="like-btn"
+              title="Add to Playlist"
+              aria-label="Add to Playlist"
+              onclick={() => onAddToPlaylist(track)}
+            >
+              <Icon name="list-plus" size={18} />
+            </button>
+          </div>
         </div>
 
         <canvas bind:this={canvasEl} width="420" height="54" class="spectrum"></canvas>
@@ -146,21 +183,44 @@
           <button
             class="ctrl-sm"
             class:on={$playerStore.shuffle}
+            title="Shuffle"
+            aria-label="Toggle shuffle"
             onclick={() => audioEngine.toggleShuffle()}
           >
-            ⇄
+            <Icon name="shuffle" size={17} />
           </button>
-          <button class="ctrl-md" onclick={() => void audioEngine.previous()}>⏮</button>
-          <button class="ctrl-lg" onclick={() => void audioEngine.togglePlayPause()}>
-            {$playerStore.playing ? "❚❚" : "▶"}
+          <button
+            class="ctrl-md"
+            title="Previous track"
+            aria-label="Previous track"
+            onclick={() => void audioEngine.previous()}
+          >
+            <Icon name="skip-back" size={19} />
           </button>
-          <button class="ctrl-md" onclick={() => void audioEngine.next()}>⏭</button>
+          <button
+            class="ctrl-lg"
+            title={$playerStore.playing ? "Pause" : "Play"}
+            aria-label={$playerStore.playing ? "Pause" : "Play"}
+            onclick={() => void audioEngine.togglePlayPause()}
+          >
+            <Icon name={$playerStore.playing ? "pause" : "play"} size={22} />
+          </button>
+          <button
+            class="ctrl-md"
+            title="Next track"
+            aria-label="Next track"
+            onclick={() => void audioEngine.next()}
+          >
+            <Icon name="skip-forward" size={19} />
+          </button>
           <button
             class="ctrl-sm"
             class:on={$playerStore.repeat !== "off"}
+            title="Repeat mode"
+            aria-label="Cycle repeat mode"
             onclick={() => audioEngine.cycleRepeat()}
           >
-            {$playerStore.repeat === "one" ? "↻1" : "↻"}
+            <Icon name={$playerStore.repeat === "one" ? "repeat-1" : "repeat"} size={17} />
           </button>
         </div>
       </div>
@@ -176,7 +236,7 @@
             </button>
           </div>
           {#if rightTab === "lyrics"}
-            <button class="btn-ghost" onclick={() => (showRomaji = !showRomaji)}>
+            <button class="btn-ghost" onclick={onToggleRomaji}>
               Romaji: {showRomaji ? "On" : "Off"}
             </button>
           {/if}
@@ -227,14 +287,26 @@
                   class="q-main"
                   onclick={() => void audioEngine.playTrack(qTrack, $playerStore.queue)}
                 >
-                  <span class="q-idx">{i === $playerStore.currentIndex ? "▶" : i + 1}</span>
+                  <span class="q-idx">
+                    {#if i === $playerStore.currentIndex}
+                      <Icon name="play" size={12} />
+                    {:else}
+                      {i + 1}
+                    {/if}
+                  </span>
                   <div class="q-meta">
                     <div class="q-title">{qTrack.title}</div>
                     <div class="q-sub">{qTrack.artist}</div>
                   </div>
                 </button>
                 {#if i !== $playerStore.currentIndex}
-                  <button class="q-rm" onclick={() => audioEngine.removeFromQueue(i)}>✕</button>
+                  <button
+                    class="q-rm"
+                    aria-label="Remove from queue"
+                    onclick={() => audioEngine.removeFromQueue(i)}
+                  >
+                    <Icon name="x" size={14} />
+                  </button>
                 {/if}
               </div>
             {/each}
@@ -369,10 +441,20 @@
     color: var(--p-text-muted);
   }
 
+  .track-btns {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
   .like-btn {
     font-size: 22px;
-    color: var(--p-accent-bright);
+    color: var(--p-text-muted);
     padding: 6px;
+  }
+
+  .like-btn.liked {
+    color: #fb7185;
   }
 
   .spectrum {

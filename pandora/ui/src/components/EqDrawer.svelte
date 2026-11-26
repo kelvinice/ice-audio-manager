@@ -1,5 +1,6 @@
 <script lang="ts">
   import { audioEngine, EQ_FREQUENCIES, EQ_PRESETS, playerStore } from "../lib/audio";
+  import Icon from "./Icon.svelte";
 
   interface Props {
     open: boolean;
@@ -40,7 +41,10 @@
           <h3>Audio DSP &amp; Equalizer</h3>
           <p>Web Audio 10-band EQ • Normalization • Skip Silence</p>
         </div>
-        <button class="btn-ghost" onclick={onClose}>Done</button>
+        <button class="btn-ghost" onclick={onClose} aria-label="Done">
+          <Icon name="x" size={15} />
+          <span>Done</span>
+        </button>
       </div>
 
       <div class="toggles">
