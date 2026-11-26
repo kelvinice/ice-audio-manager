@@ -241,6 +241,14 @@ Three agents work at once, each in **its own worktree** branched from the latest
 - [x] Anchor list in the tray ("Notch position": monitors, then the anchors) and Settings → Notch → Display ("Position")
 - [x] R1 "attached vs floating" style: **already done** as Edge Nook (flush, ears) vs Floating (`appearance.notchStyle`,
       schema v11), on both hosts
+- [x] Flexible markless drag & drop with our own pointer capture (`SetCapture` + `SetWindowPos(SWP_NOACTIVATE)`), never the system move loop.
+      WebView notch (`start_notch_drag`, `drag.ts`, `controller.svelte.ts`): Gemini; Native pill (`native_dot/input.rs`, `drag.rs`): Claude & Gemini.
+  - [x] Click vs drag via `SM_CXDRAG`/`SM_CYDRAG` (native) + `DRAG_THRESHOLD_PX` (UI). Esc cancels.
+  - [x] Continuous horizontal placement (`notch_x_ratio` in schema v17) anywhere between Left and Right without visual slot/ghost marks, clamped to monitor bounds (`NOTCH_CANVAS_W`), with silent 14 px magnet at Left/Centre/Right and compositor-only settle + accent rim flash (`placed_seq` / `flash_placed`). Reduce motion = instant.
+  - [x] Dropping on another monitor re-pins it there; Settings → Notch & tray **"Drag & place"** (`NotchPlacement`, schema v16).
+- [x] Bottom anchors for **both Floating and Edge Nook** (`BottomLeft`/`BottomCenter`/`BottomRight`): Floating sits `6 px` above the taskbar (`CANVAS_BOTTOM_OVERHANG`); Edge Nook docks pixel-flush on top of the taskbar with inverted concave ears (`sd_nook_notch` mirrored + SVG `buildNookFillPath(..., bottom = true)`) and expands upwards.
+- [x] Drag & drop effects (owner, 2026-11-26): a held notch lifts into a full capsule and lands with an impact; jelly
+      landing graduated to Settings → Notch → Display; landing ripple and carry glow stay Experimental
 
 **D-21.1 (accepted 2026-11-23):**
 - [x] L1 · Idle linger in config, per profile (default 15 s, validated range), replacing `IDLE_SUSPEND_LINGER_MS`
@@ -403,6 +411,16 @@ Three agents work at once, each in **its own worktree** branched from the latest
 - [x] Settings window: created on demand, destroyed on close; Mica backdrop; light/dark (Claude, `phase-4/settings-window`;
       [module doc](../modules/app-ui-settings.md))
 - [x] Documented theme API (`docs/theming.md`): every token, its default, an example theme
+- [ ] Pages: General (incl. **Performance profile**) · Devices (aliases, hide, favourites, icons) · Hotkeys (recorder via `RegisterHotKey` test-bind) ·
+      Notch (geometry, idle mode, pinned monitor) · Activities (toggles, durations, priorities) · Appearance (theme, accent, springs) · About (version)
+  - [x] General (launch at sign-in, performance profile, default roles, show disconnected) · Devices (notch order, star, alias,
+        spatial, hide/show) · Shortcuts (toggle pairs, device shortcuts, recorder, knob gestures) · Notch (idle style, display map) ·
+        Appearance (theme and animation with live previews) · About (version, trust promises)
+    - [x] Activities page with the D-22 music service switches; Shortcuts → Notch has the "show notch" hotkey (2026-11-24)
+    - [x] Notch → Display → Position (D-20 anchors, 2026-11-25); Notch → Hibernate page; Devices → Lyrics delay
+    - [x] Experimental page (2026-11-25); on 2026-11-26 the owner graduated estimated word highlight (now Activities →
+          Lyric highlight: Word by word, the default, or Row by row; schema v22), the wavy progress line (Appearance →
+          Song progress) and jelly landing (Notch → Display) out of it
 
 ## Phase 6: Hardening and first public release
 
@@ -410,3 +428,12 @@ Three agents work at once, each in **its own worktree** branched from the latest
 - [x] Audit the Git history for secrets: the repo has been public since 2025-02-21. Checked 2026-11-23: `.env` only ever held
       `PYTHONPATH`, and a credential-pattern scan of the full history (keys, tokens, passwords, private keys) found
       nothing. Re-run before the first release
+
+## Backlog (unscheduled)
+
+- **Spotify and YouTube Music**, D-22 (closed 2026-11-23): Level 1 + a "Music services" widget and opt-in LRCLIB lyrics
+  are planned (section "Music services, lyrics and look"). YouTube Music playback inside the app was rejected. Spotify
+  "Level 2" (like, queue, playlists) still needs its own decision under the new §1.5. *Built since; the open Level 2 note
+  stays in plan.md.*
+- **Ideas from BitChord / Echo-Music:** *Word-synced lyrics animation:* only if D-22 adopts lyrics. *Built with D-22
+  (word highlight, then Word by word / Row by row on 2026-11-26).*

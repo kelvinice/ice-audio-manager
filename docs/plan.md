@@ -69,10 +69,10 @@ games on the pinned monitor. Budgets met in every profile.
 
 **Features:** F15–F17 and F18 (without the mixer). **Primary QA target: Spotify desktop** (Q-09).
 
-
 - [ ] By hand: compare with Spotify on a few genres (EDM, hip-hop, acoustic, a quiet podcast) on both monitors
-- [ ] **D-26 spectrum bands (built 2026-11-24, see the archive): host QA gates still open**
-  - [ ] Host QA gates: verify Windows 11 microphone indicator stays off, steady low→high tone moves active bars and settles cleanly on silence, real-size 5-bar `A2` vs `A1` visual check, and visible CPU `< 1%` / hidden `0%`
+- [ ] D-26 spectrum bands (built 2026-11-24, see the archive), host QA gates: the Windows 11 microphone indicator stays
+      off, a steady low→high tone moves the active bars and settles cleanly on silence, real-size 5-bar `A2` vs `A1`
+      visual check, and visible CPU `< 1%` / hidden `0%`
 - [ ] Secondary QA: Chromium/Edge/Firefox media sessions, **including YouTube Music** (the website, and the app installed
       from Chrome/Edge). Owner, 2026-11-23: Spotify and YouTube Music are the supported music services (see Backlog)
 
@@ -94,15 +94,9 @@ Runs between Phase 3 and Phase 4. D-21 Part B (C0) applies: every resource cap s
 
 **D-20 · placement (owner ruling: both methods, drag & snap by default):** *Resumed 2026-11-25 (owner: "continue …
 review first if still relevant"; updated 2026-11-25 for flexible markless horizontal placement, bottom Edge Nook, and
-landing settle animation). Every item below is in place (the focus gate remains by-hand).*
-- [x] Flexible markless drag & drop with our own pointer capture (`SetCapture` + `SetWindowPos(SWP_NOACTIVATE)`), never the system move loop.
-      WebView notch (`start_notch_drag`, `drag.ts`, `controller.svelte.ts`): Gemini; Native pill (`native_dot/input.rs`, `drag.rs`): Claude & Gemini.
-  - [x] Click vs drag via `SM_CXDRAG`/`SM_CYDRAG` (native) + `DRAG_THRESHOLD_PX` (UI). Esc cancels.
-  - [x] Continuous horizontal placement (`notch_x_ratio` in schema v17) anywhere between Left and Right without visual slot/ghost marks, clamped to monitor bounds (`NOTCH_CANVAS_W`), with silent 14 px magnet at Left/Centre/Right and compositor-only settle + accent rim flash (`placed_seq` / `flash_placed`). Reduce motion = instant.
-  - [x] Dropping on another monitor re-pins it there; Settings → Notch & tray **"Drag & place"** (`NotchPlacement`, schema v16).
+landing settle animation). Drag & place and the bottom anchors are built (see the archive); what is left:*
 - [ ] **Release gate:** during and after a drag the foreground app keeps focus and keyboard input, on both hosts, across
       150 %/100 % monitors
-- [x] Bottom anchors for **both Floating and Edge Nook** (`BottomLeft`/`BottomCenter`/`BottomRight`): Floating sits `6 px` above the taskbar (`CANVAS_BOTTOM_OVERHANG`); Edge Nook docks pixel-flush on top of the taskbar with inverted concave ears (`sd_nook_notch` mirrored + SVG `buildNookFillPath(..., bottom = true)`) and expands upwards.
 - [ ] **D-29 (open in planning-discussion.md):** horizontal side-edge anchors (left/right bezels) with drag-and-attach
 - [ ] R2 optional modules (Phase 4 Activities): a disabled module runs no timer, subscription or IPC. *Partly there:
       music services, lyrics and the spectrum each have a switch; per-pop-up switches (volume, switch, track) remain*
@@ -119,9 +113,7 @@ landing settle animation). Every item below is in place (the focus gate remains 
 
 ## Music services, lyrics, look and ambient motion (D-22, D-23, D-25)
 
-Items marked *(needs Settings)* wait for the Phase 4 Settings window. The rest can start now.
-
-**D-22 · Lyrics (opt-in, LRCLIB + local `.lrc` + Romaji + Storage cache) *(needs Settings)*:**
+**D-22 · Lyrics (opt-in, LRCLIB + local `.lrc` + Romaji + Storage cache):**
 - Full design spec: [`docs/lyrics.md`](lyrics.md) (bottom pill/card extension, active-word emphasis, Options A & B + Option C constraints, offline Japanese Romaji, Settings → Privacy & Storage max cache size, and phased implementation path).
 - **Status, review and fixes:** what was built, a review of further improvements, and the clipped-line fix are in
   [`docs/lyrics.md`](lyrics.md) §7 ([review: improvements not built yet](lyrics.md#7-review-2026-11-24-improvements-found-not-built-yet))
@@ -130,6 +122,9 @@ Items marked *(needs Settings)* wait for the Phase 4 Settings window. The rest c
 - [ ] Owner: add Japanese in Windows (Language & region) and confirm kanji Romaji appears (lyrics.md §9); if that's not
       acceptable, open a decision on a bundled reading dictionary (size / licence / network trade-offs listed there)
 - [ ] Open improvements: lyrics.md §7 (gap countdown, loading state, kanji Romaji without the IME, …)
+- [ ] Better word timing on line-synced lyrics: word by word is the default (schema v22, owner 2026-11-26) but the
+      estimate still drifts on held notes and tempo changes; until it is accurate, Settings → Activities → Lyric
+      highlight offers **Row by row**
 
 **D-25 · Ambient motion on the expanded card (accepted 2026-11-24):**
 - [ ] By hand: the new loops, cross-fade and breath with real covers (bright and dark) on both monitors
@@ -147,7 +142,6 @@ to the static native pill. Done by Claude; module docs: [app-ui-notch](modules/a
 - [ ] By hand: skip tracks in Spotify and YouTube Music; the title should change within ~0.3 s (`--verbose` logs "now playing")
 - [ ] By hand: each of the three modes with Spotify (skip, pause, resume) in Instant and Balanced
 - [ ] By hand: the waveform on light/dark desktops, a live stream (no duration = all lit) and pause/resume
-- [ ] Visual QA of the new card on both monitors at 100 % / 150 %, light/dark desktops, all 4 themes (owner)
 - [ ] Phase 6: measure Instant idle with the WebView awake (expected ≈ 77 MB private WS from Phase 0.2, inside the ≤ 100 MB
       target) and the cursor poll's idle CPU, which now runs for as long as Instant shows the notch. D-21.1 L2
       (event-driven hit-testing) would remove that poll
@@ -180,9 +174,12 @@ criteria below pass on both monitors. Items come from Claude's review of the Edg
       WebView while hibernating (Lite-level RAM)
 
 **By hand (owner QA, Edge):**
-- [ ] By hand: the refreshed card on both monitors at 100 % / 150 %, all 4 themes, real album art
-- [ ] By hand: the new card at 100 %/150 %, all themes, 3–4 favourite devices (chip mode), the lyrics split (572 px),
-      Floating; keyboard (Tab to the volume, arrows, Esc closes the opened slider)
+- [ ] By hand: the card (Edge Nook and Floating) on both monitors at 100 % / 150 %, light/dark desktops, all 5 themes,
+      real album art, 3–4 favourite devices (chip mode), the lyrics split (572 px); keyboard (Tab to the volume, arrows,
+      Esc closes the opened slider)
+- [ ] By hand: drag & drop effects on the idle pill, the music pill (with and without its lyric rows) and both styles, top
+      and bottom: the landing ripple rises off the pill's edge and never covers it, the carry glow fades out before the
+      window edge on the docked side (no hard cut), jelly landing; wavy progress line on both cards
 - [ ] By hand: hibernate in Instant / Balanced / Lite; screen-share test in Teams, Zoom, Meet (Chrome/Edge) and OBS with
       "Hide from screen sharing" on and off; mic mute shows the dot; tray uncheck wakes the notch
 - [ ] By hand: lyrics on the Liberty 5 (Bluetooth, auto 200 ms) vs the BTD 700 dongle (USB, auto 0): tune each so a
@@ -218,16 +215,9 @@ docs: [ice-win-audio](modules/ice-win-audio.md), [ice-core](modules/ice-core.md)
 
 **Features:** F19–F23.
 
-- [ ] Pages: General (incl. **Performance profile**) · Devices (aliases, hide, favourites, icons) · Hotkeys (recorder via `RegisterHotKey` test-bind) ·
-      Notch (geometry, idle mode, pinned monitor) · Activities (toggles, durations, priorities) · Appearance (theme, accent, springs) · About (version)
-  - [x] General (launch at sign-in, performance profile, default roles, show disconnected) · Devices (notch order, star, alias,
-        spatial, hide/show) · Shortcuts (toggle pairs, device shortcuts, recorder, knob gestures) · Notch (idle style, display map) ·
-        Appearance (theme and animation with live previews) · About (version, trust promises)
-  - [ ] Activities page (needs config for module switches, D-20 R2 / D-22), favourites cycle hotkey
-        (config has `cycle_hotkey` but no command yet), live cost readout (D-21.1 L6)
-    - [x] Activities page with the D-22 music service switches; Shortcuts → Notch has the "show notch" hotkey (2026-11-24)
-    - [x] Notch → Display → Position (D-20 anchors, 2026-11-25); Notch → Hibernate page; Devices → Lyrics delay
-    - [ ] Still open: D-20 R2 module switches, favourites cycle hotkey command, live cost readout
+- [ ] Settings pages still open (the rest are built, see the archive): D-20 R2 module switches (per-pop-up: volume,
+      switch, track) on Activities, a favourites cycle hotkey command (config has `cycle_hotkey`, no settings command
+      yet), the live cost readout (D-21.1 L6)
 - [ ] Theme system: bundled `Ice` (default, portfolio palette), `Midnight`, `Fluent`, `Minimal` *(the bundled set is done, plus
       `Ice Light`; what's left is user themes)*. User themes = CSS files in
       `%APPDATA%\IceAudioManager\themes\` overriding documented `--ice-*` tokens, **validated before applying**, with **live preview**
@@ -311,15 +301,12 @@ every feature phase. Phases 1–5 focus on features and UI/UX.
     which means network calls and a sign-in. §1.5 allows only the opt-in update check today, so this needs a new decision
     before any code: opt-in per service, OAuth tokens in Windows Credential Manager, no background traffic, a documented
     privacy note. YouTube Music has no official public API. Unofficial ones risk breaking its terms, so Level 2 may be
-    Spotify-only.
-  - **D-22 (closed 2026-11-23):** Level 1 + a "Music services" widget and opt-in LRCLIB lyrics are planned (section "Music
-    services, lyrics and look"). YouTube Music playback inside the app was rejected. Spotify "Level 2" (like, queue,
-    playlists) still needs its own decision under the new §1.5.
+    Spotify-only. D-22 built Level 1, the "Music services" widget and opt-in LRCLIB lyrics; YouTube Music playback
+    inside the app was rejected; Spotify Level 2 still needs its own decision under §1.5.
 - **Ideas from BitChord / Echo-Music** (owner references, 2026-11-23; undecided, each needs an F-ID or decision before code):
   - *Sleep timer:* pause the current media session after N minutes or at the end of the track (GSMTC; no network).
   - *Output format readout:* the default device's sample rate and bit depth in the expanded notch (the endpoint's mix
     format). Pairs with "sample-rate quick toggles" above.
-  - *Word-synced lyrics animation:* only if D-22 adopts lyrics.
   - *Discord Rich Presence:* local IPC to Discord, but it shares what you play, so it would be opt-in with a privacy note.
   - Not for us: offline downloads, ad-free playback via private APIs, analytics/crash reporting (§1.5).
 - **Ideas from Auralys** (Android, closed source; owner screenshot 2026-11-23; undecided):
@@ -331,13 +318,14 @@ every feature phase. Phases 1–5 focus on features and UI/UX.
 ## Cleanup backlog
 
 Known debt under [code-practices §11](code-practices.md#11-code-hygiene-duplication-cleanliness-bloat). Each item is fixed in its
-own `refactor:` PR by the path's owner, or sooner if a feature needs to grow the file. Sizes from 2026-11-23, excluding tests.
+own `refactor:` PR by the path's owner, or sooner if a feature needs to grow the file. Sizes from 2026-11-26, including
+tests where the file holds them.
 
 | Item | Owner | Size / issue | Suggested split |
 |---|---|---|---|
-| `crates/ice-win/src/native_dot.rs` | Gemini | 1706 lines (limit ~600) | window/message loop · GDI drawing · layout/geometry · theme colours |
-| `app/src-tauri/src/main.rs` | Codex | 1414 lines; `#[allow(too_many_lines)]` at the setup fn | app setup · notch window lifecycle · commands · profiles/gaming mode |
-| `app/ui/src/lib/notch/scheduler.ts` | Gemini | 621 lines (2026-11-24), over the limit | Split the merge rules and the media/track handling out (the now-playing view already lives in `nowPlaying.ts`) |
+| `crates/ice-win/src/native_dot.rs` | Gemini | 2546 lines (limit ~600; `glyphs.rs` and `input.rs` already split out) | window/message loop · GDI drawing · layout/geometry · theme colours |
+| `app/src-tauri/src/main.rs` | Codex | 1492 lines; `#[allow(too_many_lines)]` at the setup fn | app setup · notch window lifecycle · commands · profiles/gaming mode |
+| `app/ui/src/lib/notch/scheduler.ts` | Gemini | 635 lines, over the limit | Split the merge rules and the media/track handling out (the now-playing view already lives in `nowPlaying.ts`) |
 | Repeated `#[allow(clippy::cast_possible_truncation, cast_sign_loss)]` (native_dot ×5, audio_engine, media) | Claude + Gemini | Same `f64` → integer conversion repeated without a reason | One checked conversion helper in `ice-win`; remaining suppressions become `#[expect(…, reason)]` |
 
 ## Dependency map
