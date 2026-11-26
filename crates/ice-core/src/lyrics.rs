@@ -30,9 +30,9 @@ pub struct LyricsConfig {
     pub show_on_pill: bool,
     /// Attach the 3-line bottom lyrics extension under the expanded card.
     pub show_on_card: bool,
-    /// Highlight the active word across each synced line (Enhanced LRC, or estimated cadence when enabled).
+    /// Word-by-word highlight (Enhanced LRC times, or estimated on line-synced lyrics); `false` = row by row.
     pub word_highlight: bool,
-    /// Experimental: estimate word-by-word highlight timing for line-synced LRC files without word timestamps.
+    /// Estimate word-by-word highlight timing for line-synced LRC files without word timestamps.
     pub estimated_word_sync: bool,
     /// Generate an offline Romaji subtitle line underneath Japanese lyric lines.
     pub romaji: bool,
@@ -48,7 +48,7 @@ impl Default for LyricsConfig {
             show_on_pill: true,
             show_on_card: true,
             word_highlight: true,
-            estimated_word_sync: false,
+            estimated_word_sync: true,
             romaji: true,
             cache_max_mb: LYRICS_CACHE_MAX_MB_DEFAULT,
         }

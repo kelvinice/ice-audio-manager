@@ -94,23 +94,24 @@ pub struct Appearance {
     pub hibernate_look: HibernateLook,
     /// D-27: while hibernating, leave the notch windows out of screen captures (`WDA_EXCLUDEFROMCAPTURE`).
     pub hibernate_hide_from_capture: bool,
-    /// Experimental (owner, 2026-11-26): extra drag & drop effects on the WebView notch. All off by default.
+    /// Owner, 2026-11-26: extra drag & drop effects on the WebView notch (jelly landing in Settings → Notch; the rest
+    /// Experimental). All off by default.
     pub drag_effects: DragEffects,
-    /// Experimental (owner, 2026-11-26): the played part of the card's seek bar is a slowly travelling wave while
-    /// music plays (flat when paused). Off by default.
+    /// Owner, 2026-11-26 (Settings → Appearance): the played part of the card's seek bar is a slowly travelling wave
+    /// while music plays (flat when paused). Off by default.
     pub wavy_progress: bool,
 }
 
-/// Experimental drag & drop effects (WebView notch only; the native pill keeps the plain lift and rim flash).
+/// Drag & drop effects (WebView notch only; the native pill keeps the plain lift and rim flash).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[cfg_attr(feature = "ts", derive(TS))]
 #[serde(default, deny_unknown_fields, rename_all = "camelCase")]
 pub struct DragEffects {
-    /// An accent ring spreads out from the notch where it lands.
+    /// Experimental: accent rings rise off the notch's edge and spread out where it lands.
     pub landing_ripple: bool,
     /// A softer, wobblier landing (two rebounds instead of one).
     pub jelly_landing: bool,
-    /// The carried pill glows in the accent colour.
+    /// Experimental: the carried pill glows in the accent colour.
     pub carry_glow: bool,
 }
 

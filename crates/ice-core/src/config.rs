@@ -38,7 +38,9 @@ use crate::resolve::{DeviceRef, MatchMode, resolve};
 /// v19: `lyrics.estimated_word_sync` (Experimental: estimated word highlight on line-synced lyrics; off by default).
 /// v20: `appearance.dragEffects` (Experimental: landing ripple, jelly landing, carry glow; all off).
 /// v21: `appearance.wavyProgress` (Experimental: the played part of the seek bar is a travelling wave; off).
-pub const SCHEMA_VERSION: u32 = 21;
+/// v22: `lyrics.estimated_word_sync` defaults to on (owner, 2026-11-26: lyrics highlight word by word by default; the
+/// user can switch to row by row with `lyrics.word_highlight = false`), and older files turn it on.
+pub const SCHEMA_VERSION: u32 = 22;
 
 /// Allowed per-device lyric delay, in ms (negative = lyrics earlier).
 pub const LYRICS_DELAY_MS: std::ops::RangeInclusive<i32> = -1000..=2000;
@@ -265,7 +267,7 @@ impl Config {
         {
             return Err(ConfigError::TooNew(schema_version));
         }
-        let cfg: Self = toml::from_str(text).map_err(|e| ConfigError::Parse(e.to_string()))?;
+        let mut cfg: Self = toml::from_str(text).map_err(|e| ConfigError::Parse(e.to_string()))?;
         if !IDLE_LINGER_SECS.contains(&cfg.idle_linger_secs) {
             return Err(ConfigError::Parse(format!(
                 "idle_linger_secs = {} is outside {}–{} seconds",
@@ -302,7 +304,13 @@ impl Config {
             // (off, Discord's builds as call apps), v0–v18 gain `lyrics.estimated_word_sync = false`, v0–v19 gain
             // `appearance.dragEffects` (all off), and v0–v20 gain `appearance.wavyProgress = false`, all via serde
             // defaults.
-            _ => Ok(Self { schema_version: SCHEMA_VERSION, ..cfg }),
+            // v0–v21: word-by-word highlight became the default (v22), so the old off-by-default estimate turns on.
+            v => {
+                if v < 22 {
+                    cfg.lyrics.estimated_word_sync = true;
+                }
+                Ok(Self { schema_version: SCHEMA_VERSION, ..cfg })
+            }
         }
     }
 
@@ -1235,18 +1243,18 @@ mod tests {
     }
 
     #[test]
-    fn v18_gains_estimated_word_sync_off_and_saves_setting() {
+    fn v18_gains_estimated_word_sync_on_and_saves_setting() {
         let mut config = Config::from_toml("schema_version = 18\n[lyrics]\nenabled = true").unwrap();
         assert_eq!(config.schema_version, SCHEMA_VERSION);
-        assert!(!config.lyrics.estimated_word_sync);
-        assert!(!config.view(&[]).lyrics.estimated_word_sync);
+        assert!(config.lyrics.estimated_word_sync, "v22: word by word is the default");
+        assert!(config.view(&[]).lyrics.estimated_word_sync);
 
-        let set = Command::SetLyricsEstimatedWordSync { enabled: true };
+        let set = Command::SetLyricsEstimatedWordSync { enabled: false };
         assert_eq!(config.apply_setting(&set, &[]), Ok(true));
         assert_eq!(config.apply_setting(&set, &[]), Ok(false));
 
         let saved = Config::from_toml(&config.to_toml()).unwrap();
-        assert!(saved.lyrics.estimated_word_sync);
+        assert!(!saved.lyrics.estimated_word_sync);
     }
 
     #[test]
@@ -1274,6 +1282,25 @@ mod tests {
         assert_eq!(config.apply_setting(&set, &[]), Ok(true));
         assert_eq!(config.apply_setting(&set, &[]), Ok(false));
         assert!(Config::from_toml(&config.to_toml()).unwrap().view(&[]).appearance.wavy_progress);
+    }
+
+    #[test]
+    fn v21_turns_estimated_word_highlight_on_and_v22_keeps_the_choice() {
+        let v21 = "schema_version = 21
+[lyrics]
+enabled = true
+wordHighlight = true
+estimatedWordSync = false";
+        let config = Config::from_toml(v21).unwrap();
+        assert_eq!(config.schema_version, SCHEMA_VERSION);
+        assert!(config.lyrics.estimated_word_sync && config.lyrics.word_highlight, "word by word by default");
+
+        let mut rows = Config::default();
+        assert!(rows.lyrics.estimated_word_sync, "new configs highlight word by word too");
+        rows.lyrics.word_highlight = false;
+        rows.lyrics.estimated_word_sync = false;
+        let saved = Config::from_toml(&rows.to_toml()).unwrap();
+        assert!(!saved.lyrics.word_highlight && !saved.lyrics.estimated_word_sync, "a v22 file is not migrated again");
     }
 
     #[test]

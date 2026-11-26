@@ -72,7 +72,7 @@ function initialSnapshot(): EngineSnapshot {
         showOnPill: true,
         showOnCard: true,
         wordHighlight: true,
-        estimatedWordSync: false,
+        estimatedWordSync: true,
         romaji: true,
         cacheMaxMb: 50,
       },

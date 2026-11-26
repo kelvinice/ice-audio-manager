@@ -17,7 +17,7 @@
     lyricsOpen?: boolean;
     lyricsAvailable?: boolean;
     onToggleLyrics?: () => void;
-    /** Experimental wavy progress line (`appearance.wavyProgress`). */
+    /** Wavy progress line (`appearance.wavyProgress`, Settings → Appearance). */
     wavyProgress?: boolean;
     onMediaAction: (action: MediaAction) => void;
   }

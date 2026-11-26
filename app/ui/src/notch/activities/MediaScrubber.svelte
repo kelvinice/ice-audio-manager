@@ -18,7 +18,7 @@
     showRemaining?: boolean;
     /** `large`: Edge Nook's roomier song block (5 px rail, bigger times); `regular`: the Floating card. */
     size?: 'regular' | 'large';
-    /** Experimental (`appearance.wavyProgress`): the played part is a travelling wave while playing. */
+    /** `appearance.wavyProgress`: the played part is a travelling wave while playing. */
     wavy?: boolean;
     onSeek: (positionMs: number) => void;
   }
@@ -192,7 +192,7 @@
     onkeydown={onScrubKeyDown}
   >
     {#if wavy}
-      <!-- Experimental wavy progress: draws both the played wave and the flat rest itself (round ends, no clipping). -->
+      <!-- Wavy progress: draws both the played wave and the flat rest itself (round ends, no clipping). -->
       <WavyProgress progress={scrubberScale} playing={isPlaying} visible={notchVisible} {instant} {size} />
     {:else}
       <div class="scrubber-rail">

@@ -1,4 +1,6 @@
 <script lang="ts">
+  // Graduated on 2026-11-26 (owner): estimated word highlight → Activities, wavy progress line → Appearance, jelly
+  // landing → Notch → Display. What stays here is still being tuned.
   import type { DragEffects } from '../../lib/ipc/engine';
   import type { SettingsClient } from '../../lib/settings/client.svelte';
   import InfoBar from '../controls/InfoBar.svelte';
@@ -12,20 +14,14 @@
 
   let { client }: Props = $props();
   const settings = $derived(client.engine?.settings);
-  const lyricsWordDisabled = $derived(!settings?.lyrics.enabled || !settings?.lyrics.wordHighlight);
   const dragFixed = $derived(settings?.notchPlacement === 'fixed');
 
-  type DragEffectKey = keyof DragEffects;
+  type DragEffectKey = Exclude<keyof DragEffects, 'jellyLanding'>;
   const dragEffectCards: { key: DragEffectKey; title: string; description: string }[] = [
     {
       key: 'landingRipple',
       title: 'Landing ripple',
-      description: 'A ring in the song’s colour spreads out from the edge where the notch lands.',
-    },
-    {
-      key: 'jellyLanding',
-      title: 'Jelly landing',
-      description: 'A softer, wobblier landing that bounces twice before it settles.',
+      description: 'Rings in the song’s colour rise off the notch’s edge and spread out where it lands.',
     },
     {
       key: 'carryGlow',
@@ -38,7 +34,7 @@
     void client.apply({
       type: 'setDragEffects',
       landingRipple: key === 'landingRipple' ? on : null,
-      jellyLanding: key === 'jellyLanding' ? on : null,
+      jellyLanding: null,
       carryGlow: key === 'carryGlow' ? on : null,
     });
   }
@@ -48,53 +44,8 @@
   <InfoBar
     tone="info"
     title="Experimental features"
-    text="These options are off by default. They may behave unevenly across tracks or change in future updates."
+    text="These options are off by default. They may behave unevenly or change in future updates."
   />
-
-  <Section
-    title="Lyrics"
-    description="Optional lyric behaviours that rely on estimates and may not match every song."
-  >
-    <SettingCard
-      icon="flask"
-      title="Estimated word highlight (line-synced lyrics)"
-      description="Estimates word-by-word timing for standard line-synced lyrics (such as most lrclib.net tracks) that don't include real word timestamps. May drift on held notes or tempo changes; true Enhanced LRC files always highlight word-by-word."
-      disabled={lyricsWordDisabled}
-    >
-      {#snippet control()}
-        <Toggle
-          label="Estimated word highlight for line-synced lyrics"
-          checked={settings.lyrics.estimatedWordSync}
-          disabled={lyricsWordDisabled}
-          onchange={(enabled) => client.apply({ type: 'setLyricsEstimatedWordSync', enabled })}
-        />
-      {/snippet}
-    </SettingCard>
-
-    {#if lyricsWordDisabled}
-      <InfoBar
-        tone="info"
-        title="Turn on synced lyrics and word highlight first."
-        text="Enable both Show synced lyrics and Active word highlight on the Activities page for this option to take effect."
-      />
-    {/if}
-  </Section>
-
-  <Section title="Song progress" description="How the seek bar on the open card shows the time already played.">
-    <SettingCard
-      icon="flask"
-      title="Wavy progress line"
-      description="While music plays, the played part of the seek bar becomes a gently moving wave in the song’s colour. It flattens when you pause. Still when Windows animation effects are off."
-    >
-      {#snippet control()}
-        <Toggle
-          label="Wavy progress line"
-          checked={settings.appearance.wavyProgress}
-          onchange={(enabled) => client.apply({ type: 'setWavyProgress', enabled })}
-        />
-      {/snippet}
-    </SettingCard>
-  </Section>
 
   <Section
     title="Drag & drop"

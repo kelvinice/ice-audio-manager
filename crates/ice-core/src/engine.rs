@@ -338,17 +338,17 @@ pub enum Command {
         word_highlight: Option<bool>,
         romaji: Option<bool>,
     },
-    /// Experimental: toggle estimated word-by-word highlight for line-synced lyrics (off by default).
+    /// Toggle estimated word-by-word highlight for line-synced lyrics (off by default).
     SetLyricsEstimatedWordSync {
         enabled: bool,
     },
-    /// Experimental: patch the drag & drop effects (`None` leaves one unchanged).
+    /// Patch the drag & drop effects (`None` leaves one unchanged).
     SetDragEffects {
         landing_ripple: Option<bool>,
         jelly_landing: Option<bool>,
         carry_glow: Option<bool>,
     },
-    /// Experimental: the card's seek bar shows played time as a travelling wave while music plays.
+    /// The card's seek bar shows played time as a travelling wave while music plays.
     SetWavyProgress {
         enabled: bool,
     },

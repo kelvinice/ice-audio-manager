@@ -14,7 +14,7 @@
     notchVisible: boolean;
     instant: boolean;
     preset: SpringPreset;
-    /** Experimental wavy progress line (`appearance.wavyProgress`). */
+    /** Wavy progress line (`appearance.wavyProgress`, Settings → Appearance). */
     wavyProgress?: boolean;
     onMediaAction: (action: MediaAction) => void;
   }

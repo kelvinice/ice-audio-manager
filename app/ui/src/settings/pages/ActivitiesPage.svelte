@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import type { MusicServiceId } from '../../lib/ipc/engine';
   import type { SettingsClient } from '../../lib/settings/client.svelte';
+  import ChoiceGroup from '../controls/ChoiceGroup.svelte';
   import InfoBar from '../controls/InfoBar.svelte';
   import Section from '../controls/Section.svelte';
   import SettingCard from '../controls/SettingCard.svelte';
@@ -13,6 +14,28 @@
 
   let { client }: Props = $props();
   const settings = $derived(client.engine?.settings);
+
+  // Owner, 2026-11-26: word by word by default, row by row when the estimated word timing feels off. Word by word also
+  // estimates words on line-synced lyrics (most lrclib.net tracks); Enhanced LRC files carry real word times.
+  type HighlightMode = 'word' | 'row';
+  const highlightModes: { value: HighlightMode; label: string; description: string; badge?: string }[] = [
+    {
+      value: 'word',
+      label: 'Word by word',
+      badge: 'Default',
+      description:
+        'Each word lights up as it’s sung. Most lyrics only time whole lines, so word timing is estimated and may drift on held notes.',
+    },
+    { value: 'row', label: 'Row by row', description: 'The whole current line lights up. Always in time with the song.' },
+  ];
+
+  async function setHighlight(mode: HighlightMode): Promise<void> {
+    const word = mode === 'word';
+    patchLyrics({ wordHighlight: word });
+    if (word && !settings?.lyrics.estimatedWordSync) {
+      await client.apply({ type: 'setLyricsEstimatedWordSync', enabled: true });
+    }
+  }
 
   // Fetched on open only (it also probes whether Windows can read kanji for Romaji); no polling.
   onMount(() => {
@@ -117,20 +140,12 @@
       {/snippet}
     </SettingCard>
 
-    <SettingCard
-      icon="bolt"
-      title="Active word highlight"
-      description="Highlights each word as it's sung on word-synced (Enhanced LRC) lyrics. Standard line-synced tracks highlight the whole line unless Estimated word highlight is turned on in Experimental."
-    >
-      {#snippet control()}
-        <Toggle
-          label="Highlight active word in lyrics"
-          checked={settings.lyrics.wordHighlight}
-          disabled={!settings.lyrics.enabled}
-          onchange={(wordHighlight) => patchLyrics({ wordHighlight })}
-        />
-      {/snippet}
-    </SettingCard>
+    <ChoiceGroup
+      label="Lyric highlight"
+      value={settings.lyrics.wordHighlight ? 'word' : 'row'}
+      choices={highlightModes.map((mode) => ({ ...mode, disabled: !settings.lyrics.enabled }))}
+      onchange={setHighlight}
+    />
 
     <SettingCard
       icon="globe"

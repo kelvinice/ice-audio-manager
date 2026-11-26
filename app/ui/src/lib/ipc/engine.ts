@@ -15,7 +15,7 @@ export type HibernateLook = "plain" | "hidden";
 
 export type DragEffects = {
 /**
- * An accent ring spreads out from the notch where it lands.
+ * Experimental: accent rings rise off the notch's edge and spread out where it lands.
  */
 landingRipple: boolean,
 /**
@@ -23,7 +23,7 @@ landingRipple: boolean,
  */
 jellyLanding: boolean,
 /**
- * The carried pill glows in the accent colour.
+ * Experimental: the carried pill glows in the accent colour.
  */
 carryGlow: boolean, };
 
@@ -50,12 +50,13 @@ hibernateLook: HibernateLook,
  */
 hibernateHideFromCapture: boolean,
 /**
- * Experimental (owner, 2026-11-26): extra drag & drop effects on the WebView notch. All off by default.
+ * Owner, 2026-11-26: extra drag & drop effects on the WebView notch (jelly landing in Settings → Notch; the rest
+ * Experimental). All off by default.
  */
 dragEffects: DragEffects,
 /**
- * Experimental (owner, 2026-11-26): the played part of the card's seek bar is a slowly travelling wave while
- * music plays (flat when paused). Off by default.
+ * Owner, 2026-11-26 (Settings → Appearance): the played part of the card's seek bar is a slowly travelling wave
+ * while music plays (flat when paused). Off by default.
  */
 wavyProgress: boolean, };
 
@@ -131,11 +132,11 @@ showOnPill: boolean,
  */
 showOnCard: boolean,
 /**
- * Highlight the active word across each synced line (Enhanced LRC, or estimated cadence when enabled).
+ * Word-by-word highlight (Enhanced LRC times, or estimated on line-synced lyrics); `false` = row by row.
  */
 wordHighlight: boolean,
 /**
- * Experimental: estimate word-by-word highlight timing for line-synced LRC files without word timestamps.
+ * Estimate word-by-word highlight timing for line-synced LRC files without word timestamps.
  */
 estimatedWordSync: boolean,
 /**

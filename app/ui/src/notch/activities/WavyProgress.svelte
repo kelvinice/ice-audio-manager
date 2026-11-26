@@ -1,6 +1,6 @@
 <script lang="ts">
-  // Experimental wavy progress line (owner, 2026-11-26): the played part is a gently travelling wave in the song's
-  // colour, the rest a flat line; both share one thickness and round caps, so nothing looks clipped and the wave runs
+  // Wavy progress line (owner, 2026-11-26; a regular setting, no longer Experimental): the played part is a gently
+  // travelling wave in the song's colour, the rest a flat line; both share one thickness and round caps, so nothing looks clipped and the wave runs
   // straight into the flat line. The crests move under fixed ends, so the path is rebuilt as it moves: a bounded loop,
   // at most 30 Hz, only while playing (or still flattening after a pause) and visible; none with `instant`.
   import { PROGRESS_WAVE, taperedWavePath } from '../../lib/notch/waves';

@@ -4,6 +4,8 @@
   import ChoiceGroup from '../controls/ChoiceGroup.svelte';
   import InfoBar from '../controls/InfoBar.svelte';
   import Section from '../controls/Section.svelte';
+  import SettingCard from '../controls/SettingCard.svelte';
+  import Toggle from '../controls/Toggle.svelte';
   import MonitorMap from '../previews/MonitorMap.svelte';
   import NotchPreview from '../previews/NotchPreview.svelte';
 
@@ -157,6 +159,22 @@
       choices={placements}
       onchange={(placement) => client.apply({ type: 'setNotchPlacement', placement })}
     />
+    <SettingCard
+      icon="bolt"
+      title="Jelly landing"
+      description="A softer, wobblier landing that bounces twice before it settles when you drop the notch. Off when Windows animation effects are off."
+      disabled={settings.notchPlacement === 'fixed'}
+    >
+      {#snippet control()}
+        <Toggle
+          label="Jelly landing"
+          checked={settings.appearance.dragEffects.jellyLanding}
+          disabled={settings.notchPlacement === 'fixed'}
+          onchange={(on) =>
+            client.apply({ type: 'setDragEffects', landingRipple: null, jellyLanding: on, carryGlow: null })}
+        />
+      {/snippet}
+    </SettingCard>
     {#if pinnedMissing}
       <InfoBar
         tone="info"

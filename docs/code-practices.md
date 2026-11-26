@@ -52,7 +52,7 @@ These are hard rules. A PR that breaks one is rejected, whatever else it does.
 - **Event-driven, never polling**, except: the cursor poll for click-through (only while the cursor is near the notch, ≤ 30 Hz),
   the peak meter (only while the visualizer is visible, ≤ 30 Hz), and the D-30 call-mode level read (only while call mode is
   on and a call app's audio session is playing or the music is still lowered, ~15 Hz; session peaks only, never samples),
-  and the Experimental wavy progress line (only while it's on, the card is visible and music plays or the wave is still
+  and the wavy progress line (only while it's on, the card is visible and music plays or the wave is still
   flattening, ≤ 30 Hz; `WavyProgress.svelte`).
   Every timer must have a documented stop condition.
 - **Hidden means idle:** when the notch is hidden, stop animation loops and timers.

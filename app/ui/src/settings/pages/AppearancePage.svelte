@@ -86,6 +86,22 @@
       {/snippet}
     </SettingCard>
   </Section>
+
+  <Section title="Song progress" description="How the seek bar on the open card shows the time already played.">
+    <SettingCard
+      icon="music"
+      title="Wavy progress line"
+      description="While music plays, the played part of the seek bar becomes a gently moving wave in the song’s colour. It flattens when you pause, and stays still when animation effects are off."
+    >
+      {#snippet control()}
+        <Toggle
+          label="Wavy progress line"
+          checked={settings.appearance.wavyProgress}
+          onchange={(enabled) => client.apply({ type: 'setWavyProgress', enabled })}
+        />
+      {/snippet}
+    </SettingCard>
+  </Section>
 {/if}
 
 <style>
