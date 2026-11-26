@@ -19,7 +19,7 @@ use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::thread::JoinHandle;
 use std::time::Instant;
 
-use ice_core::call_mode::{CALL_TICK, CallModeConfig, Ducker, app_id_matches_exe};
+use ice_core::call_mode::{CALL_TICK, CallModeConfig, Ducker, app_id_matches_exe, clean_call_peak};
 use serde::{Deserialize, Serialize};
 
 use crate::com::ComGuard;
@@ -102,6 +102,7 @@ fn run(config: CallModeConfig, now_playing: Option<String>, tx: &Sender<Msg>, rx
         sink,
         call_active: false,
         calls: Vec::new(),
+        music_sessions: Vec::new(),
         dip: Vec::new(),
         dipping: false,
         restore: RestoreFile::new(),
@@ -130,7 +131,7 @@ fn run(config: CallModeConfig, now_playing: Option<String>, tx: &Sender<Msg>, rx
             match msg {
                 Msg::Quit => break 'run,
                 Msg::Config(c) => rescan |= st.configure(c),
-                Msg::NowPlaying(id) => st.set_now_playing(id),
+                Msg::NowPlaying(id) => rescan |= st.set_now_playing(id),
                 Msg::Sessions => rescan = true,
                 Msg::Devices => {
                     st.release_dip();
@@ -168,6 +169,8 @@ struct State {
     /// A call app's session is playing right now.
     call_active: bool,
     calls: Vec<Session>,
+    /// Sessions belonging to the currently playing music app (used to cancel loopback bleed into call meters).
+    music_sessions: Vec<Session>,
     /// The music sessions lowered in the current dip.
     dip: Vec<Lowered>,
     /// A dip is under way (its sessions were looked up), until the music is back at full level.
@@ -184,7 +187,18 @@ impl State {
 
     fn rescan(&mut self) {
         let config = &self.config;
-        self.calls = self.watch.sessions().into_iter().filter(|s| config.is_call_app(&s.exe)).collect();
+        let all = self.watch.sessions();
+        let mut calls = Vec::new();
+        let mut music = Vec::new();
+        for s in all {
+            if config.is_call_app(&s.exe) {
+                calls.push(s);
+            } else if self.now_playing.as_deref().is_some_and(|app_id| app_id_matches_exe(app_id, &s.exe)) {
+                music.push(s);
+            }
+        }
+        self.calls = calls;
+        self.music_sessions = music;
         for s in &self.calls {
             self.watch.watch(s);
         }
@@ -212,13 +226,15 @@ impl State {
         apps_changed
     }
 
-    fn set_now_playing(&mut self, app_id: Option<String>) {
+    fn set_now_playing(&mut self, app_id: Option<String>) -> bool {
         if app_id != self.now_playing {
             // The lowered app is no longer the one playing: give it its level back. The ducker carries on, so if people
             // are still talking the next tick lowers the new app at the same level (no jump to full and back).
             self.release_dip();
             self.now_playing = app_id;
+            return true;
         }
+        false
     }
 
     fn tick(&mut self) {
@@ -230,7 +246,18 @@ impl State {
         let mut active = false;
         for s in self.calls.iter().filter(|s| s.is_active()) {
             active = true;
-            peak = peak.max(s.peak());
+            // Bracket the session peak read with endpoint meter reads to avoid 10 ms buffer-boundary skew.
+            let ep_before = self.watch.endpoint_peak(&s.endpoint_id);
+            let raw = s.peak();
+            let ep_after = self.watch.endpoint_peak(&s.endpoint_id);
+            let ep_peak = ep_before.max(ep_after);
+            let music_output = self
+                .music_sessions
+                .iter()
+                .filter(|m| m.endpoint_id == s.endpoint_id && m.is_active())
+                .map(|m| m.peak() * m.volume().unwrap_or(1.0))
+                .fold(0.0_f32, f32::max);
+            peak = peak.max(clean_call_peak(raw, ep_peak, music_output));
         }
         self.call_active = active;
         let was_talking = self.ducker.talking();

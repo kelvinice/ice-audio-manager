@@ -27,7 +27,7 @@ global hotkeys, per-device spatial sound and `config.toml` hot reload. The only 
 | `loopback.rs` | `LoopbackCapture`: shared-mode WASAPI render loopback (`AUDCLNT_STREAMFLAGS_LOOPBACK`, 100 ms buffer) drained non-blockingly on the 30 Hz `ice-meter` tick into `ice_core::spectrum::SpectrumAnalyzer` (§1.9 in-memory reduction only) |
 | `com.rs` | `ComGuard` (MTA init) |
 | `call_mode.rs` | D-30 `CallModeService`: the `ice-call` thread (exists only while call mode is on), the dip (lower the now-playing app's session by `Ducker`'s gain, user change wins), and the crash-restore file `%LOCALAPPDATA%\IceAudioManager\call-mode-restore.json` |
-| `call_mode/sessions.rs` | `SessionWatch` / `Session`: `IAudioSessionManager2` on every active playback device, "session created" + per-call-app "state changed" notifications (signal only), session peak (`IAudioMeterInformation`) and volume (`ISimpleAudioVolume`, own event-context GUID), owner exe via `proc_metrics::process_exe_name` |
+| `call_mode/sessions.rs` | `SessionWatch` / `Session` (incl. `endpoint_id` and per-endpoint `Meter` via `endpoint_peak`): `IAudioSessionManager2` on every active playback device, "session created" + per-call-app "state changed" notifications (signal only), session peak (`IAudioMeterInformation`) and volume (`ISimpleAudioVolume`, own event-context GUID), owner exe via `proc_metrics::process_exe_name` |
 
 ## How it works
 - **One `ice-audio` thread (MTA)** owns every COM object. Everything else posts a `Msg`: `Command`, `Audio(AudioEvent)`, `Mic`,
@@ -47,8 +47,9 @@ global hotkeys, per-device spatial sound and `config.toml` hot reload. The only 
 - **Call mode (D-30):** `Worker::sync_call_mode` starts `CallModeService` when `call_mode.enabled` turns on and drops it when
   it turns off (the drop restores the music, then joins). The worker forwards the now-playing `app_id` (only when it changes)
   and device refreshes. On `ice-call`: blocks on its channel while no call app plays; while one does (or the music is still
-  lowered) it reads the call sessions' peaks every `CALL_TICK` (66 ms) into `ice_core::call_mode::Ducker` and writes
-  `base × gain` to the now-playing app's sessions. Stop condition: no active call session and the ducker at rest; "active"
+  lowered) it reads the call sessions' peaks every `CALL_TICK` (66 ms), cancels shared-endpoint music loopback bleed via
+  `SessionWatch::endpoint_peak` + `music_sessions` → `clean_call_peak`, feeds the residual into `ice_core::call_mode::Ducker`,
+  and writes `base × gain` to the now-playing app's sessions. Stop condition: no active call session and the ducker at rest; "active"
   is re-read every tick, so a missed notification can't keep it polling. Each wake drains the whole queue (one re-scan per
   burst) and the tick runs whenever it's due, so messages never delay it. A level changed elsewhere leaves the dip; the
   next talk onset takes the app in again. Music-app and device changes release the dip without resetting the ducker.
@@ -81,3 +82,4 @@ Unit tests sit in each file; real-device paths use `#[ignore]` tests and the [ma
 - 2026-11-25 Claude: `summary_basic` fills `DeviceSummary.lyrics_delay_ms` from `Config::lyrics_delay_for` (playback only); `SetLyricsDelay` is a plain setting.
 - 2026-11-25 Claude: D-30 call mode: `call_mode.rs` + `call_mode/sessions.rs` (`ice-call` thread, session watch, dip, restore file), `Worker::sync_call_mode`, `proc_metrics::process_exe_name`; `SetCallMode` is a plain setting.
 - 2026-11-25 Claude: call mode glitch fixes: queue drained per wake (no tick starvation), `call_active` re-read per tick, re-dip on talk onset after an outside change, `release_dip` keeps the ducker on app/device change, restore file follows the dip; real-host probes.
+- 2026-11-26 Gemini: call mode cancels shared-endpoint music loopback bleed (`endpoint_peak` + `music_sessions` → `clean_call_peak`) so music playing through speakers/headphones never self-triggers 1 s ducking cycles on quiet call sessions.
