@@ -60,10 +60,13 @@
     ></div>
     {#if ctrl.dragEffects.carryGlow}
       <!-- Experimental "Glow while carrying": a crisp ring of the song's colour hugging the pill plus a halo that
-           breathes slowly (opacity only) while it's held. The outer box follows the lift; the inner one breathes. -->
+           breathes slowly (opacity only) while it's held. The outer box follows the lift; the inner one breathes.
+           The window ends a few px past the docked side, so the halo leans away from it and fades out by the window
+           edge (`--glow-room`) instead of being cut there. -->
       <div
         class="carry-glow"
         class:still={ctrl.isInstant}
+        class:bottom-anchor={ctrl.isBottomAnchor}
         style:top={ctrl.isBottomAnchor ? undefined : `${ctrl.surfaceShape.topPad}px`}
         style:bottom={ctrl.isBottomAnchor ? `${ctrl.surfaceShape.bottomPad}px` : undefined}
         style:width={`${ctrl.pillSize.w}px`}
@@ -71,9 +74,11 @@
         style:border-radius={ctrl.surfaceShape.shadowRadiusCss}
         style:opacity={Math.min(1, ctrl.lift).toFixed(3)}
         style:--glow-c={ctrl.activeAccentCss}
+        style:--glow-r={ctrl.surfaceShape.shadowRadiusCss}
+        style:--glow-room={`${Math.max(0, ctrl.isBottomAnchor ? CANVAS_H - ctrl.surfaceShape.insetTop - ctrl.pillSize.h : ctrl.surfaceShape.insetTop).toFixed(1)}px`}
         aria-hidden="true"
       >
-        <div class="carry-halo"></div>
+        <div class="carry-halo-fade"><div class="carry-halo"></div></div>
       </div>
     {/if}
   {/if}
@@ -426,8 +431,12 @@
     pointer-events: none;
   }
 
-  /* The ring sits right on the pill's edge (1.5 px spread, no blur); the halo is two soft layers of the same colour. */
+  /* The ring sits right on the pill's edge (1.5 px spread, no blur); the halo is two soft layers of the same colour,
+     nudged away from the docked edge (`--glow-dy`). */
   .carry-glow {
+    --glow-reach: 48px;
+    --glow-dy: 3px;
+    --glow-fade-dir: to bottom;
     position: absolute;
     left: 50%;
     transform: translateX(-50%);
@@ -435,13 +444,30 @@
     box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--glow-c) 90%, transparent);
   }
 
+  .carry-glow.bottom-anchor {
+    --glow-dy: -3px;
+    --glow-fade-dir: to top;
+  }
+
+  /* Holds the halo with `--glow-reach` to spare on every side; its mask is clear at the window edge on the docked side
+     and full a little inside the pill (hidden there anyway), so that side of the halo fades out instead of clipping. */
+  .carry-halo-fade {
+    position: absolute;
+    inset: calc(-1 * var(--glow-reach));
+    mask-image: linear-gradient(
+      var(--glow-fade-dir),
+      transparent calc(var(--glow-reach) - var(--glow-room, 0px) + 1px),
+      #000 calc(var(--glow-reach) + 14px)
+    );
+  }
+
   .carry-halo {
     position: absolute;
-    inset: 0;
-    border-radius: inherit;
+    inset: var(--glow-reach);
+    border-radius: var(--glow-r);
     box-shadow:
-      0 0 10px 2px color-mix(in srgb, var(--glow-c) 62%, transparent),
-      0 0 26px 7px color-mix(in srgb, var(--glow-c) 30%, transparent);
+      0 var(--glow-dy) 10px 2px color-mix(in srgb, var(--glow-c) 62%, transparent),
+      0 calc(var(--glow-dy) * 2) 26px 7px color-mix(in srgb, var(--glow-c) 30%, transparent);
     animation: notch-carry-breathe 1.8s ease-in-out infinite alternate;
   }
 
@@ -476,7 +502,7 @@
     animation: notch-place-settle 440ms cubic-bezier(0.22, 1, 0.36, 1) both;
   }
 
-  /* Experimental "Jelly landing": softer and wobblier, two rebounds. */
+  /* "Jelly landing" (Settings → Notch → Display): softer and wobblier, two rebounds. */
   .notch-motion.place-settle.jelly {
     animation: notch-place-jelly 640ms cubic-bezier(0.33, 1, 0.68, 1) both;
   }
