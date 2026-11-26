@@ -81,7 +81,10 @@ export interface RecognitionProgress {
   level: number;
 }
 
+export type PandoraTheme = "midnight" | "daylight" | "ember" | "system";
+
 export interface PandoraSettings {
+  theme: PandoraTheme;
   dynamicTheme: boolean;
   animatedCanvas: boolean;
   showRomaji: boolean;
@@ -95,6 +98,7 @@ export interface PandoraSettings {
 }
 
 export const DEFAULT_PANDORA_SETTINGS: PandoraSettings = {
+  theme: "midnight",
   dynamicTheme: true,
   animatedCanvas: true,
   showRomaji: true,

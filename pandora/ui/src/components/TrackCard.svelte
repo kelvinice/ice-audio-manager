@@ -108,8 +108,8 @@
     position: relative;
     padding: 11px 11px 13px;
     border-radius: 16px;
-    background: rgba(255, 255, 255, 0.035);
-    border: 1px solid rgba(255, 255, 255, 0.07);
+    background: var(--p-surface-solid);
+    border: 1px solid var(--p-border);
     backdrop-filter: blur(14px);
     display: flex;
     flex-direction: column;
@@ -232,7 +232,7 @@
     height: 40px;
     border-radius: 50%;
     background: linear-gradient(135deg, var(--p-accent-bright), var(--p-accent));
-    color: #080b12;
+    color: var(--p-on-accent);
     display: grid;
     place-items: center;
     box-shadow: 0 8px 20px rgba(0, 0, 0, 0.45);
@@ -266,7 +266,7 @@
   .eq-bars span {
     width: 3px;
     border-radius: 2px;
-    background: #080b12;
+    background: var(--p-on-accent);
     animation: cardEq 0.75s ease-in-out infinite alternate;
   }
 

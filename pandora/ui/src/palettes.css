@@ -1,0 +1,48 @@
+/* Palette previews use the same tokens as the window, with artwork accents cleared. */
+:root, .theme-preview {
+  color-scheme: dark;
+  --p-bg: light-dark(#f4f3f8, #15131d);
+  --p-rail: light-dark(#ebeaf2, #100f18);
+  --p-surface-solid: light-dark(#fff, #221f2e);
+  --p-surface: var(--p-surface-solid);
+  --p-surface-elevated: light-dark(#fff, #302b3d);
+  --p-text: light-dark(#211d31, #f8f5ff);
+  --p-text-muted: light-dark(#514b60, #ccc5d9);
+  --p-text-dim: light-dark(#655e73, #aaa2b9);
+  --p-border: light-dark(#d7d2de, #393443);
+  --p-border-strong: light-dark(#a9a2b6, #625a70);
+  --p-fill: light-dark(#eae7f0, #302b3b);
+  --p-seed: light-dark(#6249bd, #b6a1ff);
+  --p-companion: #82bbeb;
+  --p-tone: var(--art-primary, var(--p-seed));
+  --p-accent: light-dark(oklch(from var(--p-tone) .44 min(c, .16) h), oklch(from var(--p-tone) .79 min(c, .15) h));
+  --p-accent-bright: light-dark(oklch(from var(--p-tone) .38 min(c, .16) h), oklch(from var(--p-tone) .88 min(c, .12) h));
+  --p-on-accent: light-dark(#fff, #181320);
+  --p-accent-soft: color-mix(in srgb, var(--p-accent) 15%, var(--p-surface));
+  --p-glow-1: color-mix(in srgb, var(--p-tone) 28%, transparent);
+  --p-glow-2: color-mix(in srgb, var(--art-secondary, var(--p-companion)) 25%, transparent);
+  --p-glow-3: color-mix(in srgb, var(--art-tertiary, var(--p-seed)) 24%, transparent);
+  --p-surface-tint: color-mix(in srgb, var(--p-tone) 10%, var(--p-surface));
+  --p-danger: light-dark(#a22542, #ffa4b7);
+  --p-success: light-dark(#0d694d, #8ce0bb);
+  --p-warning: light-dark(#885300, #fbd188);
+  --p-radius: 16px;
+}
+
+[data-theme="system"] { color-scheme: light dark; }
+[data-theme="daylight"] { color-scheme: light; }
+[data-theme="ember"] {
+  color-scheme: dark;
+  --p-bg: #201917;
+  --p-rail: #181312;
+  --p-surface-solid: #302522;
+  --p-surface-elevated: #40302a;
+  --p-border: #4a3831;
+  --p-border-strong: #71584b;
+  --p-fill: #3b2d28;
+  --p-seed: #f4ac82;
+  --p-companion: #c98d81;
+  --p-text: #fff5ed;
+  --p-text-muted: #dfcbc1;
+  --p-text-dim: #bea99d;
+}

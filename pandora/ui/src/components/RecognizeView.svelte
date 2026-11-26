@@ -344,14 +344,14 @@
     border-radius: 999px;
     font-size: 12px;
     font-weight: 600;
-    background: rgba(255, 255, 255, 0.06);
+    background: var(--p-fill);
     border: 1px solid var(--p-border);
     color: var(--p-text-muted);
     transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.12s ease;
   }
 
   .chip:hover:not(:disabled) {
-    background: rgba(255, 255, 255, 0.1);
+    background: var(--p-fill);
     color: var(--p-text);
   }
 
@@ -372,7 +372,7 @@
     flex-direction: column;
     align-items: center;
     gap: 18px;
-    background: radial-gradient(circle at 50% 45%, var(--p-surface-tint), rgba(13, 17, 29, 0.85));
+    background: radial-gradient(circle at 50% 45%, var(--p-surface-tint), var(--p-surface));
   }
 
   .pulse-wrap {
@@ -419,7 +419,7 @@
     height: 102px;
     border-radius: 50%;
     background: linear-gradient(135deg, var(--p-accent-bright), var(--p-accent));
-    color: #080b12;
+    color: var(--p-on-accent);
     display: grid;
     place-items: center;
     box-shadow: 0 10px 32px var(--p-glow-1);
@@ -458,7 +458,7 @@
 
   .err-box {
     padding: 12px 16px;
-    color: #fca5a5;
+    color: var(--p-danger);
     font-size: 13px;
     border-color: rgba(239, 68, 68, 0.35);
   }
@@ -475,7 +475,7 @@
     height: 120px;
     border-radius: 14px;
     overflow: hidden;
-    background: rgba(255, 255, 255, 0.07);
+    background: var(--p-fill);
     display: grid;
     place-items: center;
     flex-shrink: 0;
@@ -507,7 +507,7 @@
     font-size: 11px;
     padding: 3px 9px;
     border-radius: 999px;
-    background: rgba(255, 255, 255, 0.07);
+    background: var(--p-fill);
     color: var(--p-text-muted);
   }
 
@@ -584,7 +584,7 @@
   }
 
   .hist-row:hover {
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--p-fill);
   }
 
   .hist-thumb {
@@ -592,7 +592,7 @@
     height: 44px;
     border-radius: 9px;
     overflow: hidden;
-    background: rgba(255, 255, 255, 0.07);
+    background: var(--p-fill);
     display: grid;
     place-items: center;
     flex-shrink: 0;
@@ -636,7 +636,7 @@
     display: grid;
     place-items: center;
     color: var(--p-text-muted);
-    background: rgba(255, 255, 255, 0.06);
+    background: var(--p-fill);
     transition: background 0.14s ease, color 0.14s ease, transform 0.12s ease;
   }
 
@@ -650,10 +650,10 @@
   }
 
   .act-btn.liked {
-    color: #fb7185;
+    color: var(--p-danger);
   }
 
   .act-btn.danger:hover {
-    color: #fca5a5;
+    color: var(--p-danger);
   }
 </style>

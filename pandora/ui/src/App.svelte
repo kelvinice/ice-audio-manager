@@ -120,6 +120,9 @@
   let unlistenMeter: (() => void) | null = null;
 
   let likedIds = $derived(new Set(library.liked.map((t) => t.id)));
+  $effect(() => {
+    document.documentElement.dataset.theme = library.settings.theme;
+  });
   let cachedIds = $derived(new Set(library.cachedIds));
   let defaultDevice = $derived(iceSnapshot?.playback.find((d) => d.isDefault));
 
@@ -285,11 +288,7 @@
   }
 </script>
 
-<div class="ambient-bg">
-  <div class="ambient-blob b1"></div>
-  <div class="ambient-blob b2"></div>
-  <div class="ambient-blob b3"></div>
-</div>
+<div class="ambient-bg" aria-hidden="true"></div>
 
 <div class="shell">
   <div class="main-area">
@@ -337,6 +336,10 @@
           onOpenPlaylistPicker={(track) => openPlaylistModal(track)}
           onRefresh={() => void refreshHome()}
           onGoSearch={() => navigate("search")}
+          onOpenLocal={() => {
+            libraryInitialTab = "local";
+            navigate("library");
+          }}
         />
       {:else if activeTab === "search"}
         <SearchView
@@ -542,7 +545,7 @@
     border-radius: 12px;
     background: rgba(239, 68, 68, 0.16);
     border: 1px solid rgba(239, 68, 68, 0.4);
-    color: #fecaca;
+    color: var(--p-danger);
     font-size: 13px;
     display: flex;
     justify-content: space-between;
@@ -556,7 +559,7 @@
     z-index: 70;
     padding: 9px 15px;
     border-radius: 999px;
-    background: rgba(20, 26, 44, 0.94);
+    background: var(--p-surface-solid);
     border: 1px solid var(--p-accent);
     color: var(--p-accent-bright);
     font-size: 12px;

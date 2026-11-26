@@ -111,9 +111,21 @@ pub struct RecognizedTrack {
     pub recognized_at_ms: u64,
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PandoraTheme {
+    Daylight,
+    Ember,
+    System,
+    #[default]
+    #[serde(other)]
+    Midnight,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct PandoraSettings {
+    pub theme: PandoraTheme,
     pub dynamic_theme: bool,
     pub animated_canvas: bool,
     pub show_romaji: bool,
@@ -131,6 +143,7 @@ pub struct PandoraSettings {
 impl Default for PandoraSettings {
     fn default() -> Self {
         Self {
+            theme: PandoraTheme::default(),
             dynamic_theme: true,
             animated_canvas: true,
             show_romaji: true,

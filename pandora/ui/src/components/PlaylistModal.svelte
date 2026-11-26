@@ -160,7 +160,7 @@
     display: flex;
     flex-direction: column;
     gap: 14px;
-    background: rgba(15, 19, 33, 0.97);
+    background: var(--p-surface-solid);
   }
 
   .head {
@@ -186,7 +186,7 @@
     gap: 12px;
     padding: 10px;
     border-radius: 12px;
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--p-fill);
   }
 
   .thumb {
@@ -194,7 +194,7 @@
     height: 42px;
     border-radius: 8px;
     overflow: hidden;
-    background: rgba(255, 255, 255, 0.08);
+    background: var(--p-fill);
     display: grid;
     place-items: center;
     flex-shrink: 0;
@@ -231,7 +231,7 @@
   .create-row input {
     flex: 1;
     min-width: 0;
-    background: rgba(255, 255, 255, 0.06);
+    background: var(--p-fill);
     border: 1px solid var(--p-border);
     border-radius: 999px;
     padding: 9px 14px;
@@ -245,7 +245,7 @@
 
   .err {
     font-size: 12px;
-    color: #fca5a5;
+    color: var(--p-danger);
   }
 
   .list-head {
@@ -277,12 +277,12 @@
     gap: 10px;
     padding: 9px 12px;
     border-radius: 10px;
-    background: rgba(255, 255, 255, 0.04);
+    background: var(--p-fill);
     text-align: left;
   }
 
   .pl-row:hover {
-    background: rgba(255, 255, 255, 0.09);
+    background: var(--p-fill);
   }
 
   .pl-row.checked {
@@ -303,7 +303,7 @@
 
   .pl-row.checked .box {
     background: var(--p-accent);
-    color: #080b12;
+    color: var(--p-on-accent);
     border-color: var(--p-accent);
   }
 

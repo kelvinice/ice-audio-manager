@@ -380,7 +380,7 @@
     flex-wrap: wrap;
     justify-content: space-between;
     gap: 18px;
-    background: linear-gradient(135deg, var(--p-surface-tint), rgba(14, 18, 30, 0.9));
+    background: linear-gradient(135deg, var(--p-surface-tint), var(--p-surface));
   }
 
   .banner-left {
@@ -410,13 +410,13 @@
     border-radius: 999px;
     font-size: 12px;
     font-weight: 600;
-    background: rgba(255, 255, 255, 0.06);
+    background: var(--p-fill);
     border: 1px solid var(--p-border);
     transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.12s ease;
   }
 
   .chip:hover {
-    background: rgba(255, 255, 255, 0.11);
+    background: var(--p-fill);
   }
 
   .chip:active {
@@ -431,7 +431,7 @@
 
   .err {
     padding: 12px 16px;
-    color: #fca5a5;
+    color: var(--p-danger);
     font-size: 13px;
   }
 
@@ -481,7 +481,7 @@
 
   .spatial-row select,
   .field select {
-    background: rgba(15, 19, 32, 0.95);
+    background: var(--p-surface-solid);
     border: 1px solid var(--p-border);
     border-radius: 8px;
     padding: 6px 10px;
@@ -535,7 +535,7 @@
     font-size: 12.5px;
     padding: 9px 12px;
     border-radius: 10px;
-    background: rgba(255, 255, 255, 0.04);
+    background: var(--p-fill);
     cursor: pointer;
   }
 
@@ -548,7 +548,7 @@
   .device-card {
     padding: 12px 14px;
     border-radius: 12px;
-    background: rgba(255, 255, 255, 0.04);
+    background: var(--p-fill);
     border: 1px solid var(--p-border);
     text-align: left;
     display: flex;
@@ -558,7 +558,7 @@
   }
 
   .device-card:hover {
-    background: rgba(255, 255, 255, 0.08);
+    background: var(--p-fill);
   }
 
   .device-card.active {

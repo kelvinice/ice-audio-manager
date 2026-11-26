@@ -232,7 +232,7 @@
 
   .search-bar input {
     flex: 1;
-    background: rgba(255, 255, 255, 0.06);
+    background: var(--p-fill);
     border: 1px solid var(--p-border);
     border-radius: 999px;
     padding: 11px 18px;
@@ -255,14 +255,14 @@
     border-radius: 999px;
     font-size: 12px;
     font-weight: 600;
-    background: rgba(255, 255, 255, 0.06);
+    background: var(--p-fill);
     color: var(--p-text-muted);
     border: 1px solid var(--p-border);
     transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.12s ease;
   }
 
   .chip:hover {
-    background: rgba(255, 255, 255, 0.1);
+    background: var(--p-fill);
     color: var(--p-text);
   }
 
@@ -278,7 +278,7 @@
 
   .err {
     padding: 12px 16px;
-    color: #fca5a5;
+    color: var(--p-danger);
     font-size: 13px;
   }
 
@@ -305,7 +305,7 @@
   }
 
   .row:hover {
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--p-fill);
   }
 
   .row.playing {
@@ -326,7 +326,7 @@
     height: 44px;
     border-radius: 8px;
     overflow: hidden;
-    background: rgba(255, 255, 255, 0.07);
+    background: var(--p-fill);
     display: grid;
     place-items: center;
     flex-shrink: 0;
@@ -378,11 +378,11 @@
     place-items: center;
     border-radius: 8px;
     color: var(--p-text-muted);
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--p-fill);
   }
 
   .act:hover {
-    background: rgba(255, 255, 255, 0.12);
+    background: var(--p-fill);
     color: var(--p-text);
   }
 
@@ -391,7 +391,7 @@
   }
 
   .act.liked {
-    color: #fb7185;
+    color: var(--p-danger);
   }
 
   .act.cached {

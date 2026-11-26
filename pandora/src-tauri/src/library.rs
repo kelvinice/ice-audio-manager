@@ -633,6 +633,7 @@ mod tests {
         assert!((snap.settings.default_volume - 0.85).abs() < 0.001);
 
         let updated = store.save_settings(PandoraSettings {
+            theme: crate::models::PandoraTheme::Daylight,
             dynamic_theme: false,
             animated_canvas: false,
             show_romaji: false,
@@ -649,10 +650,12 @@ mod tests {
         assert!(updated.settings.auto_launch_ice_notch);
 
         let reloaded = LibraryStore::load_at(db_path, dir.join("cache")).snapshot();
+        assert_eq!(reloaded.settings.theme, crate::models::PandoraTheme::Daylight);
         assert!(!reloaded.settings.dynamic_theme);
         assert!(reloaded.settings.auto_launch_ice_notch);
 
         let reset = store.reset_settings();
+        assert_eq!(reset.settings.theme, crate::models::PandoraTheme::Midnight);
         assert!(reset.settings.dynamic_theme);
         assert_eq!(reset.eq.preset, "Flat");
         assert_eq!(reset.liked.len(), 1);

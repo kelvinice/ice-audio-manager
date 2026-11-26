@@ -24,51 +24,33 @@ export function resolveArtworkUrl(url: string | null, proxyPort: number): string
   return url;
 }
 
+let artworkRevision = 0;
+
 export function applyDefaultMaterialTheme(): void {
-  applyPalette(DEFAULT_PALETTE);
+  artworkRevision++;
+  for (const property of ["--art-primary", "--art-secondary", "--art-tertiary"]) {
+    document.documentElement.style.removeProperty(property);
+  }
 }
 
 export async function applyMaterialThemeFromArt(artUrl: string | null, proxyPort: number): Promise<void> {
+  applyDefaultMaterialTheme();
+  const revision = artworkRevision;
   const resolved = resolveArtworkUrl(artUrl, proxyPort);
-  if (!resolved) {
-    applyDefaultMaterialTheme();
-    return;
-  }
+  if (!resolved) return;
   try {
-    const palette = await extractPalette(resolved);
-    applyPalette(palette);
+    const colors = await extractPalette(resolved);
+    // A later track or disabling artwork accents invalidates this decode.
+    if (revision !== artworkRevision || !colors) return;
+    const style = document.documentElement.style;
+    const properties = ["--art-primary", "--art-secondary", "--art-tertiary"];
+    colors.forEach(({ r, g, b }, i) => style.setProperty(properties[i], `rgb(${r}, ${g}, ${b})`));
   } catch {
-    applyDefaultMaterialTheme();
+    // Missing artwork leaves the selected palette in effect.
   }
 }
 
-function applyPalette([primary, secondary, tertiary]: [Rgb, Rgb, Rgb]): void {
-  const root = document.documentElement.style;
-  const accent = boostBrightness(primary, 1.15);
-  const bright = boostBrightness(primary, 1.45);
-  root.setProperty("--p-accent", `rgb(${accent.r}, ${accent.g}, ${accent.b})`);
-  root.setProperty("--p-accent-bright", `rgb(${bright.r}, ${bright.g}, ${bright.b})`);
-  root.setProperty("--p-accent-soft", `rgba(${accent.r}, ${accent.g}, ${accent.b}, 0.18)`);
-  root.setProperty("--p-glow-1", `rgba(${primary.r}, ${primary.g}, ${primary.b}, 0.42)`);
-  root.setProperty("--p-glow-2", `rgba(${secondary.r}, ${secondary.g}, ${secondary.b}, 0.34)`);
-  root.setProperty("--p-glow-3", `rgba(${tertiary.r}, ${tertiary.g}, ${tertiary.b}, 0.30)`);
-  root.setProperty(
-    "--p-surface-tint",
-    `rgba(${Math.round(primary.r * 0.18)}, ${Math.round(primary.g * 0.18)}, ${Math.round(primary.b * 0.22)}, 0.42)`,
-  );
-}
-
-function boostBrightness(c: Rgb, factor: number): Rgb {
-  const lum = (0.299 * c.r + 0.587 * c.g + 0.114 * c.b) / 255;
-  const scale = lum < 0.48 ? Math.max(factor, 0.54 / Math.max(lum, 0.12)) : 1.05;
-  return {
-    r: Math.min(255, Math.round(c.r * scale)),
-    g: Math.min(255, Math.round(c.g * scale)),
-    b: Math.min(255, Math.round(c.b * scale)),
-  };
-}
-
-function extractPalette(src: string): Promise<[Rgb, Rgb, Rgb]> {
+function extractPalette(src: string): Promise<[Rgb, Rgb, Rgb] | null> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.crossOrigin = "anonymous";
@@ -125,7 +107,7 @@ function extractPalette(src: string): Promise<[Rgb, Rgb, Rgb]> {
           }));
 
         if (sorted.length === 0) {
-          resolve(DEFAULT_PALETTE);
+          resolve(null);
           return;
         }
         const chosen: Rgb[] = [sorted[0]];

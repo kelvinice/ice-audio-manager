@@ -154,7 +154,7 @@
         <div class="seek-rail"></div>
         <div
           class="seek-fill"
-          class:wavy={wavyProgress && $playerStore.playing}
+          class:playback-wave={wavyProgress && $playerStore.playing}
           style="width: {seekPct}%"
         ></div>
         <input
@@ -267,10 +267,10 @@
     align-items: center;
     gap: 18px;
     padding: 0 20px;
-    background: linear-gradient(180deg, rgba(14, 18, 31, 0.92), rgba(9, 12, 22, 0.95));
-    border-top: 1px solid rgba(255, 255, 255, 0.09);
+    background: var(--p-rail);
+    border-top: 1px solid var(--p-border);
     backdrop-filter: blur(28px);
-    box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.32);
+    box-shadow: 0 -4px 18px rgba(0, 0, 0, 0.08);
     z-index: 10;
   }
 
@@ -295,8 +295,8 @@
     height: 52px;
     border-radius: 11px;
     overflow: hidden;
-    background: rgba(255, 255, 255, 0.07);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: var(--p-fill);
+    border: 1px solid var(--p-border);
     display: grid;
     place-items: center;
     flex-shrink: 0;
@@ -365,7 +365,7 @@
     width: 38px;
     height: 38px;
     border-radius: 10px;
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--p-fill);
     display: grid;
     place-items: center;
   }
@@ -399,7 +399,7 @@
   }
 
   .dock-icon:hover {
-    background: rgba(255, 255, 255, 0.08);
+    background: var(--p-fill);
     color: var(--p-text);
   }
 
@@ -412,7 +412,7 @@
   }
 
   .dock-icon.liked {
-    color: #fb7185;
+    color: var(--p-danger);
   }
 
   .dock-icon .dot {
@@ -429,7 +429,7 @@
     height: 40px;
     border-radius: 50%;
     background: linear-gradient(135deg, var(--p-accent-bright), var(--p-accent));
-    color: #080b12;
+    color: var(--p-on-accent);
     display: grid;
     place-items: center;
     box-shadow: 0 4px 16px var(--p-glow-1);
@@ -467,7 +467,7 @@
     right: 0;
     height: 4px;
     border-radius: 999px;
-    background: rgba(255, 255, 255, 0.14);
+    background: var(--p-border-strong);
     pointer-events: none;
   }
 
@@ -480,25 +480,12 @@
     pointer-events: none;
   }
 
-  .seek-fill.wavy {
+  .seek-fill:global(.playback-wave) {
     height: 8px;
     border-radius: 0;
-    background: transparent;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='8' viewBox='0 0 24 8'%3E%3Cpath d='M0 4 Q 6 0.5 12 4 T 24 4' fill='none' stroke='%23ffffff' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E");
-    background-repeat: repeat-x;
-    background-size: 24px 8px;
     filter: drop-shadow(0 0 6px var(--p-glow-1));
-    animation: waveScroll 0.85s linear infinite;
   }
 
-  @keyframes waveScroll {
-    from {
-      background-position-x: 0px;
-    }
-    to {
-      background-position-x: 24px;
-    }
-  }
 
   .range-track.transparent-track {
     position: relative;
@@ -523,7 +510,7 @@
     background: linear-gradient(
       to right,
       var(--p-accent) var(--progress, 0%),
-      rgba(255, 255, 255, 0.14) var(--progress, 0%)
+      var(--p-border-strong) var(--progress, 0%)
     );
     outline: none;
     cursor: pointer;
@@ -540,7 +527,7 @@
     width: 11px;
     height: 11px;
     border-radius: 50%;
-    background: #ffffff;
+    background: var(--p-accent-bright);
     box-shadow: 0 1px 6px rgba(0, 0, 0, 0.5);
     opacity: 0;
     transition: opacity 0.15s ease, transform 0.15s ease;
@@ -571,7 +558,7 @@
     display: flex;
     flex-direction: column;
     gap: 3px;
-    background: rgba(15, 19, 33, 0.98);
+    background: var(--p-surface-solid);
     box-shadow: 0 14px 36px rgba(0, 0, 0, 0.52);
     z-index: 30;
   }
@@ -610,7 +597,7 @@
   }
 
   .dev-popover button:hover {
-    background: rgba(255, 255, 255, 0.08);
+    background: var(--p-fill);
   }
 
   .dev-popover button.active {

@@ -682,7 +682,7 @@
 
   .pl-del:hover {
     background: rgba(239, 68, 68, 0.28);
-    color: #fecaca;
+    color: var(--p-danger);
   }
 
   .pl-fab {
@@ -693,7 +693,7 @@
     height: 40px;
     border-radius: 50%;
     background: linear-gradient(135deg, var(--p-accent-bright), var(--p-accent));
-    color: #080b12;
+    color: var(--p-on-accent);
     display: grid;
     place-items: center;
     box-shadow: 0 8px 20px rgba(0, 0, 0, 0.45);
@@ -870,6 +870,6 @@
   }
 
   .danger {
-    color: #fca5a5;
+    color: var(--p-danger);
   }
 </style>

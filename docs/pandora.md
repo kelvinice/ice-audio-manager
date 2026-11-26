@@ -65,6 +65,10 @@ Pandora never breaks standalone `ice-audio-manager.exe` and never fights it over
 
 ## 3. Building & Running
 
+In **Settings → Appearance**, choose Midnight, Daylight, Ember or Use Windows. The last option follows Windows
+when its appearance changes. Album artwork accents can be turned on for any theme. Pandora stores both choices
+in the local library and restores them on launch. Playback, Ice Audio and Storage have separate settings sections.
+
 All commands run from **PowerShell** (not Git Bash, so MSVC `link.exe` is used):
 
 ### Build & Run Pandora Prototype

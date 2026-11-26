@@ -20,6 +20,7 @@
     onOpenPlaylistPicker: (track: Track) => void;
     onRefresh: () => void;
     onGoSearch: () => void;
+    onOpenLocal: () => void;
   }
 
   let {
@@ -37,6 +38,7 @@
     onOpenPlaylistPicker,
     onRefresh,
     onGoSearch,
+    onOpenLocal,
   }: Props = $props();
 
   const demoTracks = getDemoTracks();
@@ -54,16 +56,16 @@
 
   let quickPlayConfig = $derived.by(() => {
     if (history.length > 0) {
-      return { label: "Resume Listening", track: history[0], list: history };
+      return { label: "Recently played", track: history[0], list: history };
     }
     if (favorites.length > 0) {
-      return { label: "Play Favorites", track: favorites[0], list: favorites };
+      return { label: "From your favorites", track: favorites[0], list: favorites };
     }
     if (feed.quickPicks.length > 0) {
-      return { label: "Play Quick Picks", track: feed.quickPicks[0], list: feed.quickPicks };
+      return { label: "Quick pick", track: feed.quickPicks[0], list: feed.quickPicks };
     }
     if (demoMode && demoTracks.length > 0) {
-      return { label: "Play Demo", track: demoTracks[0], list: demoTracks };
+      return { label: "From the demo collection", track: demoTracks[0], list: demoTracks };
     }
     return null;
   });
@@ -72,13 +74,13 @@
 <div class="page">
   <header class="home-bar">
     <div class="home-greet">
-      {#if demoMode}
-        <span class="pill-badge">
-          <Icon name="sparkles" size={12} />
-          <span>Demo Mode</span>
-        </span>
+      {#if quickPlayConfig}
+        <p class="feature-label">{quickPlayConfig.label}</p>
+        <h1>{quickPlayConfig.track.title}</h1>
+        <p class="artist">{quickPlayConfig.track.artist}</p>
+      {:else}
+        <h1>{greeting()}</h1>
       {/if}
-      <h1>{greeting()}</h1>
     </div>
 
     <div class="home-actions">
@@ -88,7 +90,7 @@
           onclick={() => onPlay(quickPlayConfig.track, quickPlayConfig.list)}
         >
           <Icon name="play" size={14} />
-          <span>{quickPlayConfig.label}</span>
+          <span>Play now</span>
         </button>
       {/if}
       <button class="btn-ghost" onclick={onGoSearch}>
@@ -105,13 +107,19 @@
         <Icon name="refresh" size={15} spin={loading} />
       </button>
     </div>
+    <div class="sleeve" aria-hidden="true">
+      <div class="disc"></div>
+      {#if quickPlayConfig && art(quickPlayConfig.track)}
+        <img src={art(quickPlayConfig.track)} alt="" />
+      {/if}
+    </div>
   </header>
 
   {#if demoMode}
     <section class="section">
       <div class="sec-head">
         <h2>Demo Tracks</h2>
-        <span class="sec-sub">Offline synthesized WAV + synced LRC test tracks (--demo)</span>
+
       </div>
       <div class="quick-grid">
         {#each demoTracks as track (track.id)}
@@ -273,8 +281,8 @@
       </div>
     {:else}
       <div class="empty-box card-glass">
-        Could not reach YouTube Music home feed right now. Try <strong>Search</strong> or add a
-        <strong>Local Music Folder</strong> in Library.
+        <span>The music feed is unavailable. Your local library is still here.</span>
+        <button class="btn-ghost" onclick={onOpenLocal}><Icon name="library" size={15} />Open local library</button>
       </div>
     {/if}
   </section>
@@ -311,20 +319,41 @@
   }
 
   .home-bar {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: flex-end;
-    justify-content: space-between;
-    gap: 16px;
-    padding-bottom: 4px;
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    display: grid;
+    align-content: center;
+    justify-items: start;
+    min-height: 196px;
+    gap: 18px;
+    padding: 26px clamp(20px, 3vw, 40px);
+    padding-right: 35%;
+    border-radius: 18px;
+    border: 1px solid var(--p-border);
+    background: linear-gradient(105deg, var(--p-surface) 6%, var(--p-surface-tint) 90%);
   }
 
+  .home-greet { min-width: 0; max-width: 100%; }
   .home-greet h1 {
-    margin: 4px 0 0;
-    font-size: 28px;
-    font-weight: 760;
-    letter-spacing: -0.025em;
+    margin: 0;
+    font-size: clamp(28px, 3.2vw, 48px);
+    line-height: 1.06;
+    letter-spacing: -.045em;
+    overflow-wrap: anywhere;
   }
+  .artist { margin: 6px 0 0; color: var(--p-text-muted); }
+  .feature-label { margin: 0 0 6px; font-size: 13px; font-weight: 650; color: var(--p-accent-bright); }
+  .sleeve { position: absolute; z-index: -1; right: 0; top: 0; bottom: 0; width: 33%; overflow: hidden; }
+  .disc { position: absolute; width: clamp(160px, 22vw, 310px); aspect-ratio: 1; right: -9%; top: 50%;
+    transform: translateY(-50%); border-radius: 50%; border: 2px solid #525065;
+    background: radial-gradient(circle, #13111b 0 2%, var(--p-seed) 2.5% 23%, transparent 23.5%),
+      conic-gradient(from 30deg, transparent, #d4c7ed55 12%, transparent 28% 50%, #d4c7ed55 64%, transparent 78%),
+      repeating-radial-gradient(circle, #23212c 0 2px, #393645 2.5px 3.5px, #1c1a24 4px 5px);
+  }
+  .sleeve img { position: absolute; height: 78%; max-width: 71%; aspect-ratio: 1; object-fit: cover;
+    left: 0; top: 11%; border-radius: 4px; transform: rotate(-6deg); box-shadow: 8px 10px 24px #100b2238; }
+  @media (max-width: 720px) { .home-bar { padding-right: 22%; } .sleeve { width: 21%; } .sleeve img { display: none; } }
 
   .home-actions {
     display: flex;
@@ -337,7 +366,7 @@
     width: 36px;
     height: 36px;
     border-radius: 50%;
-    background: rgba(255, 255, 255, 0.06);
+    background: var(--p-fill);
     border: 1px solid var(--p-border);
     color: var(--p-text-muted);
     display: grid;
@@ -382,12 +411,12 @@
   }
 
   .sec-sub.warn {
-    color: #fbbf24;
+    color: var(--p-warning);
   }
 
   .quick-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(238px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 245px), 1fr));
     gap: 12px;
   }
 
@@ -397,8 +426,8 @@
     gap: 12px;
     padding: 8px 10px 8px 8px;
     border-radius: 14px;
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.07);
+    background: var(--p-fill);
+    border: 1px solid var(--p-border);
     backdrop-filter: blur(12px);
     cursor: pointer;
     transition:
@@ -412,7 +441,7 @@
   .quick-card:focus-visible {
     outline: none;
     transform: translateY(-2px);
-    background: rgba(255, 255, 255, 0.09);
+    background: var(--p-fill);
     border-color: rgba(255, 255, 255, 0.16);
     box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
   }
@@ -427,7 +456,7 @@
     height: 56px;
     border-radius: 10px;
     overflow: hidden;
-    background: rgba(255, 255, 255, 0.06);
+    background: var(--p-fill);
     display: grid;
     place-items: center;
     flex-shrink: 0;
@@ -488,12 +517,12 @@
   }
 
   .mini-btn:hover {
-    background: rgba(255, 255, 255, 0.12);
+    background: var(--p-fill);
     color: var(--p-text);
   }
 
   .mini-btn.liked {
-    color: #fb7185;
+    color: var(--p-danger);
   }
 
   .quick-fab {
@@ -501,7 +530,7 @@
     height: 34px;
     border-radius: 50%;
     background: linear-gradient(135deg, var(--p-accent-bright), var(--p-accent));
-    color: #080b12;
+    color: var(--p-on-accent);
     display: grid;
     place-items: center;
     box-shadow: 0 4px 14px var(--p-glow-1);
@@ -526,8 +555,8 @@
   .skel-card {
     padding: 11px 11px 14px;
     border-radius: 16px;
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.06);
+    background: var(--p-fill);
+    border: 1px solid var(--p-border);
     display: flex;
     flex-direction: column;
     gap: 10px;
@@ -545,7 +574,7 @@
   .skel-line {
     height: 11px;
     border-radius: 6px;
-    background: rgba(255, 255, 255, 0.07);
+    background: var(--p-fill);
   }
 
   .skel-line.lg {
@@ -566,6 +595,11 @@
   }
 
   .empty-box {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
     padding: 20px;
     font-size: 13px;
     color: var(--p-text-muted);

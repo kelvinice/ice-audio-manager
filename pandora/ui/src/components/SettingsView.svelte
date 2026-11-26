@@ -15,6 +15,7 @@
     PandoraSettings,
   } from "../lib/types";
   import Icon from "./Icon.svelte";
+  import ThemePicker from "./ThemePicker.svelte";
 
   interface Props {
     settings: PandoraSettings;
@@ -50,6 +51,8 @@
     onNotify,
   }: Props = $props();
 
+  const sections = ["Appearance", "Playback", "Ice Audio", "Storage"] as const;
+  let section = $state<(typeof sections)[number]>("Appearance");
   let busy = $state(false);
   let confirmingReset = $state(false);
   let bridgeError = $state<string | null>(null);
@@ -86,7 +89,7 @@
 </script>
 
 <div class="page">
-  <header class="hero card-glass">
+  <header class="hero">
     <div>
       <h1>Settings</h1>
     </div>
@@ -102,7 +105,15 @@
     </div>
   </header>
 
-  <div class="grid-two">
+  <nav class="section-nav" aria-label="Settings sections">
+    {#each sections as item}
+      <button aria-pressed={section === item} onclick={() => { section = item; confirmingReset = false; }}>{item}</button>
+    {/each}
+  </nav>
+
+  {#if section === "Appearance"}
+  <ThemePicker theme={settings.theme} onSelect={(theme) => onUpdateSettings({ theme })} />
+
     <section class="panel card-glass">
       <div class="panel-head">
         <h2>Appearance &amp; Lyrics</h2>
@@ -110,8 +121,8 @@
 
       <label class="toggle-row">
         <div>
-          <div class="row-title">Dynamic Theme</div>
-          <div class="row-sub">Match colors to album artwork</div>
+          <div class="row-title">Album artwork accents</div>
+          <div class="row-sub">Use the playing cover’s colors over your selected theme</div>
         </div>
         <input
           type="checkbox"
@@ -187,6 +198,7 @@
       </label>
     </section>
 
+  {:else if section === "Playback"}
     <section class="panel card-glass">
       <div class="panel-head">
         <h2>Playback</h2>
@@ -239,6 +251,7 @@
         </div>
         <input
           type="range"
+          aria-label="Startup volume"
           min="0"
           max="100"
           value={startupVolPct}
@@ -249,8 +262,7 @@
         />
       </div>
     </section>
-  </div>
-
+  {:else if section === "Ice Audio"}
   <section class="panel card-glass">
     <div class="panel-head">
       <div>
@@ -367,7 +379,7 @@
       </div>
     </div>
   </section>
-
+  {:else}
   <section class="panel card-glass">
     <div class="panel-head">
       <div>
@@ -436,6 +448,7 @@
       </details>
     {/if}
   </section>
+  {/if}
 </div>
 
 <style>
@@ -447,18 +460,19 @@
   }
 
   .hero {
-    padding: 22px 24px;
+    padding: 4px 0;
     display: flex;
     flex-wrap: wrap;
     justify-content: space-between;
     align-items: center;
     gap: 16px;
-    background: linear-gradient(135deg, var(--p-surface-tint), rgba(14, 18, 30, 0.9));
+
   }
 
   .hero h1 {
     margin: 0;
-    font-size: 22px;
+    font-size: clamp(28px, 3vw, 40px);
+    letter-spacing: -.04em;
   }
 
   .hero-actions {
@@ -467,20 +481,20 @@
     gap: 10px;
   }
 
-  .grid-two {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
-    gap: 16px;
-  }
+  .section-nav { display: flex; flex-wrap: wrap; border-bottom: 1px solid var(--p-border); gap: 16px; }
+  .section-nav button { padding: 8px 2px 12px; color: var(--p-text-muted); font-size: 14px; border-bottom: 2px solid transparent; }
+  .section-nav button[aria-pressed="true"] { color: var(--p-accent-bright); border-color: var(--p-accent); font-weight: 650; }
+  .page { max-width: 1100px; margin-inline: auto; }
 
   .panel {
     padding: 18px 20px;
     display: flex;
     flex-direction: column;
-    gap: 14px;
+    gap: 0;
   }
 
   .panel-head {
+    margin-bottom: 12px;
     display: flex;
     flex-wrap: wrap;
     align-items: center;
@@ -498,10 +512,8 @@
     align-items: center;
     justify-content: space-between;
     gap: 14px;
-    padding: 10px 12px;
-    border-radius: 12px;
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.05);
+    padding: 12px 0;
+    border-top: 1px solid var(--p-border);
     cursor: pointer;
   }
 
@@ -517,13 +529,13 @@
   .row-sub {
     font-size: 12px;
     color: var(--p-text-dim);
-    margin-top: 2px;
+    margin-top: 3px;
   }
 
   .slider-block {
     padding: 12px;
     border-radius: 12px;
-    background: rgba(255, 255, 255, 0.04);
+    background: var(--p-fill);
     display: flex;
     flex-direction: column;
     gap: 10px;
@@ -552,7 +564,7 @@
     border-radius: 8px;
     font-size: 11px;
     font-weight: 600;
-    background: rgba(255, 255, 255, 0.08);
+    background: var(--p-fill);
     border: 1px solid var(--p-border);
   }
 
@@ -569,7 +581,7 @@
 
   .pill-badge.live {
     background: rgba(52, 211, 153, 0.16);
-    color: #6ee7b7;
+    color: var(--p-success);
     border: 1px solid rgba(52, 211, 153, 0.45);
   }
 
@@ -577,7 +589,7 @@
     font-size: 11px;
     padding: 4px 10px;
     border-radius: 999px;
-    background: rgba(255, 255, 255, 0.06);
+    background: var(--p-fill);
     color: var(--p-text-muted);
   }
 
@@ -586,7 +598,7 @@
     border-radius: 10px;
     background: rgba(239, 68, 68, 0.14);
     border: 1px solid rgba(239, 68, 68, 0.35);
-    color: #fecaca;
+    color: var(--p-danger);
     font-size: 12px;
   }
 
@@ -614,13 +626,13 @@
     border-radius: 999px;
     font-size: 12px;
     font-weight: 600;
-    background: rgba(255, 255, 255, 0.06);
+    background: var(--p-fill);
     border: 1px solid var(--p-border);
     transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.12s ease;
   }
 
   .chip:hover {
-    background: rgba(255, 255, 255, 0.11);
+    background: var(--p-fill);
   }
 
   .chip:active {
@@ -649,8 +661,8 @@
   .stat-card {
     padding: 12px 14px;
     border-radius: 12px;
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.05);
+    background: var(--p-fill);
+    border: 1px solid var(--p-border);
     display: flex;
     flex-direction: column;
     gap: 4px;
@@ -686,7 +698,7 @@
   }
 
   code {
-    background: rgba(255, 255, 255, 0.07);
+    background: var(--p-fill);
     padding: 2px 6px;
     border-radius: 5px;
     word-break: break-all;

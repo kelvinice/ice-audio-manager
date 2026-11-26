@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { DeviceSummary, IceStatus, Playlist } from "../lib/types";
   import Icon from "./Icon.svelte";
+  import pandoraMark from "../../../../assets/src/pandora.svg";
 
   export type NavTab = "home" | "search" | "recognize" | "library" | "ice" | "settings";
 
@@ -29,18 +30,7 @@
 
 <aside class="sidebar">
   <div class="brand">
-    <div class="logo-ring">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-        <path
-          d="M12 3 21 12 12 21 3 12 12 3Z"
-          fill="#090d16"
-          stroke="#090d16"
-          stroke-width="1.5"
-          stroke-linejoin="round"
-        />
-        <circle cx="12" cy="12" r="3" fill="currentColor" />
-      </svg>
-    </div>
+    <img class="brand-mark" src={pandoraMark} alt="" width="36" height="36" />
     <div>
       <div class="brand-name">Pandora</div>
     </div>
@@ -170,12 +160,14 @@
 
 <style>
   .sidebar {
-    width: 248px;
+    min-height: 0;
+    overflow-y: auto;
+    width: clamp(190px, 18vw, 240px);
     flex-shrink: 0;
     display: flex;
     flex-direction: column;
     padding: 18px 12px 14px;
-    background: linear-gradient(180deg, rgba(13, 17, 29, 0.88), rgba(10, 13, 22, 0.82));
+    background: var(--p-rail);
     border-right: 1px solid var(--p-border);
     backdrop-filter: blur(24px);
     z-index: 2;
@@ -185,24 +177,13 @@
     display: flex;
     align-items: center;
     gap: 11px;
-    padding: 2px 8px 18px;
+    padding: 4px 8px 24px;
   }
 
-  .logo-ring {
-    width: 36px;
-    height: 36px;
-    border-radius: 11px;
-    background: linear-gradient(135deg, var(--p-accent), #38bdf8);
-    color: var(--p-accent-bright);
-    display: grid;
-    place-items: center;
-    box-shadow: 0 6px 20px var(--p-glow-1);
-    transition: background 0.6s ease;
-    flex-shrink: 0;
-  }
+  .brand-mark { flex-shrink: 0; }
 
   .brand-name {
-    font-size: 17px;
+    font-size: 21px;
     font-weight: 700;
     letter-spacing: -0.02em;
   }
@@ -228,7 +209,7 @@
   }
 
   .nav-item:hover {
-    background: rgba(255, 255, 255, 0.06);
+    background: var(--p-fill);
     color: var(--p-text);
   }
 
@@ -281,7 +262,7 @@
   .divider {
     height: 1px;
     margin: 14px 8px 12px;
-    background: rgba(255, 255, 255, 0.07);
+    background: var(--p-fill);
   }
 
   .playlists-head {
@@ -300,8 +281,8 @@
     width: 24px;
     height: 24px;
     border-radius: 50%;
-    background: rgba(255, 255, 255, 0.07);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: var(--p-fill);
+    border: 1px solid var(--p-border);
     color: var(--p-text-muted);
     display: grid;
     place-items: center;
@@ -344,7 +325,7 @@
   }
 
   .pl-item:hover {
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--p-fill);
     color: var(--p-text);
   }
 
@@ -415,7 +396,7 @@
 
   .ice-pill.live {
     background: rgba(52, 211, 153, 0.18);
-    color: #6ee7b7;
+    color: var(--p-success);
   }
 
   .ice-device {

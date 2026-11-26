@@ -257,7 +257,7 @@
     flex-direction: column;
     gap: 14px;
     overflow-y: auto;
-    background: rgba(14, 18, 30, 0.96);
+    background: var(--p-surface-solid);
   }
 
   .head {
@@ -283,7 +283,7 @@
     justify-content: space-between;
     padding: 10px 12px;
     border-radius: 12px;
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--p-fill);
     font-size: 13px;
     cursor: pointer;
   }
@@ -307,7 +307,7 @@
     padding: 6px 11px;
     border-radius: 999px;
     font-size: 12px;
-    background: rgba(255, 255, 255, 0.06);
+    background: var(--p-fill);
     border: 1px solid var(--p-border);
   }
 
@@ -323,7 +323,7 @@
     gap: 4px;
     padding: 12px 8px;
     border-radius: 14px;
-    background: rgba(255, 255, 255, 0.04);
+    background: var(--p-fill);
   }
 
   .band {
@@ -364,7 +364,7 @@
     padding: 9px 12px;
     border-radius: 12px;
     background: var(--p-accent-soft);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid var(--p-border);
     font-size: 12px;
   }
 
@@ -388,7 +388,7 @@
     width: 100%;
     border-radius: 10px;
     border: 1px solid var(--p-border);
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--p-fill);
     color: var(--p-text);
     font-family: monospace;
     font-size: 11px;
@@ -398,6 +398,6 @@
 
   .parse-err {
     font-size: 12px;
-    color: #fca5a5;
+    color: var(--p-danger);
   }
 </style>

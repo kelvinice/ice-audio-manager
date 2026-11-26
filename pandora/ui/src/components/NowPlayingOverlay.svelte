@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { onDestroy, onMount } from "svelte";
   import { audioEngine, playerStore } from "../lib/audio";
   import { resolveArtworkUrl } from "../lib/theme";
   import type { Track } from "../lib/types";
@@ -38,7 +37,7 @@
   let rightTab = $state<"lyrics" | "queue">("lyrics");
   let canvasEl = $state<HTMLCanvasElement | null>(null);
   let lyricsContainer = $state<HTMLDivElement | null>(null);
-  let rafId = 0;
+  let playing = $derived($playerStore.playing);
 
   let pct = $derived(
     $playerStore.durationMs > 0
@@ -66,39 +65,42 @@
     }
   });
 
-  onMount(() => {
-    const draw = () => {
-      if (open && canvasEl) {
-        const ctx = canvasEl.getContext("2d");
-        if (ctx) {
-          const bars = audioEngine.getSpectrumBars(28);
-          const w = canvasEl.width;
-          const h = canvasEl.height;
-          ctx.clearRect(0, 0, w, h);
-          const accent = getComputedStyle(document.documentElement).getPropertyValue("--p-accent").trim() || "#6d83f2";
-          const gap = 4;
-          const barW = (w - gap * (bars.length - 1)) / bars.length;
-          for (let i = 0; i < bars.length; i++) {
-            const val = Math.max(0.06, bars[i]);
-            const barH = val * (h - 6);
-            ctx.fillStyle = accent;
-            ctx.globalAlpha = 0.35 + val * 0.65;
-            const x = i * (barW + gap);
-            const y = h - barH;
-            ctx.beginPath();
-            ctx.roundRect(x, y, barW, barH, 3);
-            ctx.fill();
-          }
-          ctx.globalAlpha = 1;
-        }
+  $effect(() => {
+    const canvas = canvasEl;
+    if (!open || !canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const animate = playing;
+    let frame = 0;
+    function draw() {
+      if (!canvas || !ctx || document.hidden) return;
+      const bars = audioEngine.getSpectrumBars(28);
+      const { width, height } = canvas;
+      const gap = 4;
+      const barWidth = (width - gap * (bars.length - 1)) / bars.length;
+      ctx.clearRect(0, 0, width, height);
+      ctx.fillStyle = getComputedStyle(canvas).color;
+      for (const [i, level] of bars.entries()) {
+        const value = Math.max(0.06, level);
+        const barHeight = value * (height - 6);
+        ctx.globalAlpha = 0.35 + value * 0.65;
+        ctx.beginPath();
+        ctx.roundRect(i * (barWidth + gap), height - barHeight, barWidth, barHeight, 3);
+        ctx.fill();
       }
-      rafId = requestAnimationFrame(draw);
+      ctx.globalAlpha = 1;
+      if (animate) frame = requestAnimationFrame(draw);
+    }
+    function refresh() {
+      cancelAnimationFrame(frame);
+      draw();
+    }
+    refresh();
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      cancelAnimationFrame(frame);
+      document.removeEventListener("visibilitychange", refresh);
     };
-    rafId = requestAnimationFrame(draw);
-  });
-
-  onDestroy(() => {
-    if (rafId) cancelAnimationFrame(rafId);
   });
 
   function formatMs(ms: number): string {
@@ -187,11 +189,12 @@
             <div class="scrub-rail"></div>
             <div
               class="scrub-fill"
-              class:wavy={wavyProgress && $playerStore.playing}
+              class:playback-wave={wavyProgress && $playerStore.playing}
               style="width: {pct}%"
             ></div>
             <input
               class="scrub-input"
+              aria-label="Seek in track"
               type="range"
               min="0"
               max={Math.max(1000, $playerStore.durationMs)}
@@ -348,7 +351,7 @@
     position: fixed;
     inset: 0;
     z-index: 40;
-    background: rgba(9, 11, 18, 0.94);
+    background: var(--p-surface-solid);
     backdrop-filter: blur(42px);
     display: flex;
     flex-direction: column;
@@ -409,6 +412,7 @@
   .body-grid {
     flex: 1;
     min-height: 0;
+    overflow-y: auto;
     display: grid;
     grid-template-columns: minmax(320px, 440px) 1fr;
     gap: 32px;
@@ -425,13 +429,13 @@
   .cover-wrap {
     position: relative;
     width: 100%;
-    max-width: 340px;
+    max-width: clamp(140px,  calc(100dvh - 368px), 340px);
     aspect-ratio: 1;
     margin: 0 auto;
     border-radius: 22px;
     overflow: hidden;
     box-shadow: 0 26px 64px rgba(0, 0, 0, 0.55), 0 0 40px var(--p-glow-1);
-    background: rgba(255, 255, 255, 0.06);
+    background: var(--p-fill);
     transition: border-radius 0.35s ease;
   }
 
@@ -515,12 +519,13 @@
   }
 
   .like-btn.liked {
-    color: #fb7185;
+    color: var(--p-danger);
   }
 
   .spectrum {
     width: 100%;
-    height: 54px;
+    height: clamp(22px, 6vh, 54px);
+    color: var(--p-accent);
   }
 
   .scrub-wrap {
@@ -536,7 +541,7 @@
     right: 0;
     height: 4px;
     border-radius: 999px;
-    background: rgba(255, 255, 255, 0.15);
+    background: var(--p-border-strong);
     pointer-events: none;
   }
 
@@ -549,25 +554,12 @@
     pointer-events: none;
   }
 
-  .scrub-fill.wavy {
+  .scrub-fill:global(.playback-wave) {
     height: 8px;
     border-radius: 0;
-    background: transparent;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='8' viewBox='0 0 24 8'%3E%3Cpath d='M0 4 Q 6 0.5 12 4 T 24 4' fill='none' stroke='%23ffffff' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E");
-    background-repeat: repeat-x;
-    background-size: 24px 8px;
     filter: drop-shadow(0 0 6px var(--p-glow-1));
-    animation: scrubWave 0.85s linear infinite;
   }
 
-  @keyframes scrubWave {
-    from {
-      background-position-x: 0px;
-    }
-    to {
-      background-position-x: 24px;
-    }
-  }
 
   .scrub-input {
     -webkit-appearance: none;
@@ -587,7 +579,7 @@
     width: 12px;
     height: 12px;
     border-radius: 50%;
-    background: #ffffff;
+    background: var(--p-accent-bright);
     box-shadow: 0 1px 6px rgba(0, 0, 0, 0.5);
   }
 
@@ -616,7 +608,7 @@
   }
 
   .ctrl-sm:hover {
-    background: rgba(255, 255, 255, 0.08);
+    background: var(--p-fill);
     color: var(--p-text);
   }
 
@@ -634,7 +626,7 @@
   }
 
   .ctrl-md:hover {
-    background: rgba(255, 255, 255, 0.08);
+    background: var(--p-fill);
   }
 
   .ctrl-lg {
@@ -644,7 +636,7 @@
     display: grid;
     place-items: center;
     background: linear-gradient(135deg, var(--p-accent-bright), var(--p-accent));
-    color: #080b12;
+    color: var(--p-on-accent);
     box-shadow: 0 8px 24px var(--p-glow-1);
     transition: transform 0.14s ease, filter 0.14s ease;
   }
@@ -685,7 +677,7 @@
     font-size: 13px;
     font-weight: 600;
     color: var(--p-text-muted);
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--p-fill);
   }
 
   .right-tabs button.active {
@@ -715,26 +707,26 @@
     border-radius: 12px;
     font-size: 22px;
     font-weight: 700;
-    color: rgba(255, 255, 255, 0.36);
+    color: var(--p-text-dim);
     transition: color 0.25s ease, transform 0.25s ease, background 0.25s ease;
   }
 
   .lyr-line:hover {
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--p-fill);
   }
 
   .lyr-line.past {
-    color: rgba(255, 255, 255, 0.52);
+    color: var(--p-text-muted);
   }
 
   .lyr-line.active {
-    color: #ffffff;
+    color: var(--p-text);
     background: var(--p-accent-soft);
     transform: scale(1.015);
   }
 
   .word {
-    color: rgba(255, 255, 255, 0.45);
+    color: var(--p-text-dim);
     transition: color 0.14s ease;
   }
 
