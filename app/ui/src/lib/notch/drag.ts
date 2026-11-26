@@ -32,3 +32,15 @@ export function shouldStartDrag(
 ): boolean {
   return Math.abs(curX - startX) > threshold || Math.abs(curY - startY) > threshold;
 }
+
+/**
+ * Hover intent (Edge Nook plan item, 2026-11-26): pointer speed in px/ms above which the pointer is passing over the
+ * notch (on its way to a browser tab or title bar) rather than settling on it, so the hover-open dwell starts over.
+ */
+export const HOVER_PASS_SPEED_PX_PER_MS = 0.5;
+
+/** Returns `true` when a pointer step of `(dx, dy)` px in `dtMs` is faster than `HOVER_PASS_SPEED_PX_PER_MS`. */
+export function isPassingThrough(dx: number, dy: number, dtMs: number): boolean {
+  if (!(dtMs > 0)) return false;
+  return Math.hypot(dx, dy) / dtMs > HOVER_PASS_SPEED_PX_PER_MS;
+}

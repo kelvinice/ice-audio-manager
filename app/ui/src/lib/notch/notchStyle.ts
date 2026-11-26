@@ -57,6 +57,8 @@ export interface NotchStyleStrategy {
   readonly id: NotchStyle;
   readonly topPad: number;
   readonly usesSideBySideLyrics: boolean;
+  /** Hover-open dwell (ms). Edge Nook waits longer: it sits where the cursor heads for browser tabs and title bars. */
+  readonly hoverIntentMs: number;
   earRadius(box: { h: number }): number;
   targetGeometry(ctx: GeometryContext): PillBox;
   /** `lift` 0–1: held / carried (Edge Nook becomes a full capsule off the edge; Floating already is one). */
@@ -180,6 +182,7 @@ export const floatingStyleStrategy: NotchStyleStrategy = Object.freeze({
   id: 'floating',
   topPad: TOP_PAD,
   usesSideBySideLyrics: false,
+  hoverIntentMs: 120,
   earRadius: () => 0,
   targetGeometry(ctx: GeometryContext): PillBox {
     const lyricsExtraH = ctx.expanded ? ctx.cardLyricsExtraH : ctx.pillLyricsExtraH;
@@ -230,6 +233,7 @@ export const nookStyleStrategy: NotchStyleStrategy = Object.freeze({
   id: 'nook',
   topPad: 0,
   usesSideBySideLyrics: true,
+  hoverIntentMs: 220,
   earRadius: (box: { h: number }) => nookEarForHeight(box.h),
   targetGeometry(ctx: GeometryContext): PillBox {
     const vol = ctx.view.kind === 'volume' ? ctx.view.percent : ctx.fallbackVolume;
@@ -280,8 +284,9 @@ export const nookStyleStrategy: NotchStyleStrategy = Object.freeze({
     };
   },
   computeHitRect(target: { w: number; h: number }, bottom = false): HitRect {
-    const ear = nookEarForHeight(target.h);
-    const width = target.w + ear * 2;
+    // The body only: the concave ears are mostly transparent, so clicks beside the body go to the app below (owner
+    // QA item, 2026-11-26). Twin: `startup_hit_rect` in `app/src-tauri/src/main.rs`.
+    const width = target.w;
     return {
       x: Math.max(0, (CANVAS_W - width) / 2),
       y: bottom ? Math.max(0, CANVAS_H - target.h) : 0,

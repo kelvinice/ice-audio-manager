@@ -1434,6 +1434,14 @@ impl FrameMetrics {
     }
 }
 
+/// The idle pill's body on the notch canvas in logical px, `(width, height, top offset)`, without Edge Nook ears. The
+/// shell seeds the WebView's first hit rect with it. Twin: `idleGeometry` / `computeHitRect` in `app/ui/src/lib/notch/`.
+#[must_use]
+pub const fn idle_body_box(idle_style: IdleStyle, notch_style: NotchStyle) -> (i32, i32, i32) {
+    let m = frame_metrics(PillMode::Idle, idle_style, notch_style);
+    (m.body_w, m.body_h, m.top_offset)
+}
+
 // Twin: `app/ui/src/lib/notch/notchStyle.ts` (Floating vs Edge Nook top offset, ear radius and +2 px docked height).
 const fn frame_metrics(mode: PillMode, idle_style: IdleStyle, notch_style: NotchStyle) -> FrameMetrics {
     let (body_w, base_h) = logical_dimensions(mode, idle_style);
@@ -2457,6 +2465,13 @@ mod tests {
             // The centre carries the idle content, so compare loosely: still as solid as the docked pill.
             assert!(alpha(&px, w / 2, h / 2) >= docked_centre.min(200), "lifted: still a solid pill");
         }
+    }
+
+    #[test]
+    fn idle_body_box_matches_the_webview_idle_pill_without_ears() {
+        // Twin: `idleGeometry` (116 × 28, Edge Nook +2 px docked) and `TOP_PAD` (6) in `app/ui/src/lib/notch/`.
+        assert_eq!(idle_body_box(IdleStyle::MiniPill, NotchStyle::Floating), (116, 28, 6));
+        assert_eq!(idle_body_box(IdleStyle::MiniPill, NotchStyle::Nook), (116, 30, 0));
     }
 
     #[test]

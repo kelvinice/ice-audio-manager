@@ -360,6 +360,15 @@ Three agents work at once, each in **its own worktree** branched from the latest
       active word's lift was clipped at the row edge. Fixed for pill, card and nook. In the nook, the current line now
       **wraps** (balanced, ≤ 3 rows) instead of shrinking or sliding, and the rows are placed around its measured height
 
+**Open, fixes (Edge-specific, do first):**
+- [x] **Hover intent at the top edge** (Claude, 2026-11-26): `NotchStyleStrategy.hoverIntentMs` (Floating 120 ms, Edge
+      Nook 220 ms), restarted while the pointer sweeps past faster than 0.5 px/ms (`drag.ts` `isPassingThrough`). The
+      owner's feel check stays open in plan.md
+- [x] **Startup hit rect** (Claude, 2026-11-26): `startup_hit_rect` in `main.rs` reads `native_dot::idle_body_box`
+      (one source, honours bottom anchors) instead of the hand-copied `116 + 16 × 30`
+- [x] **Hit rect vs ears** (Claude, 2026-11-26): `nookStyleStrategy.computeHitRect` covers the body only, so clicks
+      under the transparent concave ears reach the app below
+
 **Open, polish:**
 - [x] Top bar: the device name repeats the active device chip below. *Done in the Edge Nook card refresh (2026-11-25): the
       header names the player (`mediaSource`) and the spatial badge*

@@ -127,14 +127,7 @@ impl SharedRuntime {
             placement: Mutex::default(),
             preview_on_attach: AtomicBool::default(),
             start_minimized: AtomicBool::default(),
-            hit_rect: Mutex::new(
-                if initial.settings.appearance.notch_style == ice_core::appearance::NotchStyle::Nook {
-                    let width = 116.0 + 16.0;
-                    HitRect { x: (f64::from(NOTCH_CANVAS_W) - width) / 2.0, y: 0.0, width, height: 30.0 }
-                } else {
-                    HitRect { x: (f64::from(NOTCH_CANVAS_W) - 116.0) / 2.0, y: 6.0, width: 116.0, height: 28.0 }
-                },
-            ),
+            hit_rect: Mutex::new(startup_hit_rect(&initial.settings.appearance, initial.settings.notch_anchor)),
             notch_hwnd: AtomicIsize::new(0),
             notch_visible: AtomicBool::new(false),
             allow_exit: AtomicBool::new(false),
@@ -271,6 +264,23 @@ fn adjust_volume(delta: i8, state: State<'_, Arc<SharedRuntime>>) {
 #[tauri::command]
 fn set_volume(percent: u8, state: State<'_, Arc<SharedRuntime>>) {
     state.engine.send(Command::SetVolume { percent: percent.min(100) });
+}
+
+/// The WebView's click area until the UI reports its own: the idle pill's body, from the native pill's metrics (one
+/// source, no hand copy). Edge Nook ears are left out, like `nookStyleStrategy.computeHitRect`, so a click under a
+/// concave ear reaches the app below.
+fn startup_hit_rect(
+    appearance: &ice_core::appearance::Appearance,
+    anchor: ice_core::placement::NotchAnchor,
+) -> HitRect {
+    let style = appearance.notch_style;
+    let (w, h, top) = ice_win::native_dot::idle_body_box(appearance.effective_idle_style(), style);
+    let y = if anchor.is_bottom() {
+        NOTCH_CANVAS_H - h - top + ice_core::placement::canvas_edge_offset_for(anchor, style)
+    } else {
+        top
+    };
+    HitRect { x: f64::from(NOTCH_CANVAS_W - w) / 2.0, y: f64::from(y), width: f64::from(w), height: f64::from(h) }
 }
 
 #[tauri::command]

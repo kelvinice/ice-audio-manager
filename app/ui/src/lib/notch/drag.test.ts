@@ -3,6 +3,7 @@ import test from 'node:test';
 import {
   DRAG_THRESHOLD_PX,
   INTERACTIVE_DRAG_BLOCK_SELECTOR,
+  isPassingThrough,
   isDragBlockedTarget,
   shouldStartDrag,
 } from './drag.ts';
@@ -30,4 +31,10 @@ test('isDragBlockedTarget respects interactive controls and ignores surface elem
     } as unknown as EventTarget),
     false,
   );
+});
+
+test('a fast pointer is passing through; a slow or settled one is not', () => {
+  assert.equal(isPassingThrough(40, 0, 16), true, '2.5 px/ms: sweeping to a tab');
+  assert.equal(isPassingThrough(3, 2, 16), false, 'about 0.2 px/ms: settling on the notch');
+  assert.equal(isPassingThrough(5, 0, 0), false, 'no time elapsed: no speed');
 });

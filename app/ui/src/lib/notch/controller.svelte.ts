@@ -10,7 +10,7 @@ import {
   resolveMusicServices,
   type MusicServiceId,
 } from './backdrop';
-import { isDragBlockedTarget, shouldStartDrag } from './drag';
+import { isDragBlockedTarget, isPassingThrough, shouldStartDrag } from './drag';
 import {
   CARD_LYRICS_H,
   deriveBenchOverride,
@@ -53,6 +53,8 @@ const IDLE_VIEW: ActivityView = Object.freeze({ kind: 'idle' });
 const HIBERNATE_HANDOVER_MS = 1000;
 /** After asking the shell to drag, how long the notch stays lifted waiting for `NotchSnapshot.dragging`. */
 const HELD_DRAG_START_GRACE_MS = 600;
+/** After a drop, hover can't reopen the card until the pointer leaves, unless no pointer enters within this long. */
+const HOVER_LOCK_STALE_MS = 4000;
 
 export class NotchController {
   private readonly scheduler = new NotchActivityScheduler(Date.now());
@@ -75,6 +77,11 @@ export class NotchController {
   placedFlashKey = $state(0);
 
   private hoverTimer: number | null = null;
+  /** Set when a drag ends; cleared when the pointer leaves the notch (hover may not reopen the card before that). */
+  private hoverLockedAfterDrop = false;
+  private enteredSinceDrop = false;
+  private droppedAt = 0;
+  private lastHoverMove: { x: number; y: number; t: number } | null = null;
   private leaveTimer: number | null = null;
   private activityTimer: number | null = null;
   private placedFlashTimer: number | null = null;
@@ -424,7 +431,17 @@ export class NotchController {
     const wasDragging = this.notchSnapshot?.dragging ?? false;
     this.notchSnapshot = next;
     // The shell's drag ended (button released or Esc): let go, so the notch settles back onto its edge.
-    if (wasDragging && !next.dragging) this.held = false;
+    if (wasDragging && !next.dragging) {
+      this.held = false;
+      this.hoverLockedAfterDrop = true;
+      this.enteredSinceDrop = false;
+      this.droppedAt = Date.now();
+      this.hoverExpanded = false;
+      if (this.hoverTimer !== null) {
+        clearTimeout(this.hoverTimer);
+        this.hoverTimer = null;
+      }
+    }
     if (next.dragging && this.heldFallbackTimer !== null) {
       clearTimeout(this.heldFallbackTimer);
       this.heldFallbackTimer = null;
@@ -740,16 +757,42 @@ export class NotchController {
     this.scheduler.markInteraction(Date.now());
     this.scheduleNextTick();
     if (this.hoverExpanded || this.notchSnapshot?.expanded) return;
+    // Owner, 2026-11-26: a dropped notch stays a notch. It lands under the cursor, so hovering may open the card again
+    // only after the pointer has left it once.
+    if (this.hoverLockedAfterDrop) {
+      // No enter soon after the drop means the cursor wasn't on the notch, so this is a new hover.
+      const stale = !this.enteredSinceDrop && Date.now() - this.droppedAt > HOVER_LOCK_STALE_MS;
+      this.enteredSinceDrop = true;
+      if (!stale) return;
+      this.hoverLockedAfterDrop = false;
+    }
+    this.lastHoverMove = e ? { x: e.clientX, y: e.clientY, t: e.timeStamp } : null;
+    this.armHoverOpen();
+  };
+
+  /** Edge Nook plan item: a pointer sweeping over the notch restarts the dwell instead of opening the card. */
+  onPointerMove = (e: PointerEvent): void => {
+    const prev = this.lastHoverMove;
+    this.lastHoverMove = { x: e.clientX, y: e.clientY, t: e.timeStamp };
+    if (this.hoverTimer === null || !prev) return;
+    if (isPassingThrough(e.clientX - prev.x, e.clientY - prev.y, e.timeStamp - prev.t)) this.armHoverOpen();
+  };
+
+  private armHoverOpen(): void {
+    if (this.hoverTimer !== null) clearTimeout(this.hoverTimer);
     this.hoverTimer = window.setTimeout(() => {
+      this.hoverTimer = null;
       this.hoverExpanded = true;
       this.syncGeometry(false);
       this.scheduleNextTick();
-    }, 120);
-  };
+    }, this.styleStrategy.hoverIntentMs);
+  }
 
   onPointerLeave = (): void => {
     this.clearTimers();
     this.pointerInside = false;
+    this.hoverLockedAfterDrop = false;
+    this.lastHoverMove = null;
     this.scheduler.markInteraction(Date.now());
     if (!this.hoverExpanded) {
       this.scheduleNextTick();

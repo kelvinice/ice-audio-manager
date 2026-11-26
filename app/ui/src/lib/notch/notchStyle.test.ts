@@ -106,14 +106,14 @@ test('Nook surface paths stay centered, flush to y=0, open along top rim, and sa
   assert.ok(!collapsed.clipPath.includes('NaN'));
 });
 
-test('hit rects stay top-aligned and expand for concave ears in Edge Nook mode', () => {
+test('hit rects stay top-aligned and cover only the body in Edge Nook mode (not the transparent ears)', () => {
   const floatHit = floatingStyleStrategy.computeHitRect({ w: 116, h: 28 });
   assert.equal(floatHit.y, TOP_PAD);
   assert.equal(floatHit.width, 116);
 
   const nookHit = nookStyleStrategy.computeHitRect({ w: 116, h: 30 });
   assert.equal(nookHit.y, 0);
-  assert.equal(nookHit.width, 116 + 16);
+  assert.equal(nookHit.width, 116);
   assert.equal(nookHit.x, (CANVAS_W - nookHit.width) / 2);
 });
 
