@@ -13,8 +13,9 @@ Pandora is a native Windows desktop music player inspired by **Vivi Music**, bui
 | **Dynamic Material You** | Album-art palette extraction shifts app theme | Canvas palette extractor updates `--p-accent`, `--p-glow-*`, and surface tints live |
 | **Animated Canvas** | Apple Music-style fluid cover backdrop | Animated multi-blob GPU-blurred canvas backdrop + live FFT spectrum in Now Playing |
 | **Catalog & Streaming** | YouTube / YouTube Music InnerTube (ad-free) | Clean-room InnerTube (`search`, `browse` Home, `next` Up Next radio, `ANDROID_VR`/`IOS`/`ANDROID_MUSIC` + `yt-dlp` fallback) routed via local `127.0.0.1` Range proxy |
-| **Audio Tweaks & EQ** | Equalizer, Audio Normalization, Skip Silence | Web Audio DSP pipeline: 10-band Graphic EQ (`32 Hz–16 kHz`, 7 presets), `DynamicsCompressor` normalization, RMS-gated Skip Silence, playback speed, sleep timer |
-| **Lyrics & Romaji** | Synced karaoke lyrics | Reuses `ice-win` LRCLIB + `ice-core` LRC parser & estimated word-sync karaoke + `ice-win` offline Japanese → Romaji |
+| **Audio Tweaks & EQ** | Equalizer, Audio Normalization, Skip Silence | Web Audio DSP pipeline: 10-band Graphic EQ (`32 Hz–16 kHz`, 7 presets), **AutoEq `ParametricEQ.txt` import** (peaking/shelf/pass `BiquadFilterNode` + preamp), `DynamicsCompressor` normalization, RMS-gated Skip Silence, playback speed, countdown + **End-of-Track** sleep timer |
+| **Lyrics & Romaji** | Synced karaoke lyrics | Reuses `ice-win` LRCLIB + `ice-core` LRC parser & estimated word-sync karaoke + offline **Japanese, Korean, and Cyrillic** romanization |
+| **Song Recognition** | Microphone Shazam fingerprinting (`vibrafp` + `shazamkit`) | Pure-Rust Shazam-compatible 2048-pt FFT acoustic fingerprinter + Shazam Discovery v5 API capturing either **System Audio** (WASAPI loopback) or **Microphone**, with match history & instant YouTube Music playback |
 | **Offline & Local Files** | Local caching/downloads + offline library | `%LOCALAPPDATA%\Pandora\cache\` byte-range offline audio cache + local Windows folder scanner (`.mp3/.flac/.wav/.ogg/.m4a/.opus`) |
 | **Privacy-First** | Local DB, zero trackers/telemetry | `%APPDATA%\Pandora\library.json` atomic JSON store, zero analytics |
 | **Windows Native Extra** | N/A | **Dual-mode Ice Audio Manager wrapper & live local bridge**: authenticated `127.0.0.1` JSON-line bridge (`bridge.json`), instant Notch Toggle / Show / Open Ice Settings, 1-click device switching, Master/Mic mute, Spatial Sound (Sonic/Atmos/DTS), 14-band WASAPI loopback meter, shared Notch & Call Mode controls, and Windows SMTC integration |
@@ -71,8 +72,11 @@ All commands run from **PowerShell** (not Git Bash, so MSVC `link.exe` is used):
 # One-click debug build + launch
 .\pandora\build.cmd run
 
+# Or run with demo WAV tracks enabled (for testing without YouTube/local files)
+cargo run --manifest-path pandora\src-tauri\Cargo.toml -- --demo
+
 # Or run with fake audio devices (no real audio hardware needed)
-cargo run --manifest-path pandora\src-tauri\Cargo.toml -- --fake-engine
+cargo run --manifest-path pandora\src-tauri\Cargo.toml -- --fake-engine --demo
 
 # Check UI types + build + Rust tests
 .\pandora\build.cmd check

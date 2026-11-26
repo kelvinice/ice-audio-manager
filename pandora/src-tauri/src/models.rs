@@ -46,6 +46,24 @@ pub struct SearchResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct ParametricBand {
+    /// `"PK" | "LSC" | "HSC" | "LPQ" | "HPQ"`
+    pub filter_type: String,
+    pub frequency: f32,
+    pub gain: f32,
+    pub q: f32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ParametricEqProfile {
+    pub name: String,
+    pub preamp: f32,
+    pub bands: Vec<ParametricBand>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct EqState {
     pub enabled: bool,
     pub preset: String,
@@ -53,6 +71,8 @@ pub struct EqState {
     pub normalize: bool,
     pub skip_silence: bool,
     pub playback_rate: f32,
+    #[serde(default)]
+    pub parametric: Option<ParametricEqProfile>,
 }
 
 impl Default for EqState {
@@ -64,8 +84,31 @@ impl Default for EqState {
             normalize: false,
             skip_silence: false,
             playback_rate: 1.0,
+            parametric: None,
         }
     }
+}
+
+fn default_true() -> bool {
+    true
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RecognizedTrack {
+    pub id: String,
+    pub title: String,
+    pub artist: String,
+    pub album: Option<String>,
+    pub artwork_url: Option<String>,
+    pub genre: Option<String>,
+    pub release_date: Option<String>,
+    pub label: Option<String>,
+    pub lyrics_snippet: Option<String>,
+    pub shazam_url: Option<String>,
+    pub matched_track: Option<Track>,
+    pub source: String,
+    pub recognized_at_ms: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -79,6 +122,10 @@ pub struct PandoraSettings {
     pub media_session_enabled: bool,
     pub auto_launch_ice_notch: bool,
     pub show_ice_card_in_sidebar: bool,
+    #[serde(default = "default_true")]
+    pub wavy_progress: bool,
+    #[serde(default)]
+    pub spinning_cover: bool,
 }
 
 impl Default for PandoraSettings {
@@ -92,6 +139,8 @@ impl Default for PandoraSettings {
             media_session_enabled: true,
             auto_launch_ice_notch: false,
             show_ice_card_in_sidebar: true,
+            wavy_progress: true,
+            spinning_cover: false,
         }
     }
 }
@@ -121,6 +170,8 @@ pub struct LibraryState {
     pub ice_mode_pref: String,
     #[serde(default)]
     pub settings: PandoraSettings,
+    #[serde(default)]
+    pub recognition_history: Vec<RecognizedTrack>,
 }
 
 impl Default for LibraryState {
@@ -137,6 +188,7 @@ impl Default for LibraryState {
             eq: EqState::default(),
             ice_mode_pref: "auto".into(),
             settings: PandoraSettings::default(),
+            recognition_history: Vec::new(),
         }
     }
 }

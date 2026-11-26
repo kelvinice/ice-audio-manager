@@ -11,6 +11,8 @@
     likedIds: Set<string>;
     showRomaji: boolean;
     animatedCanvas: boolean;
+    wavyProgress?: boolean;
+    spinningCover?: boolean;
     onClose: () => void;
     onToggleLike: (track: Track) => void;
     onAddToPlaylist: (track: Track) => void;
@@ -24,6 +26,8 @@
     likedIds,
     showRomaji,
     animatedCanvas,
+    wavyProgress = true,
+    spinningCover = false,
     onClose,
     onToggleLike,
     onAddToPlaylist,
@@ -35,6 +39,12 @@
   let canvasEl = $state<HTMLCanvasElement | null>(null);
   let lyricsContainer = $state<HTMLDivElement | null>(null);
   let rafId = 0;
+
+  let pct = $derived(
+    $playerStore.durationMs > 0
+      ? Math.min(100, Math.max(0, ($playerStore.currentTimeMs / $playerStore.durationMs) * 100))
+      : 0,
+  );
 
   let activeLineIdx = $derived.by(() => {
     const lyr = $playerStore.lyrics;
@@ -129,11 +139,18 @@
 
     <div class="body-grid">
       <div class="left-col">
-        <div class="cover-wrap">
+        <div
+          class="cover-wrap"
+          class:spinning={spinningCover}
+          class:paused={!$playerStore.playing}
+        >
           {#if resolveArtworkUrl(track.artworkUrl, proxyPort)}
             <img src={resolveArtworkUrl(track.artworkUrl, proxyPort)} alt={track.title} />
           {:else}
             <div class="cover-empty"><Icon name="music" size={48} /></div>
+          {/if}
+          {#if spinningCover}
+            <span class="vinyl-hole" aria-hidden="true"></span>
           {/if}
         </div>
 
@@ -166,13 +183,22 @@
         <canvas bind:this={canvasEl} width="420" height="54" class="spectrum"></canvas>
 
         <div class="scrubber">
-          <input
-            type="range"
-            min="0"
-            max={Math.max(1000, $playerStore.durationMs)}
-            value={$playerStore.currentTimeMs}
-            oninput={handleSeek}
-          />
+          <div class="scrub-wrap">
+            <div class="scrub-rail"></div>
+            <div
+              class="scrub-fill"
+              class:wavy={wavyProgress && $playerStore.playing}
+              style="width: {pct}%"
+            ></div>
+            <input
+              class="scrub-input"
+              type="range"
+              min="0"
+              max={Math.max(1000, $playerStore.durationMs)}
+              value={$playerStore.currentTimeMs}
+              oninput={handleSeek}
+            />
+          </div>
           <div class="times">
             <span>{formatMs($playerStore.currentTimeMs)}</span>
             <span>{formatMs($playerStore.durationMs)}</span>
@@ -245,7 +271,7 @@
         {#if rightTab === "lyrics"}
           <div class="lyrics-scroll" bind:this={lyricsContainer}>
             {#if !$playerStore.lyrics || $playerStore.lyrics.status === "loading"}
-              <div class="lyr-state">Searching synced lyrics (LRCLIB / local LRC)...</div>
+              <div class="lyr-state">Loading lyrics...</div>
             {:else if $playerStore.lyrics.status === "synced"}
               {#each $playerStore.lyrics.lines as line, idx (idx)}
                 {@const isActive = idx === activeLineIdx}
@@ -276,7 +302,7 @@
             {:else if $playerStore.lyrics.status === "instrumental"}
               <div class="lyr-state">♪ Instrumental track ♪</div>
             {:else}
-              <div class="lyr-state">No synced lyrics found for this track.</div>
+              <div class="lyr-state">No lyrics available.</div>
             {/if}
           </div>
         {:else}
@@ -397,6 +423,7 @@
   }
 
   .cover-wrap {
+    position: relative;
     width: 100%;
     max-width: 340px;
     aspect-ratio: 1;
@@ -405,6 +432,40 @@
     overflow: hidden;
     box-shadow: 0 26px 64px rgba(0, 0, 0, 0.55), 0 0 40px var(--p-glow-1);
     background: rgba(255, 255, 255, 0.06);
+    transition: border-radius 0.35s ease;
+  }
+
+  .cover-wrap.spinning {
+    border-radius: 50%;
+    border: 3px solid rgba(255, 255, 255, 0.14);
+    animation: vinylSpin 20s linear infinite;
+  }
+
+  .cover-wrap.spinning.paused {
+    animation-play-state: paused;
+  }
+
+  .vinyl-hole {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 34px;
+    height: 34px;
+    margin: -17px 0 0 -17px;
+    border-radius: 50%;
+    background: #0b0d14;
+    border: 4px solid rgba(255, 255, 255, 0.28);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.65);
+    pointer-events: none;
+  }
+
+  @keyframes vinylSpin {
+    from {
+      transform: rotate(0deg);
+    }
+    to {
+      transform: rotate(360deg);
+    }
   }
 
   .cover-wrap img {
@@ -462,9 +523,72 @@
     height: 54px;
   }
 
-  .scrubber input {
+  .scrub-wrap {
+    position: relative;
+    height: 18px;
+    display: flex;
+    align-items: center;
+  }
+
+  .scrub-rail {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 4px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.15);
+    pointer-events: none;
+  }
+
+  .scrub-fill {
+    position: absolute;
+    left: 0;
+    height: 4px;
+    border-radius: 999px;
+    background: var(--p-accent);
+    pointer-events: none;
+  }
+
+  .scrub-fill.wavy {
+    height: 8px;
+    border-radius: 0;
+    background: transparent;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='8' viewBox='0 0 24 8'%3E%3Cpath d='M0 4 Q 6 0.5 12 4 T 24 4' fill='none' stroke='%23ffffff' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: repeat-x;
+    background-size: 24px 8px;
+    filter: drop-shadow(0 0 6px var(--p-glow-1));
+    animation: scrubWave 0.85s linear infinite;
+  }
+
+  @keyframes scrubWave {
+    from {
+      background-position-x: 0px;
+    }
+    to {
+      background-position-x: 24px;
+    }
+  }
+
+  .scrub-input {
+    -webkit-appearance: none;
+    appearance: none;
+    position: relative;
+    z-index: 2;
     width: 100%;
-    accent-color: var(--p-accent);
+    height: 16px;
+    background: transparent;
+    cursor: pointer;
+    outline: none;
+  }
+
+  .scrub-input::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #ffffff;
+    box-shadow: 0 1px 6px rgba(0, 0, 0, 0.5);
   }
 
   .times {
@@ -482,8 +606,18 @@
   }
 
   .ctrl-sm {
-    font-size: 16px;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
     color: var(--p-text-dim);
+    transition: background 0.15s ease, color 0.15s ease, transform 0.12s ease;
+  }
+
+  .ctrl-sm:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--p-text);
   }
 
   .ctrl-sm.on {
@@ -491,18 +625,39 @@
   }
 
   .ctrl-md {
-    font-size: 20px;
-    padding: 8px;
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    transition: background 0.15s ease, transform 0.12s ease;
+  }
+
+  .ctrl-md:hover {
+    background: rgba(255, 255, 255, 0.08);
   }
 
   .ctrl-lg {
-    width: 54px;
-    height: 54px;
+    width: 56px;
+    height: 56px;
     border-radius: 50%;
-    background: var(--p-accent);
+    display: grid;
+    place-items: center;
+    background: linear-gradient(135deg, var(--p-accent-bright), var(--p-accent));
     color: #080b12;
-    font-size: 18px;
-    font-weight: 700;
+    box-shadow: 0 8px 24px var(--p-glow-1);
+    transition: transform 0.14s ease, filter 0.14s ease;
+  }
+
+  .ctrl-lg:hover {
+    transform: scale(1.06);
+    filter: brightness(1.06);
+  }
+
+  .ctrl-sm:active,
+  .ctrl-md:active,
+  .ctrl-lg:active {
+    transform: scale(0.92);
   }
 
   .right-col {

@@ -27,6 +27,10 @@ fn is_allowed_art_host(host: &str) -> bool {
         || h == "ytimg.com"
         || h.ends_with(".ggpht.com")
         || h == "ggpht.com"
+        || h.ends_with(".mzstatic.com")
+        || h == "mzstatic.com"
+        || h.ends_with(".shazam.com")
+        || h == "shazam.com"
 }
 
 struct ArtEntry {

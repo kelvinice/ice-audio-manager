@@ -2,6 +2,8 @@
   export type IconName =
     | "home"
     | "search"
+    | "radar"
+    | "mic"
     | "library"
     | "snowflake"
     | "settings"
@@ -76,6 +78,16 @@
   {:else if name === "search"}
     <circle cx="11" cy="11" r="8" />
     <path d="m21 21-4.3-4.3" />
+  {:else if name === "radar"}
+    <circle cx="12" cy="12" r="2.2" fill="currentColor" stroke="none" />
+    <path d="M16.24 7.76a6 6 0 0 1 0 8.49" />
+    <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+    <path d="M7.76 16.24a6 6 0 0 1 0-8.49" />
+    <path d="M4.93 19.07a10 10 0 0 1 0-14.14" />
+  {:else if name === "mic"}
+    <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+    <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+    <line x1="12" x2="12" y1="19" y2="22" />
   {:else if name === "library"}
     <path d="m16 6 4 14" />
     <path d="M12 6v14" />

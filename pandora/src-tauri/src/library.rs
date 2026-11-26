@@ -9,7 +9,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crate::http;
-use crate::models::{EqState, LibraryState, PandoraSettings, Playlist, Track};
+use crate::models::{EqState, LibraryState, PandoraSettings, Playlist, RecognizedTrack, Track};
 use crate::ytmusic::YtMusicClient;
 
 const AUDIO_EXTENSIONS: &[&str] = &["mp3", "flac", "wav", "ogg", "m4a", "opus", "aac", "weba", "webm"];
@@ -202,6 +202,34 @@ impl LibraryStore {
         let mut guard = self.state.lock().unwrap_or_else(|e| e.into_inner());
         guard.settings = PandoraSettings::default();
         guard.eq = EqState::default();
+        self.save_locked(&guard);
+        guard.clone()
+    }
+
+    pub fn add_recognition_history(&self, mut item: RecognizedTrack) -> LibraryState {
+        let mut guard = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(m) = item.matched_track.as_mut() {
+            m.liked = guard.liked.iter().any(|t| t.id == m.id);
+            guard.tracks_index.insert(m.id.clone(), m.clone());
+        }
+        guard.recognition_history.retain(|r| r.id != item.id);
+        guard.recognition_history.insert(0, item);
+        guard.recognition_history.truncate(50);
+        sync_track_flags(&self.cache_dir, &mut guard);
+        self.save_locked(&guard);
+        guard.clone()
+    }
+
+    pub fn delete_recognition_item(&self, id: &str) -> LibraryState {
+        let mut guard = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        guard.recognition_history.retain(|r| r.id != id);
+        self.save_locked(&guard);
+        guard.clone()
+    }
+
+    pub fn clear_recognition_history(&self) -> LibraryState {
+        let mut guard = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        guard.recognition_history.clear();
         self.save_locked(&guard);
         guard.clone()
     }
@@ -613,6 +641,8 @@ mod tests {
             media_session_enabled: false,
             auto_launch_ice_notch: true,
             show_ice_card_in_sidebar: false,
+            wavy_progress: false,
+            spinning_cover: true,
         });
         assert!(!updated.settings.dynamic_theme);
         assert!((updated.settings.default_volume - 1.0).abs() < 0.001);

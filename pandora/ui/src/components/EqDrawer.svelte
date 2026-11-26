@@ -1,5 +1,6 @@
 <script lang="ts">
   import { audioEngine, EQ_FREQUENCIES, EQ_PRESETS, playerStore } from "../lib/audio";
+  import { parseParametricEqText } from "../lib/parametricEq";
   import Icon from "./Icon.svelte";
 
   interface Props {
@@ -8,6 +9,31 @@
   }
 
   let { open, onClose }: Props = $props();
+  let showPaste = $state(false);
+  let pasteText = $state("");
+  let parseErr = $state<string | null>(null);
+  let fileInput = $state<HTMLInputElement | null>(null);
+
+  function applyParametricText(text: string, name: string) {
+    parseErr = null;
+    try {
+      const profile = parseParametricEqText(text, name);
+      audioEngine.updateEq({ ...$playerStore.eq, enabled: true, parametric: profile });
+      showPaste = false;
+      pasteText = "";
+    } catch (e) {
+      parseErr = e instanceof Error ? e.message : String(e);
+    }
+  }
+
+  async function handleFilePicked(e: Event) {
+    const input = e.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+    const text = await file.text();
+    applyParametricText(text, file.name.replace(/\.txt$/i, ""));
+    input.value = "";
+  }
 
   function applyPreset(name: string) {
     const bands = EQ_PRESETS[name] ?? EQ_PRESETS.Flat;
@@ -38,8 +64,7 @@
     >
       <div class="head">
         <div>
-          <h3>Audio DSP &amp; Equalizer</h3>
-          <p>Web Audio 10-band EQ • Normalization • Skip Silence</p>
+          <h3>Equalizer</h3>
         </div>
         <button class="btn-ghost" onclick={onClose} aria-label="Done">
           <Icon name="x" size={15} />
@@ -61,7 +86,7 @@
           />
         </label>
         <label class="toggle-row">
-          <span>Audio Normalization (Compressor)</span>
+          <span>Volume Normalization</span>
           <input
             type="checkbox"
             checked={$playerStore.eq.normalize}
@@ -73,7 +98,7 @@
           />
         </label>
         <label class="toggle-row">
-          <span>Skip Silence (RMS gate)</span>
+          <span>Skip Silence</span>
           <input
             type="checkbox"
             checked={$playerStore.eq.skipSilence}
@@ -99,7 +124,7 @@
         {/each}
       </div>
 
-      <div class="section-label">10-Band Graphic EQ (-12 dB to +12 dB)</div>
+      <div class="section-label">Bands</div>
       <div class="bands">
         {#each EQ_FREQUENCIES as hz, idx}
           <div class="band">
@@ -116,6 +141,55 @@
           </div>
         {/each}
       </div>
+
+      <div class="section-label">AutoEq Parametric</div>
+      {#if $playerStore.eq.parametric}
+        <div class="param-badge">
+          <div>
+            <strong>{$playerStore.eq.parametric.name}</strong>
+            <span>
+              {$playerStore.eq.parametric.bands.length} bands • Preamp {$playerStore.eq.parametric.preamp} dB
+            </span>
+          </div>
+          <button
+            class="preset-chip"
+            onclick={() => audioEngine.updateEq({ ...$playerStore.eq, parametric: null })}
+          >
+            Clear
+          </button>
+        </div>
+      {/if}
+      <div class="presets">
+        <input
+          bind:this={fileInput}
+          type="file"
+          accept=".txt"
+          class="hidden-file"
+          onchange={(e) => void handleFilePicked(e)}
+        />
+        <button class="preset-chip" onclick={() => fileInput?.click()}>Import .txt</button>
+        <button class="preset-chip" onclick={() => (showPaste = !showPaste)}>
+          {showPaste ? "Hide Paste" : "Paste AutoEq"}
+        </button>
+      </div>
+      {#if showPaste}
+        <div class="paste-box">
+          <textarea
+            rows="4"
+            placeholder="Paste Equalizer APO ParametricEQ.txt..."
+            bind:value={pasteText}
+          ></textarea>
+          <button
+            class="preset-chip active"
+            onclick={() => applyParametricText(pasteText, "Pasted AutoEq")}
+          >
+            Apply Profile
+          </button>
+        </div>
+      {/if}
+      {#if parseErr}
+        <div class="parse-err">{parseErr}</div>
+      {/if}
 
       <div class="section-label">Playback Speed ({$playerStore.eq.playbackRate.toFixed(2)}×)</div>
       <input
@@ -134,12 +208,27 @@
 
       <div class="section-label">
         Sleep Timer
-        {#if $playerStore.sleepRemainingSec !== null}
+        {#if $playerStore.sleepEndOfTrack}
+          • Stops after track
+        {:else if $playerStore.sleepRemainingSec !== null}
           • {Math.ceil($playerStore.sleepRemainingSec / 60)} min left
         {/if}
       </div>
       <div class="presets">
-        <button class="preset-chip" onclick={() => audioEngine.setSleepTimer(null)}>Off</button>
+        <button
+          class="preset-chip"
+          class:active={!$playerStore.sleepEndOfTrack && $playerStore.sleepRemainingSec === null}
+          onclick={() => audioEngine.setSleepTimer(null)}
+        >
+          Off
+        </button>
+        <button
+          class="preset-chip"
+          class:active={$playerStore.sleepEndOfTrack}
+          onclick={() => audioEngine.setSleepEndOfTrack(!$playerStore.sleepEndOfTrack)}
+        >
+          End of Track
+        </button>
         <button class="preset-chip" onclick={() => audioEngine.setSleepTimer(15)}>15m</button>
         <button class="preset-chip" onclick={() => audioEngine.setSleepTimer(30)}>30m</button>
         <button class="preset-chip" onclick={() => audioEngine.setSleepTimer(60)}>60m</button>
@@ -182,12 +271,6 @@
     font-size: 18px;
   }
 
-  .head p {
-    margin: 4px 0 0;
-    font-size: 12px;
-    color: var(--p-text-muted);
-  }
-
   .toggles {
     display: flex;
     flex-direction: column;
@@ -203,12 +286,6 @@
     background: rgba(255, 255, 255, 0.05);
     font-size: 13px;
     cursor: pointer;
-  }
-
-  .toggle-row input {
-    accent-color: var(--p-accent);
-    width: 16px;
-    height: 16px;
   }
 
   .section-label {
@@ -273,5 +350,54 @@
   .speed-slider {
     width: 100%;
     accent-color: var(--p-accent);
+  }
+
+  .hidden-file {
+    display: none;
+  }
+
+  .param-badge {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 9px 12px;
+    border-radius: 12px;
+    background: var(--p-accent-soft);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    font-size: 12px;
+  }
+
+  .param-badge strong {
+    display: block;
+    color: var(--p-accent-bright);
+  }
+
+  .param-badge span {
+    font-size: 11px;
+    color: var(--p-text-muted);
+  }
+
+  .paste-box {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .paste-box textarea {
+    width: 100%;
+    border-radius: 10px;
+    border: 1px solid var(--p-border);
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--p-text);
+    font-family: monospace;
+    font-size: 11px;
+    padding: 8px 10px;
+    resize: vertical;
+  }
+
+  .parse-err {
+    font-size: 12px;
+    color: #fca5a5;
   }
 </style>

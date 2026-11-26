@@ -4,7 +4,6 @@
     launchIceStandalone,
     openIceSettings,
     pingIceBridge,
-    showIceNotch,
     stopIceStandalone,
     toggleIceNotch,
   } from "../lib/ipc";
@@ -61,14 +60,14 @@
 
   let bridgeLabel = $derived(
     iceStatus.bridgeConnected
-      ? `Bridge Live • Port ${iceStatus.bridgePort ?? "?"}`
+      ? "Connected"
       : iceStatus.standaloneRunning
-        ? "Connected (File Sync)"
+        ? "External"
         : iceStatus.mode === "embedded"
-          ? "Wrapped (Embedded)"
+          ? "Built-in"
           : iceStatus.mode === "fake"
-            ? "Fake Engine"
-            : "Disconnected",
+            ? "Fake"
+            : "Offline",
   );
 
   async function runBridgeAction(fn: () => Promise<IceStatus | void>, okMsg: string) {
@@ -89,21 +88,16 @@
 <div class="page">
   <header class="hero card-glass">
     <div>
-      <div class="pill-badge">Pandora Preferences</div>
-      <h1>Settings &amp; Ice Audio Bridge</h1>
-      <p>
-        Configure Pandora's adaptive theme, Vivi-style Up Next playback behavior, Windows SMTC media
-        broadcasting, and live IPC bridging with standalone Ice Audio Manager.
-      </p>
+      <h1>Settings</h1>
     </div>
     <div class="hero-actions">
       <button class="btn-ghost" onclick={onOpenEq}>
         <Icon name="sliders" size={15} />
-        <span>Audio EQ &amp; Effects</span>
+        <span>Equalizer</span>
       </button>
       <button class="btn-primary" onclick={onOpenIceHub}>
         <Icon name="snowflake" size={15} />
-        <span>Open Ice Audio Hub</span>
+        <span>Ice Audio</span>
       </button>
     </div>
   </header>
@@ -112,13 +106,12 @@
     <section class="panel card-glass">
       <div class="panel-head">
         <h2>Appearance &amp; Lyrics</h2>
-        <span class="sub">Saved in library.json</span>
       </div>
 
       <label class="toggle-row">
         <div>
-          <div class="row-title">Dynamic Material You Theme</div>
-          <div class="row-sub">Extract accent &amp; ambient glow colors from the active album art</div>
+          <div class="row-title">Dynamic Theme</div>
+          <div class="row-sub">Match colors to album artwork</div>
         </div>
         <input
           type="checkbox"
@@ -130,8 +123,8 @@
 
       <label class="toggle-row">
         <div>
-          <div class="row-title">Animated Now Playing Canvas</div>
-          <div class="row-sub">Show flowing multi-orb ambient backdrop inside Now Playing</div>
+          <div class="row-title">Animated Backdrop</div>
+          <div class="row-sub">Ambient glow in Now Playing</div>
         </div>
         <input
           type="checkbox"
@@ -143,8 +136,8 @@
 
       <label class="toggle-row">
         <div>
-          <div class="row-title">Show Romaji under Japanese Lyrics</div>
-          <div class="row-sub">Powered by ice-win offline Japanese phonetic analyzer</div>
+          <div class="row-title">Lyrics Romanization</div>
+          <div class="row-sub">Japanese, Korean, and Cyrillic offline romanization</div>
         </div>
         <input
           type="checkbox"
@@ -156,8 +149,34 @@
 
       <label class="toggle-row">
         <div>
-          <div class="row-title">Show Ice Engine Card in Sidebar</div>
-          <div class="row-sub">Quick status badge for Wrapped / Bridge Live output device</div>
+          <div class="row-title">Wavy Progress Bar</div>
+          <div class="row-sub">Animated wave along progress bar while playing</div>
+        </div>
+        <input
+          type="checkbox"
+          checked={settings.wavyProgress}
+          onchange={(e) =>
+            onUpdateSettings({ wavyProgress: (e.target as HTMLInputElement).checked })}
+        />
+      </label>
+
+      <label class="toggle-row">
+        <div>
+          <div class="row-title">Spinning Vinyl Cover</div>
+          <div class="row-sub">Rotate album artwork inside Now Playing</div>
+        </div>
+        <input
+          type="checkbox"
+          checked={settings.spinningCover}
+          onchange={(e) =>
+            onUpdateSettings({ spinningCover: (e.target as HTMLInputElement).checked })}
+        />
+      </label>
+
+      <label class="toggle-row">
+        <div>
+          <div class="row-title">Sidebar Audio Card</div>
+          <div class="row-sub">Show output device in sidebar</div>
         </div>
         <input
           type="checkbox"
@@ -170,14 +189,13 @@
 
     <section class="panel card-glass">
       <div class="panel-head">
-        <h2>Playback &amp; Media Integration</h2>
-        <span class="sub">Web Audio DSP &amp; Windows SMTC</span>
+        <h2>Playback</h2>
       </div>
 
       <label class="toggle-row">
         <div>
-          <div class="row-title">Auto-Queue Related Tracks (Up Next Radio)</div>
-          <div class="row-sub">Automatically fetch similar InnerTube tracks near queue end</div>
+          <div class="row-title">Autoplay Radio</div>
+          <div class="row-sub">Queue similar songs automatically</div>
         </div>
         <input
           type="checkbox"
@@ -189,8 +207,8 @@
 
       <label class="toggle-row">
         <div>
-          <div class="row-title">Broadcast to Windows SMTC / Ice Notch</div>
-          <div class="row-sub">Send track title, art, and timeline so Ice Notch displays Now Playing</div>
+          <div class="row-title">Windows Media Controls</div>
+          <div class="row-sub">Show track info in Windows &amp; Ice Notch</div>
         </div>
         <input
           type="checkbox"
@@ -203,8 +221,8 @@
       <div class="slider-block">
         <div class="slider-top">
           <div>
-            <div class="row-title">Default Startup Player Volume</div>
-            <div class="row-sub">Applied when Pandora initializes playback</div>
+            <div class="row-title">Startup Volume</div>
+            <div class="row-sub">Default volume when Pandora opens</div>
           </div>
           <div class="slider-right">
             <strong>{startupVolPct}%</strong>
@@ -212,10 +230,10 @@
               class="btn-mini"
               onclick={() => {
                 audioEngine.setVolume(settings.defaultVolume);
-                onNotify(`Applied ${startupVolPct}% volume to player`);
+                onNotify(`Volume set to ${startupVolPct}%`);
               }}
             >
-              Apply Now
+              Apply
             </button>
           </div>
         </div>
@@ -236,17 +254,10 @@
   <section class="panel card-glass">
     <div class="panel-head">
       <div>
-        <h2>Ice Audio Manager Bridge</h2>
-        <div class="row-sub">
-          Zero-latency localhost JSON-line bridge (`127.0.0.1`) with automatic fallback to Core Audio +
-          <code>config.toml</code>
-        </div>
+        <h2>Ice Audio Bridge</h2>
       </div>
       <div class="bridge-badges">
         <span class="pill-badge" class:live={iceStatus.bridgeConnected}>{bridgeLabel}</span>
-        {#if iceStatus.iceVersion}
-          <span class="meta-chip">Ice v{iceStatus.iceVersion} • PID {iceStatus.bridgePid}</span>
-        {/if}
         {#if iceStatus.notchExpanded !== null}
           <span class="meta-chip">
             Notch: {iceStatus.notchExpanded ? "Expanded" : "Collapsed"}
@@ -261,8 +272,7 @@
 
     <div class="bridge-grid">
       <div class="bridge-col">
-        <div class="row-title">Ownership Mode Preference</div>
-        <div class="row-sub">Auto wraps Ice internally unless standalone Ice is running</div>
+        <div class="row-title">Engine Mode</div>
         <div class="pref-row">
           <button
             class="chip"
@@ -276,21 +286,21 @@
             class:active={library.iceModePref === "embedded"}
             onclick={() => onSetModePref("embedded")}
           >
-            Wrap Inside Pandora
+            Built-in
           </button>
           <button
             class="chip"
             class:active={library.iceModePref === "connected"}
             onclick={() => onSetModePref("connected")}
           >
-            Connected Co-op
+            External
           </button>
         </div>
 
         <label class="toggle-row compact">
           <div>
-            <div class="row-title">Auto-Launch Standalone Ice Notch on Startup</div>
-            <div class="row-sub">Starts Ice Audio Manager when Pandora opens</div>
+            <div class="row-title">Launch Ice on Startup</div>
+            <div class="row-sub">Start Ice Audio Manager automatically</div>
           </div>
           <input
             type="checkbox"
@@ -302,62 +312,55 @@
       </div>
 
       <div class="bridge-col">
-        <div class="row-title">Live Standalone Bridge Actions</div>
+        <div class="row-title">Controls</div>
         <div class="row-sub">
-          Active Output: <strong>{defaultPlayback?.name ?? "Default Windows Output"}</strong>
+          Output: <strong>{defaultPlayback?.name ?? "Default Output"}</strong>
         </div>
         <div class="btn-wrap">
           <button
             class="btn-ghost"
             disabled={busy}
-            onclick={() => void runBridgeAction(pingIceBridge, "Refreshed Ice bridge status")}
+            onclick={() => void runBridgeAction(pingIceBridge, "Refreshed status")}
           >
             <Icon name="refresh" size={14} spin={busy} />
-            <span>Ping Bridge</span>
+            <span>Refresh</span>
           </button>
           <button
             class="btn-ghost"
             disabled={busy || !iceStatus.bridgeConnected}
-            title={iceStatus.bridgeConnected ? "Toggle desktop Notch" : "Requires standalone Ice bridge"}
-            onclick={() => void runBridgeAction(toggleIceNotch, "Toggled Ice desktop Notch")}
+            title={iceStatus.bridgeConnected ? "Toggle desktop Notch" : "Launch Ice to control Notch"}
+            onclick={() => void runBridgeAction(toggleIceNotch, "Toggled Ice Notch")}
           >
             <Icon name="panel-top" size={14} />
-            <span>{iceStatus.notchExpanded ? "Collapse Notch" : "Expand / Toggle Notch"}</span>
+            <span>{iceStatus.notchExpanded ? "Collapse Notch" : "Toggle Notch"}</span>
           </button>
           <button
             class="btn-ghost"
             disabled={busy || !iceStatus.bridgeConnected}
-            onclick={() => void runBridgeAction(showIceNotch, "Revealed Ice desktop Notch")}
-          >
-            <span>Show Notch</span>
-          </button>
-          <button
-            class="btn-ghost"
-            disabled={busy || !iceStatus.bridgeConnected}
-            onclick={() => void runBridgeAction(openIceSettings, "Opened Ice Audio Manager Settings")}
+            onclick={() => void runBridgeAction(openIceSettings, "Opened Ice Settings")}
           >
             <Icon name="settings" size={14} />
-            <span>Open Ice Settings</span>
+            <span>Ice Settings</span>
           </button>
           {#if iceStatus.standaloneRunning}
             <button
               class="btn-ghost"
               disabled={busy}
               onclick={() =>
-                void runBridgeAction(stopIceStandalone, "Stopped standalone Ice and wrapped engine")}
+                void runBridgeAction(stopIceStandalone, "Switched to built-in engine")}
             >
               <Icon name="power" size={14} />
-              <span>Stop Standalone Ice</span>
+              <span>Stop Ice</span>
             </button>
           {:else}
             <button
               class="btn-primary"
               disabled={busy || !iceStatus.standaloneExe}
               onclick={() =>
-                void runBridgeAction(launchIceStandalone, "Launched standalone Ice Audio Manager")}
+                void runBridgeAction(launchIceStandalone, "Launched Ice Audio Manager")}
             >
               <Icon name="snowflake" size={15} />
-              <span>Launch Standalone Ice</span>
+              <span>Launch Ice</span>
             </button>
           {/if}
         </div>
@@ -368,13 +371,12 @@
   <section class="panel card-glass">
     <div class="panel-head">
       <div>
-        <h2>Storage, Local Library &amp; Maintenance</h2>
-        <div class="row-sub">All data stays local on Windows • zero analytics</div>
+        <h2>Storage &amp; Reset</h2>
       </div>
       <div class="mini-actions">
         <button class="btn-ghost" onclick={onRescanLocal}>
           <Icon name="refresh" size={14} />
-          <span>Rescan Local Folders</span>
+          <span>Rescan Folders</span>
         </button>
         <button
           class="btn-ghost"
@@ -382,7 +384,7 @@
           onclick={onClearCache}
         >
           <Icon name="trash" size={14} />
-          <span>Clear Offline Cache ({cacheMb} MB)</span>
+          <span>Clear Cache ({cacheMb} MB)</span>
         </button>
         {#if confirmingReset}
           <button
@@ -392,12 +394,12 @@
               onResetSettings();
             }}
           >
-            Confirm Reset Settings &amp; EQ
+            Confirm Reset
           </button>
           <button class="btn-ghost" onclick={() => (confirmingReset = false)}>Cancel</button>
         {:else}
           <button class="btn-ghost" onclick={() => (confirmingReset = true)}>
-            Reset Settings &amp; EQ
+            Reset Defaults
           </button>
         {/if}
       </div>
@@ -413,22 +415,25 @@
         <strong>{library.playlists.length}</strong>
       </div>
       <div class="stat-card">
-        <span>Local Folders / Tracks</span>
-        <strong>{library.localFolders.length} / {library.localTracks.length}</strong>
+        <span>Local Tracks</span>
+        <strong>{library.localTracks.length}</strong>
       </div>
       <div class="stat-card">
-        <span>Offline Cached Tracks</span>
+        <span>Cached</span>
         <strong>{library.cachedIds.length} ({cacheMb} MB)</strong>
       </div>
     </div>
 
     {#if appPaths}
-      <div class="paths-grid">
-        <div><span>Pandora DB:</span> <code>{appPaths.libraryPath}</code></div>
-        <div><span>Offline Cache:</span> <code>{appPaths.cacheDir}</code></div>
-        <div><span>Ice Config:</span> <code>{appPaths.iceConfigPath}</code></div>
-        <div><span>Ice Bridge Discovery:</span> <code>{appPaths.iceBridgePath}</code></div>
-      </div>
+      <details class="diag-details">
+        <summary>File Locations</summary>
+        <div class="paths-grid">
+          <div><span>Library:</span> <code>{appPaths.libraryPath}</code></div>
+          <div><span>Cache:</span> <code>{appPaths.cacheDir}</code></div>
+          <div><span>Ice Config:</span> <code>{appPaths.iceConfigPath}</code></div>
+          <div><span>Bridge Info:</span> <code>{appPaths.iceBridgePath}</code></div>
+        </div>
+      </details>
     {/if}
   </section>
 </div>
@@ -452,16 +457,8 @@
   }
 
   .hero h1 {
-    margin: 10px 0 6px;
-    font-size: 22px;
-  }
-
-  .hero p {
     margin: 0;
-    max-width: 660px;
-    font-size: 13px;
-    color: var(--p-text-muted);
-    line-height: 1.5;
+    font-size: 22px;
   }
 
   .hero-actions {
@@ -496,11 +493,6 @@
     font-size: 16px;
   }
 
-  .sub {
-    font-size: 12px;
-    color: var(--p-text-dim);
-  }
-
   .toggle-row {
     display: flex;
     align-items: center;
@@ -515,13 +507,6 @@
 
   .toggle-row.compact {
     margin-top: 8px;
-  }
-
-  .toggle-row input {
-    width: 18px;
-    height: 18px;
-    accent-color: var(--p-accent);
-    flex-shrink: 0;
   }
 
   .row-title {
@@ -625,12 +610,21 @@
   }
 
   .chip {
-    padding: 6px 12px;
+    padding: 6px 13px;
     border-radius: 999px;
     font-size: 12px;
     font-weight: 600;
     background: rgba(255, 255, 255, 0.06);
     border: 1px solid var(--p-border);
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.12s ease;
+  }
+
+  .chip:hover {
+    background: rgba(255, 255, 255, 0.11);
+  }
+
+  .chip:active {
+    transform: scale(0.95);
   }
 
   .chip.active {
@@ -644,16 +638,6 @@
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
-  }
-
-  .btn-danger {
-    padding: 8px 14px;
-    border-radius: 10px;
-    font-size: 12px;
-    font-weight: 600;
-    background: rgba(239, 68, 68, 0.25);
-    border: 1px solid rgba(239, 68, 68, 0.55);
-    color: #fecaca;
   }
 
   .stats-row {
@@ -681,7 +665,19 @@
     font-size: 16px;
   }
 
+  .diag-details {
+    font-size: 12px;
+    color: var(--p-text-muted);
+  }
+
+  .diag-details summary {
+    cursor: pointer;
+    padding: 4px 0;
+    color: var(--p-text-dim);
+  }
+
   .paths-grid {
+    margin-top: 8px;
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
     gap: 8px;

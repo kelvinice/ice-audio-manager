@@ -147,7 +147,7 @@
 
     <div class="list card-glass">
       {#if playlistTracks.length === 0}
-        <div class="empty">Add songs to this playlist using the Add to Playlist button anywhere in Pandora.</div>
+        <div class="empty">This playlist is empty.</div>
       {:else}
         {#each playlistTracks as track (track.id)}
           {@const isLiked = likedIds.has(track.id)}
@@ -190,7 +190,6 @@
     <div class="header-row">
       <div>
         <h1>Your Library</h1>
-        <p class="sub">Privacy-first local database in %APPDATA%\Pandora\library.json</p>
       </div>
       <div class="head-actions">
         <button class="btn-primary" onclick={onOpenNewPlaylist}>
@@ -238,7 +237,7 @@
       {/if}
       <div class="list card-glass">
         {#if library.liked.length === 0}
-          <div class="empty">No favorites yet — click the heart icon on any track to save it here.</div>
+          <div class="empty">No favorites yet.</div>
         {:else}
           {#each library.liked as track (track.id)}
             <div class="row" class:playing={currentTrackId === track.id}>
@@ -278,44 +277,60 @@
     {:else if tab === "playlists"}
       {#if library.playlists.length === 0}
         <div class="list card-glass">
-          <div class="empty">
-            No playlists yet. Click <strong>New Playlist</strong> above to create your first one.
-          </div>
+          <div class="empty">No playlists yet.</div>
         </div>
       {:else}
         <div class="pl-grid">
           {#each library.playlists as pl (pl.id)}
             {@const cover = playlistCover(pl.trackIds)}
             {@const tracks = pl.trackIds.map((id) => library.tracksIndex[id]).filter((t): t is Track => Boolean(t))}
-            <div class="pl-card card-glass">
-              <button class="pl-cover-btn" onclick={() => onSelectPlaylist(pl.id)}>
-                <div class="pl-cover">
-                  {#if cover}
-                    <img src={cover} alt={pl.name} />
-                  {:else}
-                    <Icon name="list-music" size={28} />
-                  {/if}
-                </div>
-                <div class="pl-card-title">{pl.name}</div>
-                <div class="pl-card-sub">{tracks.length} tracks</div>
-              </button>
-              <div class="pl-card-actions">
+            <div
+              class="pl-card"
+              role="button"
+              tabindex="0"
+              onclick={() => onSelectPlaylist(pl.id)}
+              onkeydown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  onSelectPlaylist(pl.id);
+                }
+              }}
+            >
+              <div class="pl-cover">
+                {#if cover}
+                  <img src={cover} alt={pl.name} loading="lazy" />
+                {:else}
+                  <Icon name="list-music" size={32} />
+                {/if}
+                <div class="pl-scrim"></div>
                 <button
-                  class="btn-ghost"
-                  disabled={tracks.length === 0}
-                  onclick={() => tracks.length > 0 && onPlay(tracks[0], tracks)}
-                >
-                  <Icon name="play" size={13} />
-                  <span>Play</span>
-                </button>
-                <button
-                  class="act danger"
+                  class="pl-del"
                   title="Delete playlist"
                   aria-label="Delete playlist"
-                  onclick={() => onDeletePlaylist(pl.id)}
+                  onclick={(e) => {
+                    e.stopPropagation();
+                    onDeletePlaylist(pl.id);
+                  }}
                 >
-                  <Icon name="trash" size={14} />
+                  <Icon name="trash" size={13} />
                 </button>
+                {#if tracks.length > 0}
+                  <button
+                    class="pl-fab"
+                    title={`Play ${pl.name}`}
+                    aria-label={`Play ${pl.name}`}
+                    onclick={(e) => {
+                      e.stopPropagation();
+                      onPlay(tracks[0], tracks);
+                    }}
+                  >
+                    <Icon name="play" size={16} />
+                  </button>
+                {/if}
+              </div>
+              <div class="pl-meta">
+                <div class="pl-card-title">{pl.name}</div>
+                <div class="pl-card-sub">{tracks.length} {tracks.length === 1 ? "track" : "tracks"}</div>
               </div>
             </div>
           {/each}
@@ -352,7 +367,7 @@
 
       <div class="list card-glass">
         {#if library.localTracks.length === 0}
-          <div class="empty">Add a Windows folder containing MP3, FLAC, WAV, M4A, or OGG files.</div>
+          <div class="empty">Add a music folder to browse local songs.</div>
         {:else}
           {#each library.localTracks as track (track.id)}
             {@const isLiked = likedIds.has(track.id)}
@@ -398,7 +413,7 @@
       </div>
       <div class="list card-glass">
         {#if cachedTracks.length === 0}
-          <div class="empty">Download tracks from Search for offline playback.</div>
+          <div class="empty">No downloaded songs yet.</div>
         {:else}
           {#each cachedTracks as track (track.id)}
             {@const isLiked = likedIds.has(track.id)}
@@ -448,7 +463,7 @@
     {:else}
       <div class="list card-glass">
         {#if library.history.length === 0}
-          <div class="empty">Your local playback history will appear here.</div>
+          <div class="empty">Songs you play will appear here.</div>
         {:else}
           {#each library.history as track (track.id)}
             {@const isLiked = likedIds.has(track.id)}
@@ -553,6 +568,16 @@
     background: rgba(255, 255, 255, 0.06);
     border: 1px solid var(--p-border);
     color: var(--p-text-muted);
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.12s ease;
+  }
+
+  .chip:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--p-text);
+  }
+
+  .chip:active {
+    transform: scale(0.95);
   }
 
   .chip.active {
@@ -563,45 +588,141 @@
 
   .pl-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
-    gap: 14px;
+    grid-template-columns: repeat(auto-fill, minmax(176px, 1fr));
+    gap: 16px;
   }
 
   .pl-card {
-    padding: 12px;
+    padding: 11px 11px 13px;
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.035);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    backdrop-filter: blur(14px);
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 11px;
+    cursor: pointer;
+    transition:
+      transform 0.22s cubic-bezier(0.22, 1, 0.36, 1),
+      background 0.22s ease,
+      border-color 0.22s ease,
+      box-shadow 0.22s ease;
   }
 
-  .pl-cover-btn {
-    text-align: left;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
+  .pl-card:hover,
+  .pl-card:focus-visible {
+    outline: none;
+    transform: translateY(-3px);
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.16);
+    box-shadow: 0 14px 30px rgba(0, 0, 0, 0.34);
   }
 
   .pl-cover {
+    position: relative;
     width: 100%;
     aspect-ratio: 1;
-    border-radius: 10px;
+    border-radius: 12px;
     overflow: hidden;
     background: rgba(255, 255, 255, 0.06);
     display: grid;
     place-items: center;
-    font-size: 28px;
     color: var(--p-text-dim);
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.36);
   }
 
   .pl-cover img {
     width: 100%;
     height: 100%;
     object-fit: cover;
+    display: block;
+    transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .pl-card:hover .pl-cover img {
+    transform: scale(1.05);
+  }
+
+  .pl-scrim {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(6, 9, 16, 0.14) 0%, transparent 45%, rgba(6, 9, 16, 0.56) 100%);
+    opacity: 0;
+    transition: opacity 0.22s ease;
+    pointer-events: none;
+  }
+
+  .pl-card:hover .pl-scrim {
+    opacity: 1;
+  }
+
+  .pl-del {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: rgba(10, 13, 24, 0.72);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    backdrop-filter: blur(12px);
+    color: rgba(252, 165, 165, 0.9);
+    display: grid;
+    place-items: center;
+    opacity: 0;
+    transform: translateY(-4px);
+    transition: opacity 0.18s ease, transform 0.2s ease, background 0.14s ease;
+  }
+
+  .pl-card:hover .pl-del,
+  .pl-card:focus-within .pl-del {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .pl-del:hover {
+    background: rgba(239, 68, 68, 0.28);
+    color: #fecaca;
+  }
+
+  .pl-fab {
+    position: absolute;
+    right: 10px;
+    bottom: 10px;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--p-accent-bright), var(--p-accent));
+    color: #080b12;
+    display: grid;
+    place-items: center;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.45);
+    opacity: 0;
+    transform: translateY(8px) scale(0.92);
+    transition: opacity 0.2s ease, transform 0.24s cubic-bezier(0.22, 1, 0.36, 1), filter 0.15s ease;
+  }
+
+  .pl-card:hover .pl-fab,
+  .pl-card:focus-within .pl-fab {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+
+  .pl-fab:hover {
+    transform: scale(1.07);
+    filter: brightness(1.08);
+  }
+
+  .pl-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 0 2px;
   }
 
   .pl-card-title {
-    font-size: 14px;
-    font-weight: 700;
+    font-size: 13.5px;
+    font-weight: 650;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -610,12 +731,6 @@
   .pl-card-sub {
     font-size: 12px;
     color: var(--p-text-muted);
-  }
-
-  .pl-card-actions {
-    display: flex;
-    justify-content: space-between;
-    gap: 6px;
   }
 
   .folder-panel,
@@ -744,6 +859,10 @@
   .act:hover {
     background: rgba(255, 255, 255, 0.12);
     color: var(--p-text);
+  }
+
+  .act:active {
+    transform: scale(0.91);
   }
 
   .act.liked {

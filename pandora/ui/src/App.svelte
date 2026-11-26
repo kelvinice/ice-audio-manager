@@ -8,6 +8,7 @@
   import NowPlayingOverlay from "./components/NowPlayingOverlay.svelte";
   import PlayerBar from "./components/PlayerBar.svelte";
   import PlaylistModal from "./components/PlaylistModal.svelte";
+  import RecognizeView from "./components/RecognizeView.svelte";
   import SearchView from "./components/SearchView.svelte";
   import SettingsView from "./components/SettingsView.svelte";
   import Sidebar, { type NavTab } from "./components/Sidebar.svelte";
@@ -25,6 +26,7 @@
     getIceStatus,
     getLibrary,
     getProxyPort,
+    isDemoMode,
     isTauriEnv,
     onIceMeter,
     onIceSnapshot,
@@ -64,7 +66,10 @@
   let noticeTimer: number | null = null;
 
   let proxyPort = $state(0);
+  let demoMode = $state(false);
   let feedLoading = $state(false);
+  let externalQuery = $state("");
+  let externalQuerySeq = $state(0);
   let feed = $state<HomeFeed>({
     quickPicks: [],
     trending: [],
@@ -75,6 +80,7 @@
     liked: [],
     playlists: [],
     history: [],
+    recognitionHistory: [],
     localFolders: [],
     localTracks: [],
     tracksIndex: {},
@@ -128,6 +134,7 @@
 
   onMount(async () => {
     proxyPort = await getProxyPort().catch(() => 0);
+    demoMode = await isDemoMode().catch(() => false);
     const lib = await getLibrary().catch(() => library);
     library = lib;
     audioEngine.init(proxyPort, lib.eq, lib.settings, () => {
@@ -318,9 +325,12 @@
         <HomeView
           {feed}
           loading={feedLoading}
+          {demoMode}
           history={library.history}
+          favorites={library.liked}
           {likedIds}
           currentTrackId={$playerStore.currentTrack?.id ?? null}
+          isPlaying={$playerStore.playing}
           {proxyPort}
           onPlay={(track, list) => void audioEngine.playTrack(track, list)}
           onToggleLike={(track) => void handleToggleLike(track)}
@@ -335,6 +345,8 @@
           {cachedIds}
           currentTrackId={$playerStore.currentTrack?.id ?? null}
           {proxyPort}
+          {externalQuery}
+          {externalQuerySeq}
           onPlay={(track, list) => void audioEngine.playTrack(track, list)}
           onEnqueue={(track) => audioEngine.enqueue(track)}
           onToggleLike={(track) => void handleToggleLike(track)}
@@ -344,6 +356,21 @@
               .catch(() => {});
           }}
           onOpenPlaylistPicker={(track) => openPlaylistModal(track)}
+        />
+      {:else if activeTab === "recognize"}
+        <RecognizeView
+          history={library.recognitionHistory}
+          {likedIds}
+          {proxyPort}
+          onPlay={(track, list) => void audioEngine.playTrack(track, list)}
+          onSearchQuery={(q) => {
+            externalQuery = q;
+            externalQuerySeq += 1;
+            navigate("search", null);
+          }}
+          onToggleLike={(track) => void handleToggleLike(track)}
+          onHistoryChange={(next) => (library = next)}
+          onNotify={showNotice}
         />
       {:else if activeTab === "library"}
         <LibraryView
@@ -450,6 +477,7 @@
     {proxyPort}
     playbackDevices={iceSnapshot?.playback ?? []}
     {likedIds}
+    wavyProgress={library.settings.wavyProgress}
     onOpenNowPlaying={() => (showNowPlaying = true)}
     onOpenEq={() => (showEq = true)}
     onToggleLike={(track) => void handleToggleLike(track)}
@@ -463,6 +491,8 @@
   {likedIds}
   showRomaji={library.settings.showRomaji}
   animatedCanvas={library.settings.animatedCanvas}
+  wavyProgress={library.settings.wavyProgress}
+  spinningCover={library.settings.spinningCover}
   onClose={() => (showNowPlaying = false)}
   onToggleLike={(track) => void handleToggleLike(track)}
   onAddToPlaylist={(track) => openPlaylistModal(track)}

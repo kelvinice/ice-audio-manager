@@ -2,7 +2,7 @@
   import type { DeviceSummary, IceStatus, Playlist } from "../lib/types";
   import Icon from "./Icon.svelte";
 
-  export type NavTab = "home" | "search" | "library" | "ice" | "settings";
+  export type NavTab = "home" | "search" | "recognize" | "library" | "ice" | "settings";
 
   interface Props {
     activeTab: NavTab;
@@ -43,7 +43,6 @@
     </div>
     <div>
       <div class="brand-name">Pandora</div>
-      <div class="brand-sub">Vivi-Inspired • Windows</div>
     </div>
   </div>
 
@@ -66,11 +65,19 @@
     </button>
     <button
       class="nav-item"
+      class:active={activeTab === "recognize"}
+      onclick={() => onNavigate("recognize", null)}
+    >
+      <span class="nav-ic"><Icon name="radar" size={17} /></span>
+      <span>Identify</span>
+    </button>
+    <button
+      class="nav-item"
       class:active={activeTab === "library" && !selectedPlaylistId}
       onclick={() => onNavigate("library", null)}
     >
       <span class="nav-ic"><Icon name="library" size={17} /></span>
-      <span>Library &amp; Local</span>
+      <span>Library</span>
     </button>
     <button
       class="nav-item"
@@ -78,7 +85,7 @@
       onclick={() => onNavigate("ice", null)}
     >
       <span class="nav-ic"><Icon name="snowflake" size={17} /></span>
-      <span>Ice Audio Hub</span>
+      <span>Ice Audio</span>
       <span
         class="mode-dot"
         class:connected={iceStatus.mode === "connected"}
@@ -132,15 +139,15 @@
       <div class="ice-card-top">
         <span class="ice-label">
           <Icon name="snowflake" size={12} />
-          <span>ICE ENGINE</span>
+          <span>ICE AUDIO</span>
         </span>
         <span class="ice-pill" class:live={iceStatus.bridgeConnected}>
           {iceStatus.bridgeConnected
-            ? "Bridge Live"
+            ? "Live"
             : iceStatus.mode === "connected"
               ? "Connected"
               : iceStatus.mode === "embedded"
-                ? "Wrapped"
+                ? "Built-in"
                 : iceStatus.mode === "fake"
                   ? "Fake"
                   : "Offline"}
@@ -148,14 +155,14 @@
       </div>
       <div class="ice-device">
         <Icon name="headphones" size={13} />
-        <span>{defaultDevice ? defaultDevice.name : "Default Windows Output"}</span>
+        <span>{defaultDevice ? defaultDevice.name : "Default Output"}</span>
       </div>
       <div class="ice-hint">
         {iceStatus.bridgeConnected
-          ? `Live Bridge • Port ${iceStatus.bridgePort ?? "?"}`
+          ? "Notch connected"
           : iceStatus.standaloneRunning
-            ? "Standalone Ice Notch active"
-            : "Wrapped inside Pandora"}
+            ? "Ice app running"
+            : "Built-in engine"}
       </div>
     </button>
   {/if}
@@ -195,14 +202,9 @@
   }
 
   .brand-name {
-    font-size: 16px;
+    font-size: 17px;
     font-weight: 700;
     letter-spacing: -0.02em;
-  }
-
-  .brand-sub {
-    font-size: 11px;
-    color: var(--p-text-dim);
   }
 
   .nav-list {
@@ -228,6 +230,10 @@
   .nav-item:hover {
     background: rgba(255, 255, 255, 0.06);
     color: var(--p-text);
+  }
+
+  .nav-item:active {
+    transform: scale(0.98);
   }
 
   .nav-item.active {
@@ -305,6 +311,10 @@
   .icon-add:hover {
     background: var(--p-accent-soft);
     color: var(--p-accent-bright);
+  }
+
+  .icon-add:active {
+    transform: scale(0.92);
   }
 
   .playlists-list {

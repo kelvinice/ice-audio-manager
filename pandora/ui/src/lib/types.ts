@@ -36,6 +36,19 @@ export interface SearchResponse {
   error: string | null;
 }
 
+export interface ParametricBand {
+  filterType: string;
+  frequency: number;
+  gain: number;
+  q: number;
+}
+
+export interface ParametricEqProfile {
+  name: string;
+  preamp: number;
+  bands: ParametricBand[];
+}
+
 export interface EqState {
   enabled: boolean;
   preset: string;
@@ -43,6 +56,29 @@ export interface EqState {
   normalize: boolean;
   skipSilence: boolean;
   playbackRate: number;
+  parametric?: ParametricEqProfile | null;
+}
+
+export interface RecognizedTrack {
+  id: string;
+  title: string;
+  artist: string;
+  album: string | null;
+  artworkUrl: string | null;
+  genre: string | null;
+  releaseDate: string | null;
+  label: string | null;
+  lyricsSnippet: string | null;
+  shazamUrl: string | null;
+  matchedTrack: Track | null;
+  source: "system" | "mic" | string;
+  recognizedAtMs: number;
+}
+
+export interface RecognitionProgress {
+  state: "listening" | "matching" | "done" | "cancelled" | "error";
+  elapsedMs: number;
+  level: number;
 }
 
 export interface PandoraSettings {
@@ -54,6 +90,8 @@ export interface PandoraSettings {
   mediaSessionEnabled: boolean;
   autoLaunchIceNotch: boolean;
   showIceCardInSidebar: boolean;
+  wavyProgress: boolean;
+  spinningCover: boolean;
 }
 
 export const DEFAULT_PANDORA_SETTINGS: PandoraSettings = {
@@ -65,6 +103,8 @@ export const DEFAULT_PANDORA_SETTINGS: PandoraSettings = {
   mediaSessionEnabled: true,
   autoLaunchIceNotch: false,
   showIceCardInSidebar: true,
+  wavyProgress: true,
+  spinningCover: false,
 };
 
 export interface AppPaths {
@@ -86,6 +126,7 @@ export interface LibraryState {
   eq: EqState;
   iceModePref: "auto" | "embedded" | "connected";
   settings: PandoraSettings;
+  recognitionHistory: RecognizedTrack[];
 }
 
 export interface IceStatus {

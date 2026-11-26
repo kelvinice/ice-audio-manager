@@ -12,6 +12,8 @@ import {
   type MeterFrame,
   type PandoraLyrics,
   type PandoraSettings,
+  type RecognitionProgress,
+  type RecognizedTrack,
   type SearchResponse,
   type SpatialMode,
   type Track,
@@ -33,6 +35,13 @@ async function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T> 
 export async function getProxyPort(): Promise<number> {
   if (!inTauri) return 0;
   return call<number>("get_proxy_port");
+}
+
+export async function isDemoMode(): Promise<boolean> {
+  if (!inTauri) {
+    return typeof window !== "undefined" && new URLSearchParams(window.location.search).get("demo") === "1";
+  }
+  return call<boolean>("is_demo_mode");
 }
 
 export function ytmHome(): Promise<HomeFeed> {
@@ -101,6 +110,7 @@ export function getLibrary(): Promise<LibraryState> {
       },
       iceModePref: "auto",
       settings: { ...DEFAULT_PANDORA_SETTINGS },
+      recognitionHistory: [],
     });
   }
   return call<LibraryState>("get_library");
@@ -147,6 +157,20 @@ export const pingIceBridge = () => call<IceStatus>("ice_ping_bridge");
 export const toggleIceNotch = () => call<IceStatus>("ice_toggle_notch");
 export const showIceNotch = () => call<IceStatus>("ice_show_notch");
 export const openIceSettings = () => call<void>("ice_open_settings");
+
+export const recognizeMusic = (source: "system" | "mic") =>
+  call<RecognizedTrack>("recognize_music", { source });
+export const cancelRecognition = () => call<void>("cancel_recognition");
+export const deleteRecognitionItem = (id: string) =>
+  call<LibraryState>("delete_recognition_item", { id });
+export const clearRecognitionHistory = () => call<LibraryState>("clear_recognition_history");
+
+export async function onRecognitionProgress(
+  cb: (progress: RecognitionProgress) => void,
+): Promise<UnlistenFn> {
+  if (!inTauri) return () => {};
+  return listen<RecognitionProgress>("recognition://status/v1", (e) => cb(e.payload));
+}
 
 export async function onIceStatus(cb: (status: IceStatus) => void): Promise<UnlistenFn> {
   if (!inTauri) return () => {};

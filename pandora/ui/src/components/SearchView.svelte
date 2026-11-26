@@ -9,6 +9,8 @@
     cachedIds: Set<string>;
     currentTrackId: string | null;
     proxyPort: number;
+    externalQuery?: string;
+    externalQuerySeq?: number;
     onPlay: (track: Track, list: Track[]) => void;
     onEnqueue: (track: Track) => void;
     onToggleLike: (track: Track) => void;
@@ -22,6 +24,8 @@
     cachedIds,
     currentTrackId,
     proxyPort,
+    externalQuery = "",
+    externalQuerySeq = 0,
     onPlay,
     onEnqueue,
     onToggleLike,
@@ -35,6 +39,16 @@
   let results = $state<Track[]>([]);
   let error = $state<string | null>(null);
   let downloadingId = $state<string | null>(null);
+  let lastHandledSeq = 0;
+
+  $effect(() => {
+    if (externalQuerySeq > 0 && externalQuerySeq !== lastHandledSeq && externalQuery.trim()) {
+      lastHandledSeq = externalQuerySeq;
+      query = externalQuery.trim();
+      filter = "songs";
+      void runSearch();
+    }
+  });
 
   let displayedTracks = $derived.by(() => {
     if (filter === "local") {
@@ -90,7 +104,7 @@
     <form class="search-bar" onsubmit={runSearch}>
       <input
         type="text"
-        placeholder="Search YouTube Music songs, artists, or local files..."
+        placeholder="Search songs, artists, or albums..."
         bind:value={query}
       />
       <button type="submit" class="btn-primary" disabled={searching}>
@@ -100,13 +114,13 @@
 
     <div class="chips">
       <button class="chip" class:active={filter === "songs"} onclick={() => (filter = "songs")}>
-        YouTube Songs
+        Songs
       </button>
       <button class="chip" class:active={filter === "videos"} onclick={() => (filter = "videos")}>
         Videos
       </button>
       <button class="chip" class:active={filter === "local"} onclick={() => (filter = "local")}>
-        Local Files ({localTracks.length})
+        Local ({localTracks.length})
       </button>
     </div>
   </div>
@@ -119,11 +133,11 @@
     {#if displayedTracks.length === 0}
       <div class="empty">
         {#if filter === "local"}
-          No matching local tracks. Add folders in <strong>Library &amp; Local</strong>.
+          No matching local songs.
         {:else if searching}
-          Querying YouTube Music InnerTube...
+          Searching...
         {:else}
-          Type a song or artist name and press Enter to search YouTube Music.
+          Search for songs, artists, or local files.
         {/if}
       </div>
     {:else}
@@ -237,13 +251,23 @@
   }
 
   .chip {
-    padding: 6px 14px;
+    padding: 7px 15px;
     border-radius: 999px;
     font-size: 12px;
     font-weight: 600;
     background: rgba(255, 255, 255, 0.06);
     color: var(--p-text-muted);
     border: 1px solid var(--p-border);
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.12s ease;
+  }
+
+  .chip:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--p-text);
+  }
+
+  .chip:active {
+    transform: scale(0.96);
   }
 
   .chip.active {
@@ -360,6 +384,10 @@
   .act:hover {
     background: rgba(255, 255, 255, 0.12);
     color: var(--p-text);
+  }
+
+  .act:active {
+    transform: scale(0.91);
   }
 
   .act.liked {

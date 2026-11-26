@@ -6,31 +6,40 @@ mod library;
 mod lyrics;
 mod models;
 mod proxy;
+mod recognition;
 mod ytmusic;
 
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 
 use ice_core::engine::{Command, EngineSnapshot, RoleSet, SpatialMode};
-use tauri::{Manager, State};
+use tauri::{AppHandle, Manager, State};
 
 use crate::ice_bridge::IceBridge;
 use crate::library::LibraryStore;
 use crate::models::{
     AppPaths, EqState, HomeFeed, IceConfigPatch, IceStatus, LibraryState, PandoraLyrics, PandoraSettings,
-    SearchResponse, Track,
+    RecognizedTrack, SearchResponse, Track,
 };
 use crate::ytmusic::YtMusicClient;
 
 struct AppState {
     proxy_port: u16,
+    demo_mode: bool,
     ytm: Arc<YtMusicClient>,
     library: Arc<LibraryStore>,
     ice: Arc<IceBridge>,
+    recognition_cancel: Arc<AtomicBool>,
 }
 
 #[tauri::command]
 fn get_proxy_port(state: State<'_, Arc<AppState>>) -> u16 {
     state.proxy_port
+}
+
+#[tauri::command]
+fn is_demo_mode(state: State<'_, Arc<AppState>>) -> bool {
+    state.demo_mode
 }
 
 #[tauri::command]
@@ -305,12 +314,49 @@ async fn ice_open_settings(state: State<'_, Arc<AppState>>) -> Result<(), String
         .map_err(|e| e.to_string())?
 }
 
+#[tauri::command]
+async fn recognize_music(
+    source: String,
+    app: AppHandle,
+    state: State<'_, Arc<AppState>>,
+) -> Result<RecognizedTrack, String> {
+    let cancel = Arc::clone(&state.recognition_cancel);
+    let ytm = Arc::clone(&state.ytm);
+    let lib = Arc::clone(&state.library);
+    let cap_src = recognition::CaptureSource::from_str(&source);
+    let matched = tauri::async_runtime::spawn_blocking(move || {
+        recognition::recognize_from_audio(cap_src, &cancel, &app, &ytm)
+    })
+    .await
+    .map_err(|e| e.to_string())??;
+    lib.add_recognition_history(matched.clone());
+    Ok(matched)
+}
+
+#[tauri::command]
+fn cancel_recognition(state: State<'_, Arc<AppState>>) {
+    state
+        .recognition_cancel
+        .store(true, std::sync::atomic::Ordering::Release);
+}
+
+#[tauri::command]
+fn delete_recognition_item(id: String, state: State<'_, Arc<AppState>>) -> LibraryState {
+    state.library.delete_recognition_item(&id)
+}
+
+#[tauri::command]
+fn clear_recognition_history(state: State<'_, Arc<AppState>>) -> LibraryState {
+    state.library.clear_recognition_history()
+}
+
 fn main() {
     let _ = tracing_subscriber::fmt()
         .with_max_level(tracing::Level::INFO)
         .try_init();
 
     let fake_engine = std::env::args().any(|a| a == "--fake-engine");
+    let demo_mode = std::env::args().any(|a| a == "--demo");
     let library = Arc::new(LibraryStore::load());
     let ytm = Arc::new(YtMusicClient::new());
     let initial_lib = library.snapshot();
@@ -322,13 +368,15 @@ fn main() {
     let proxy_port = rt
         .block_on(proxy::start(Arc::clone(&ytm), Arc::clone(&library)))
         .expect("local media proxy failed to bind");
-    tracing::info!(proxy_port, "Pandora local audio/art proxy ready");
+    tracing::info!(proxy_port, demo_mode, "Pandora local audio/art proxy ready");
 
     let state = Arc::new(AppState {
         proxy_port,
+        demo_mode,
         ytm,
         library,
         ice: Arc::clone(&ice),
+        recognition_cancel: Arc::new(AtomicBool::new(false)),
     });
 
     tauri::Builder::default()
@@ -352,6 +400,7 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             get_proxy_port,
+            is_demo_mode,
             ytm_home,
             ytm_search,
             ytm_related,
@@ -390,6 +439,10 @@ fn main() {
             ice_toggle_notch,
             ice_show_notch,
             ice_open_settings,
+            recognize_music,
+            cancel_recognition,
+            delete_recognition_item,
+            clear_recognition_history,
         ])
         .run(tauri::generate_context!())
         .expect("error running Pandora");

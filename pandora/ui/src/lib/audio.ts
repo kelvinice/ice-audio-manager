@@ -5,6 +5,7 @@ import {
   saveEqState,
   ytmRelated,
 } from "./ipc";
+import { mapParametricFilterType } from "./parametricEq";
 import { applyDefaultMaterialTheme, applyMaterialThemeFromArt, resolveArtworkUrl } from "./theme";
 import {
   DEFAULT_PANDORA_SETTINGS,
@@ -41,6 +42,7 @@ export interface PlayerState {
   eq: EqState;
   lyrics: PandoraLyrics | null;
   sleepRemainingSec: number | null;
+  sleepEndOfTrack: boolean;
   error: string | null;
 }
 
@@ -63,9 +65,11 @@ const initialState: PlayerState = {
     normalize: false,
     skipSilence: false,
     playbackRate: 1,
+    parametric: null,
   },
   lyrics: null,
   sleepRemainingSec: null,
+  sleepEndOfTrack: false,
   error: null,
 };
 
@@ -76,6 +80,8 @@ class PandoraAudioEngine {
   private ctx: AudioContext | null = null;
   private sourceNode: MediaElementAudioSourceNode | null = null;
   private filters: BiquadFilterNode[] = [];
+  private preampNode: GainNode | null = null;
+  private parametricNodes: BiquadFilterNode[] = [];
   private compressor: DynamicsCompressorNode | null = null;
   private analyser: AnalyserNode | null = null;
   private gainNode: GainNode | null = null;
@@ -188,12 +194,16 @@ class PandoraAudioEngine {
     const st = get(playerStore);
     gain.gain.value = st.muted ? 0 : st.volume;
 
+    const preampNode = ctx.createGain();
+    preampNode.gain.value = 1;
+
     let node: AudioNode = source;
     for (const f of filters) {
       node.connect(f);
       node = f;
     }
-    node.connect(compressor);
+    node.connect(preampNode);
+    preampNode.connect(compressor);
     compressor.connect(analyser);
     analyser.connect(gain);
     gain.connect(ctx.destination);
@@ -201,6 +211,7 @@ class PandoraAudioEngine {
     this.ctx = ctx;
     this.sourceNode = source;
     this.filters = filters;
+    this.preampNode = preampNode;
     this.compressor = compressor;
     this.analyser = analyser;
     this.gainNode = gain;
@@ -240,6 +251,33 @@ class PandoraAudioEngine {
     this.filters.forEach((f, idx) => {
       f.gain.value = eq.enabled ? (eq.bands[idx] ?? 0) : 0;
     });
+    if (this.ctx && this.preampNode && this.compressor) {
+      this.preampNode.disconnect();
+      for (const pn of this.parametricNodes) {
+        pn.disconnect();
+      }
+      this.parametricNodes = [];
+
+      const profile = eq.enabled ? eq.parametric : null;
+      if (profile && profile.bands.length > 0) {
+        this.preampNode.gain.value = Math.pow(10, (profile.preamp || 0) / 20);
+        let tail: AudioNode = this.preampNode;
+        for (const band of profile.bands) {
+          const bq = this.ctx.createBiquadFilter();
+          bq.type = mapParametricFilterType(band.filterType);
+          bq.frequency.value = band.frequency;
+          bq.gain.value = band.gain;
+          bq.Q.value = band.q;
+          tail.connect(bq);
+          tail = bq;
+          this.parametricNodes.push(bq);
+        }
+        tail.connect(this.compressor);
+      } else {
+        this.preampNode.gain.value = 1;
+        this.preampNode.connect(this.compressor);
+      }
+    }
     if (this.compressor) {
       if (eq.normalize) {
         this.compressor.threshold.value = -20;
@@ -429,6 +467,13 @@ class PandoraAudioEngine {
 
   private async handleEnded() {
     const st = get(playerStore);
+    if (st.sleepEndOfTrack) {
+      playerStore.update((s) => ({ ...s, sleepEndOfTrack: false, playing: false }));
+      if (this.audio) {
+        this.audio.pause();
+      }
+      return;
+    }
     if (st.repeat === "one" && this.audio) {
       this.seekMs(0);
       await this.audio.play().catch(() => {});
@@ -494,11 +539,11 @@ class PandoraAudioEngine {
       this.sleepTimerId = null;
     }
     if (!minutes || minutes <= 0) {
-      playerStore.update((s) => ({ ...s, sleepRemainingSec: null }));
+      playerStore.update((s) => ({ ...s, sleepRemainingSec: null, sleepEndOfTrack: false }));
       return;
     }
     let remaining = Math.round(minutes * 60);
-    playerStore.update((s) => ({ ...s, sleepRemainingSec: remaining }));
+    playerStore.update((s) => ({ ...s, sleepRemainingSec: remaining, sleepEndOfTrack: false }));
     this.sleepTimerId = window.setInterval(() => {
       remaining -= 1;
       if (remaining <= 0) {
@@ -512,6 +557,18 @@ class PandoraAudioEngine {
         playerStore.update((s) => ({ ...s, sleepRemainingSec: remaining }));
       }
     }, 1000);
+  }
+
+  setSleepEndOfTrack(enabled: boolean) {
+    if (this.sleepTimerId !== null) {
+      window.clearInterval(this.sleepTimerId);
+      this.sleepTimerId = null;
+    }
+    playerStore.update((s) => ({
+      ...s,
+      sleepRemainingSec: null,
+      sleepEndOfTrack: enabled,
+    }));
   }
 
   getSpectrumBars(count = 24): number[] {

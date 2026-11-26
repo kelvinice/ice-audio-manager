@@ -9,7 +9,6 @@
     setIceModePref,
     setIceSpatial,
     setIceVolume,
-    showIceNotch,
     stopIceStandalone,
     switchIceDevice,
     toggleIceMicMute,
@@ -131,54 +130,36 @@
   <header class="banner card-glass">
     <div class="banner-left">
       <div class="pill-badge">
-        Ice Audio Manager • {iceStatus.bridgeConnected
-          ? `Bridge Live (Port ${iceStatus.bridgePort ?? "?"})`
+        {iceStatus.bridgeConnected
+          ? "Connected"
           : iceStatus.mode === "connected"
-            ? "Connected (Co-op)"
+            ? "External"
             : iceStatus.mode === "embedded"
-              ? "Wrapped (Embedded)"
+              ? "Built-in"
               : iceStatus.mode}
       </div>
-      <h1>Windows Audio Engine &amp; Notch Bridge</h1>
-      <p>
-        Pandora reuses <code>ice-core</code> and <code>ice-win</code> directly. When standalone Ice Audio Manager
-        is running, Pandora connects over Ice's authenticated loopback bridge (<code>bridge.json</code>) for
-        instant device/Notch/settings sync, falling back cleanly to Core Audio + <code>config.toml</code>.
-      </p>
-      <div class="meta-line">
-        Config: <code>{iceStatus.configPath}</code>
-        {#if iceStatus.bridgeConnected}
-          • Bridge: <code>127.0.0.1:{iceStatus.bridgePort}</code> (v{iceStatus.iceVersion}, PID {iceStatus.bridgePid})
-        {/if}
-      </div>
+      <h1>Ice Audio</h1>
     </div>
 
     <div class="banner-actions">
       <div class="pref-row">
         <button class="chip" class:active={modePref === "auto"} onclick={() => changePref("auto")}>Auto</button>
-        <button class="chip" class:active={modePref === "embedded"} onclick={() => changePref("embedded")}>Wrap</button>
-        <button class="chip" class:active={modePref === "connected"} onclick={() => changePref("connected")}>Co-op</button>
+        <button class="chip" class:active={modePref === "embedded"} onclick={() => changePref("embedded")}>Built-in</button>
+        <button class="chip" class:active={modePref === "connected"} onclick={() => changePref("connected")}>External</button>
       </div>
       <div class="mini-actions">
         <button class="btn-ghost" disabled={busy} onclick={() => void runRemote(pingIceBridge)}>
           <Icon name="refresh" size={14} spin={busy} />
-          <span>Ping Bridge</span>
+          <span>Refresh</span>
         </button>
         <button
           class="btn-ghost"
           disabled={busy || !iceStatus.bridgeConnected}
-          title={iceStatus.bridgeConnected ? "Toggle Ice desktop Notch" : "Launch standalone Ice to control Notch"}
+          title={iceStatus.bridgeConnected ? "Toggle Ice Notch" : "Launch Ice to control Notch"}
           onclick={() => void runRemote(toggleIceNotch)}
         >
           <Icon name="panel-top" size={14} />
           <span>{iceStatus.notchExpanded ? "Collapse Notch" : "Toggle Notch"}</span>
-        </button>
-        <button
-          class="btn-ghost"
-          disabled={busy || !iceStatus.bridgeConnected}
-          onclick={() => void runRemote(showIceNotch)}
-        >
-          <span>Show Notch</span>
         </button>
         <button
           class="btn-ghost"
@@ -192,12 +173,12 @@
       {#if iceStatus.standaloneRunning}
         <button class="btn-ghost" disabled={busy} onclick={handleStopStandalone}>
           <Icon name="power" size={14} />
-          <span>Stop Standalone Ice &amp; Wrap Internally</span>
+          <span>Stop Ice</span>
         </button>
       {:else}
         <button class="btn-primary" disabled={busy || !iceStatus.standaloneExe} onclick={handleLaunchStandalone}>
           <Icon name="snowflake" size={15} />
-          <span>Launch Standalone Ice Notch</span>
+          <span>Launch Ice</span>
         </button>
       {/if}
     </div>
@@ -211,7 +192,7 @@
     <div class="grid-two">
       <section class="panel card-glass">
         <div class="panel-head">
-          <h2>System Master &amp; Live WASAPI Spectrum</h2>
+          <h2>Volume &amp; Spectrum</h2>
           <div class="mini-actions">
             <button class="btn-ghost" onclick={() => void toggleIceMute()}>
               {iceSnapshot.volume?.muted ? "Unmute Output" : "Mute Output"}
@@ -223,7 +204,7 @@
         </div>
 
         <div class="vol-row">
-          <span>Windows Volume</span>
+          <span>System Volume</span>
           <input
             type="range"
             min="0"
@@ -234,7 +215,7 @@
           <strong>{iceSnapshot.volume?.percent ?? 0}%</strong>
         </div>
 
-        <div class="meter-bars" title="Live 14-band WASAPI Loopback Spectrum from ice-win::MeterHub">
+        <div class="meter-bars">
           {#each bands as val, i (i)}
             <div class="meter-col">
               <div class="meter-fill" style="height: {Math.max(8, Math.min(100, val * 100))}%"></div>
@@ -263,8 +244,7 @@
 
       <section class="panel card-glass">
         <div class="panel-head">
-          <h2>Shared Ice Notch &amp; Call Mode Settings</h2>
-          <span class="sub">Hot-reloaded by standalone Ice</span>
+          <h2>Notch &amp; Call Mode</h2>
         </div>
 
         <div class="settings-grid">
@@ -294,14 +274,14 @@
           </label>
 
           <label class="field">
-            <span>Performance Profile</span>
+            <span>Performance</span>
             <select
               value={iceSnapshot.settings.performanceProfile}
               onchange={(e) => void patch({ performanceProfile: (e.target as HTMLSelectElement).value })}
             >
               <option value="instant">Instant</option>
               <option value="balanced">Balanced</option>
-              <option value="lite">Lite (Zero WebView)</option>
+              <option value="lite">Lite</option>
             </select>
           </label>
 
@@ -311,7 +291,7 @@
               checked={iceSnapshot.settings.callMode.enabled}
               onchange={(e) => void patch({ callModeEnabled: (e.target as HTMLInputElement).checked })}
             />
-            <span>Call Mode Ducking (Discord)</span>
+            <span>Call Mode Ducking</span>
           </label>
 
           <label class="check">
@@ -329,7 +309,7 @@
               checked={iceSnapshot.settings.lyrics.enabled}
               onchange={(e) => void patch({ lyricsEnabled: (e.target as HTMLInputElement).checked })}
             />
-            <span>Notch Lyrics Extension</span>
+            <span>Notch Lyrics</span>
           </label>
 
           <label class="check">
@@ -338,7 +318,7 @@
               checked={iceSnapshot.settings.visualizerSpectrum}
               onchange={(e) => void patch({ visualizerSpectrum: (e.target as HTMLInputElement).checked })}
             />
-            <span>WASAPI 14-Band Spectrum</span>
+            <span>Audio Spectrum</span>
           </label>
 
           <label class="check">
@@ -347,7 +327,7 @@
               checked={iceSnapshot.settings.appearance.hibernate}
               onchange={(e) => void patch({ hibernate: (e.target as HTMLInputElement).checked })}
             />
-            <span>Hibernate Notch (Meeting Mode)</span>
+            <span>Hibernate Notch</span>
           </label>
         </div>
       </section>
@@ -355,8 +335,7 @@
 
     <section class="panel card-glass">
       <div class="panel-head">
-        <h2>Playback Devices ({iceSnapshot.playback.length})</h2>
-        <span class="sub">Click any device to switch Windows Multimedia + Console default via IPolicyConfig</span>
+        <h2>Output Devices ({iceSnapshot.playback.length})</h2>
       </div>
       <div class="device-grid">
         {#each iceSnapshot.playback as dev (dev.id)}
@@ -409,26 +388,8 @@
   }
 
   .banner-left h1 {
-    margin: 10px 0 6px;
+    margin: 8px 0 0;
     font-size: 22px;
-  }
-
-  .banner-left p {
-    margin: 0 0 8px;
-    font-size: 13px;
-    color: var(--p-text-muted);
-    line-height: 1.5;
-  }
-
-  .meta-line {
-    font-size: 11px;
-    color: var(--p-text-dim);
-  }
-
-  code {
-    background: rgba(255, 255, 255, 0.08);
-    padding: 1px 6px;
-    border-radius: 5px;
   }
 
   .banner-actions {
@@ -445,12 +406,21 @@
   }
 
   .chip {
-    padding: 6px 12px;
+    padding: 6px 13px;
     border-radius: 999px;
     font-size: 12px;
     font-weight: 600;
     background: rgba(255, 255, 255, 0.06);
     border: 1px solid var(--p-border);
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.12s ease;
+  }
+
+  .chip:hover {
+    background: rgba(255, 255, 255, 0.11);
+  }
+
+  .chip:active {
+    transform: scale(0.95);
   }
 
   .chip.active {
@@ -489,11 +459,6 @@
   .panel-head h2 {
     margin: 0;
     font-size: 16px;
-  }
-
-  .sub {
-    font-size: 12px;
-    color: var(--p-text-dim);
   }
 
   .mini-actions {
@@ -565,16 +530,13 @@
   .check {
     display: flex;
     align-items: center;
-    gap: 8px;
-    font-size: 12px;
-    padding: 8px 10px;
+    justify-content: space-between;
+    gap: 10px;
+    font-size: 12.5px;
+    padding: 9px 12px;
     border-radius: 10px;
     background: rgba(255, 255, 255, 0.04);
     cursor: pointer;
-  }
-
-  .check input {
-    accent-color: var(--p-accent);
   }
 
   .device-grid {

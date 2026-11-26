@@ -9,6 +9,7 @@
     proxyPort: number;
     playbackDevices: DeviceSummary[];
     likedIds: Set<string>;
+    wavyProgress?: boolean;
     onOpenNowPlaying: () => void;
     onOpenEq: () => void;
     onToggleLike: (track: Track) => void;
@@ -19,6 +20,7 @@
     proxyPort,
     playbackDevices,
     likedIds,
+    wavyProgress = true,
     onOpenNowPlaying,
     onOpenEq,
     onToggleLike,
@@ -148,16 +150,24 @@
 
     <div class="seek-row">
       <span class="time">{formatMs($playerStore.currentTimeMs)}</span>
-      <input
-        class="range-track"
-        style="--progress: {seekPct}%"
-        type="range"
-        min="0"
-        max={Math.max(1000, $playerStore.durationMs)}
-        value={$playerStore.currentTimeMs}
-        aria-label="Playback position"
-        oninput={(e) => audioEngine.seekMs(Number((e.target as HTMLInputElement).value))}
-      />
+      <div class="seek-wrap">
+        <div class="seek-rail"></div>
+        <div
+          class="seek-fill"
+          class:wavy={wavyProgress && $playerStore.playing}
+          style="width: {seekPct}%"
+        ></div>
+        <input
+          class="range-track transparent-track"
+          style="--progress: {seekPct}%"
+          type="range"
+          min="0"
+          max={Math.max(1000, $playerStore.durationMs)}
+          value={$playerStore.currentTimeMs}
+          aria-label="Playback position"
+          oninput={(e) => audioEngine.seekMs(Number((e.target as HTMLInputElement).value))}
+        />
+      </div>
       <span class="time">{formatMs($playerStore.durationMs)}</span>
     </div>
   </div>
@@ -196,7 +206,7 @@
         </button>
         {#if showDevices}
           <div class="dev-popover card-glass">
-            <div class="pop-head">Switch Output (Ice Engine)</div>
+            <div class="pop-head">Audio Output</div>
             {#each playbackDevices as dev (dev.id)}
               <button
                 class:active={dev.isDefault}
@@ -393,6 +403,10 @@
     color: var(--p-text);
   }
 
+  .dock-icon:active {
+    transform: scale(0.91);
+  }
+
   .dock-icon.lit {
     color: var(--p-accent-bright);
   }
@@ -427,12 +441,69 @@
     filter: brightness(1.06);
   }
 
+  .play-btn:active {
+    transform: scale(0.94);
+  }
+
   .seek-row {
     width: 100%;
     max-width: 460px;
     display: flex;
     align-items: center;
     gap: 10px;
+  }
+
+  .seek-wrap {
+    position: relative;
+    flex: 1;
+    height: 16px;
+    display: flex;
+    align-items: center;
+  }
+
+  .seek-rail {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 4px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.14);
+    pointer-events: none;
+  }
+
+  .seek-fill {
+    position: absolute;
+    left: 0;
+    height: 4px;
+    border-radius: 999px;
+    background: var(--p-accent);
+    pointer-events: none;
+  }
+
+  .seek-fill.wavy {
+    height: 8px;
+    border-radius: 0;
+    background: transparent;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='8' viewBox='0 0 24 8'%3E%3Cpath d='M0 4 Q 6 0.5 12 4 T 24 4' fill='none' stroke='%23ffffff' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: repeat-x;
+    background-size: 24px 8px;
+    filter: drop-shadow(0 0 6px var(--p-glow-1));
+    animation: waveScroll 0.85s linear infinite;
+  }
+
+  @keyframes waveScroll {
+    from {
+      background-position-x: 0px;
+    }
+    to {
+      background-position-x: 24px;
+    }
+  }
+
+  .range-track.transparent-track {
+    position: relative;
+    z-index: 2;
+    background: transparent;
   }
 
   .time {

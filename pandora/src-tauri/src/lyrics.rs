@@ -25,7 +25,7 @@ pub fn fetch_lyrics(
                 line.words = estimate_word_timings(&line.text, line.start_ms, end);
             }
             if line.subtitle.is_none() && line.romaji.is_none() {
-                line.romaji = romaji.line_to_romaji(&line.text);
+                line.romaji = romanize_line(&romaji, &line.text);
             }
         }
         let doc = LyricsDocument {
@@ -57,7 +57,7 @@ pub fn fetch_lyrics(
                         line.words = estimate_word_timings(&line.text, line.start_ms, end);
                     }
                     if line.subtitle.is_none() && line.romaji.is_none() {
-                        line.romaji = romaji.line_to_romaji(&line.text);
+                        line.romaji = romanize_line(&romaji, &line.text);
                     }
                 }
             }
@@ -124,5 +124,140 @@ fn doc_to_pandora(doc: ice_core::lyrics::LyricsDocument, source_override: Option
         lines,
         plain_text: doc.plain_text,
         error: None,
+    }
+}
+
+fn romanize_line(jp: &JapaneseRomaji, text: &str) -> Option<String> {
+    if let Some(r) = jp.line_to_romaji(text) {
+        return Some(r);
+    }
+    romanize_korean_or_cyrillic(text)
+}
+
+/// Offline transliteration for Korean Hangul (Revised Romanization) and Cyrillic scripts.
+pub fn romanize_korean_or_cyrillic(text: &str) -> Option<String> {
+    const INITIALS: [&str; 19] = [
+        "g", "kk", "n", "d", "tt", "r", "m", "b", "pp", "s", "ss", "", "j", "jj", "ch", "k", "t", "p", "h",
+    ];
+    const MEDIALS: [&str; 21] = [
+        "a", "ae", "ya", "yae", "eo", "e", "yeo", "ye", "o", "wa", "wae", "oe", "yo", "u", "wo", "we", "wi",
+        "yu", "eu", "ui", "i",
+    ];
+    const FINALS: [&str; 28] = [
+        "", "k", "k", "k", "n", "n", "n", "t", "l", "l", "l", "l", "l", "l", "l", "l", "m", "p", "p", "t",
+        "t", "ng", "t", "t", "k", "t", "p", "t",
+    ];
+
+    let mut out = String::with_capacity(text.len() * 2);
+    let mut converted = false;
+
+    for ch in text.chars() {
+        let cp = ch as u32;
+        if (0xAC00..=0xD7A3).contains(&cp) {
+            let idx = (cp - 0xAC00) as usize;
+            let ini = idx / (21 * 28);
+            let med = (idx % (21 * 28)) / 28;
+            let fin = idx % 28;
+            out.push_str(INITIALS[ini]);
+            out.push_str(MEDIALS[med]);
+            out.push_str(FINALS[fin]);
+            converted = true;
+        } else if let Some(lat) = cyrillic_to_latin(ch) {
+            out.push_str(lat);
+            converted = true;
+        } else {
+            out.push(ch);
+        }
+    }
+
+    if converted { Some(out) } else { None }
+}
+
+fn cyrillic_to_latin(ch: char) -> Option<&'static str> {
+    Some(match ch {
+        'А' => "A",
+        'а' => "a",
+        'Б' => "B",
+        'б' => "b",
+        'В' => "V",
+        'в' => "v",
+        'Г' => "G",
+        'г' => "g",
+        'Ґ' => "G",
+        'ґ' => "g",
+        'Д' => "D",
+        'д' => "d",
+        'Е' => "E",
+        'е' => "e",
+        'Ё' => "Yo",
+        'ё' => "yo",
+        'Є' => "Ye",
+        'є' => "ye",
+        'Ж' => "Zh",
+        'ж' => "zh",
+        'З' => "Z",
+        'з' => "z",
+        'И' => "I",
+        'и' => "i",
+        'І' => "I",
+        'і' => "i",
+        'Ї' => "Yi",
+        'ї' => "yi",
+        'Й' => "Y",
+        'й' => "y",
+        'К' => "K",
+        'к' => "k",
+        'Л' => "L",
+        'л' => "l",
+        'М' => "M",
+        'м' => "m",
+        'Н' => "N",
+        'н' => "n",
+        'О' => "O",
+        'о' => "o",
+        'П' => "P",
+        'п' => "p",
+        'Р' => "R",
+        'р' => "r",
+        'С' => "S",
+        'с' => "s",
+        'Т' => "T",
+        'т' => "t",
+        'У' => "U",
+        'у' => "u",
+        'Ф' => "F",
+        'ф' => "f",
+        'Х' => "Kh",
+        'х' => "kh",
+        'Ц' => "Ts",
+        'ц' => "ts",
+        'Ч' => "Ch",
+        'ч' => "ch",
+        'Ш' => "Sh",
+        'ш' => "sh",
+        'Щ' => "Shch",
+        'щ' => "shch",
+        'Ъ' | 'ъ' | 'Ь' | 'ь' => "",
+        'Ы' => "Y",
+        'ы' => "y",
+        'Э' => "E",
+        'э' => "e",
+        'Ю' => "Yu",
+        'ю' => "yu",
+        'Я' => "Ya",
+        'я' => "ya",
+        _ => return None,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn romanizes_korean_and_cyrillic_leaving_latin_none() {
+        assert_eq!(romanize_korean_or_cyrillic("사랑해").as_deref(), Some("saranghae"));
+        assert_eq!(romanize_korean_or_cyrillic("Привет").as_deref(), Some("Privet"));
+        assert_eq!(romanize_korean_or_cyrillic("Hello world"), None);
     }
 }
