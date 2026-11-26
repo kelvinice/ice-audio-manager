@@ -175,8 +175,9 @@ criteria below pass on both monitors. Items come from Claude's review of the Edg
 - [ ] By hand: drag & drop effects on the idle pill, the music pill (with and without its lyric rows) and both styles, top
       and bottom: the landing ripple rises off the pill's edge and never covers it, the carry glow fades out before the
       window edge on the docked side (no hard cut), jelly landing; wavy progress line on both cards
-- [ ] By hand: pin the card, drag and drop it: it lands as the notch and stays one until the pointer leaves and comes
-      back; Volume as a button on both cards; Experimental beat rim (Spotify, bass-heavy and quiet tracks) and cover tilt
+- [ ] By hand: pin the card, drag and drop it (and Esc mid-drag): it folds into the capsule while carried and opens
+      pinned again where it lands; a hover-opened card lands as the notch and stays one until the pointer leaves and
+      comes back; Volume as a button on both cards; Experimental beat rim (Spotify, bass-heavy and quiet tracks) and cover tilt
 - [ ] By hand: hibernate in Instant / Balanced / Lite; screen-share test in Teams, Zoom, Meet (Chrome/Edge) and OBS with
       "Hide from screen sharing" on and off; mic mute shows the dot; tray uncheck wakes the notch
 - [ ] By hand: lyrics on the Liberty 5 (Bluetooth, auto 200 ms) vs the BTD 700 dongle (USB, auto 0): tune each so a

@@ -757,8 +757,8 @@ export class NotchController {
     this.scheduler.markInteraction(Date.now());
     this.scheduleNextTick();
     if (this.hoverExpanded || this.notchSnapshot?.expanded) return;
-    // Owner, 2026-11-26: a dropped notch stays a notch. It lands under the cursor, so hovering may open the card again
-    // only after the pointer has left it once.
+    // Owner, 2026-11-26: a card opened by hover lands as the notch (a pinned one is re-pinned by the shell, `drag.rs`).
+    // It lands under the cursor, so hovering may open the card again only after the pointer has left it once.
     if (this.hoverLockedAfterDrop) {
       // No enter soon after the drop means the cursor wasn't on the notch, so this is a new hover.
       const stale = !this.enteredSinceDrop && Date.now() - this.droppedAt > HOVER_LOCK_STALE_MS;

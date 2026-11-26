@@ -86,8 +86,9 @@ pub(super) fn start(app: &AppHandle, state: &Arc<SharedRuntime>, host: Host) {
     } else {
         (cursor.0 - left, cursor.1 - top)
     };
-    // The card collapses while it's carried (the WebView lifts it into a full capsule); dropping it shows the pill at
-    // its new place.
+    // The card collapses while it's carried (the WebView lifts it into a full capsule). Owner, 2026-11-26: a pinned card
+    // stays pinned, so it opens again once it has landed (or sprung back on Esc); a hover-opened one lands as the pill.
+    let was_pinned = state.snapshot_clone().expanded;
     state.update_and_emit(app, |s| {
         s.expanded = false;
         s.dragging = true;
@@ -105,6 +106,7 @@ pub(super) fn start(app: &AppHandle, state: &Arc<SharedRuntime>, host: Host) {
         pinned: settings.pinned_monitor.clone(),
         saved_anchor: settings.notch_anchor,
         saved_x_ratio: settings.notch_x_ratio,
+        was_pinned,
         reduce_motion: state.snapshot_clone().system_reduce_motion
             || settings.appearance.preset == ice_core::appearance::SpringPreset::Off,
     };
@@ -112,6 +114,7 @@ pub(super) fn start(app: &AppHandle, state: &Arc<SharedRuntime>, host: Host) {
     let spawned = std::thread::Builder::new().name("ice-notch-drag".into()).spawn(move || {
         job.run(&st);
         job.released(&st); // idempotent: covers every early return in `run`
+        job.restore_pin(&st);
         st.dragging.store(false, Ordering::Release);
     });
     if spawned.is_err() {
@@ -136,6 +139,8 @@ struct Drag {
     pinned: Option<String>,
     saved_anchor: NotchAnchor,
     saved_x_ratio: Option<f32>,
+    /// The card was pinned open when the drag began: pin it again after the drop.
+    was_pinned: bool,
     reduce_motion: bool,
 }
 
@@ -218,6 +223,14 @@ impl Drag {
     /// is free.
     fn released(&self, state: &SharedRuntime) {
         state.update_and_emit(&self.app, |s| s.dragging = false);
+    }
+
+    /// Re-pins a card that was pinned when the drag began, once the window has reached its place (dropped or sprung
+    /// back on Esc). Not when hibernate was turned on meanwhile: a hibernating notch never shows the card.
+    fn restore_pin(&self, state: &SharedRuntime) {
+        if self.was_pinned && self.host == Host::WebView && !state.engine.snapshot().settings.appearance.hibernate {
+            state.update_and_emit(&self.app, |s| s.expanded = true);
+        }
     }
 
     fn move_host(&self, state: &SharedRuntime, pos: (i32, i32)) {
