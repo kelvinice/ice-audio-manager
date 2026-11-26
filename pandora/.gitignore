@@ -1,0 +1,44 @@
+# Rust / Cargo build outputs
+src-tauri/target/
+target/
+**/*.rs.bk
+*.pdb
+
+# Tauri generated files (schemas, Windows resource intermediates)
+src-tauri/gen/
+
+# Node / Vite / TypeScript UI artifacts
+ui/node_modules/
+ui/dist/
+ui/.vite/
+ui/.svelte-kit/
+*.tsbuildinfo
+npm-debug.log*
+
+# Local runtime cache, library DB & logs
+cache/
+*.audio
+*.audio.part
+library.json
+library.json.tmp
+logs/
+temp/
+*.log
+*.jsonl
+
+# Local env / secrets
+.env
+.env.*
+
+# IDE
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+.idea/
+
+# Windows / OS metadata
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+.DS_Store
+$RECYCLE.BIN/

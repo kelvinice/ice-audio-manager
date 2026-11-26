@@ -1,0 +1,178 @@
+:root {
+  --p-bg: #0b0d14;
+  --p-surface: rgba(20, 24, 38, 0.72);
+  --p-surface-solid: #151927;
+  --p-surface-elevated: rgba(30, 35, 56, 0.85);
+  --p-border: rgba(255, 255, 255, 0.08);
+  --p-border-strong: rgba(255, 255, 255, 0.16);
+  --p-text: #f3f5fc;
+  --p-text-muted: rgba(226, 232, 248, 0.65);
+  --p-text-dim: rgba(226, 232, 248, 0.42);
+  --p-accent: rgb(109, 131, 242);
+  --p-accent-bright: rgb(160, 178, 255);
+  --p-accent-soft: rgba(109, 131, 242, 0.18);
+  --p-glow-1: rgba(109, 131, 242, 0.42);
+  --p-glow-2: rgba(56, 189, 248, 0.34);
+  --p-glow-3: rgba(168, 85, 247, 0.30);
+  --p-surface-tint: rgba(25, 32, 54, 0.42);
+  --p-danger: #f87171;
+  --p-success: #34d399;
+  --p-radius: 16px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--p-bg);
+  color: var(--p-text);
+  font-family: "Segoe UI Variable", "Segoe UI", system-ui, -apple-system, sans-serif;
+  user-select: none;
+}
+
+button,
+input,
+select {
+  font-family: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+  border: none;
+  background: transparent;
+}
+
+::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+.ambient-bg {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 0;
+}
+
+.ambient-blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(110px);
+  opacity: 0.65;
+  transition: background 1.2s ease;
+}
+
+.ambient-blob.b1 {
+  width: 520px;
+  height: 520px;
+  top: -140px;
+  left: -80px;
+  background: var(--p-glow-1);
+  animation: driftA 22s ease-in-out infinite alternate;
+}
+
+.ambient-blob.b2 {
+  width: 460px;
+  height: 460px;
+  top: 24%;
+  right: -110px;
+  background: var(--p-glow-2);
+  animation: driftB 28s ease-in-out infinite alternate;
+}
+
+.ambient-blob.b3 {
+  width: 420px;
+  height: 420px;
+  bottom: -120px;
+  left: 32%;
+  background: var(--p-glow-3);
+  animation: driftC 25s ease-in-out infinite alternate;
+}
+
+@keyframes driftA {
+  from { transform: translate(0, 0) scale(1); }
+  to { transform: translate(80px, 60px) scale(1.14); }
+}
+
+@keyframes driftB {
+  from { transform: translate(0, 0) scale(1); }
+  to { transform: translate(-90px, 70px) scale(1.1); }
+}
+
+@keyframes driftC {
+  from { transform: translate(0, 0) scale(1); }
+  to { transform: translate(60px, -65px) scale(1.16); }
+}
+
+.btn-primary {
+  background: var(--p-accent);
+  color: #080b12;
+  font-weight: 600;
+  padding: 9px 16px;
+  border-radius: 999px;
+  transition: transform 0.15s ease, filter 0.15s ease, background 0.4s ease;
+}
+
+.btn-primary:hover {
+  filter: brightness(1.12);
+  transform: translateY(-1px);
+}
+
+.btn-ghost {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--p-border);
+  color: var(--p-text);
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 500;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.btn-ghost:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: var(--p-border-strong);
+}
+
+.card-glass {
+  background: var(--p-surface);
+  border: 1px solid var(--p-border);
+  border-radius: var(--p-radius);
+  backdrop-filter: blur(18px);
+}
+
+.pill-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--p-accent-soft);
+  color: var(--p-accent-bright);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}

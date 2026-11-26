@@ -1,0 +1,310 @@
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
+mod http;
+mod ice_bridge;
+mod library;
+mod lyrics;
+mod models;
+mod proxy;
+mod ytmusic;
+
+use std::sync::Arc;
+
+use ice_core::engine::{Command, EngineSnapshot, RoleSet, SpatialMode};
+use tauri::{Manager, State};
+
+use crate::ice_bridge::IceBridge;
+use crate::library::LibraryStore;
+use crate::models::{
+    EqState, HomeFeed, IceConfigPatch, IceStatus, LibraryState, PandoraLyrics, SearchResponse, Track,
+};
+use crate::ytmusic::YtMusicClient;
+
+struct AppState {
+    proxy_port: u16,
+    ytm: Arc<YtMusicClient>,
+    library: Arc<LibraryStore>,
+    ice: Arc<IceBridge>,
+}
+
+#[tauri::command]
+fn get_proxy_port(state: State<'_, Arc<AppState>>) -> u16 {
+    state.proxy_port
+}
+
+#[tauri::command]
+async fn ytm_home(state: State<'_, Arc<AppState>>) -> Result<HomeFeed, String> {
+    let ytm = Arc::clone(&state.ytm);
+    tauri::async_runtime::spawn_blocking(move || ytm.home())
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn ytm_search(
+    query: String,
+    filter: Option<String>,
+    state: State<'_, Arc<AppState>>,
+) -> Result<SearchResponse, String> {
+    let ytm = Arc::clone(&state.ytm);
+    let flt = filter.unwrap_or_else(|| "songs".into());
+    tauri::async_runtime::spawn_blocking(move || ytm.search(&query, &flt))
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn ytm_related(video_id: String, state: State<'_, Arc<AppState>>) -> Result<Vec<Track>, String> {
+    let ytm = Arc::clone(&state.ytm);
+    tauri::async_runtime::spawn_blocking(move || ytm.related(&video_id))
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn fetch_lyrics(
+    title: String,
+    artist: String,
+    album: String,
+    duration_ms: Option<u64>,
+    lrc_override: Option<String>,
+) -> Result<PandoraLyrics, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        lyrics::fetch_lyrics(&title, &artist, &album, duration_ms, lrc_override.as_deref())
+    })
+    .await
+    .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn get_library(state: State<'_, Arc<AppState>>) -> LibraryState {
+    state.library.snapshot()
+}
+
+#[tauri::command]
+fn toggle_like(track: Track, state: State<'_, Arc<AppState>>) -> LibraryState {
+    state.library.toggle_like(track)
+}
+
+#[tauri::command]
+fn record_history(track: Track, state: State<'_, Arc<AppState>>) -> LibraryState {
+    state.library.record_history(track)
+}
+
+#[tauri::command]
+fn create_playlist(name: String, state: State<'_, Arc<AppState>>) -> Result<LibraryState, String> {
+    state.library.create_playlist(&name)
+}
+
+#[tauri::command]
+fn delete_playlist(playlist_id: String, state: State<'_, Arc<AppState>>) -> LibraryState {
+    state.library.delete_playlist(&playlist_id)
+}
+
+#[tauri::command]
+fn add_to_playlist(
+    playlist_id: String,
+    track: Track,
+    state: State<'_, Arc<AppState>>,
+) -> Result<LibraryState, String> {
+    state.library.add_to_playlist(&playlist_id, track)
+}
+
+#[tauri::command]
+fn remove_from_playlist(
+    playlist_id: String,
+    track_id: String,
+    state: State<'_, Arc<AppState>>,
+) -> LibraryState {
+    state.library.remove_from_playlist(&playlist_id, &track_id)
+}
+
+#[tauri::command]
+fn save_eq(eq: EqState, state: State<'_, Arc<AppState>>) -> LibraryState {
+    state.library.save_eq(eq)
+}
+
+#[tauri::command]
+async fn add_local_folder(path: String, state: State<'_, Arc<AppState>>) -> Result<LibraryState, String> {
+    let lib = Arc::clone(&state.library);
+    tauri::async_runtime::spawn_blocking(move || lib.add_local_folder(&path))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+fn remove_local_folder(path: String, state: State<'_, Arc<AppState>>) -> LibraryState {
+    state.library.remove_local_folder(&path)
+}
+
+#[tauri::command]
+async fn rescan_local(state: State<'_, Arc<AppState>>) -> Result<LibraryState, String> {
+    let lib = Arc::clone(&state.library);
+    tauri::async_runtime::spawn_blocking(move || lib.rescan_local())
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn download_track(track: Track, state: State<'_, Arc<AppState>>) -> Result<LibraryState, String> {
+    let lib = Arc::clone(&state.library);
+    let ytm = Arc::clone(&state.ytm);
+    tauri::async_runtime::spawn_blocking(move || lib.download_track(track, &ytm))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+fn delete_cached_track(track_id: String, state: State<'_, Arc<AppState>>) -> LibraryState {
+    state.library.delete_cached_track(&track_id)
+}
+
+#[tauri::command]
+fn clear_offline_cache(state: State<'_, Arc<AppState>>) -> LibraryState {
+    state.library.clear_offline_cache()
+}
+
+#[tauri::command]
+fn ice_status(state: State<'_, Arc<AppState>>) -> IceStatus {
+    state.ice.status()
+}
+
+#[tauri::command]
+fn ice_snapshot(state: State<'_, Arc<AppState>>) -> EngineSnapshot {
+    state.ice.snapshot()
+}
+
+#[tauri::command]
+fn ice_set_mode_pref(pref: String, state: State<'_, Arc<AppState>>) -> Result<IceStatus, String> {
+    state.library.set_ice_mode_pref(&pref);
+    state.ice.set_mode_pref(&pref);
+    Ok(state.ice.status())
+}
+
+#[tauri::command]
+fn ice_switch_device(device_id: String, state: State<'_, Arc<AppState>>) -> Result<(), String> {
+    state.ice.send_command(Command::SwitchTo { device_id, roles: RoleSet::Default })
+}
+
+#[tauri::command]
+fn ice_set_volume(percent: u8, state: State<'_, Arc<AppState>>) -> Result<(), String> {
+    state.ice.send_command(Command::SetVolume { percent })
+}
+
+#[tauri::command]
+fn ice_toggle_mute(state: State<'_, Arc<AppState>>) -> Result<(), String> {
+    state.ice.send_command(Command::ToggleMute)
+}
+
+#[tauri::command]
+fn ice_toggle_mic_mute(state: State<'_, Arc<AppState>>) -> Result<(), String> {
+    state.ice.send_command(Command::ToggleMicMute)
+}
+
+#[tauri::command]
+fn ice_set_spatial(
+    device_id: String,
+    mode: SpatialMode,
+    state: State<'_, Arc<AppState>>,
+) -> Result<(), String> {
+    state.ice.send_command(Command::SetSpatial { device_id, mode })
+}
+
+#[tauri::command]
+fn ice_patch_settings(
+    patch: IceConfigPatch,
+    state: State<'_, Arc<AppState>>,
+) -> Result<EngineSnapshot, String> {
+    state.ice.patch_settings(patch)
+}
+
+#[tauri::command]
+fn ice_set_meter_active(active: bool, state: State<'_, Arc<AppState>>) {
+    state.ice.set_meter_active(active);
+}
+
+#[tauri::command]
+async fn ice_launch_standalone(state: State<'_, Arc<AppState>>) -> Result<IceStatus, String> {
+    let ice = Arc::clone(&state.ice);
+    tauri::async_runtime::spawn_blocking(move || ice.launch_standalone())
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+async fn ice_stop_standalone(state: State<'_, Arc<AppState>>) -> Result<IceStatus, String> {
+    let ice = Arc::clone(&state.ice);
+    tauri::async_runtime::spawn_blocking(move || ice.stop_standalone())
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+fn main() {
+    let _ = tracing_subscriber::fmt()
+        .with_max_level(tracing::Level::INFO)
+        .try_init();
+
+    let fake_engine = std::env::args().any(|a| a == "--fake-engine");
+    let library = Arc::new(LibraryStore::load());
+    let ytm = Arc::new(YtMusicClient::new());
+    let pref = library.snapshot().ice_mode_pref;
+    let ice = IceBridge::new(pref, fake_engine);
+
+    let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
+    let proxy_port = rt
+        .block_on(proxy::start(Arc::clone(&ytm), Arc::clone(&library)))
+        .expect("local media proxy failed to bind");
+    tracing::info!(proxy_port, "Pandora local audio/art proxy ready");
+
+    let state = Arc::new(AppState {
+        proxy_port,
+        ytm,
+        library,
+        ice: Arc::clone(&ice),
+    });
+
+    tauri::Builder::default()
+        .manage(state)
+        .setup(move |app| {
+            ice.attach_app(app.handle().clone());
+            if let Some(win) = app.get_webview_window("main") {
+                ice_bridge::apply_window_backdrop(&win);
+            }
+            Ok(())
+        })
+        .invoke_handler(tauri::generate_handler![
+            get_proxy_port,
+            ytm_home,
+            ytm_search,
+            ytm_related,
+            fetch_lyrics,
+            get_library,
+            toggle_like,
+            record_history,
+            create_playlist,
+            delete_playlist,
+            add_to_playlist,
+            remove_from_playlist,
+            save_eq,
+            add_local_folder,
+            remove_local_folder,
+            rescan_local,
+            download_track,
+            delete_cached_track,
+            clear_offline_cache,
+            ice_status,
+            ice_snapshot,
+            ice_set_mode_pref,
+            ice_switch_device,
+            ice_set_volume,
+            ice_toggle_mute,
+            ice_toggle_mic_mute,
+            ice_set_spatial,
+            ice_patch_settings,
+            ice_set_meter_active,
+            ice_launch_standalone,
+            ice_stop_standalone,
+        ])
+        .run(tauri::generate_context!())
+        .expect("error running Pandora");
+}
