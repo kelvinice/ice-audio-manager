@@ -127,6 +127,7 @@
           {instant}
           {preset}
           wavyProgress={settings?.appearance.wavyProgress ?? false}
+          coverTilt={settings?.appearance.experiments.coverTilt ?? false}
           {onMediaAction}
         />
       {:else}

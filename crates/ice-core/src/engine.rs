@@ -352,6 +352,15 @@ pub enum Command {
     SetWavyProgress {
         enabled: bool,
     },
+    /// The card's volume is always a button that opens the slider (never the inline slider).
+    SetVolumeButton {
+        enabled: bool,
+    },
+    /// Patch the Experimental notch looks (`None` leaves one unchanged).
+    SetExperiments {
+        beat_rim: Option<bool>,
+        cover_tilt: Option<bool>,
+    },
     /// D-22 Storage: set maximum managed lyrics disk cache size in MiB (`5..=500`).
     SetLyricsCacheMaxMb {
         max_mb: u16,
@@ -413,6 +422,8 @@ impl Command {
             | Self::SetLyricsEstimatedWordSync { .. }
             | Self::SetDragEffects { .. }
             | Self::SetWavyProgress { .. }
+            | Self::SetVolumeButton { .. }
+            | Self::SetExperiments { .. }
             | Self::SetLyricsCacheMaxMb { .. }
             | Self::DisableAllNetworkFeatures
             | Self::SetVisualizerSpectrum { .. }

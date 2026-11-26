@@ -135,6 +135,22 @@
     />
   </Section>
 
+  <Section title="Open card" description="The card that opens when you point at or click the notch.">
+    <SettingCard
+      icon="volume"
+      title="Volume as a button"
+      description="Always show the volume as a small speaker button that opens the slider, so a stray click on the card can’t change the volume. Scrolling over the notch still changes it."
+    >
+      {#snippet control()}
+        <Toggle
+          label="Volume as a button"
+          checked={settings.appearance.volumeButton}
+          onchange={(enabled) => client.apply({ type: 'setVolumeButton', enabled })}
+        />
+      {/snippet}
+    </SettingCard>
+  </Section>
+
   <Section
     title="Display"
     description="Pick the display, screen position, or drag the notch anywhere along the top or bottom edge. It follows Windows’ scaling on each screen and stays clear of the taskbar."

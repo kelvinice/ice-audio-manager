@@ -5,6 +5,7 @@
   import type { MediaAction, NowPlaying } from '../../lib/ipc/engine';
   import type { SpringPreset } from '../../lib/ipc/types';
   import AlbumArtTile from './AlbumArtTile.svelte';
+  import CoverTilt from './CoverTilt.svelte';
   import DeviceIcon from './DeviceIcon.svelte';
   import MediaScrubber from './MediaScrubber.svelte';
   import VisualizerBars from './VisualizerBars.svelte';
@@ -16,10 +17,13 @@
     preset: SpringPreset;
     /** Wavy progress line (`appearance.wavyProgress`, Settings → Appearance). */
     wavyProgress?: boolean;
+    /** Experimental cover tilt (`appearance.experiments.coverTilt`). */
+    coverTilt?: boolean;
     onMediaAction: (action: MediaAction) => void;
   }
 
-  let { media, notchVisible, instant, preset, wavyProgress = false, onMediaAction }: Props = $props();
+  let { media, notchVisible, instant, preset, wavyProgress = false, coverTilt = false, onMediaAction }: Props =
+    $props();
 
   /** Cover edge; the meta column (title, artist, transport) is exactly this tall. */
   const COVER_PX = 84;
@@ -30,7 +34,9 @@
 <div class="media">
   <div class="head">
     <div class="cover">
-      <AlbumArtTile art={media.art} size={COVER_PX} radius="var(--ice-radius-md)" {instant} />
+      <CoverTilt enabled={coverTilt} {instant}>
+        <AlbumArtTile art={media.art} size={COVER_PX} radius="var(--ice-radius-md)" {instant} />
+      </CoverTilt>
     </div>
     <div class="meta">
       <div class="text">

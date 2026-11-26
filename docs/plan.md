@@ -154,14 +154,9 @@ Owner, 2026-11-25: **Edge Nook is the priority; Floating follows once Edge is st
 criteria below pass on both monitors. Items come from Claude's review of the Edge layout (2026-11-25).
 
 **Open, fixes (Edge-specific, do first):**
-- [ ] **Hover intent at the top edge.** The nook sits where the cursor goes for browser tabs and title bars, and the
-      120 ms hover delay (`controller.svelte.ts` `onPointerEnter`) opens a 572 × 206 card over them on a pass-through.
-      Proposal: a per-style dwell (`NotchStyleStrategy.hoverIntentMs`, e.g. 220 ms for Edge) that restarts while the pointer
-      is still moving fast. Needs the owner's feel check
-- [ ] **Startup hit rect** in `main.rs` (`116 + 16 × 30` for Nook) is a hand copy of the idle geometry + ear; replace with
-      the UI's first `report_hit_rect` or a `// Twin:` constant
-- [ ] **Hit rect vs ears:** `nookStyleStrategy.computeHitRect` is a rectangle that includes the transparent area under the
-      concave ears. Clicks there land on the notch instead of the app below. Narrow it by the ear radius or wait for L2
+- [ ] By hand (owner's feel check): the Edge Nook hover dwell (220 ms, restarts while the pointer sweeps past; built
+      2026-11-26, see the archive) no longer opens the card when reaching for browser tabs, yet still feels quick; tune
+      `hoverIntentMs` / `HOVER_PASS_SPEED_PX_PER_MS` from that
 - [ ] Side-by-side visual QA of the native and WebView **nook** idle silhouettes (ears, rim, 100 % / 150 %, both monitors)
 
 **Open, polish:**
@@ -180,6 +175,8 @@ criteria below pass on both monitors. Items come from Claude's review of the Edg
 - [ ] By hand: drag & drop effects on the idle pill, the music pill (with and without its lyric rows) and both styles, top
       and bottom: the landing ripple rises off the pill's edge and never covers it, the carry glow fades out before the
       window edge on the docked side (no hard cut), jelly landing; wavy progress line on both cards
+- [ ] By hand: pin the card, drag and drop it: it lands as the notch and stays one until the pointer leaves and comes
+      back; Volume as a button on both cards; Experimental beat rim (Spotify, bass-heavy and quiet tracks) and cover tilt
 - [ ] By hand: hibernate in Instant / Balanced / Lite; screen-share test in Teams, Zoom, Meet (Chrome/Edge) and OBS with
       "Hide from screen sharing" on and off; mic mute shows the dot; tray uncheck wakes the notch
 - [ ] By hand: lyrics on the Liberty 5 (Bluetooth, auto 200 ms) vs the BTD 700 dongle (USB, auto 0): tune each so a

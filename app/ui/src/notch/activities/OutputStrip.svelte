@@ -1,8 +1,8 @@
 <script lang="ts">
   // D-28 (owner, 2026-11-25): the card's "output" strip, below the song block: where it plays (device chips) and how
   // loud (a small neutral volume control). When the chips need the room, the volume becomes a chip (icon + %) that
-  // grows into a full-strip slider when clicked (owner, 2026-11-26: animated from the chip, back into it on close).
-  // The wheel anywhere on the notch still changes the volume.
+  // grows into a full-strip slider when clicked (owner, 2026-11-26: animated from the chip, back into it on close;
+  // `appearance.volumeButton` keeps the chip always). The wheel anywhere on the notch still changes the volume.
   import { tick } from 'svelte';
   import type { DeviceSummary, SettingsView } from '../../lib/ipc/engine';
   import { buildNotchDeviceRow } from '../../lib/notch/devices';
@@ -45,7 +45,9 @@
   let chipEl = $state<HTMLButtonElement | null>(null);
 
   const chipCount = $derived(buildNotchDeviceRow(playback, settings, disconnected).chips.length);
-  const inline = $derived(volumeFitsInline(chipCount, width));
+  // Owner, 2026-11-26: "Volume as a button" keeps the chip even when the slider would fit, so a stray click on the
+  // card can't change the volume.
+  const inline = $derived(!(settings?.appearance.volumeButton ?? false) && volumeFitsInline(chipCount, width));
 
   $effect(() => {
     if (inline) sliderOpen = false;

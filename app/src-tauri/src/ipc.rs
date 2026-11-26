@@ -154,6 +154,8 @@ mod tests {
             "",
             &format!("export {}", ice_core::appearance::DragEffects::decl(&cfg)),
             "",
+            &format!("export {}", ice_core::appearance::Experiments::decl(&cfg)),
+            "",
             &format!("export {}", ice_core::placement::NotchAnchor::decl(&cfg)),
             "",
             &format!("export {}", ice_core::placement::NotchPlacement::decl(&cfg)),

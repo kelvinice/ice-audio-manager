@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { createNotchController } from '../lib/notch/controller.svelte';
   import { CANVAS_H, CANVAS_W } from '../lib/notch/geometry';
+  import BeatRim from './activities/BeatRim.svelte';
   import ExpandedNotch from './activities/ExpandedNotch.svelte';
   import IdlePill from './activities/IdlePill.svelte';
   import LandingRipple from './activities/LandingRipple.svelte';
@@ -87,6 +88,7 @@
     style:clip-path={ctrl.surfaceShape.clipPath}
     onpointerdown={ctrl.onPointerDown}
     onpointerenter={ctrl.onPointerEnter}
+    onpointermove={ctrl.onPointerMove}
     onpointerleave={ctrl.onPointerLeave}
     onwheel={ctrl.onWheel}
     onauxclick={ctrl.onAuxClick}
@@ -311,6 +313,9 @@
       {/if}
     {/if}
   </svg>
+  {#if ctrl.engineState.settings?.appearance.experiments.beatRim && !ctrl.isExpanded && !ctrl.isInstant && !ctrl.isHibernating && !ctrl.isLifted && ctrl.activeView.kind === 'track'}
+    <BeatRim shape={ctrl.surfaceShape} insetLeft={ctrl.insetLeft} pill={ctrl.pillSize} accent={ctrl.activeAccentCss} />
+  {/if}
   {#if ctrl.placedFlash && ctrl.dragEffects.landingRipple && !ctrl.isInstant}
     {#key ctrl.placedFlashKey}
       <LandingRipple shape={ctrl.surfaceShape} pill={ctrl.pillSize} accent={ctrl.activeAccentCss} />

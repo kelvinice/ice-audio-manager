@@ -40,7 +40,9 @@ use crate::resolve::{DeviceRef, MatchMode, resolve};
 /// v21: `appearance.wavyProgress` (Experimental: the played part of the seek bar is a travelling wave; off).
 /// v22: `lyrics.estimated_word_sync` defaults to on (owner, 2026-11-26: lyrics highlight word by word by default; the
 /// user can switch to row by row with `lyrics.word_highlight = false`), and older files turn it on.
-pub const SCHEMA_VERSION: u32 = 22;
+/// v23: `appearance.volumeButton` (the card's volume is always a button; off) and `appearance.experiments`
+/// (Experimental: beat rim, cover tilt; all off).
+pub const SCHEMA_VERSION: u32 = 23;
 
 /// Allowed per-device lyric delay, in ms (negative = lyrics earlier).
 pub const LYRICS_DELAY_MS: std::ops::RangeInclusive<i32> = -1000..=2000;
@@ -305,6 +307,7 @@ impl Config {
             // `appearance.dragEffects` (all off), and v0–v20 gain `appearance.wavyProgress = false`, all via serde
             // defaults.
             // v0–v21: word-by-word highlight became the default (v22), so the old off-by-default estimate turns on.
+            // v0–v22 gain `appearance.volumeButton = false` and `appearance.experiments` (all off) via serde defaults.
             v => {
                 if v < 22 {
                     cfg.lyrics.estimated_word_sync = true;
@@ -569,6 +572,12 @@ impl Config {
                 fx.carry_glow = carry_glow.unwrap_or(fx.carry_glow);
             }
             Command::SetWavyProgress { enabled } => next.appearance.wavy_progress = *enabled,
+            Command::SetVolumeButton { enabled } => next.appearance.volume_button = *enabled,
+            Command::SetExperiments { beat_rim, cover_tilt } => {
+                let ex = &mut next.appearance.experiments;
+                ex.beat_rim = beat_rim.unwrap_or(ex.beat_rim);
+                ex.cover_tilt = cover_tilt.unwrap_or(ex.cover_tilt);
+            }
             Command::SetLyricsCacheMaxMb { max_mb } => {
                 if !LYRICS_CACHE_MAX_MB.contains(max_mb) {
                     return Err(format!(
@@ -1301,6 +1310,25 @@ estimatedWordSync = false";
         rows.lyrics.estimated_word_sync = false;
         let saved = Config::from_toml(&rows.to_toml()).unwrap();
         assert!(!saved.lyrics.word_highlight && !saved.lyrics.estimated_word_sync, "a v22 file is not migrated again");
+    }
+
+    #[test]
+    fn v22_gains_volume_button_and_experiments_off_and_saves_them() {
+        use crate::appearance::Experiments;
+        let mut config = Config::from_toml("schema_version = 22\n[appearance]\ntheme = 'ice'").unwrap();
+        assert_eq!(config.schema_version, SCHEMA_VERSION);
+        assert!(!config.appearance.volume_button);
+        assert_eq!(config.appearance.experiments, Experiments::default());
+
+        let button = Command::SetVolumeButton { enabled: true };
+        assert_eq!(config.apply_setting(&button, &[]), Ok(true));
+        let set = Command::SetExperiments { beat_rim: Some(true), cover_tilt: None };
+        assert_eq!(config.apply_setting(&set, &[]), Ok(true));
+        assert_eq!(config.apply_setting(&set, &[]), Ok(false));
+        let saved = Config::from_toml(&config.to_toml()).unwrap();
+        assert!(saved.appearance.volume_button);
+        assert!(saved.appearance.experiments.beat_rim && !saved.appearance.experiments.cover_tilt);
+        assert!(saved.view(&[]).appearance.experiments.beat_rim);
     }
 
     #[test]

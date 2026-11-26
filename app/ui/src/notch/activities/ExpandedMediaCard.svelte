@@ -2,6 +2,7 @@
   import type { MediaAction, NowPlaying } from '../../lib/ipc/engine';
   import type { SpringPreset } from '../../lib/ipc/types';
   import AlbumArtTile from './AlbumArtTile.svelte';
+  import CoverTilt from './CoverTilt.svelte';
   import DeviceIcon from './DeviceIcon.svelte';
   import MediaScrubber from './MediaScrubber.svelte';
   import VisualizerBars from './VisualizerBars.svelte';
@@ -19,6 +20,8 @@
     onToggleLyrics?: () => void;
     /** Wavy progress line (`appearance.wavyProgress`, Settings → Appearance). */
     wavyProgress?: boolean;
+    /** Experimental cover tilt (`appearance.experiments.coverTilt`). */
+    coverTilt?: boolean;
     onMediaAction: (action: MediaAction) => void;
   }
 
@@ -33,6 +36,7 @@
     lyricsAvailable = false,
     onToggleLyrics = () => {},
     wavyProgress = false,
+    coverTilt = false,
     onMediaAction,
   }: Props = $props();
 
@@ -41,7 +45,9 @@
 
 <div class="media-card" class:instant>
   <div class="media-head">
-    <AlbumArtTile art={media.art} size={58} {instant} />
+    <CoverTilt enabled={coverTilt} {instant}>
+      <AlbumArtTile art={media.art} size={58} {instant} />
+    </CoverTilt>
     <div class="media-info">
       <div class="title-row">
         <span class="media-title">{media.title || 'Unknown track'}</span>

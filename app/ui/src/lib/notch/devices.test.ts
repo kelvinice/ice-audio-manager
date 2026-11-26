@@ -27,7 +27,7 @@ function saved(name: string, savedId: string, deviceId: string | null = savedId)
 
 function baseSettings(overrides: Partial<SettingsView> = {}): SettingsView {
   return {
-    appearance: { theme: 'ice', preset: 'smooth', idleStyle: 'mini_pill', notchStyle: 'floating', nowPlaying: 'brief', movingBackdrop: true, hibernate: false, hibernateLook: 'plain', hibernateHideFromCapture: true, dragEffects: { landingRipple: false, jellyLanding: false, carryGlow: false }, wavyProgress: false },
+    appearance: { theme: 'ice', preset: 'smooth', idleStyle: 'mini_pill', notchStyle: 'floating', nowPlaying: 'brief', movingBackdrop: true, hibernate: false, hibernateLook: 'plain', hibernateHideFromCapture: true, dragEffects: { landingRipple: false, jellyLanding: false, carryGlow: false }, wavyProgress: false, volumeButton: false, experiments: { beatRim: false, coverTilt: false } },
     performanceProfile: 'instant',
     pinnedMonitor: null,
     notchAnchor: 'top_center',

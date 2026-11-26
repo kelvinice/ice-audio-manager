@@ -94,6 +94,7 @@
           lyricsOpen={lyricsDrawerOpen}
           {lyricsAvailable}
           wavyProgress={settings?.appearance.wavyProgress ?? false}
+          coverTilt={settings?.appearance.experiments.coverTilt ?? false}
           {onToggleLyrics}
           {onMediaAction}
         />

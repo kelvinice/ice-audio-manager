@@ -27,6 +27,16 @@ jellyLanding: boolean,
  */
 carryGlow: boolean, };
 
+export type Experiments = {
+/**
+ * The music pill's rim lights up in the song's colour on each bass kick (from meter frames that already arrive).
+ */
+beatRim: boolean,
+/**
+ * The open card's cover tilts toward the pointer, with a soft glare (pointer events only, no loop).
+ */
+coverTilt: boolean, };
+
 export type NotchAnchor = "top_left" | "top_center" | "top_right" | "bottom_left" | "bottom_center" | "bottom_right";
 
 export type NotchPlacement = "drag_snap" | "fixed";
@@ -58,7 +68,16 @@ dragEffects: DragEffects,
  * Owner, 2026-11-26 (Settings → Appearance): the played part of the card's seek bar is a slowly travelling wave
  * while music plays (flat when paused). Off by default.
  */
-wavyProgress: boolean, };
+wavyProgress: boolean,
+/**
+ * Owner, 2026-11-26: the card's volume is always the speaker + % button that opens the slider, never the inline
+ * slider, so a stray click can't change the volume. Off by default (inline when the chips leave room).
+ */
+volumeButton: boolean,
+/**
+ * Experimental notch looks that are not about drag & drop (owner, 2026-11-26). All off by default.
+ */
+experiments: Experiments, };
 
 export type Flow = "render" | "capture";
 
@@ -343,7 +362,7 @@ media: NowPlaying | null,
  */
 lyrics: LyricsState, };
 
-export type Command = { "type": "switchTo", deviceId: string, roles: RoleSet, } | { "type": "switchBinding", bindingId: string, } | { "type": "togglePair", pairId: string, } | { "type": "cycleFavourites", flow: Flow, step: number, } | { "type": "setVolume", percent: number, } | { "type": "stepVolume", delta: number, } | { "type": "toggleMute" } | { "type": "toggleMicMute" } | { "type": "media", action: MediaAction, } | { "type": "setSpatial", deviceId: string, mode: SpatialMode, } | { "type": "resolveChoice", requestId: number, deviceId: string | null, } | { "type": "refresh" } | { "type": "setTogglePair", pairId: string, primaryId: string, secondaryId: string, hotkey: string | null, roles: RoleSet | null, } | { "type": "removeTogglePair", pairId: string, } | { "type": "setBinding", bindingId: string, deviceId: string, hotkey: string | null, roles: RoleSet | null, } | { "type": "removeBinding", bindingId: string, } | { "type": "setFavourites", flow: Flow, deviceIds: Array<string>, } | { "type": "setDevicePrefs", deviceId: string, spatial: SpatialMode | null, alias: string | null, hidden: boolean | null, } | { "type": "setLyricsDelay", deviceId: string, delayMs: number | null, } | { "type": "setTheme", theme: ThemeKind, } | { "type": "setPreset", preset: SpringPreset, } | { "type": "setIdleStyle", style: IdleStyle, } | { "type": "setNotchStyle", style: NotchStyle, } | { "type": "setNowPlayingPill", mode: NowPlayingPill, } | { "type": "setMovingBackdrop", enabled: boolean, } | { "type": "setHibernate", enabled: boolean, } | { "type": "setHibernateLook", look: HibernateLook, } | { "type": "setHibernateHideFromCapture", enabled: boolean, } | { "type": "setPerformanceProfile", profile: PerformanceProfile, } | { "type": "setNotchAnchor", anchor: NotchAnchor, } | { "type": "setNotchPosition", anchor: NotchAnchor, xRatio: number | null, } | { "type": "setNotchPlacement", placement: NotchPlacement, } | { "type": "setPinnedMonitor", displayPath: string, } | { "type": "setKnobGestures", enabled: boolean, } | { "type": "setShowDisconnected", enabled: boolean, } | { "type": "setIdleLinger", secs: number, } | { "type": "setShowNotchHotkey", hotkey: string | null, } | { "type": "setMusicService", service: MusicServiceId, enabled: boolean, } | { "type": "setLyricsEnabled", enabled: boolean, } | { "type": "setLyricsOnlineLookup", enabled: boolean, } | { "type": "setLyricsDisplay", showOnPill: boolean | null, showOnCard: boolean | null, wordHighlight: boolean | null, romaji: boolean | null, } | { "type": "setLyricsEstimatedWordSync", enabled: boolean, } | { "type": "setDragEffects", landingRipple: boolean | null, jellyLanding: boolean | null, carryGlow: boolean | null, } | { "type": "setWavyProgress", enabled: boolean, } | { "type": "setLyricsCacheMaxMb", maxMb: number, } | { "type": "disableAllNetworkFeatures" } | { "type": "setVisualizerSpectrum", enabled: boolean, } | { "type": "setCallMode", enabled: boolean | null, apps: Array<string> | null, duckPercent: number | null, holdSecs: number | null, sensitivity: CallSensitivity | null, } | { "type": "setDefaultRoles", roles: RoleSet, };
+export type Command = { "type": "switchTo", deviceId: string, roles: RoleSet, } | { "type": "switchBinding", bindingId: string, } | { "type": "togglePair", pairId: string, } | { "type": "cycleFavourites", flow: Flow, step: number, } | { "type": "setVolume", percent: number, } | { "type": "stepVolume", delta: number, } | { "type": "toggleMute" } | { "type": "toggleMicMute" } | { "type": "media", action: MediaAction, } | { "type": "setSpatial", deviceId: string, mode: SpatialMode, } | { "type": "resolveChoice", requestId: number, deviceId: string | null, } | { "type": "refresh" } | { "type": "setTogglePair", pairId: string, primaryId: string, secondaryId: string, hotkey: string | null, roles: RoleSet | null, } | { "type": "removeTogglePair", pairId: string, } | { "type": "setBinding", bindingId: string, deviceId: string, hotkey: string | null, roles: RoleSet | null, } | { "type": "removeBinding", bindingId: string, } | { "type": "setFavourites", flow: Flow, deviceIds: Array<string>, } | { "type": "setDevicePrefs", deviceId: string, spatial: SpatialMode | null, alias: string | null, hidden: boolean | null, } | { "type": "setLyricsDelay", deviceId: string, delayMs: number | null, } | { "type": "setTheme", theme: ThemeKind, } | { "type": "setPreset", preset: SpringPreset, } | { "type": "setIdleStyle", style: IdleStyle, } | { "type": "setNotchStyle", style: NotchStyle, } | { "type": "setNowPlayingPill", mode: NowPlayingPill, } | { "type": "setMovingBackdrop", enabled: boolean, } | { "type": "setHibernate", enabled: boolean, } | { "type": "setHibernateLook", look: HibernateLook, } | { "type": "setHibernateHideFromCapture", enabled: boolean, } | { "type": "setPerformanceProfile", profile: PerformanceProfile, } | { "type": "setNotchAnchor", anchor: NotchAnchor, } | { "type": "setNotchPosition", anchor: NotchAnchor, xRatio: number | null, } | { "type": "setNotchPlacement", placement: NotchPlacement, } | { "type": "setPinnedMonitor", displayPath: string, } | { "type": "setKnobGestures", enabled: boolean, } | { "type": "setShowDisconnected", enabled: boolean, } | { "type": "setIdleLinger", secs: number, } | { "type": "setShowNotchHotkey", hotkey: string | null, } | { "type": "setMusicService", service: MusicServiceId, enabled: boolean, } | { "type": "setLyricsEnabled", enabled: boolean, } | { "type": "setLyricsOnlineLookup", enabled: boolean, } | { "type": "setLyricsDisplay", showOnPill: boolean | null, showOnCard: boolean | null, wordHighlight: boolean | null, romaji: boolean | null, } | { "type": "setLyricsEstimatedWordSync", enabled: boolean, } | { "type": "setDragEffects", landingRipple: boolean | null, jellyLanding: boolean | null, carryGlow: boolean | null, } | { "type": "setWavyProgress", enabled: boolean, } | { "type": "setVolumeButton", enabled: boolean, } | { "type": "setExperiments", beatRim: boolean | null, coverTilt: boolean | null, } | { "type": "setLyricsCacheMaxMb", maxMb: number, } | { "type": "disableAllNetworkFeatures" } | { "type": "setVisualizerSpectrum", enabled: boolean, } | { "type": "setCallMode", enabled: boolean | null, apps: Array<string> | null, duckPercent: number | null, holdSecs: number | null, sensitivity: CallSensitivity | null, } | { "type": "setDefaultRoles", roles: RoleSet, };
 
 export type Notice = { "type": "notConnected", name: string, } | { "type": "chooseDevice", requestId: number, name: string, candidates: Array<DeviceSummary>, } | { "type": "switchFailed", name: string, failedRoles: Array<Role>, } | { "type": "spatialUnavailable", name: string, mode: SpatialMode, reason: string, } | { "type": "hotkeyConflict", bindingId: string, keys: string, } | { "type": "configReplaced", backup: string, error: string, } | { "type": "configInvalid", error: string, } | { "type": "configSaveFailed", error: string, } | { "type": "settingRejected", error: string, };
 

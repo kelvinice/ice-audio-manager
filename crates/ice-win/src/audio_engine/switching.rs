@@ -98,6 +98,8 @@ impl Worker {
             | Command::SetLyricsEstimatedWordSync { .. }
             | Command::SetDragEffects { .. }
             | Command::SetWavyProgress { .. }
+            | Command::SetVolumeButton { .. }
+            | Command::SetExperiments { .. }
             | Command::SetLyricsCacheMaxMb { .. }
             | Command::DisableAllNetworkFeatures
             | Command::SetVisualizerSpectrum { .. }

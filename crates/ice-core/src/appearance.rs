@@ -100,6 +100,11 @@ pub struct Appearance {
     /// Owner, 2026-11-26 (Settings → Appearance): the played part of the card's seek bar is a slowly travelling wave
     /// while music plays (flat when paused). Off by default.
     pub wavy_progress: bool,
+    /// Owner, 2026-11-26: the card's volume is always the speaker + % button that opens the slider, never the inline
+    /// slider, so a stray click can't change the volume. Off by default (inline when the chips leave room).
+    pub volume_button: bool,
+    /// Experimental notch looks that are not about drag & drop (owner, 2026-11-26). All off by default.
+    pub experiments: Experiments,
 }
 
 /// Drag & drop effects (WebView notch only; the native pill keeps the plain lift and rim flash).
@@ -113,6 +118,17 @@ pub struct DragEffects {
     pub jelly_landing: bool,
     /// Experimental: the carried pill glows in the accent colour.
     pub carry_glow: bool,
+}
+
+/// Experimental notch looks (WebView notch only). Each runs nothing while off.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(TS))]
+#[serde(default, deny_unknown_fields, rename_all = "camelCase")]
+pub struct Experiments {
+    /// The music pill's rim lights up in the song's colour on each bass kick (from meter frames that already arrive).
+    pub beat_rim: bool,
+    /// The open card's cover tilts toward the pointer, with a soft glare (pointer events only, no loop).
+    pub cover_tilt: bool,
 }
 
 impl Appearance {
@@ -148,6 +164,8 @@ impl Default for Appearance {
             hibernate_hide_from_capture: true,
             drag_effects: DragEffects::default(),
             wavy_progress: false,
+            volume_button: false,
+            experiments: Experiments::default(),
         }
     }
 }
