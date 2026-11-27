@@ -19,7 +19,7 @@ integration and autostart. All `unsafe` stays here. No hooks into other processe
 | `proc_metrics.rs` | `sample_pids`, `cpu_percent_between`, `TreeSnapshot`: Private Bytes, private working set, CPU for the host + WebView2 processes |
 | `desktop.rs` | `InstanceGuard::acquire` (single instance), `finish_tray_menu`, `notify_tray` (tray balloon by GUID) |
 | `autostart.rs` | `Autostart`: per-user launch at sign-in (HKCU) |
-| `music_service.rs` | `open(MusicServiceId)`: on user click, launches the installed Spotify / YouTube Music app (Store app id, `spotify:` protocol, or Chrome/Edge PWA id) and falls back to the official website. STA COM, no network by the app itself |
+| `music_service.rs` | `open(MusicServiceId)`: refuses `Pandora` (the shell opens it through `pandora.rs`); on user click, launches the installed Spotify / YouTube Music app (Store app id, `spotify:` protocol, or Chrome/Edge PWA id) and falls back to the official website. STA COM, no network by the app itself |
 
 ## How it works
 - **Gaming mode:** the shell starts one `FullscreenWatcher`. `Changed` / `DisplaysChanged` → `placement::reconcile` (see [app-shell](app-shell.md)).
@@ -47,3 +47,4 @@ and `examples/fullscreen_spike.rs`.
 - 2026-11-25 Claude: `move_top_center` → `notch_origin` / `move_notch` (D-20 anchors; work area, so a top taskbar is no longer covered).
 - 2026-11-25 Claude: D-20 drag & snap helpers in `overlay_win.rs` (`canvas_origin`, `move_window_async`, `primary_button_down`, `escape_down`, `drag_threshold`) and `drag_ghosts.rs` (`DragGhosts` layered slot overlays on the drag thread).
 - 2026-11-25 Gemini: removed `drag_ghosts.rs` (markless drag); `overlay_win::{notch_origin_at, canvas_origin, move_notch}` accept `(anchor, x_ratio, style)` with flush bottom support for `NotchStyle::Nook`.
+- 2026-11-27 Claude: `music_service::open` refuses `MusicServiceId::Pandora` (no shell app; the app shell opens it through the companion bridge).

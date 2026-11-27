@@ -44,7 +44,8 @@ use crate::widget::NotchWidget;
 /// v23: `appearance.volumeButton` (the card's volume is always a button; off) and `appearance.experiments`
 /// (Experimental: beat rim, cover tilt; all off).
 /// v24: `[widget]` (Experimental notch widget: off, default button order).
-pub const SCHEMA_VERSION: u32 = 24;
+/// v25: `music_services.pandora` (a launch button for the experimental Pandora player; off).
+pub const SCHEMA_VERSION: u32 = 25;
 
 /// Allowed per-device lyric delay, in ms (negative = lyrics earlier).
 pub const LYRICS_DELAY_MS: std::ops::RangeInclusive<i32> = -1000..=2000;
@@ -315,6 +316,7 @@ impl Config {
             // v0–v21: word-by-word highlight became the default (v22), so the old off-by-default estimate turns on.
             // v0–v22 gain `appearance.volumeButton = false` and `appearance.experiments` (all off) via serde defaults.
             // v0–v23 gain `[widget]` (off, default buttons) via serde defaults.
+            // v0–v24 gain `music_services.pandora = false` via serde defaults.
             v => {
                 if v < 22 {
                     cfg.lyrics.estimated_word_sync = true;
@@ -973,13 +975,19 @@ mod tests {
         let mut config = Config::from_toml("schema_version = 6\nidle_linger_secs = 30").unwrap();
         assert_eq!(config.schema_version, SCHEMA_VERSION);
         assert_eq!(config.idle_linger_secs, 30, "v6 settings are kept");
-        assert_eq!(config.view(&[]).music_services, MusicServices { spotify: true, youtube_music: true });
+        assert_eq!(
+            config.view(&[]).music_services,
+            MusicServices { spotify: true, youtube_music: true, pandora: false }
+        );
 
         let off = Command::SetMusicService { service: MusicServiceId::YoutubeMusic, enabled: false };
         assert_eq!(config.apply_setting(&off, &[]), Ok(true));
         assert_eq!(config.apply_setting(&off, &[]), Ok(false), "already off");
         let saved = Config::from_toml(&config.to_toml()).unwrap();
-        assert_eq!(saved.view(&[]).music_services, MusicServices { spotify: true, youtube_music: false });
+        assert_eq!(
+            saved.view(&[]).music_services,
+            MusicServices { spotify: true, youtube_music: false, pandora: false }
+        );
     }
 
     #[test]
@@ -1366,6 +1374,22 @@ estimatedWordSync = false";
             Command::SetNotchWidget { enabled: None, buttons: Some(vec![WidgetButton::Mic, WidgetButton::Mic]) };
         assert!(config.apply_setting(&repeat, &[]).is_err());
         assert!(Config::from_toml("[widget]\nbuttons = ['mic', 'mic']").is_err(), "a hand-edited repeat is rejected");
+    }
+
+    #[test]
+    fn v24_gains_the_pandora_service_off_and_saves_it() {
+        use crate::media::MusicServiceId;
+        let mut config = Config::from_toml("schema_version = 24\n[music_services]\nspotify = false").unwrap();
+        assert_eq!(config.schema_version, SCHEMA_VERSION);
+        assert!(
+            !config.music_services.spotify && config.music_services.youtube_music && !config.music_services.pandora
+        );
+
+        let on = Command::SetMusicService { service: MusicServiceId::Pandora, enabled: true };
+        assert_eq!(config.apply_setting(&on, &[]), Ok(true));
+        let saved = Config::from_toml(&config.to_toml()).unwrap();
+        assert!(saved.music_services.pandora);
+        assert!(saved.view(&[]).music_services.pandora);
     }
 
     #[test]

@@ -3,7 +3,7 @@
  * "Chrome"…). Pure; no network. `appId` is GSMTC's source id: an exe name (`Spotify.exe`) or an AppUserModelID
  * (`Chrome._crx_…`, `Microsoft.ZuneMusic_8wekyb3d8bbwe!Microsoft.ZuneMusic`).
  */
-export type MediaSourceIcon = 'spotify' | 'youtube-music' | 'music';
+export type MediaSourceIcon = 'spotify' | 'youtube-music' | 'pandora' | 'music';
 
 export interface MediaSource {
   label: string;
@@ -12,6 +12,7 @@ export interface MediaSource {
 
 const KNOWN: { test: RegExp; source: MediaSource }[] = [
   { test: /spotify/i, source: { label: 'Spotify', icon: 'spotify' } },
+  { test: /pandora/i, source: { label: 'Pandora', icon: 'pandora' } },
   { test: /music\.youtube|youtube ?music|ytm/i, source: { label: 'YouTube Music', icon: 'youtube-music' } },
   { test: /youtube/i, source: { label: 'YouTube', icon: 'youtube-music' } },
   { test: /zunemusic|media ?player/i, source: { label: 'Media Player', icon: 'music' } },

@@ -306,8 +306,8 @@ export function computeArtBackdrop(
 }
 
 /**
- * Builds enabled D-22 "Music services" quick-launch items. Config `[music_services]` (Settings → Activities);
- * both on by default, and while settings haven't loaded yet.
+ * Builds enabled D-22 "Music services" quick-launch items. Config `[music_services]` (Settings → Activities):
+ * Spotify and YouTube Music on by default (and while settings haven't loaded yet); the experimental Pandora player off.
  */
 export function resolveMusicServices(
   settings: SettingsView | null | undefined,
@@ -315,6 +315,7 @@ export function resolveMusicServices(
 ): MusicServiceItem[] {
   const spotifyEnabled = settings?.musicServices.spotify ?? true;
   const youtubeMusicEnabled = settings?.musicServices.youtubeMusic ?? true;
+  const pandoraEnabled = settings?.musicServices.pandora ?? false;
 
   const activeApp = isMediaActive(media) ? media.appId : '';
   const items: MusicServiceItem[] = [];
@@ -334,5 +335,18 @@ export function resolveMusicServices(
       active: /youtube|ytm/i.test(activeApp),
     });
   }
+  if (pandoraEnabled) {
+    items.push({ id: 'pandora', label: 'Pandora', shortLabel: 'Pandora', active: /pandora/i.test(activeApp) });
+  }
   return items;
+}
+
+/**
+ * The services that fit in `room` slots of the Floating side rail (five 24 px buttons in all), the playing one first so
+ * it never drops out. The Edge Nook toolbar and the empty card are horizontal and show them all.
+ */
+export function fitRailServices(services: MusicServiceItem[], room: number): MusicServiceItem[] {
+  if (services.length <= room) return services;
+  const ordered = [...services.filter((s) => s.active), ...services.filter((s) => !s.active)];
+  return ordered.slice(0, Math.max(0, room));
 }

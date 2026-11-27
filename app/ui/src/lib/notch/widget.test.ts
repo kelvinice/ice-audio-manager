@@ -6,7 +6,6 @@ import {
   WIDGET_BUTTONS,
   addWidgetButton,
   pandoraTitle,
-  railFitsServices,
   visibleWidgetButtons,
 } from './widget.ts';
 
@@ -30,11 +29,6 @@ test('adding a button never repeats it or passes the limit (twin of ice_core::wi
   const full = ALL_WIDGET_BUTTONS.slice(0, MAX_WIDGET_BUTTONS);
   assert.equal(addWidgetButton(full, 'settings'), full);
   assert.deepEqual(addWidgetButton(['pin'], 'call_mode'), ['pin', 'call_mode']);
-});
-
-test('music services join the rail only while five buttons are not exceeded', () => {
-  assert.equal(railFitsServices(3, 2), true);
-  assert.equal(railFitsServices(4, 2), false);
 });
 
 test('every button has a label, and Pandora state shows in the tooltip', () => {

@@ -87,7 +87,9 @@ one out. The protocol types are shared from `ice_core::companion`.
 | `show` | Brings its window to the front. |
 | `recognize` | Listens to the PC's playback (WASAPI loopback, never the microphone), looks the song up, saves it in the recognition history, and answers `{ title, artist, album }`. One at a time, shared with the Recognize view. |
 
-In Ice, turn on **Settings → Experimental → Notch widget** and add **Recognise song** or **Open Pandora**. Pressing one
+In Ice, turn on **Settings → Activities → Music services → Pandora** for a Pandora launch button next to Spotify
+and YouTube Music (it shows Pandora, starting it if needed). Or turn on **Settings → Experimental → Notch widget**
+and add **Recognise song** or **Open Pandora**. Pressing one
 of these buttons starts Pandora if needed, sends the request on a short `ice-pandora` thread, and pulses the button
 while it waits. The answer then appears as a tray notification and in the button's tooltip. Ice never touches the
 network for this: Pandora does the lookup.

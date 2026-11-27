@@ -57,8 +57,8 @@
     });
   }
 
-  // D-22: one switch per supported music service (owner, 2026-11-23: both on by default).
-  const services: { id: MusicServiceId; key: 'spotify' | 'youtubeMusic'; title: string; description: string }[] = [
+  // D-22: one switch per supported music service (owner, 2026-11-23: both on by default; 2026-11-27: Pandora, off).
+  const services: { id: MusicServiceId; key: 'spotify' | 'youtubeMusic' | 'pandora'; title: string; description: string }[] = [
     {
       id: 'spotify',
       key: 'spotify',
@@ -70,6 +70,12 @@
       key: 'youtubeMusic',
       title: 'YouTube Music',
       description: 'A button that opens the installed YouTube Music app, or music.youtube.com.',
+    },
+    {
+      id: 'pandora',
+      key: 'pandora',
+      title: 'Pandora',
+      description: 'A button that opens the Pandora player and starts it if needed (experimental; run Pandora once so Ice can find it).',
     },
   ];
 </script>

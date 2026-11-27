@@ -129,9 +129,9 @@ export type VolumeState = {
  */
 percent: number, muted: boolean, };
 
-export type MusicServiceId = "spotify" | "youtube_music";
+export type MusicServiceId = "spotify" | "youtube_music" | "pandora";
 
-export type MusicServices = { spotify: boolean, youtubeMusic: boolean, };
+export type MusicServices = { spotify: boolean, youtubeMusic: boolean, pandora: boolean, };
 
 export type LyricsConfig = {
 /**

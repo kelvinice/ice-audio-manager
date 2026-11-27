@@ -86,7 +86,7 @@ function sampleSnapshot(): EngineSnapshot {
       knobGestures: false,
       showDisconnected: false,
       idleLingerSecs: 15,
-      musicServices: { spotify: true, youtubeMusic: true },
+      musicServices: { spotify: true, youtubeMusic: true, pandora: false },
       lyrics: { enabled: false, onlineLookup: false, showOnPill: true, showOnCard: true, wordHighlight: true, estimatedWordSync: false, romaji: true, cacheMaxMb: 50 },
       visualizerSpectrum: true,
 

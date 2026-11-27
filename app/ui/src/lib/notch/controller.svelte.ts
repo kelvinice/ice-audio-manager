@@ -914,7 +914,7 @@ export class NotchController {
     this.scheduler.markInteraction(Date.now());
     void invoke('pandora_action', { action }).catch(() => {});
   };
-  openMusicService =(service: MusicServiceId): void => {
+  openMusicService = (service: MusicServiceId): void => {
     this.scheduler.markInteraction(Date.now());
     this.scheduleNextTick();
     void invoke('open_music_service', { service }).catch(() => {});

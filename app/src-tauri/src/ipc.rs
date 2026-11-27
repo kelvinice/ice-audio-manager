@@ -99,9 +99,15 @@ pub enum NotchDelta {
 pub(super) async fn open_music_service(
     window: tauri::WebviewWindow,
     service: ice_core::media::MusicServiceId,
+    app: tauri::AppHandle,
+    state: tauri::State<'_, std::sync::Arc<super::SharedRuntime>>,
 ) -> Result<(), String> {
     if window.label() != "notch" {
         return Err("Only the notch can launch music services".into());
+    }
+    if service == ice_core::media::MusicServiceId::Pandora {
+        // Not a shell app: find, start and show it through the companion bridge (its own `ice-pandora` thread).
+        return super::pandora::start(&app, &state, PandoraAction::Open);
     }
     tauri::async_runtime::spawn_blocking(move || ice_win::music_service::open(service))
         .await

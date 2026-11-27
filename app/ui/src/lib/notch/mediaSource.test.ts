@@ -4,6 +4,7 @@ import { mediaSource } from './mediaSource.ts';
 
 test('known players get a friendly name and icon', () => {
   assert.deepEqual(mediaSource('Spotify.exe'), { label: 'Spotify', icon: 'spotify' });
+  assert.deepEqual(mediaSource('pandora.exe'), { label: 'Pandora', icon: 'pandora' });
   assert.equal(mediaSource('music.youtube.com-Default').label, 'YouTube Music');
   assert.equal(mediaSource('YouTube Music').icon, 'youtube-music');
   assert.equal(mediaSource('msedge.exe').label, 'Edge');

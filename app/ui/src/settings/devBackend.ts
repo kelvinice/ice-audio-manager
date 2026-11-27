@@ -65,7 +65,7 @@ function initialSnapshot(): EngineSnapshot {
       knobGestures: true,
       showDisconnected: false,
       idleLingerSecs: 15,
-      musicServices: { spotify: true, youtubeMusic: true },
+      musicServices: { spotify: true, youtubeMusic: true, pandora: false },
       lyrics: {
         enabled: false,
         onlineLookup: false,
@@ -142,7 +142,11 @@ function applyCommand(s: EngineSnapshot, c: Command): void {
     case 'setKnobGestures': st.knobGestures = c.enabled; break;
     case 'setShowDisconnected': st.showDisconnected = c.enabled; break;
     case 'setIdleLinger': st.idleLingerSecs = c.secs; break;
-    case 'setMusicService': st.musicServices = { ...st.musicServices, [c.service === 'spotify' ? 'spotify' : 'youtubeMusic']: c.enabled }; break;
+    case 'setMusicService': {
+      const key = c.service === 'youtube_music' ? 'youtubeMusic' : c.service;
+      st.musicServices = { ...st.musicServices, [key]: c.enabled };
+      break;
+    }
     case 'setLyricsEnabled': st.lyrics = { ...st.lyrics, enabled: c.enabled }; break;
     case 'setLyricsOnlineLookup': st.lyrics = { ...st.lyrics, onlineLookup: c.enabled }; break;
     case 'setLyricsDisplay':

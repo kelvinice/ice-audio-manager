@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { MusicServiceId, MusicServiceItem } from '../../lib/notch/backdrop';
-  import { railFitsServices, type WidgetBinding } from '../../lib/notch/widget';
+  import { fitRailServices } from '../../lib/notch/backdrop';
+  import { MAX_WIDGET_BUTTONS, type WidgetBinding } from '../../lib/notch/widget';
   import DeviceIcon from './DeviceIcon.svelte';
   import MusicServicesWidget from './MusicServicesWidget.svelte';
   import WidgetButtons from './WidgetButtons.svelte';
@@ -32,8 +33,9 @@
     widget = null,
   }: Props = $props();
 
-  const servicesShown = $derived(
-    showServices && services.length > 0 && (!widget || railFitsServices(widget.buttons.length, services.length)),
+  // Five 24 px buttons fill the 140 px rail: pin, mic and Settings leave two for services; the widget leaves the rest.
+  const railServices = $derived(
+    showServices ? fitRailServices(services, widget ? MAX_WIDGET_BUTTONS - widget.buttons.length : 2) : [],
   );
 </script>
 
@@ -43,8 +45,8 @@
     <div class="group">
       <WidgetButtons {...widget} variant="rail" />
     </div>
-    {#if servicesShown}
-      <MusicServicesWidget {services} variant="rail" {onOpenService} />
+    {#if railServices.length > 0}
+      <MusicServicesWidget services={railServices} variant="rail" {onOpenService} />
     {/if}
   {:else}
   <div class="group">
@@ -72,12 +74,13 @@
     </button>
   </div>
 
-  {#if servicesShown}
-    <MusicServicesWidget {services} variant="rail" {onOpenService} />
+  {#if railServices.length > 0}
+    <MusicServicesWidget services={railServices} variant="rail" {onOpenService} />
   {/if}
 
-  <!-- Five buttons at most (pin, mic, 2 services, settings): 5 × 24 px fits the 140 px rail. The lyrics toggle lives
-       in the media card's transport row (2026-11-24: a sixth button pushed Settings off the bottom). -->
+  <!-- Five buttons at most (pin, mic, 2 services, settings): 5 × 24 px fits the 140 px rail, so a third service shows
+       only while it plays (`fitRailServices`). The lyrics toggle lives in the media card's transport row (2026-11-24:
+       a sixth button pushed Settings off the bottom). -->
   <button class="rail-btn" type="button" title="Settings" aria-label="Open Settings" onclick={onOpenSettings}>
     <DeviceIcon kind="settings" size={13} />
   </button>

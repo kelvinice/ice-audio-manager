@@ -18,13 +18,18 @@ fn matches_app(service: MusicServiceId, id: &str) -> bool {
         }
         MusicServiceId::Spotify => "_crx_pjibgclleladliembfgfagdaldikeohf",
         MusicServiceId::YoutubeMusic => "_crx_cinhimbnkkaeohfgghhklpknlkffjgod",
+        MusicServiceId::Pandora => return false,
     };
     // Browser prefix, app identity, then optional profile suffix.
     id.split('.').nth(1).is_some_and(|part| part.eq_ignore_ascii_case(pwa))
 }
 
 /// Discover and open the installed app on user request, with the official website as fallback.
+/// Pandora is not a shell app: the app shell opens it through its companion bridge, so it is refused here.
 pub fn open(service: MusicServiceId) -> Result<()> {
+    if service == MusicServiceId::Pandora {
+        return Err(windows::core::Error::from(windows::Win32::Foundation::E_INVALIDARG));
+    }
     let _com = ComGuard::init_sta()?;
     if service == MusicServiceId::Spotify && spotify_protocol_available() && open_uri(w!("spotify:")).is_ok() {
         return Ok(());
@@ -35,6 +40,7 @@ pub fn open(service: MusicServiceId) -> Result<()> {
     let url = match service {
         MusicServiceId::Spotify => w!("https://open.spotify.com/"),
         MusicServiceId::YoutubeMusic => w!("https://music.youtube.com/"),
+        MusicServiceId::Pandora => return Err(windows::core::Error::from(windows::Win32::Foundation::E_INVALIDARG)),
     };
     open_uri(url)
 }

@@ -69,11 +69,6 @@ export function visibleWidgetButtons(widget: NotchWidget | undefined, lyricsTogg
   return widget.buttons.filter((b) => b !== 'lyrics' || lyricsToggle).slice(0, MAX_WIDGET_BUTTONS);
 }
 
-/** The Floating rail fits five 24 px buttons; music-service icons join the widget only while they still fit. */
-export function railFitsServices(widgetCount: number, serviceCount: number): boolean {
-  return widgetCount + serviceCount <= MAX_WIDGET_BUTTONS;
-}
-
 /** Adds `button` at the end, unless it is already there or the widget is full. */
 export function addWidgetButton(list: WidgetButton[], button: WidgetButton): WidgetButton[] {
   if (list.includes(button) || list.length >= MAX_WIDGET_BUTTONS) return list;

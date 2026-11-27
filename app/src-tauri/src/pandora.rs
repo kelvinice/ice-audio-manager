@@ -59,7 +59,7 @@ pub(super) fn pandora_action(
     start(&app, &state, action)
 }
 
-fn start(app: &AppHandle, state: &Arc<SharedRuntime>, action: PandoraAction) -> Result<(), String> {
+pub(super) fn start(app: &AppHandle, state: &Arc<SharedRuntime>, action: PandoraAction) -> Result<(), String> {
     if BUSY.swap(true, Ordering::AcqRel) {
         return Err("Pandora is still busy".into());
     }

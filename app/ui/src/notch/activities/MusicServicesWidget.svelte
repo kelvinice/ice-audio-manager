@@ -10,6 +10,12 @@
   }
 
   let { services, variant, onOpenService }: Props = $props();
+
+  const SERVICE_ICON: Record<MusicServiceId, 'spotify' | 'youtube-music' | 'pandora'> = {
+    spotify: 'spotify',
+    youtube_music: 'youtube-music',
+    pandora: 'pandora',
+  };
 </script>
 
 {#if services.length > 0}
@@ -23,7 +29,7 @@
         aria-label={`Open ${svc.label}`}
         onclick={() => onOpenService(svc.id)}
       >
-        <DeviceIcon kind={svc.id === 'spotify' ? 'spotify' : 'youtube-music'} size={variant === 'rail' ? 14 : 12} />
+        <DeviceIcon kind={SERVICE_ICON[svc.id]} size={variant === 'rail' ? 14 : 12} />
         {#if variant === 'launch'}
           <span>{svc.label}</span>
         {/if}

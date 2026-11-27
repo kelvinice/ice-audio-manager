@@ -15,20 +15,25 @@ use ts_rs::TS;
 pub enum MusicServiceId {
     Spotify,
     YoutubeMusic,
+    /// The experimental Pandora player (owner, 2026-11-27). The shell opens it through the companion bridge
+    /// (`app/src-tauri/src/pandora.rs`), not the Windows app launcher.
+    Pandora,
 }
 
-/// D-22: which music services get a launch button in the notch. Both on by default (owner).
+/// D-22: which music services get a launch button in the notch. Spotify and YouTube Music on by default (owner);
+/// Pandora (experimental companion) off.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "ts", derive(TS))]
 #[serde(default, deny_unknown_fields, rename_all = "camelCase")]
 pub struct MusicServices {
     pub spotify: bool,
     pub youtube_music: bool,
+    pub pandora: bool,
 }
 
 impl Default for MusicServices {
     fn default() -> Self {
-        Self { spotify: true, youtube_music: true }
+        Self { spotify: true, youtube_music: true, pandora: false }
     }
 }
 
@@ -37,6 +42,7 @@ impl MusicServices {
         match service {
             MusicServiceId::Spotify => self.spotify = enabled,
             MusicServiceId::YoutubeMusic => self.youtube_music = enabled,
+            MusicServiceId::Pandora => self.pandora = enabled,
         }
     }
 }

@@ -9,6 +9,7 @@ import {
   contrastRatio,
   relativeLuminance,
   resolveAmbientMotionState,
+  fitRailServices,
   resolveMusicServices,
   WASH_MAX_LUMINANCE,
 } from './backdrop.ts';
@@ -38,7 +39,7 @@ const baseSettings: SettingsView = {
   knobGestures: true,
   showDisconnected: true,
   idleLingerSecs: 15,
-  musicServices: { spotify: true, youtubeMusic: true },
+  musicServices: { spotify: true, youtubeMusic: true, pandora: false },
   lyrics: { enabled: false, onlineLookup: false, showOnPill: true, showOnCard: true, wordHighlight: true, estimatedWordSync: false, romaji: true, cacheMaxMb: 50 },
   visualizerSpectrum: true,
 
@@ -139,7 +140,7 @@ test('resolveMusicServices enables Spotify and YouTube Music by default and trac
   assert.equal(whileSpotify[1].active, false);
 
   const withYtmDisabled = resolveMusicServices(
-    { ...baseSettings, musicServices: { spotify: true, youtubeMusic: false } },
+    { ...baseSettings, musicServices: { spotify: true, youtubeMusic: false, pandora: false } },
     { ...playingSpotify, appId: 'chrome.exe' },
   );
   assert.deepEqual(
@@ -245,4 +246,42 @@ test('the wash follows the cover: only its own hues, and greys stay grey', () =>
     const { rgb } = parseRgba(css);
     assert.ok(Math.max(rgb.r, rgb.g, rgb.b) - Math.min(rgb.r, rgb.g, rgb.b) <= 6, `grey stays grey: ${css}`);
   }
+});
+
+test('Pandora is an opt-in service that lights up while it plays', () => {
+  const withPandora = { ...baseSettings, musicServices: { spotify: true, youtubeMusic: true, pandora: true } };
+  const playingPandora: NowPlaying = {
+    appId: 'pandora.exe',
+    title: 'Canopy',
+    artist: 'Auralis Sessions',
+    album: '',
+    status: 'playing',
+    positionMs: null,
+    durationMs: null,
+    art: null,
+  };
+  const items = resolveMusicServices(withPandora, playingPandora);
+  assert.deepEqual(
+    items.map((s) => [s.id, s.active]),
+    [
+      ['spotify', false],
+      ['youtube_music', false],
+      ['pandora', true],
+    ],
+  );
+  assert.ok(resolveMusicServices(baseSettings, playingPandora).every((s) => s.id !== 'pandora'), 'off by default');
+});
+
+test('fitRailServices keeps the playing service when the rail is short of room', () => {
+  const items = resolveMusicServices(
+    { ...baseSettings, musicServices: { spotify: true, youtubeMusic: true, pandora: true } },
+    null,
+  ).map((s) => (s.id === 'pandora' ? { ...s, active: true } : s));
+  assert.deepEqual(
+    fitRailServices(items, 2).map((s) => s.id),
+    ['pandora', 'spotify'],
+  );
+  assert.equal(fitRailServices(items, 3), items, 'unchanged when everything fits');
+  assert.deepEqual(fitRailServices(items, 0), []);
+  assert.deepEqual(fitRailServices(items, -1), []);
 });
