@@ -10,7 +10,7 @@ Pandora is a native Windows desktop music player inspired by **Vivi Music**, bui
 
 | Capability | Vivi Music (Android / Compose DE) | Pandora Prototype (Native Windows) |
 |---|---|---|
-| **Dynamic Material You** | Album-art palette extraction shifts app theme | Canvas palette extractor updates `--p-accent`, `--p-glow-*`, and surface tints live |
+| **Dynamic Material You** | Album-art palette extraction shifts app theme | Canvas palette extractor feeds the Now Playing backdrop; with artwork accents on (off by default) it also drives `--p-accent`, `--p-glow-*`, and surface tints |
 | **Animated Canvas** | Apple Music-style fluid cover backdrop | Animated multi-blob GPU-blurred canvas backdrop + live FFT spectrum in Now Playing |
 | **Catalog & Streaming** | YouTube / YouTube Music InnerTube (ad-free) | Clean-room InnerTube (`search`, `browse` Home, `next` Up Next radio, `ANDROID_VR`/`IOS`/`ANDROID_MUSIC` + `yt-dlp` fallback) routed via local `127.0.0.1` Range proxy |
 | **Audio Tweaks & EQ** | Equalizer, Audio Normalization, Skip Silence | Web Audio DSP pipeline: 10-band Graphic EQ (`32 Hz–16 kHz`, 7 presets), **AutoEq `ParametricEQ.txt` import** (peaking/shelf/pass `BiquadFilterNode` + preamp), `DynamicsCompressor` normalization, RMS-gated Skip Silence, playback speed, countdown + **End-of-Track** sleep timer |
@@ -107,7 +107,8 @@ before.
 ## 3. Building & Running
 
 In **Settings → Appearance**, choose Midnight, Ice, Daylight, Ember or Use Windows. The last option follows Windows
-when its appearance changes. Album artwork accents can be turned on for any theme. Pandora stores both choices
+when its appearance changes. Buttons keep the theme's colour; Album artwork accents (off by default) lets them take the
+playing cover's colour on any theme. Pandora stores both choices
 in the local library and restores them on launch. Playback, Ice Audio and Storage have separate settings sections.
 
 All commands run from **PowerShell** (not Git Bash, so MSVC `link.exe` is used):

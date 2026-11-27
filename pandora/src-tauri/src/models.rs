@@ -165,7 +165,9 @@ pub enum PandoraTheme {
 #[serde(rename_all = "camelCase", default)]
 pub struct PandoraSettings {
     pub theme: PandoraTheme,
-    pub dynamic_theme: bool,
+    /// Buttons and other accents take the playing cover's colour instead of the theme's. Off by default; the
+    /// older `dynamicTheme` key (on by default) is ignored so every library starts on the theme colour.
+    pub artwork_accents: bool,
     pub animated_canvas: bool,
     pub show_romaji: bool,
     pub auto_queue_related: bool,
@@ -210,7 +212,7 @@ impl Default for PandoraSettings {
     fn default() -> Self {
         Self {
             theme: PandoraTheme::default(),
-            dynamic_theme: true,
+            artwork_accents: false,
             animated_canvas: true,
             show_romaji: true,
             auto_queue_related: true,

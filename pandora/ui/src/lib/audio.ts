@@ -7,7 +7,7 @@ import {
   ytmRelated,
 } from "./ipc";
 import { mapParametricFilterType } from "./parametricEq";
-import { applyDefaultMaterialTheme, applyMaterialThemeFromArt, resolveArtworkUrl } from "./theme";
+import { applyDefaultMaterialTheme, applyMaterialThemeFromArt, resolveArtworkUrl, setArtworkAccents } from "./theme";
 import {
   DEFAULT_PANDORA_SETTINGS,
   type EqState,
@@ -197,7 +197,7 @@ class PandoraAudioEngine {
       error: null,
       lyrics: { trackKey: track.id, status: "loading", source: null, lines: [], plainText: null, error: null },
     }));
-    if (this.settings.dynamicTheme) void applyMaterialThemeFromArt(track.artworkUrl, this.proxyPort);
+    void applyMaterialThemeFromArt(track.artworkUrl, this.proxyPort);
     void this.loadLyricsForTrack(track);
   }
 
@@ -267,14 +267,7 @@ class PandoraAudioEngine {
     const prev = this.settings;
     this.settings = { ...DEFAULT_PANDORA_SETTINGS, ...next };
     const track = get(playerStore).currentTrack;
-
-    if (prev.dynamicTheme !== this.settings.dynamicTheme) {
-      if (this.settings.dynamicTheme && track) {
-        void applyMaterialThemeFromArt(track.artworkUrl, this.proxyPort);
-      } else if (!this.settings.dynamicTheme) {
-        applyDefaultMaterialTheme();
-      }
-    }
+    setArtworkAccents(this.settings.artworkAccents);
 
     if (prev.mediaSessionEnabled !== this.settings.mediaSessionEnabled && "mediaSession" in navigator) {
       if (!this.settings.mediaSessionEnabled) {
@@ -380,11 +373,7 @@ class PandoraAudioEngine {
     if (resumeMs > 0) this.audio.currentTime = resumeMs / 1000;
     this.persistSession();
     this.audio.playbackRate = get(playerStore).eq.playbackRate;
-    if (this.settings.dynamicTheme) {
-      void applyMaterialThemeFromArt(track.artworkUrl, this.proxyPort);
-    } else {
-      applyDefaultMaterialTheme();
-    }
+    void applyMaterialThemeFromArt(track.artworkUrl, this.proxyPort);
     if (this.settings.mediaSessionEnabled) {
       this.updateMediaSessionMetadata(track);
     }

@@ -681,12 +681,12 @@ mod tests {
         let store = LibraryStore::load_at(db_path.clone(), dir.join("cache"));
         let snap = store.snapshot();
         assert_eq!(snap.liked.len(), 1);
-        assert!(snap.settings.dynamic_theme);
+        assert!(!snap.settings.artwork_accents);
         assert!((snap.settings.default_volume - 0.85).abs() < 0.001);
 
         let updated = store.save_settings(PandoraSettings {
             theme: crate::models::PandoraTheme::Daylight,
-            dynamic_theme: false,
+            artwork_accents: true,
             animated_canvas: false,
             show_romaji: false,
             auto_queue_related: false,
@@ -700,14 +700,14 @@ mod tests {
             artwork_cache_mb: 64,
             lyrics_style: crate::models::LyricsStyle::Rain,
         });
-        assert!(!updated.settings.dynamic_theme);
+        assert!(updated.settings.artwork_accents);
         assert!((updated.settings.default_volume - 1.0).abs() < 0.001);
         assert!(updated.settings.auto_launch_ice_notch);
         assert!(updated.settings.close_to_tray);
 
         let reloaded = LibraryStore::load_at(db_path, dir.join("cache")).snapshot();
         assert_eq!(reloaded.settings.theme, crate::models::PandoraTheme::Daylight);
-        assert!(!reloaded.settings.dynamic_theme);
+        assert!(reloaded.settings.artwork_accents);
         assert!(reloaded.settings.auto_launch_ice_notch);
         assert!(reloaded.settings.close_to_tray);
         assert_eq!(reloaded.settings.artwork_cache_mb, 64);
@@ -715,7 +715,7 @@ mod tests {
 
         let reset = store.reset_settings();
         assert_eq!(reset.settings.theme, crate::models::PandoraTheme::Midnight);
-        assert!(reset.settings.dynamic_theme);
+        assert!(!reset.settings.artwork_accents);
         assert!(!reset.settings.close_to_tray);
         assert_eq!(reset.eq.preset, "Flat");
         assert_eq!(reset.liked.len(), 1);
@@ -734,5 +734,8 @@ mod tests {
         assert_eq!(ice.theme, crate::models::PandoraTheme::Ice);
         let unknown: PandoraSettings = serde_json::from_str(r#"{"theme":"aurora"}"#).unwrap();
         assert_eq!(unknown.theme, crate::models::PandoraTheme::Midnight);
+        // The old on-by-default switch no longer turns artwork accents on.
+        let legacy: PandoraSettings = serde_json::from_str(r#"{"dynamicTheme":true}"#).unwrap();
+        assert!(!legacy.artwork_accents);
     }
 }

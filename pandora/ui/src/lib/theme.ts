@@ -1,5 +1,6 @@
-// Dynamic Material You color engine: extracts a vibrant 3-color palette from the active
-// album art (via local CORS-safe proxy or data URI) and updates root CSS custom properties.
+// Album-art colours: extracts a vibrant 3-color palette from the active album art (via local
+// CORS-safe proxy or data URI) into `--art-*` on the root. The Now Playing backdrop always uses
+// them; buttons and accents use them only with artwork accents on (`setArtworkAccents`).
 
 interface Rgb {
   r: number;
@@ -26,6 +27,11 @@ export function resolveArtworkUrl(url: string | null, proxyPort: number): string
 
 let artworkRevision = 0;
 
+/** Lets `--p-tone` (buttons, accents, glows) follow the cover instead of the theme. */
+export function setArtworkAccents(on: boolean): void {
+  document.documentElement.toggleAttribute("data-artwork-accents", on);
+}
+
 export function applyDefaultMaterialTheme(): void {
   artworkRevision++;
   for (const property of ["--art-primary", "--art-secondary", "--art-tertiary"]) {
@@ -40,7 +46,7 @@ export async function applyMaterialThemeFromArt(artUrl: string | null, proxyPort
   if (!resolved) return;
   try {
     const colors = await extractPalette(resolved);
-    // A later track or disabling artwork accents invalidates this decode.
+    // A later track invalidates this decode.
     if (revision !== artworkRevision || !colors) return;
     const style = document.documentElement.style;
     const properties = ["--art-primary", "--art-secondary", "--art-tertiary"];

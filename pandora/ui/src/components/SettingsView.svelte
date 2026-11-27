@@ -127,13 +127,13 @@
       <label class="toggle-row">
         <div>
           <div class="row-title">Album artwork accents</div>
-          <div class="row-sub">Use the playing cover’s colors over your selected theme</div>
+          <div class="row-sub">Buttons and highlights take the playing cover’s color instead of your theme’s</div>
         </div>
         <input
           type="checkbox"
-          checked={settings.dynamicTheme}
+          checked={settings.artworkAccents}
           onchange={(e) =>
-            onUpdateSettings({ dynamicTheme: (e.target as HTMLInputElement).checked })}
+            onUpdateSettings({ artworkAccents: (e.target as HTMLInputElement).checked })}
         />
       </label>
 

@@ -14,7 +14,8 @@
   --p-fill: light-dark(#eae7f0, #302b3b);
   --p-seed: light-dark(#6249bd, #b6a1ff);
   --p-companion: #82bbeb;
-  --p-tone: var(--art-primary, var(--p-seed));
+  /* Accents stay on the theme colour; the cover's colours (`--art-*`) only tint them with artwork accents on. */
+  --p-tone: var(--p-seed);
   --p-accent: light-dark(oklch(from var(--p-tone) .44 min(c, .16) h), oklch(from var(--p-tone) .79 min(c, .15) h));
   --p-accent-bright: light-dark(oklch(from var(--p-tone) .38 min(c, .16) h), oklch(from var(--p-tone) .88 min(c, .12) h));
   --p-on-accent: light-dark(#fff, #181320);
@@ -31,6 +32,7 @@
   --p-radius: 16px;
 }
 
+:root[data-artwork-accents] { --p-tone: var(--art-primary, var(--p-seed)); }
 [data-theme="system"] { color-scheme: light dark; }
 [data-theme="daylight"] { color-scheme: light; }
 /* Ice Audio Manager's palette: cool blue-grey surfaces and its #6bc5ff accent. */

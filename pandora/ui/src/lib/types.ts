@@ -108,7 +108,8 @@ export type PandoraTheme = "midnight" | "ice" | "daylight" | "ember" | "system";
 
 export interface PandoraSettings {
   theme: PandoraTheme;
-  dynamicTheme: boolean;
+  /** Buttons and accents follow the playing cover instead of the theme (Rust `artwork_accents`). */
+  artworkAccents: boolean;
   animatedCanvas: boolean;
   showRomaji: boolean;
   autoQueueRelated: boolean;
@@ -129,7 +130,7 @@ export type LyricsStyle = "default" | "fisheye" | "rain";
 
 export const DEFAULT_PANDORA_SETTINGS: PandoraSettings = {
   theme: "midnight",
-  dynamicTheme: true,
+  artworkAccents: false,
   animatedCanvas: true,
   showRomaji: true,
   autoQueueRelated: true,

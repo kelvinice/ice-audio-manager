@@ -6,8 +6,10 @@
 
 Pandora saves its theme with the other player preferences in `library.json`. Rust owns the default and
 deserializes older settings. The Svelte shell applies the selection to the document so the library, player,
-overlays and settings share one palette. Use Windows follows the system color scheme live. The album artwork
-switch controls accent colors independently. Only the most recent artwork decode can supply those colors.
+overlays and settings share one palette. Use Windows follows the system color scheme live. Buttons and accents keep
+the theme colour by default; the "Album artwork accents" switch (`artworkAccents`, off by default, sets
+`data-artwork-accents` on the root) lets the cover's colour replace it. The cover's colours (`--art-*`, `lib/theme.ts`)
+always feed the Now Playing backdrop. Only the most recent artwork decode can supply those colors.
 
 The palette definitions are in `pandora/ui/src/palettes.css`. Settings previews use the same tokens as the
 window. The Windows icon family and the sidebar mark share the Pandora diamond. Regenerate the native assets
@@ -109,6 +111,8 @@ and lyrics for visual checks. See the [Pandora guide](../pandora.md) for launch 
 
 ## Change log
 
+- 2026-11-27 · Buttons and accents keep the theme colour by default: `dynamicTheme` (on) became `artworkAccents` (off; the old
+  key is ignored). Cover colours still tint the Now Playing backdrop.
 - 2026-11-27 · Rain: a finished line falls from the same stack it was shown in (romaji kept, then faded), so lines with romaji
   no longer jump when they start falling.
 - 2026-11-27 · Title bar snowflake: `ice_wake_and_peek` starts Ice if needed and asks it to wake and show the notch for 2 s
