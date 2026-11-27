@@ -46,6 +46,7 @@
     savePandoraSettings,
     setIceModePref,
     toggleLikeTrack,
+    wakeAndPeekIce,
     ytmCollection,
     ytmHome,
   } from "./lib/ipc";
@@ -319,6 +320,15 @@
     content?.scrollTo({ top: 0 });
   });
 
+  /** Title bar snowflake: start Ice if needed, wake its notch and show it for a moment. */
+  async function peekIce() {
+    try {
+      iceStatus = await wakeAndPeekIce();
+    } catch (e) {
+      showNotice(e instanceof Error ? e.message : String(e));
+    }
+  }
+
   async function playCollection(card: CollectionCard) {
     try {
       const page = await ytmCollection(card.browseId);
@@ -489,7 +499,7 @@
     onSearch={search}
     onSubmitSearch={submitSearch}
     onIdentify={() => navigate("recognize")}
-    onOpenIce={() => navigate("ice")}
+    onOpenIce={() => void peekIce()}
     onOpenSettings={() => navigate("settings")}
     onOpenEq={() => (showEq = true)}
     onNewPlaylist={() => openPlaylistModal(null)}

@@ -360,6 +360,17 @@ async fn ice_show_notch(state: State<'_, Arc<AppState>>) -> Result<IceStatus, St
         .map_err(|e| e.to_string())?
 }
 
+/// How long the title bar's Ice button shows the notch card.
+const ICE_PEEK_MS: u64 = 2_000;
+
+#[tauri::command]
+async fn ice_wake_and_peek(state: State<'_, Arc<AppState>>) -> Result<IceStatus, String> {
+    let ice = Arc::clone(&state.ice);
+    tauri::async_runtime::spawn_blocking(move || ice.wake_and_peek(ICE_PEEK_MS))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
 #[tauri::command]
 async fn ice_open_settings(state: State<'_, Arc<AppState>>) -> Result<(), String> {
     let ice = Arc::clone(&state.ice);
@@ -605,6 +616,7 @@ fn main() {
             ice_ping_bridge,
             ice_toggle_notch,
             ice_show_notch,
+            ice_wake_and_peek,
             ice_open_settings,
             recognize_music,
             cancel_recognition,

@@ -43,10 +43,21 @@ struct BridgeRequest {
 enum BridgeAction {
     Ping,
     Snapshot,
-    Command { command: Command },
+    Command {
+        command: Command,
+    },
     ShowNotch,
     ToggleNotch,
+    /// Wake from hibernation, open the card, close it after `ms` (default 2 s) unless the user took it over.
+    PeekNotch {
+        #[serde(default = "default_peek_ms")]
+        ms: u64,
+    },
     OpenSettings,
+}
+
+const fn default_peek_ms() -> u64 {
+    2_000
 }
 
 #[derive(Debug, Serialize)]
@@ -213,6 +224,12 @@ fn dispatch_request(
             let snap = state.engine.snapshot();
             BridgeResponse::ok_status(build_status(state, &snap), None)
         }
+        BridgeAction::PeekNotch { ms } => {
+            let (h, st) = (app.clone(), Arc::clone(state));
+            let _ = app.run_on_main_thread(move || show_notch::peek(&h, &st, ms));
+            let snap = state.engine.snapshot();
+            BridgeResponse::ok_status(build_status(state, &snap), None)
+        }
         BridgeAction::OpenSettings => {
             let (h, st) = (app.clone(), Arc::clone(state));
             let _ = app.run_on_main_thread(move || {
@@ -278,6 +295,11 @@ mod tests {
 
         let show: BridgeRequest = serde_json::from_str(r#"{"token":"abc","action":"showNotch"}"#).unwrap();
         assert!(matches!(show.action, BridgeAction::ShowNotch));
+
+        let peek: BridgeRequest = serde_json::from_str(r#"{"token":"abc","action":"peekNotch","ms":1500}"#).unwrap();
+        assert!(matches!(peek.action, BridgeAction::PeekNotch { ms: 1500 }));
+        let peek_default: BridgeRequest = serde_json::from_str(r#"{"token":"abc","action":"peekNotch"}"#).unwrap();
+        assert!(matches!(peek_default.action, BridgeAction::PeekNotch { ms: 2_000 }));
 
         let toggle: BridgeRequest = serde_json::from_str(r#"{"token":"abc","action":"toggleNotch"}"#).unwrap();
         assert!(matches!(toggle.action, BridgeAction::ToggleNotch));

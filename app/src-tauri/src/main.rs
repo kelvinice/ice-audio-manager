@@ -316,6 +316,7 @@ fn media_command(action: ice_core::engine::MediaAction, state: State<'_, Arc<Sha
 
 #[tauri::command]
 fn toggle_expand(app: AppHandle, state: State<'_, Arc<SharedRuntime>>) {
+    show_notch::cancel_peek();
     state.update_and_emit(&app, |s| {
         s.expanded = !s.expanded;
         s.event_seq = s.event_seq.saturating_add(1);

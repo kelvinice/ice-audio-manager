@@ -6,6 +6,8 @@
 //! - A fullscreen app covers the notch's monitor (gaming mode): nothing, so a game never gets a popup.
 
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::Duration;
 
 use ice_core::engine::{Command, RoleSet};
 use ice_win::native_dot::{NativeDotHandle, PillInput};
@@ -42,8 +44,64 @@ fn decide(allows_webview: bool, gaming: bool, expanded: bool, open: Open) -> Out
     }
 }
 
+/// Bumped whenever the user opens, closes or pins the card, so a pending [`peek`] never closes a card the user has
+/// taken over in the meantime.
+static PEEK_GEN: AtomicU64 = AtomicU64::new(0);
+/// Longest a companion may hold the card open.
+const PEEK_MAX_MS: u64 = 10_000;
+const PEEK_MIN_MS: u64 = 500;
+
+/// The user changed the card themselves (pill, hotkey, pin): cancel any pending peek close.
+pub(super) fn cancel_peek() {
+    PEEK_GEN.fetch_add(1, Ordering::AcqRel);
+}
+
+/// Companion request (Pandora's Ice button): wake the notch from hibernation, open the card, and close it again after
+/// `ms` unless it was already open or the user opened, pinned or closed it meanwhile. Hovering still keeps it open
+/// (the WebView's own hover state). Main thread; the wait is one short-lived thread with a fixed end.
+pub(super) fn peek(app: &AppHandle, state: &Arc<SharedRuntime>, ms: u64) {
+    if state.engine.snapshot().settings.appearance.hibernate {
+        state.engine.send(Command::SetHibernate { enabled: false });
+    }
+    // Lite would open the tray menu and gaming shows nothing: a companion peek only uses the WebView card.
+    let (allows_webview, gaming) = {
+        let p = state.placement();
+        (p.allows_webview(), p.gaming)
+    };
+    if !allows_webview || gaming {
+        return;
+    }
+    let was_open = state.snapshot_clone().expanded;
+    show(app, state, Open::Show);
+    if was_open || !state.snapshot_clone().expanded {
+        return;
+    }
+    let generation = PEEK_GEN.load(Ordering::Acquire);
+    let (handle, st) = (app.clone(), Arc::clone(state));
+    let wait = Duration::from_millis(ms.clamp(PEEK_MIN_MS, PEEK_MAX_MS));
+    let spawned = std::thread::Builder::new().name("ice-notch-peek".into()).spawn(move || {
+        std::thread::sleep(wait);
+        let main = handle.clone();
+        let _ = handle.run_on_main_thread(move || {
+            if PEEK_GEN.load(Ordering::Acquire) != generation {
+                return;
+            }
+            st.update_and_emit(&main, |s| {
+                if s.expanded {
+                    s.expanded = false;
+                    s.event_seq = s.event_seq.saturating_add(1);
+                }
+            });
+        });
+    });
+    if let Err(error) = spawned {
+        tracing::debug!(%error, "Could not schedule the notch peek close");
+    }
+}
+
 /// Runs on the main thread (engine bridge and pill input both dispatch there).
 pub(super) fn show(app: &AppHandle, state: &Arc<SharedRuntime>, open: Open) {
+    cancel_peek();
     let (allows_webview, gaming) = {
         let p = state.placement();
         (p.allows_webview(), p.gaming)

@@ -143,7 +143,7 @@
   </div>
 
   <div class="side right" data-tauri-drag-region>
-    <button class="btn-icon solid ice" aria-label="Ice Audio" title={iceLive ? "Ice Audio (connected)" : "Ice Audio"} onclick={onOpenIce}>
+    <button class="btn-icon solid ice" aria-label="Ice Audio" title={iceLive ? "Show the Ice notch" : "Start Ice and show its notch"} onclick={onOpenIce}>
       <Icon name="snowflake" size={18} />
     </button>
     {#if appWindow}

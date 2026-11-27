@@ -355,6 +355,22 @@ impl IceBridge {
         Ok(self.status())
     }
 
+    /// The title bar's Ice button: start standalone Ice if it isn't running, then ask it to wake the notch from
+    /// hibernation and show the card for `ms`. An Ice without `peekNotch` (older build) is woken and shown instead.
+    pub fn wake_and_peek(self: &Arc<Self>, ms: u64) -> Result<IceStatus, String> {
+        if !is_standalone_ice_running() {
+            self.launch_standalone()?;
+        }
+        if self.call_bridge(serde_json::json!({ "action": "peekNotch", "ms": ms })).is_err() {
+            let _ = self.patch_settings(IceConfigPatch { hibernate: Some(false), ..IceConfigPatch::default() });
+            self.call_bridge(serde_json::json!({ "action": "showNotch" }))?;
+        }
+        std::thread::sleep(Duration::from_millis(40));
+        let _ = self.call_bridge(serde_json::json!({ "action": "ping" }));
+        self.emit_status_and_snapshot();
+        Ok(self.status())
+    }
+
     pub fn open_ice_settings(self: &Arc<Self>) -> Result<(), String> {
         if !is_standalone_ice_running() {
             return Err("Start standalone Ice Audio Manager to open Ice's Settings window.".into());

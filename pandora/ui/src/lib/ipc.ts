@@ -182,6 +182,8 @@ export const stopIceStandalone = () => call<IceStatus>("ice_stop_standalone");
 export const pingIceBridge = () => call<IceStatus>("ice_ping_bridge");
 export const toggleIceNotch = () => call<IceStatus>("ice_toggle_notch");
 export const showIceNotch = () => call<IceStatus>("ice_show_notch");
+/** Starts Ice if needed, wakes its notch and shows the card for about two seconds. */
+export const wakeAndPeekIce = () => call<IceStatus>("ice_wake_and_peek");
 export const openIceSettings = () => call<void>("ice_open_settings");
 
 export const recognizeMusic = (source: "system" | "mic") =>
