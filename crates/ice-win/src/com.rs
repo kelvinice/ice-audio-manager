@@ -21,8 +21,12 @@ impl ComGuard {
         Self::init(COINIT_MULTITHREADED)
     }
 
-    /// Joins the STA for shell extensions used by ShellExecuteEx.
-    pub(crate) fn init_sta() -> windows::core::Result<Self> {
+    /// Joins the STA: shell extensions used by ShellExecuteEx, and Japanese Romaji (the Windows phonetic analyzer and
+    /// the IME reading need COM on the calling thread; without it only kana can be romanized).
+    ///
+    /// # Errors
+    /// Fails if this thread already initialised COM as multithreaded (`RPC_E_CHANGED_MODE`).
+    pub fn init_sta() -> windows::core::Result<Self> {
         Self::init(COINIT_APARTMENTTHREADED)
     }
 

@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Track } from "../lib/types";
+  import HeartButton from "./HeartButton.svelte";
   import Icon from "./Icon.svelte";
 
   /** Compact song row for home shelves (Quick picks): cover with a hover play overlay, title, artist, actions. */
@@ -33,16 +34,7 @@
     </span>
   </button>
   <span class="acts">
-    <button
-      class="btn-icon sm"
-      class:keep={isLiked}
-      class:on={isLiked}
-      aria-label={isLiked ? "Remove from Favorites" : "Add to Favorites"}
-      title={isLiked ? "Remove from Favorites" : "Add to Favorites"}
-      onclick={onToggleLike}
-    >
-      <Icon name={isLiked ? "heart-filled" : "heart"} size={15} />
-    </button>
+    <HeartButton liked={isLiked} size={16} onToggle={onToggleLike} />
     <button class="btn-icon sm" aria-label="Add to playlist" title="Add to playlist" onclick={onAddToPlaylist}>
       <Icon name="list-plus" size={15} />
     </button>
@@ -142,12 +134,12 @@
     flex-shrink: 0;
   }
 
-  .acts .btn-icon:not(.keep) {
+  .acts :global(.btn-icon:not(.keep)) {
     opacity: 0;
   }
 
-  .song:hover .acts .btn-icon,
-  .song:focus-within .acts .btn-icon {
+  .song:hover .acts :global(.btn-icon),
+  .song:focus-within .acts :global(.btn-icon) {
     opacity: 1;
   }
 </style>

@@ -24,6 +24,8 @@
   --p-glow-3: color-mix(in srgb, var(--art-tertiary, var(--p-seed)) 24%, transparent);
   --p-surface-tint: color-mix(in srgb, var(--p-tone) 10%, var(--p-surface));
   --p-danger: light-dark(#a22542, #ffa4b7);
+  /* Liked hearts: a warm pink that reads on every theme and stays apart from the accent. */
+  --p-love: light-dark(#d1245f, #ff5c8d);
   --p-success: light-dark(#0d694d, #8ce0bb);
   --p-warning: light-dark(#885300, #fbd188);
   --p-radius: 16px;

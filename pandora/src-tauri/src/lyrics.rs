@@ -15,6 +15,9 @@ pub fn fetch_lyrics(
     duration_ms: Option<u64>,
     lrc_override: Option<&str>,
 ) -> PandoraLyrics {
+    // Romaji reads kanji through COM (Windows phonetic analyzer / IME), so this thread joins an STA for the call. On a
+    // pooled thread without it, every line with kanji came back with no romaji at all.
+    let _com = ice_win::com::ComGuard::init_sta().ok();
     let key = track_key("pandora", title, artist, album);
     if let Some(raw_lrc) = lrc_override {
         let (sync_kind, mut lines) = parse_lrc(raw_lrc, duration_ms);

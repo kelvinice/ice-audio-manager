@@ -1,7 +1,10 @@
 <script lang="ts">
+  import { get } from "svelte/store";
   import { audioEngine, playerStore } from "../lib/audio";
+  import { SpectrumShaper } from "../lib/spectrum";
   import { resolveArtworkUrl } from "../lib/theme";
   import type { LyricsStyle, Track } from "../lib/types";
+  import HeartButton from "./HeartButton.svelte";
   import Icon from "./Icon.svelte";
   import LyricsFisheye from "./LyricsFisheye.svelte";
   import LyricsRain from "./LyricsRain.svelte";
@@ -105,68 +108,90 @@
     centerCurrentLine("smooth");
   });
 
-  // Spectrum: thin round bars grown from the middle, as many as fit, sharp at any display scale. They rise at once
-  // and fall back gently (meter ballistics). Redrawn at most 30 times a second, and only while playing and shown.
+  // Spectrum, shaped like Ice's notch pill (`lib/spectrum.ts`): thin round bars grown from the middle, each band on
+  // its own automatic range and spring, a low textured resting line when quiet. Bars up to the playback position
+  // are in the accent colour, the rest dimmed, so the bars double as progress. At most 30 Hz, only while playing
+  // and shown; after a pause it runs just until the bars have settled onto the resting line.
   const SPECTRUM_FRAME_MS = 1000 / 30;
-  const SPECTRUM_FALL = 0.86;
+  const shaper = new SpectrumShaper();
+  let bandDb = new Float32Array(48);
+  /** Repaints the progress colouring while paused, in 1 % steps (cheap: the loop restarts, the springs persist). */
+  let progressStep = $derived(
+    $playerStore.durationMs > 0 ? Math.round(($playerStore.currentTimeMs / $playerStore.durationMs) * 100) : 0,
+  );
 
   $effect(() => {
     const canvas = canvasEl;
+    void progressStep;
     if (!open || !canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    const animate = playing && !reduceMotion;
+    const live = playing && !reduceMotion;
     let frame = 0;
     let lastPaint = 0;
-    let levels: number[] = [];
-    let color = getComputedStyle(canvas).color;
+    let accent = "";
+    let dim = "";
 
-    function draw(now = performance.now()) {
-      if (!canvas || !ctx) return;
-      if (animate) frame = requestAnimationFrame(draw);
-      if (now - lastPaint < SPECTRUM_FRAME_MS) return;
-      lastPaint = now;
+    function readColors() {
+      const cs = getComputedStyle(canvas!);
+      accent = cs.color;
+      dim = cs.getPropertyValue("--p-text").trim() || "#ffffff";
+    }
+
+    function paint(dt: number): boolean {
+      if (!canvas || !ctx) return false;
       const dpr = window.devicePixelRatio || 1;
       const width = Math.round(canvas.clientWidth * dpr);
       const height = Math.round(canvas.clientHeight * dpr);
-      if (canvas.width !== width || canvas.height !== height) {
+      if (canvas.width !== width || canvas.height !== height || !accent) {
         canvas.width = width;
         canvas.height = height;
-        color = getComputedStyle(canvas).color;
+        readColors();
       }
       const barW = Math.max(2, Math.round(3 * dpr));
-      const gap = Math.max(2, Math.round(3 * dpr));
-      const count = Math.max(8, Math.floor((width + gap) / (barW + gap)));
-      const raw = audioEngine.getSpectrumBars(count);
-      if (levels.length !== count) levels = new Array(count).fill(0);
+      const gap = Math.max(3, Math.round(4 * dpr));
+      const count = Math.max(14, Math.min(48, Math.floor((width + gap) / (barW + gap))));
+      if (bandDb.length < count) bandDb = new Float32Array(count);
+      const hasAudio = live && audioEngine.getSpectrumDb(count, bandDb);
+      const { levels, moving } = shaper.step(hasAudio ? bandDb : null, count, dt);
+      const st = get(playerStore);
+      const played = st.durationMs > 0 ? Math.round((st.currentTimeMs / st.durationMs) * count) : 0;
       const x0 = Math.round((width - (count * barW + (count - 1) * gap)) / 2);
       const mid = height / 2;
       ctx.clearRect(0, 0, width, height);
-      ctx.fillStyle = color;
       for (let i = 0; i < count; i++) {
-        levels[i] = Math.max(raw[i] ?? 0, levels[i] * SPECTRUM_FALL);
-        const h = Math.max(barW, levels[i] * height);
-        ctx.globalAlpha = 0.4 + 0.6 * levels[i];
+        const level = levels[i];
+        const h = Math.max(barW, height * (0.08 + 0.92 * level));
+        const isPlayed = i < played;
+        ctx.fillStyle = isPlayed ? accent : dim;
+        ctx.globalAlpha = isPlayed ? 0.55 + 0.45 * level : 0.2 + 0.3 * level;
         ctx.beginPath();
         ctx.roundRect(x0 + i * (barW + gap), mid - h / 2, barW, h, barW / 2);
         ctx.fill();
       }
       ctx.globalAlpha = 1;
+      return moving;
     }
 
-    function redraw() {
-      cancelAnimationFrame(frame);
-      lastPaint = 0;
-      draw();
+    function tick(now: number) {
+      frame = 0;
+      if (now - lastPaint >= SPECTRUM_FRAME_MS) {
+        const dt = lastPaint === 0 ? SPECTRUM_FRAME_MS / 1000 : Math.min(0.1, (now - lastPaint) / 1000);
+        lastPaint = now;
+        if (!paint(dt) && !live) return;
+      }
+      frame = requestAnimationFrame(tick);
     }
-    redraw();
-    const resize = new ResizeObserver(redraw);
+
+    frame = requestAnimationFrame(tick);
+    const resize = new ResizeObserver(() => {
+      accent = "";
+      if (!frame) paint(0.1);
+    });
     resize.observe(canvas);
-    document.addEventListener("visibilitychange", redraw);
     return () => {
       cancelAnimationFrame(frame);
       resize.disconnect();
-      document.removeEventListener("visibilitychange", redraw);
     };
   });
 
@@ -239,15 +264,7 @@
             <p>{track.artist}{track.album ? ` • ${track.album}` : ""}</p>
           </div>
           <div class="track-btns">
-            <button
-              class="like-btn"
-              class:liked={isLiked}
-              title={isLiked ? "Remove from Favorites" : "Add to Favorites"}
-              aria-label={isLiked ? "Remove from Favorites" : "Add to Favorites"}
-              onclick={() => onToggleLike(track)}
-            >
-              <Icon name={isLiked ? "heart-filled" : "heart"} size={18} />
-            </button>
+            <HeartButton liked={isLiked} size={22} buttonClass="btn-icon" keep onToggle={() => onToggleLike(track)} />
             <button
               class="like-btn"
               title="Add to Playlist"
@@ -328,11 +345,9 @@
             </button>
           </div>
           {#if rightTab === "lyrics"}
-            {#if lyricsStyle !== "rain"}
-              <button class="chip-toggle" class:on={showRomaji} aria-pressed={showRomaji} onclick={onToggleRomaji}>
-                Romaji
-              </button>
-            {/if}
+            <button class="chip-toggle" class:on={showRomaji} aria-pressed={showRomaji} onclick={onToggleRomaji}>
+              Romaji
+            </button>
           {/if}
         </div>
 
@@ -345,7 +360,12 @@
             onSeek={(ms) => audioEngine.seekMs(ms)}
           />
         {:else if rightTab === "lyrics" && lyricsStyle === "rain" && $playerStore.lyrics?.status === "synced"}
-          <LyricsRain lines={$playerStore.lyrics.lines} activeIdx={activeLineIdx} timeMs={$playerStore.currentTimeMs} />
+          <LyricsRain
+            lines={$playerStore.lyrics.lines}
+            activeIdx={activeLineIdx}
+            timeMs={$playerStore.currentTimeMs}
+            {showRomaji}
+          />
         {:else if rightTab === "lyrics"}
           <div
             class="lyrics-scroll"
@@ -583,9 +603,6 @@
     padding: 6px;
   }
 
-  .like-btn.liked {
-    color: var(--p-danger);
-  }
 
   .spectrum {
     display: block;

@@ -2,6 +2,7 @@
   import { audioEngine, playerStore } from "../lib/audio";
   import { resolveArtworkUrl } from "../lib/theme";
   import type { DeviceSummary, Track } from "../lib/types";
+  import HeartButton from "./HeartButton.svelte";
   import Icon from "./Icon.svelte";
   import OutputPicker from "./OutputPicker.svelte";
   import VolumeControl from "./VolumeControl.svelte";
@@ -57,15 +58,7 @@
       </button>
 
       <div class="left-acts">
-        <button
-          class="dock-icon"
-          class:liked={isLiked}
-          title={isLiked ? "Remove from Favorites" : "Add to Favorites"}
-          aria-label={isLiked ? "Remove from Favorites" : "Add to Favorites"}
-          onclick={() => onToggleLike(track)}
-        >
-          <Icon name={isLiked ? "heart-filled" : "heart"} size={16} />
-        </button>
+        <HeartButton liked={isLiked} size={17} buttonClass="btn-icon sm" keep onToggle={() => onToggleLike(track)} />
         <button
           class="dock-icon"
           title="Add to Playlist"
@@ -341,9 +334,6 @@
     color: var(--p-accent-bright);
   }
 
-  .dock-icon.liked {
-    color: var(--p-danger);
-  }
 
   .dock-icon .dot {
     position: absolute;

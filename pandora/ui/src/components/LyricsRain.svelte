@@ -12,9 +12,10 @@
     lines: PandoraLyricLine[];
     activeIdx: number;
     timeMs: number;
+    showRomaji: boolean;
   }
 
-  let { lines, activeIdx, timeMs }: Props = $props();
+  let { lines, activeIdx, timeMs, showRomaji }: Props = $props();
 
   /** How long a finished line keeps falling before it is removed (longest fall + largest delay). */
   const FALL_MS = 2_600;
@@ -59,6 +60,9 @@
 
   let current = $derived(activeIdx >= 0 ? build(activeIdx) : null);
   let upcoming = $derived(lines[activeIdx + 1]?.text ?? "");
+  let reading = $derived(
+    showRomaji && activeIdx >= 0 ? (lines[activeIdx]?.romaji ?? lines[activeIdx]?.subtitle ?? null) : null,
+  );
 
   /** Lines that already ended, still raining down. */
   let falling = $state<RainLine[]>([]);
@@ -99,6 +103,7 @@
 
   {#if current}
     {#key current.idx}
+      <div class="stack">
       <p class="line current" class:calm={reduceMotion}>
         {#each current.words as word, wi (wi)}<span class="word" class:sung={timeMs >= word.startMs}
             >{#each word.glyphs as g, gi (gi)}<span
@@ -109,6 +114,8 @@
               >{/each}</span
           >{current.noGaps ? "" : " "}{/each}
       </p>
+      {#if reading}<p class="reading">{reading}</p>{/if}
+      </div>
     {/key}
   {/if}
 
@@ -139,6 +146,36 @@
     letter-spacing: -0.02em;
     overflow-wrap: anywhere;
     color: var(--p-text);
+  }
+
+  /* The current line and its romaji sit together in the middle of the sky. */
+  .stack {
+    grid-area: 1 / 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    max-width: 100%;
+  }
+
+  .stack .line {
+    grid-area: auto;
+  }
+
+  .reading {
+    margin: 0;
+    text-align: center;
+    font-size: clamp(15px, 1.5vw, 22px);
+    font-weight: 600;
+    color: var(--p-text-muted);
+    animation: reading-in 0.6s ease 0.15s both;
+  }
+
+  @keyframes reading-in {
+    from {
+      opacity: 0;
+      translate: 0 6px;
+    }
   }
 
   .word {

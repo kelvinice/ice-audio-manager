@@ -92,7 +92,7 @@ class PandoraAudioEngine {
   private compressor: DynamicsCompressorNode | null = null;
   private analyser: AnalyserNode | null = null;
   private gainNode: GainNode | null = null;
-  private freqBuf: Uint8Array<ArrayBuffer> | null = null;
+  private freqBuf: Float32Array<ArrayBuffer> | null = null;
   private timeBuf: Uint8Array<ArrayBuffer> | null = null;
   private proxyPort = 0;
   private silenceSinceMs: number | null = null;
@@ -232,8 +232,6 @@ class PandoraAudioEngine {
     // 1024 points gives ~43 Hz bins, enough to spread the visualizer's bars across bass, mids and treble.
     analyser.fftSize = 1024;
     analyser.smoothingTimeConstant = 0.72;
-    analyser.minDecibels = -88;
-    analyser.maxDecibels = -22;
 
     const gain = ctx.createGain();
     const st = get(playerStore);
@@ -260,7 +258,7 @@ class PandoraAudioEngine {
     this.compressor = compressor;
     this.analyser = analyser;
     this.gainNode = gain;
-    this.freqBuf = new Uint8Array(new ArrayBuffer(analyser.frequencyBinCount));
+    this.freqBuf = new Float32Array(new ArrayBuffer(analyser.frequencyBinCount * 4));
     this.timeBuf = new Uint8Array(new ArrayBuffer(analyser.fftSize));
     this.applyEqToGraph(st.eq);
   }
@@ -624,30 +622,26 @@ class PandoraAudioEngine {
   }
 
   /**
-   * Levels (0..1) for `count` log-spaced bands from ~45 Hz to ~15 kHz, so each bar covers an equal musical range
-   * instead of most bars sharing the bass. Higher bands get a small lift because music carries less energy there.
+   * Fills `out` with the loudest bin (dB) of `count` log-spaced bands from ~45 Hz to ~15 kHz, so each bar covers an
+   * equal musical range. Shaping into bar heights is `lib/spectrum.ts`. Returns false (nothing written) while paused.
    */
-  getSpectrumBars(count = 24): number[] {
-    if (!this.analyser || !this.freqBuf || !get(playerStore).playing) {
-      return new Array(count).fill(0);
-    }
-    this.analyser.getByteFrequencyData(this.freqBuf);
+  getSpectrumDb(count: number, out: Float32Array): boolean {
+    if (!this.analyser || !this.freqBuf || !get(playerStore).playing) return false;
+    this.analyser.getFloatFrequencyData(this.freqBuf);
     const bins = this.freqBuf.length;
     const nyquist = this.analyser.context.sampleRate / 2;
     const lo = 45;
     const hi = Math.min(15_000, nyquist);
-    const out: number[] = [];
     for (let i = 0; i < count; i++) {
       const f0 = lo * (hi / lo) ** (i / count);
       const f1 = lo * (hi / lo) ** ((i + 1) / count);
       const first = Math.min(bins - 1, Math.floor((f0 / nyquist) * bins));
       const last = Math.min(bins, Math.max(first + 1, Math.ceil((f1 / nyquist) * bins)));
-      let peak = 0;
+      let peak = -Infinity;
       for (let j = first; j < last; j++) peak = Math.max(peak, this.freqBuf[j]);
-      const tilt = 0.85 + 0.4 * (i / Math.max(1, count - 1));
-      out.push(Math.min(1, ((peak / 255) * tilt) ** 1.4));
+      out[i] = peak;
     }
-    return out;
+    return true;
   }
 
   private checkSkipSilence() {

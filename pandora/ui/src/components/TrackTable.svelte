@@ -2,6 +2,7 @@
   import { formatTrackDuration } from "../lib/format";
   import { resolveArtworkUrl } from "../lib/theme";
   import type { Track } from "../lib/types";
+  import HeartButton from "./HeartButton.svelte";
   import Icon from "./Icon.svelte";
 
   /**
@@ -123,16 +124,7 @@
         <span class="time">{formatTrackDuration(track.durationMs)}</span>
 
         <span class="acts">
-          <button
-            class="btn-icon sm"
-            class:keep={liked}
-            class:on={liked}
-            title={liked ? "Remove from Favorites" : "Add to Favorites"}
-            aria-label={liked ? "Remove from Favorites" : "Add to Favorites"}
-            onclick={() => onToggleLike(track)}
-          >
-            <Icon name={liked ? "heart-filled" : "heart"} size={15} />
-          </button>
+          <HeartButton {liked} size={16} onToggle={() => onToggleLike(track)} />
           <button class="btn-icon sm" title="Add to playlist" aria-label="Add to playlist" onclick={() => onAddToPlaylist(track)}>
             <Icon name="list-plus" size={15} />
           </button>
@@ -141,10 +133,17 @@
               <Icon name="queue-plus" size={15} />
             </button>
           {/if}
+          <!-- The download slot is always there, so every row's buttons line up whatever its state. -->
           {#if onDownload && track.source === "ytmusic" && !cached}
             <button class="btn-icon sm" title="Download" aria-label="Download" onclick={() => onDownload(track)}>
               <Icon name="download" size={15} />
             </button>
+          {:else if onDownload && cached}
+            <span class="btn-icon sm slot done" title="Downloaded" role="img" aria-label="Downloaded">
+              <Icon name="check" size={15} />
+            </span>
+          {:else if onDownload}
+            <span class="btn-icon sm slot" aria-hidden="true"></span>
           {/if}
           {#if onRemove}
             <button class="btn-icon sm" title={removeLabel} aria-label={removeLabel} onclick={() => onRemove(track)}>
@@ -347,12 +346,22 @@
     gap: 2px;
   }
 
-  .acts .btn-icon:not(.keep) {
+  /* Placeholder / status in the download slot: same size as a button, not clickable. */
+  .slot {
+    pointer-events: none;
+  }
+
+  .slot.done {
+    color: var(--p-accent-bright);
+  }
+
+  /* :global so the heart (a child component) follows the same show-on-hover rule. */
+  .acts :global(.btn-icon:not(.keep)) {
     opacity: 0;
   }
 
-  .row:hover .acts .btn-icon,
-  .row:focus-within .acts .btn-icon {
+  .row:hover .acts :global(.btn-icon),
+  .row:focus-within .acts :global(.btn-icon) {
     opacity: 1;
   }
 

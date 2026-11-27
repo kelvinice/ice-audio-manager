@@ -15,6 +15,7 @@
     RecognizedTrack,
     Track,
   } from "../lib/types";
+  import HeartButton from "./HeartButton.svelte";
   import Icon from "./Icon.svelte";
 
   interface Props {
@@ -203,15 +204,7 @@
               <Icon name="play" size={14} />
               <span>Play</span>
             </button>
-            <button
-              class="act-btn"
-              class:liked={isLiked}
-              title={isLiked ? "Remove from Favorites" : "Add to Favorites"}
-              aria-label={isLiked ? "Remove from Favorites" : "Add to Favorites"}
-              onclick={() => onToggleLike(m)}
-            >
-              <Icon name={isLiked ? "heart-filled" : "heart"} size={15} />
-            </button>
+            <HeartButton liked={isLiked} size={16} buttonClass="btn-icon sm" keep onToggle={() => onToggleLike(m)} />
             <button
               class="act-btn"
               title="Add to Playlist"
@@ -286,15 +279,7 @@
                 >
                   <Icon name="play" size={14} />
                 </button>
-                <button
-                  class="act-btn"
-                  class:liked={isLiked}
-                  title={isLiked ? "Remove from Favorites" : "Add to Favorites"}
-                  aria-label={isLiked ? "Remove from Favorites" : "Add to Favorites"}
-                  onclick={() => onToggleLike(m)}
-                >
-                  <Icon name={isLiked ? "heart-filled" : "heart"} size={14} />
-                </button>
+                <HeartButton liked={isLiked} size={15} buttonClass="btn-icon sm" keep onToggle={() => onToggleLike(m)} />
                 <button
                   class="act-btn"
                   title="Add to Playlist"
@@ -667,9 +652,6 @@
     transform: scale(0.92);
   }
 
-  .act-btn.liked {
-    color: var(--p-danger);
-  }
 
   .act-btn.danger:hover {
     color: var(--p-danger);

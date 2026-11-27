@@ -56,7 +56,7 @@
       {:else}
         {line.text}
       {/if}
-      {#if idx === activeIdx && showRomaji && (line.romaji || line.subtitle)}
+      {#if showRomaji && (line.romaji || line.subtitle)}
         <span class="sub">{line.romaji ?? line.subtitle}</span>
       {/if}
     </button>
