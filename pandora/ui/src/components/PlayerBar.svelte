@@ -85,7 +85,7 @@
         aria-label={SHUFFLE_TITLES[$playerStore.shuffle]}
         onclick={() => audioEngine.cycleShuffle()}
       >
-        <Icon name={$playerStore.shuffle === "magic" ? "sparkles" : "shuffle"} size={16} />
+        <Icon name={$playerStore.shuffle === "magic" ? "shuffle-magic" : "shuffle"} size={16} />
         {#if $playerStore.shuffle !== "off"}<span class="dot"></span>{/if}
       </button>
 

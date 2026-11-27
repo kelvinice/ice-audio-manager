@@ -13,6 +13,7 @@
     | "skip-back"
     | "skip-forward"
     | "shuffle"
+    | "shuffle-magic"
     | "repeat"
     | "repeat-1"
     | "loader"
@@ -137,6 +138,16 @@
     <path d="M2 6h1.9c1.5 0 2.9.9 3.6 2.2" />
     <path d="M22 18h-5.9c-1.3 0-2.6-.7-3.3-1.8l-.5-.8" />
     <path d="m18 14 4 4-4 4" />
+  {:else if name === "shuffle-magic"}
+    <!-- Magic shuffle: the shuffle arrows, a little smaller toward the bottom right, with a four-point star at top left. -->
+    <g transform="translate(4 4.3) scale(0.82)">
+      <path vector-effect="non-scaling-stroke" d="M2 18h1.4c1.3 0 2.5-.6 3.3-1.7l6.1-8.6c.7-1.1 2-1.7 3.3-1.7H22" />
+      <path vector-effect="non-scaling-stroke" d="m18 2 4 4-4 4" />
+      <path vector-effect="non-scaling-stroke" d="M2 6h1.9c1.5 0 2.9.9 3.6 2.2" />
+      <path vector-effect="non-scaling-stroke" d="M22 18h-5.9c-1.3 0-2.6-.7-3.3-1.8l-.5-.8" />
+      <path vector-effect="non-scaling-stroke" d="m18 14 4 4-4 4" />
+    </g>
+    <path d="M4.2 .4Q4.9 3.5 8 4.2 4.9 4.9 4.2 8 3.5 4.9 .4 4.2 3.5 3.5 4.2 .4Z" fill="currentColor" stroke="none" />
   {:else if name === "repeat"}
     <path d="m17 2 4 4-4 4" />
     <path d="M3 11v-1a4 4 0 0 1 4-4h14" />
