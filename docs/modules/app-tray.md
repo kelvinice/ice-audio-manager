@@ -36,6 +36,7 @@ communications mic line · **Toggle pairs** (and "Toggle with the current device
 Unit tests in `tray.rs` and `preferences.rs` cover id round-trips and favourite edits. Manual: checklist sections A, C, D.
 
 ## Change log
+- 2026-11-27 · The Windows tray loads a dedicated small snowflake drawn on a 16 px grid. The taskbar uses the multi-size app icon.
 - 2026-11-23 Claude: initial recap.
 - 2026-11-23 Claude: "Launch at sign-in" reads the registry through `startup.rs` each time the menu opens (Settings can change it too).
 - 2026-11-24 Claude: "Now playing pill" submenu (Brief, then small (default) / While playing / Off).

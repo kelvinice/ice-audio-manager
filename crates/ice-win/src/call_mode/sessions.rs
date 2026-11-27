@@ -77,6 +77,8 @@ impl IAudioSessionEvents_Impl for StateEvents_Impl {
 pub struct Session {
     /// Windows' session instance identifier: unique per session, stable while it lives.
     pub key: String,
+    /// MMDevice endpoint ID this session belongs to.
+    pub endpoint_id: String,
     /// Executable file name of the owning process, e.g. `Discord.exe`.
     pub exe: String,
     control: IAudioSessionControl2,
@@ -115,10 +117,17 @@ impl Session {
     }
 }
 
+struct EndpointManager {
+    id: String,
+    manager: IAudioSessionManager2,
+    created: IAudioSessionNotification,
+    meter: Option<crate::meter::Meter>,
+}
+
 /// The session managers of every active playback device with our "session created" notification registered, plus
 /// state-change notifications on the sessions passed to [`SessionWatch::watch`]. Unregisters everything on drop.
 pub struct SessionWatch {
-    managers: Vec<(IAudioSessionManager2, IAudioSessionNotification)>,
+    managers: Vec<EndpointManager>,
     watched: Vec<(String, IAudioSessionControl, IAudioSessionEvents)>,
     exe_names: HashMap<u32, Option<String>>,
     sink: Sink,
@@ -133,11 +142,22 @@ impl SessionWatch {
                 continue;
             }
             match register_manager(eps, &info.id, &sink) {
-                Ok(pair) => managers.push(pair),
+                Ok(entry) => managers.push(entry),
                 Err(e) => tracing::debug!(error = %e, "call mode: no session manager for a playback device"),
             }
         }
         Self { managers, watched: Vec::new(), exe_names: HashMap::new(), sink }
+    }
+
+    /// Current master peak (0.0–1.0) of the render endpoint `endpoint_id`, or `0.0` if unavailable.
+    #[must_use]
+    pub fn endpoint_peak(&self, endpoint_id: &str) -> f32 {
+        self.managers
+            .iter()
+            .find(|ep| ep.id == endpoint_id)
+            .and_then(|ep| ep.meter.as_ref())
+            .and_then(|m| m.peak().ok())
+            .unwrap_or(0.0)
     }
 
     /// Every app session on every watched device (system sounds and our own process excluded).
@@ -145,9 +165,9 @@ impl SessionWatch {
         let own = std::process::id();
         let mut out = Vec::new();
         let mut live_pids = Vec::new();
-        for (manager, _) in &self.managers {
+        for ep in &self.managers {
             // SAFETY: plain enumeration on a valid manager; the enumerator is a snapshot owned by us.
-            let Ok(list) = (unsafe { manager.GetSessionEnumerator() }) else { continue };
+            let Ok(list) = (unsafe { ep.manager.GetSessionEnumerator() }) else { continue };
             // SAFETY: plain getter on a valid enumerator.
             let count = unsafe { list.GetCount() }.unwrap_or(0);
             for i in 0..count {
@@ -166,7 +186,7 @@ impl SessionWatch {
                     continue;
                 };
                 if let Some(key) = instance_id(&control) {
-                    out.push(Session { key, exe, control });
+                    out.push(Session { key, endpoint_id: ep.id.clone(), exe, control });
                 }
             }
         }
@@ -203,19 +223,16 @@ impl SessionWatch {
 impl Drop for SessionWatch {
     fn drop(&mut self) {
         self.retain_watched(&[]);
-        for (manager, created) in &self.managers {
+        for ep in &self.managers {
             // SAFETY: unregisters the same notification registered in `register_manager`.
-            let _ = unsafe { manager.UnregisterSessionNotification(created) };
+            let _ = unsafe { ep.manager.UnregisterSessionNotification(&ep.created) };
         }
     }
 }
 
-fn register_manager(
-    eps: &Endpoints,
-    device_id: &str,
-    sink: &Sink,
-) -> Result<(IAudioSessionManager2, IAudioSessionNotification)> {
+fn register_manager(eps: &Endpoints, device_id: &str, sink: &Sink) -> Result<EndpointManager> {
     let device = eps.device(device_id)?;
+    let meter = crate::meter::Meter::new(&device).ok();
     // SAFETY: documented activation of the session manager on a valid endpoint.
     let manager: IAudioSessionManager2 = unsafe { device.Activate(CLSCTX_ALL, None)? };
     // Windows only starts sending "session created" after the first enumeration (documented on
@@ -225,7 +242,7 @@ fn register_manager(
     let created: IAudioSessionNotification = Created { sink: Arc::clone(sink) }.into();
     // SAFETY: `created` is kept alive with the manager until `SessionWatch::drop` unregisters it.
     unsafe { manager.RegisterSessionNotification(&created)? };
-    Ok((manager, created))
+    Ok(EndpointManager { id: device_id.to_string(), manager, created, meter })
 }
 
 fn instance_id(control: &IAudioSessionControl2) -> Option<String> {
@@ -251,15 +268,77 @@ mod tests {
     #[test]
     #[ignore = "needs the real audio service"]
     fn real_sessions_list() {
+        use ice_core::device::Flow;
         let _com = ComGuard::init_mta().unwrap();
         let eps = Endpoints::new().unwrap();
+        for info in eps.list(false).unwrap_or_default() {
+            if info.flow != Flow::Render {
+                continue;
+            }
+            let Ok(dev) = eps.device(&info.id) else { continue };
+            let ep_vol = crate::volume::get(&dev).ok();
+            let ep_peak = crate::meter::Meter::new(&dev).and_then(|m| m.peak()).unwrap_or(-1.0);
+            // SAFETY: documented activation of IAudioSessionManager2 on a valid endpoint.
+            let Ok(mgr) = (unsafe { dev.Activate::<IAudioSessionManager2>(CLSCTX_ALL, None) }) else {
+                continue;
+            };
+            // SAFETY: plain enumeration on a valid manager.
+            let Ok(list) = (unsafe { mgr.GetSessionEnumerator() }) else { continue };
+            // SAFETY: plain getter on a valid enumerator.
+            let count = unsafe { list.GetCount() }.unwrap_or(0);
+            if count == 0 {
+                continue;
+            }
+            println!(
+                "=== DEVICE {} ep_vol={ep_vol:?} ep_peak={ep_peak:.4} sessions={count} ===",
+                info.friendly_name.as_deref().unwrap_or(&info.id)
+            );
+            for i in 0..count {
+                // SAFETY: `i` is within `count`.
+                let Ok(ctl) = (unsafe { list.GetSession(i) }) else { continue };
+                let Ok(ctl2) = ctl.cast::<IAudioSessionControl2>() else { continue };
+                // SAFETY: plain getters on a valid session control.
+                let pid = unsafe { ctl2.GetProcessId() }.unwrap_or(0);
+                // SAFETY: plain getter on a valid session control.
+                let sys = unsafe { ctl2.IsSystemSoundsSession() }.0 == 0;
+                let exe =
+                    if sys { "<system>".into() } else { process_exe_name(pid).unwrap_or_else(|| format!("pid:{pid}")) };
+                // SAFETY: `GetSessionIdentifier` returns a CoTaskMemAlloc'ed string freed with CoTaskMemFree.
+                let sid = unsafe {
+                    ctl2.GetSessionIdentifier()
+                        .ok()
+                        .map(|p| {
+                            let s = p.to_string().unwrap_or_default();
+                            CoTaskMemFree(Some(p.0.cast_const().cast()));
+                            s
+                        })
+                        .unwrap_or_default()
+                };
+                // SAFETY: plain getter on a valid session control.
+                let active = unsafe { ctl2.GetState() }.is_ok_and(|s| s == AudioSessionStateActive);
+                // SAFETY: plain getter on a valid session meter interface.
+                let peak =
+                    ctl2.cast::<IAudioMeterInformation>().and_then(|m| unsafe { m.GetPeakValue() }).unwrap_or(-1.0);
+                // SAFETY: plain getter on a valid session volume interface.
+                let vol = ctl2.cast::<ISimpleAudioVolume>().and_then(|v| unsafe { v.GetMasterVolume() }).ok();
+                println!("  [{i}] {exe:<24} pid={pid:<6} active={active:<5} peak={peak:.4} vol={vol:?} sid={sid}");
+            }
+        }
         let mut watch = SessionWatch::new(&eps, Arc::new(|| {}));
         let sessions = watch.sessions();
         for s in &sessions {
-            println!("{:<28} active={:<5} peak={:.3} volume={:?}", s.exe, s.is_active(), s.peak(), s.volume());
             watch.watch(s);
         }
         assert_eq!(watch.watched.len(), sessions.len(), "every session accepts a state notification");
+        let default_dev = eps.default_device(Flow::Render, ice_core::device::Role::Multimedia).ok();
+        let meter = default_dev.as_ref().and_then(|d| crate::meter::Meter::new(d).ok());
+        for step in 0..10 {
+            let ep_p = meter.as_ref().and_then(|m| m.peak().ok()).unwrap_or(-1.0);
+            let active_peaks: Vec<String> =
+                sessions.iter().filter(|s| s.is_active()).map(|s| format!("{}={:.4}", s.exe, s.peak())).collect();
+            println!("sample[{step}]: ep_peak={ep_p:.4} sessions=[{}]", active_peaks.join(", "));
+            std::thread::sleep(std::time::Duration::from_millis(150));
+        }
     }
 
     /// Real host, read-only: while the app runs, logs Discord's peak and every music-session volume change it sees

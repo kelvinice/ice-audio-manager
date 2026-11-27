@@ -39,6 +39,7 @@ Part of the Definition of Done ([code-practices §10](../code-practices.md#10-de
 | [app-ui-notch](app-ui-notch.md) | Notch WebView: controller, scheduler, springs, geometry, activities, themes | `app/ui/**` (except Settings) | Gemini |
 | [app-ui-settings](app-ui-settings.md) | Settings window: pages, controls, previews, settings client, `--ice-set-*` tokens | `app/ui/src/settings/**`, `app/ui/src/lib/settings/**` | Gemini |
 | [data-flows](data-flows.md) | End-to-end traces: hotkey switch, volume key, media, wake/suspend, settings change | cross-layer | all |
+| [pandora](pandora.md) | Desktop player appearance, settings persistence and Windows icons | `pandora/**`, `assets/src/pandora*.svg` | Pandora |
 
 ## Layers at a glance
 

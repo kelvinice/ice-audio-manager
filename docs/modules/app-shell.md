@@ -21,6 +21,7 @@ state to the UI, and exposes a small set of Tauri commands. Thin by rule: valida
 | `drag.rs` | D-20 markless drag & drop loop (`start`, `Host::{WebView, Native}`): bounded 120 Hz worker moving either host via `SWP_NOACTIVATE`, resolving clamped continuous top/bottom drop targets (`resolve_drop_target`), springing into place, and triggering WebView `placed_seq` or native `flash_placed` (Esc cancels) |
 | `meter.rs` | `Visualizer`: the shell owns the `audio://meter/v1` subscription and drains queued frames to the latest reading before emitting; the WebView only *requests* frames |
 | `art.rs` | `iceart://<id>` handler: engine PNGs only, no paths/queries/other methods |
+| `bridge.rs` | Authenticated `127.0.0.1:0` JSON-line local bridge for companion tools (`%LOCALAPPDATA%\IceAudioManager\bridge.json`; `ping`, `snapshot`, `command`, `showNotch`, `toggleNotch`, `openSettings`; cleaned up on exit) |
 | `logging.rs` | File logs in `%LOCALAPPDATA%\IceAudioManager\logs` (`--verbose` for debug) |
 | `tray.rs`, `tray/preferences.rs` | See [app-tray](app-tray.md) |
 | `capabilities/{default,notch,settings}.json`, `permissions/shell.toml`, `tauri.conf.json` | Least-privilege per window; CSP: `default-src 'self'`, `img-src … iceart:` , no remote origins |
@@ -88,3 +89,4 @@ Unit tests in `art.rs`, `engine_bridge.rs`, `ipc.rs`, `meter.rs`, `placement.rs`
 - 2026-11-26 Claude: `NotchSnapshot.dragging`: `drag.rs` sets it when the drag starts and clears it the moment the button is released or Esc is pressed (`Drag::released`, idempotent, also after any early return), so the WebView settles its lifted shape while the window springs into place.
 - 2026-11-26 Claude: the WebView's startup hit rect comes from `startup_hit_rect` (main.rs) over `native_dot::idle_body_box` instead of a hand copy; it covers the idle body only (no Edge Nook ears) and honours bottom anchors. `ipc.rs` exports `Experiments`.
 - 2026-11-26 Claude: owner: a pinned card stays pinned through a drag: `drag::start` remembers `NotchSnapshot.expanded` (`Drag.was_pinned`), still collapses it while carried, and `Drag::restore_pin` sets it again once the window has landed or sprung back on Esc (WebView host only; not if hibernate came on meanwhile). A hover-opened card still lands as the pill.
+- 2026-11-26 Antigravity: added `bridge.rs`, an optional loopback-only (`127.0.0.1:0`, token-authenticated via `%LOCALAPPDATA%\IceAudioManager\bridge.json`) JSON-line local bridge for companion apps like Pandora (`ping`, `snapshot`, `command`, `showNotch`, `toggleNotch`, `openSettings`).

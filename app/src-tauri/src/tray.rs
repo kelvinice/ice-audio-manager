@@ -283,13 +283,15 @@ pub(super) fn build(app: &AppHandle, state: Arc<SharedRuntime>) -> tauri::Result
     });
 
     let guid = tray_guid()?;
-    let mut builder = TrayIconBuilder::new().with_id(TRAY_ID).with_guid(guid).with_tooltip("Ice Audio Manager");
-    if let Some(image) = app.default_window_icon() {
-        let icon = Icon::from_rgba(image.rgba().to_vec(), image.width(), image.height())
-            .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidData, error))?;
-        builder = builder.with_icon(icon);
-    }
-    let icon = builder.build()?;
+    let image = tauri::include_image!("icons/tray.png");
+    let mark = Icon::from_rgba(image.rgba().to_vec(), image.width(), image.height())
+        .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidData, error))?;
+    let icon = TrayIconBuilder::new()
+        .with_id(TRAY_ID)
+        .with_guid(guid)
+        .with_tooltip("Ice Audio Manager")
+        .with_icon(mark)
+        .build()?;
     TRAY.with_borrow_mut(|tray| *tray = Some(RegisteredTray { icon, guid }));
     Ok(())
 }

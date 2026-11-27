@@ -1,0 +1,403 @@
+<script lang="ts">
+  import { audioEngine, EQ_FREQUENCIES, EQ_PRESETS, playerStore } from "../lib/audio";
+  import { parseParametricEqText } from "../lib/parametricEq";
+  import Icon from "./Icon.svelte";
+
+  interface Props {
+    open: boolean;
+    onClose: () => void;
+  }
+
+  let { open, onClose }: Props = $props();
+  let showPaste = $state(false);
+  let pasteText = $state("");
+  let parseErr = $state<string | null>(null);
+  let fileInput = $state<HTMLInputElement | null>(null);
+
+  function applyParametricText(text: string, name: string) {
+    parseErr = null;
+    try {
+      const profile = parseParametricEqText(text, name);
+      audioEngine.updateEq({ ...$playerStore.eq, enabled: true, parametric: profile });
+      showPaste = false;
+      pasteText = "";
+    } catch (e) {
+      parseErr = e instanceof Error ? e.message : String(e);
+    }
+  }
+
+  async function handleFilePicked(e: Event) {
+    const input = e.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+    const text = await file.text();
+    applyParametricText(text, file.name.replace(/\.txt$/i, ""));
+    input.value = "";
+  }
+
+  function applyPreset(name: string) {
+    const bands = EQ_PRESETS[name] ?? EQ_PRESETS.Flat;
+    audioEngine.updateEq({ ...$playerStore.eq, preset: name, bands: [...bands] });
+  }
+
+  function setBand(index: number, db: number) {
+    const bands = [...$playerStore.eq.bands];
+    bands[index] = db;
+    audioEngine.updateEq({ ...$playerStore.eq, preset: "Custom", bands });
+  }
+
+  function freqLabel(hz: number): string {
+    return hz >= 1000 ? `${hz / 1000}k` : `${hz}`;
+  }
+</script>
+
+{#if open}
+  <div class="backdrop" role="presentation" onclick={onClose}>
+    <div
+      class="drawer card-glass"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Audio DSP and Equalizer"
+      tabindex="-1"
+      onclick={(e) => e.stopPropagation()}
+      onkeydown={(e) => { if (e.key === "Escape") onClose(); }}
+    >
+      <div class="head">
+        <div>
+          <h3>Equalizer</h3>
+        </div>
+        <button class="btn-ghost" onclick={onClose} aria-label="Done">
+          <Icon name="x" size={15} />
+          <span>Done</span>
+        </button>
+      </div>
+
+      <div class="toggles">
+        <label class="toggle-row">
+          <span>Enable Equalizer</span>
+          <input
+            type="checkbox"
+            checked={$playerStore.eq.enabled}
+            onchange={(e) =>
+              audioEngine.updateEq({
+                ...$playerStore.eq,
+                enabled: (e.target as HTMLInputElement).checked,
+              })}
+          />
+        </label>
+        <label class="toggle-row">
+          <span>Volume Normalization</span>
+          <input
+            type="checkbox"
+            checked={$playerStore.eq.normalize}
+            onchange={(e) =>
+              audioEngine.updateEq({
+                ...$playerStore.eq,
+                normalize: (e.target as HTMLInputElement).checked,
+              })}
+          />
+        </label>
+        <label class="toggle-row">
+          <span>Skip Silence</span>
+          <input
+            type="checkbox"
+            checked={$playerStore.eq.skipSilence}
+            onchange={(e) =>
+              audioEngine.updateEq({
+                ...$playerStore.eq,
+                skipSilence: (e.target as HTMLInputElement).checked,
+              })}
+          />
+        </label>
+      </div>
+
+      <div class="section-label">Presets</div>
+      <div class="presets">
+        {#each Object.keys(EQ_PRESETS) as preset}
+          <button
+            class="preset-chip"
+            class:active={$playerStore.eq.preset === preset}
+            onclick={() => applyPreset(preset)}
+          >
+            {preset}
+          </button>
+        {/each}
+      </div>
+
+      <div class="section-label">Bands</div>
+      <div class="bands">
+        {#each EQ_FREQUENCIES as hz, idx}
+          <div class="band">
+            <span class="db">{$playerStore.eq.bands[idx] > 0 ? `+${$playerStore.eq.bands[idx]}` : $playerStore.eq.bands[idx]}</span>
+            <input
+              type="range"
+              min="-12"
+              max="12"
+              step="0.5"
+              value={$playerStore.eq.bands[idx]}
+              oninput={(e) => setBand(idx, Number((e.target as HTMLInputElement).value))}
+            />
+            <span class="hz">{freqLabel(hz)}</span>
+          </div>
+        {/each}
+      </div>
+
+      <div class="section-label">AutoEq Parametric</div>
+      {#if $playerStore.eq.parametric}
+        <div class="param-badge">
+          <div>
+            <strong>{$playerStore.eq.parametric.name}</strong>
+            <span>
+              {$playerStore.eq.parametric.bands.length} bands • Preamp {$playerStore.eq.parametric.preamp} dB
+            </span>
+          </div>
+          <button
+            class="preset-chip"
+            onclick={() => audioEngine.updateEq({ ...$playerStore.eq, parametric: null })}
+          >
+            Clear
+          </button>
+        </div>
+      {/if}
+      <div class="presets">
+        <input
+          bind:this={fileInput}
+          type="file"
+          accept=".txt"
+          class="hidden-file"
+          onchange={(e) => void handleFilePicked(e)}
+        />
+        <button class="preset-chip" onclick={() => fileInput?.click()}>Import .txt</button>
+        <button class="preset-chip" onclick={() => (showPaste = !showPaste)}>
+          {showPaste ? "Hide Paste" : "Paste AutoEq"}
+        </button>
+      </div>
+      {#if showPaste}
+        <div class="paste-box">
+          <textarea
+            rows="4"
+            placeholder="Paste Equalizer APO ParametricEQ.txt..."
+            bind:value={pasteText}
+          ></textarea>
+          <button
+            class="preset-chip active"
+            onclick={() => applyParametricText(pasteText, "Pasted AutoEq")}
+          >
+            Apply Profile
+          </button>
+        </div>
+      {/if}
+      {#if parseErr}
+        <div class="parse-err">{parseErr}</div>
+      {/if}
+
+      <div class="section-label">Playback Speed ({$playerStore.eq.playbackRate.toFixed(2)}×)</div>
+      <input
+        class="speed-slider"
+        type="range"
+        min="0.75"
+        max="1.5"
+        step="0.05"
+        value={$playerStore.eq.playbackRate}
+        oninput={(e) =>
+          audioEngine.updateEq({
+            ...$playerStore.eq,
+            playbackRate: Number((e.target as HTMLInputElement).value),
+          })}
+      />
+
+      <div class="section-label">
+        Sleep Timer
+        {#if $playerStore.sleepEndOfTrack}
+          • Stops after track
+        {:else if $playerStore.sleepRemainingSec !== null}
+          • {Math.ceil($playerStore.sleepRemainingSec / 60)} min left
+        {/if}
+      </div>
+      <div class="presets">
+        <button
+          class="preset-chip"
+          class:active={!$playerStore.sleepEndOfTrack && $playerStore.sleepRemainingSec === null}
+          onclick={() => audioEngine.setSleepTimer(null)}
+        >
+          Off
+        </button>
+        <button
+          class="preset-chip"
+          class:active={$playerStore.sleepEndOfTrack}
+          onclick={() => audioEngine.setSleepEndOfTrack(!$playerStore.sleepEndOfTrack)}
+        >
+          End of Track
+        </button>
+        <button class="preset-chip" onclick={() => audioEngine.setSleepTimer(15)}>15m</button>
+        <button class="preset-chip" onclick={() => audioEngine.setSleepTimer(30)}>30m</button>
+        <button class="preset-chip" onclick={() => audioEngine.setSleepTimer(60)}>60m</button>
+      </div>
+    </div>
+  </div>
+{/if}
+
+<style>
+  .backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    background: rgba(0, 0, 0, 0.45);
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  .drawer {
+    width: 410px;
+    max-width: 92vw;
+    height: 100%;
+    border-radius: 20px 0 0 20px;
+    padding: 22px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    overflow-y: auto;
+    background: var(--p-surface-solid);
+  }
+
+  .head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+  }
+
+  .head h3 {
+    margin: 0;
+    font-size: 18px;
+  }
+
+  .toggles {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 12px;
+    border-radius: 12px;
+    background: var(--p-fill);
+    font-size: 13px;
+    cursor: pointer;
+  }
+
+  .section-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--p-text-dim);
+    margin-top: 4px;
+  }
+
+  .presets {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .preset-chip {
+    padding: 6px 11px;
+    border-radius: 999px;
+    font-size: 12px;
+    background: var(--p-fill);
+    border: 1px solid var(--p-border);
+  }
+
+  .preset-chip.active {
+    background: var(--p-accent-soft);
+    color: var(--p-accent-bright);
+    border-color: var(--p-accent);
+  }
+
+  .bands {
+    display: grid;
+    grid-template-columns: repeat(10, 1fr);
+    gap: 4px;
+    padding: 12px 8px;
+    border-radius: 14px;
+    background: var(--p-fill);
+  }
+
+  .band {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .band input[type="range"] {
+    writing-mode: vertical-lr;
+    direction: rtl;
+    height: 110px;
+    width: 22px;
+    accent-color: var(--p-accent);
+  }
+
+  .db,
+  .hz {
+    font-size: 10px;
+    color: var(--p-text-dim);
+  }
+
+  .speed-slider {
+    width: 100%;
+    accent-color: var(--p-accent);
+  }
+
+  .hidden-file {
+    display: none;
+  }
+
+  .param-badge {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 9px 12px;
+    border-radius: 12px;
+    background: var(--p-accent-soft);
+    border: 1px solid var(--p-border);
+    font-size: 12px;
+  }
+
+  .param-badge strong {
+    display: block;
+    color: var(--p-accent-bright);
+  }
+
+  .param-badge span {
+    font-size: 11px;
+    color: var(--p-text-muted);
+  }
+
+  .paste-box {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .paste-box textarea {
+    width: 100%;
+    border-radius: 10px;
+    border: 1px solid var(--p-border);
+    background: var(--p-fill);
+    color: var(--p-text);
+    font-family: monospace;
+    font-size: 11px;
+    padding: 8px 10px;
+    resize: vertical;
+  }
+
+  .parse-err {
+    font-size: 12px;
+    color: var(--p-danger);
+  }
+</style>

@@ -1,0 +1,332 @@
+//! Authenticated localhost JSON-line bridge (`127.0.0.1:0`) for companion tools such as Pandora.
+//!
+//! Discovery metadata (`{ version, port, token, pid }`) is written atomically to
+//! `%LOCALAPPDATA%\IceAudioManager\bridge.json` on startup and removed cleanly on exit. If nothing
+//! connects, the listener thread sleeps blocked in `TcpListener::accept` with zero CPU usage.
+
+use std::collections::hash_map::RandomState;
+use std::hash::BuildHasher;
+use std::io::{BufRead, BufReader, Read, Write};
+use std::net::{SocketAddr, TcpListener, TcpStream};
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex, PoisonError};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+use ice_core::engine::{Command, EngineSnapshot, PerformanceProfile};
+use serde::{Deserialize, Serialize};
+use tauri::AppHandle;
+
+use super::{SharedRuntime, settings, show_notch};
+
+const BRIDGE_VERSION: u32 = 1;
+const MAX_REQUEST_BYTES: u64 = 65_536;
+const IO_TIMEOUT: Duration = Duration::from_secs(2);
+
+static ACTIVE: Mutex<Option<BridgeStop>> = Mutex::new(None);
+
+struct BridgeStop {
+    stop: Arc<AtomicBool>,
+    port: u16,
+    info_path: PathBuf,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct BridgeInfoFile {
+    version: u32,
+    port: u16,
+    token: String,
+    pid: u32,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct BridgeRequest {
+    token: String,
+    #[serde(flatten)]
+    action: BridgeAction,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(tag = "action", rename_all = "camelCase")]
+enum BridgeAction {
+    Ping,
+    Snapshot,
+    Command { command: Command },
+    ShowNotch,
+    ToggleNotch,
+    OpenSettings,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct BridgeStatus {
+    version: u32,
+    app_version: String,
+    pid: u32,
+    notch_expanded: bool,
+    hibernate: bool,
+    gaming: bool,
+    performance_profile: String,
+    active_device: Option<String>,
+    volume_percent: Option<u8>,
+    muted: Option<bool>,
+    mic_muted: Option<bool>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct BridgeResponse {
+    ok: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    error: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    status: Option<BridgeStatus>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    snapshot: Option<EngineSnapshot>,
+}
+
+impl BridgeResponse {
+    fn err(msg: impl Into<String>) -> Self {
+        Self { ok: false, error: Some(msg.into()), status: None, snapshot: None }
+    }
+
+    fn ok_status(status: BridgeStatus, snapshot: Option<EngineSnapshot>) -> Self {
+        Self { ok: true, error: None, status: Some(status), snapshot }
+    }
+}
+
+pub(super) fn start(app: &AppHandle, state: &Arc<SharedRuntime>, info_path: PathBuf) {
+    let listener = match TcpListener::bind("127.0.0.1:0") {
+        Ok(l) => l,
+        Err(error) => {
+            tracing::warn!(%error, "Ice local bridge failed to bind");
+            return;
+        }
+    };
+    let Ok(addr) = listener.local_addr() else {
+        tracing::warn!("Ice local bridge could not read local address");
+        return;
+    };
+    let port = addr.port();
+    let token = generate_token();
+    let info = BridgeInfoFile { version: BRIDGE_VERSION, port, token: token.clone(), pid: std::process::id() };
+    if let Err(error) = write_info_file(&info_path, &info) {
+        tracing::warn!(%error, path = %info_path.display(), "Ice local bridge could not write discovery file");
+    }
+
+    let stop = Arc::new(AtomicBool::new(false));
+    {
+        let mut active = ACTIVE.lock().unwrap_or_else(PoisonError::into_inner);
+        *active = Some(BridgeStop { stop: Arc::clone(&stop), port, info_path });
+    }
+
+    let app_handle = app.clone();
+    let runtime = Arc::clone(state);
+    if let Err(error) = std::thread::Builder::new().name("ice-local-bridge".into()).spawn(move || {
+        for conn in listener.incoming() {
+            if stop.load(Ordering::Acquire) {
+                break;
+            }
+            match conn {
+                Ok(stream) => {
+                    if stop.load(Ordering::Acquire) {
+                        break;
+                    }
+                    handle_client(stream, &app_handle, &runtime, &token);
+                }
+                Err(error) => {
+                    tracing::debug!(%error, "Ice local bridge accept error");
+                    break;
+                }
+            }
+        }
+    }) {
+        tracing::warn!(%error, "Ice local bridge thread failed to spawn");
+        return;
+    }
+
+    tracing::info!(port, "Ice local bridge ready");
+}
+
+pub(super) fn stop() {
+    let prev = ACTIVE.lock().unwrap_or_else(PoisonError::into_inner).take();
+    let Some(entry) = prev else {
+        return;
+    };
+    entry.stop.store(true, Ordering::Release);
+    let _ = std::fs::remove_file(&entry.info_path);
+    let addr = SocketAddr::from(([127, 0, 0, 1], entry.port));
+    let _ = TcpStream::connect_timeout(&addr, Duration::from_millis(100));
+}
+
+fn handle_client(mut stream: TcpStream, app: &AppHandle, state: &Arc<SharedRuntime>, expected_token: &str) {
+    let _ = stream.set_read_timeout(Some(IO_TIMEOUT));
+    let _ = stream.set_write_timeout(Some(IO_TIMEOUT));
+
+    let mut line = String::new();
+    let read_res = {
+        let mut limited = BufReader::new(Read::by_ref(&mut stream).take(MAX_REQUEST_BYTES));
+        limited.read_line(&mut line)
+    };
+    let response = match read_res {
+        Ok(0) => return,
+        Ok(_) => match serde_json::from_str::<BridgeRequest>(line.trim_end()) {
+            Ok(req) => dispatch_request(req, app, state, expected_token),
+            Err(e) => BridgeResponse::err(format!("invalid request: {e}")),
+        },
+        Err(e) => BridgeResponse::err(format!("read error: {e}")),
+    };
+
+    if let Ok(mut json) = serde_json::to_string(&response) {
+        json.push('\n');
+        let _ = stream.write_all(json.as_bytes());
+        let _ = stream.flush();
+    }
+}
+
+fn dispatch_request(
+    req: BridgeRequest,
+    app: &AppHandle,
+    state: &Arc<SharedRuntime>,
+    expected_token: &str,
+) -> BridgeResponse {
+    if !tokens_match(&req.token, expected_token) {
+        return BridgeResponse::err("unauthorized");
+    }
+
+    match req.action {
+        BridgeAction::Ping => {
+            let snap = state.engine.snapshot();
+            BridgeResponse::ok_status(build_status(state, &snap), None)
+        }
+        BridgeAction::Snapshot => {
+            let snap = state.engine.snapshot();
+            BridgeResponse::ok_status(build_status(state, &snap), Some(snap))
+        }
+        BridgeAction::Command { command } => {
+            state.engine.send(command);
+            std::thread::sleep(Duration::from_millis(25));
+            let snap = state.engine.snapshot();
+            BridgeResponse::ok_status(build_status(state, &snap), Some(snap))
+        }
+        BridgeAction::ShowNotch => {
+            let (h, st) = (app.clone(), Arc::clone(state));
+            let _ = app.run_on_main_thread(move || show_notch::show(&h, &st, show_notch::Open::Show));
+            let snap = state.engine.snapshot();
+            BridgeResponse::ok_status(build_status(state, &snap), None)
+        }
+        BridgeAction::ToggleNotch => {
+            let (h, st) = (app.clone(), Arc::clone(state));
+            let _ = app.run_on_main_thread(move || show_notch::show(&h, &st, show_notch::Open::Toggle));
+            let snap = state.engine.snapshot();
+            BridgeResponse::ok_status(build_status(state, &snap), None)
+        }
+        BridgeAction::OpenSettings => {
+            let (h, st) = (app.clone(), Arc::clone(state));
+            let _ = app.run_on_main_thread(move || {
+                let _ = settings::create_window(&h, &st);
+            });
+            let snap = state.engine.snapshot();
+            BridgeResponse::ok_status(build_status(state, &snap), None)
+        }
+    }
+}
+
+fn build_status(state: &SharedRuntime, snap: &EngineSnapshot) -> BridgeStatus {
+    let notch_expanded = state.snapshot_clone().expanded;
+    let gaming = state.placement().gaming;
+    let active_device = snap.playback.iter().find(|d| d.is_default).map(|d| d.name.clone());
+    let profile = match snap.settings.performance_profile {
+        PerformanceProfile::Instant => "instant",
+        PerformanceProfile::Balanced => "balanced",
+        PerformanceProfile::Lite => "lite",
+    };
+
+    BridgeStatus {
+        version: BRIDGE_VERSION,
+        app_version: env!("CARGO_PKG_VERSION").to_string(),
+        pid: std::process::id(),
+        notch_expanded,
+        hibernate: snap.settings.appearance.hibernate,
+        gaming,
+        performance_profile: profile.to_string(),
+        active_device,
+        volume_percent: snap.volume.as_ref().map(|v| v.percent),
+        muted: snap.volume.as_ref().map(|v| v.muted),
+        mic_muted: snap.mic_muted,
+    }
+}
+
+fn tokens_match(candidate: &str, expected: &str) -> bool {
+    candidate.as_bytes() == expected.as_bytes()
+}
+
+fn generate_token() -> String {
+    let nanos = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_nanos();
+    let pid = u128::from(std::process::id());
+    let s1 = RandomState::new();
+    let s2 = RandomState::new();
+    let hi = s1.hash_one((nanos, pid, 0x9e37_79b9_7f4a_7c15_u64));
+    let lo = s2.hash_one((pid, nanos.wrapping_mul(6364_1362_2384_6793_u128), &hi as *const u64 as usize));
+    format!("{hi:016x}{lo:016x}")
+}
+
+fn write_info_file(path: &Path, info: &BridgeInfoFile) -> std::io::Result<()> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let json = serde_json::to_string_pretty(info).map_err(std::io::Error::other)?;
+    let tmp = path.with_extension("json.tmp");
+    std::fs::write(&tmp, &json)?;
+    if std::fs::rename(&tmp, path).is_err() {
+        std::fs::write(path, &json)?;
+        let _ = std::fs::remove_file(&tmp);
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn request_deserializes_all_bridge_actions() {
+        let ping: BridgeRequest = serde_json::from_str(r#"{"token":"abc","action":"ping"}"#).unwrap();
+        assert!(matches!(ping.action, BridgeAction::Ping));
+
+        let snap: BridgeRequest = serde_json::from_str(r#"{"token":"abc","action":"snapshot"}"#).unwrap();
+        assert!(matches!(snap.action, BridgeAction::Snapshot));
+
+        let show: BridgeRequest = serde_json::from_str(r#"{"token":"abc","action":"showNotch"}"#).unwrap();
+        assert!(matches!(show.action, BridgeAction::ShowNotch));
+
+        let toggle: BridgeRequest = serde_json::from_str(r#"{"token":"abc","action":"toggleNotch"}"#).unwrap();
+        assert!(matches!(toggle.action, BridgeAction::ToggleNotch));
+
+        let settings: BridgeRequest = serde_json::from_str(r#"{"token":"abc","action":"openSettings"}"#).unwrap();
+        assert!(matches!(settings.action, BridgeAction::OpenSettings));
+
+        let cmd: BridgeRequest =
+            serde_json::from_str(r#"{"token":"abc","action":"command","command":{"type":"toggleMute"}}"#).unwrap();
+        assert!(matches!(cmd.action, BridgeAction::Command { command: Command::ToggleMute }));
+    }
+
+    #[test]
+    fn token_generation_is_32_hex_chars_and_unique() {
+        let t1 = generate_token();
+        let t2 = generate_token();
+        assert_eq!(t1.len(), 32);
+        assert_eq!(t2.len(), 32);
+        assert!(t1.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f')));
+        assert_ne!(t1, t2);
+    }
+
+    #[test]
+    fn token_verification_checks_exact_match() {
+        assert!(tokens_match("deadbeef", "deadbeef"));
+        assert!(!tokens_match("deadbeee", "deadbeef"));
+        assert!(!tokens_match("", "deadbeef"));
+    }
+}
