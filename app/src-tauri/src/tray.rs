@@ -44,6 +44,24 @@ pub(super) fn close() {
     TRAY.with_borrow_mut(|tray| *tray = None);
 }
 
+/// Loads the notification-area icon from the app ICO embedded in the exe, at the small-icon size for the
+/// primary display (16 px at 100 %, 24 px at 150 %). Windows then uses the frame drawn for that size; handing the
+/// shell one large bitmap made it shrink the snowflake itself, which blurred it into a Bluetooth-like mark.
+fn tray_mark() -> std::io::Result<Icon> {
+    let scale = ice_win::monitors::list_monitors()
+        .ok()
+        .and_then(|monitors| monitors.into_iter().find(|monitor| monitor.is_primary))
+        .map_or(1.0, |monitor| monitor.scale_factor);
+    let size = small_icon_size(scale);
+    Icon::from_resource(tauri::utils::platform::WINDOWS_APP_ICON_RESOURCE_ID, Some((size, size)))
+        .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidData, error))
+}
+
+/// `SM_CXSMICON` for a display scale: 16 logical px, rounded to whole device pixels and clamped to sane DPI.
+fn small_icon_size(scale: f64) -> u32 {
+    (16.0 * scale.clamp(1.0, 4.0)).round() as u32
+}
+
 fn tray_guid() -> std::io::Result<u128> {
     // Windows binds a tray GUID to an executable path. Hash it so side-by-side worktrees
     // can each register their own icon while upgrades at the same path keep their identity.
@@ -283,9 +301,7 @@ pub(super) fn build(app: &AppHandle, state: Arc<SharedRuntime>) -> tauri::Result
     });
 
     let guid = tray_guid()?;
-    let image = tauri::include_image!("icons/tray.png");
-    let mark = Icon::from_rgba(image.rgba().to_vec(), image.width(), image.height())
-        .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidData, error))?;
+    let mark = tray_mark()?;
     let icon = TrayIconBuilder::new()
         .with_id(TRAY_ID)
         .with_guid(guid)
@@ -508,6 +524,15 @@ mod tests {
     use ice_core::engine::{Engine, fake::FakeEngine};
 
     use super::*;
+
+    #[test]
+    fn tray_icon_size_matches_the_display_scale() {
+        assert_eq!(small_icon_size(1.0), 16);
+        assert_eq!(small_icon_size(1.25), 20);
+        assert_eq!(small_icon_size(1.5), 24);
+        assert_eq!(small_icon_size(2.0), 32);
+        assert_eq!(small_icon_size(0.0), 16);
+    }
 
     #[test]
     fn picker_answers_use_the_current_request_and_offered_candidates() {

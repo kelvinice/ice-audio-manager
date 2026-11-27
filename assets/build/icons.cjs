@@ -26,11 +26,8 @@ async function buildIcon(name, app) {
     offset += png.length;
     if (size === 32) await fs.writeFile(path.join(dest, "32x32.png"), png);
   }
+  // The Ice tray loads its frame from this ICO (embedded in the exe), so keep the 16-24 px frames crisp.
   await fs.writeFile(path.join(dest, "icon.ico"), Buffer.concat([directory, ...frames]));
-  if (name === "ice") {
-    await sharp(path.join(root, "assets/src/ice-mini.svg"), { density: 288 })
-      .resize(48, 48).ensureAlpha().png().toFile(path.join(dest, "tray.png"));
-  }
 }
 
 Promise.all([buildIcon("ice", "app"), buildIcon("pandora", "pandora")]).catch(error => {
