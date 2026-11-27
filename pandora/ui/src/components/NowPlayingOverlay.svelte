@@ -70,13 +70,16 @@
     typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   /**
-   * Lyrics follow the song (current line kept mid-pane) until the listener scrolls them; then they stay put and a Sync
-   * button brings the current line back and resumes following. A new song or reopening starts in follow mode.
+   * Lyrics follow the song (current line kept mid-pane) until the listener scrolls them with the wheel or touch; then
+   * they stay where they were put, however the song moves on, until the Sync button is pressed. A different song or
+   * reopening Now Playing starts in follow mode again.
    */
   let following = $state(true);
+  // Only the id: reading the whole store here re-ran this on every time update and switched following back on.
+  let trackId = $derived($playerStore.currentTrack?.id ?? null);
 
   $effect(() => {
-    void $playerStore.currentTrack?.id;
+    void trackId;
     void open;
     following = true;
   });
@@ -389,7 +392,7 @@
           </div>
           {#if !following && $playerStore.lyrics?.status === "synced" && activeLineIdx >= 0}
             <button class="sync" onclick={syncLyrics}>
-              <Icon name="locate" size={15} />
+              <Icon name="refresh" size={15} />
               <span>Sync</span>
             </button>
           {/if}

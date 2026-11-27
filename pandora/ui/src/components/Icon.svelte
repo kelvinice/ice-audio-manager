@@ -44,7 +44,6 @@
     | "chevron-left"
     | "chevron-right"
     | "more"
-    | "locate"
     | "queue"
     | "collapse"
     | "expand"
@@ -268,10 +267,6 @@
     <path d="M4 5h16" />
     <path d="M4 10h16" />
     <rect x="4" y="14.5" width="16" height="5.5" rx="1.5" />
-  {:else if name === "locate"}
-    <circle cx="12" cy="12" r="7" />
-    <circle cx="12" cy="12" r="2.2" fill="currentColor" stroke="none" />
-    <path d="M12 2v3M12 19v3M2 12h3M19 12h3" />
   {:else if name === "more"}
     <circle cx="5" cy="12" r="1.6" fill="currentColor" stroke="none" />
     <circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none" />
