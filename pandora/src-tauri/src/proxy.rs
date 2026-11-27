@@ -14,6 +14,7 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{TcpListener, TcpStream};
 use url::Url;
 
+use crate::artcache::ArtCache;
 use crate::http;
 use crate::library::LibraryStore;
 use crate::ytmusic::YtMusicClient;
@@ -41,10 +42,16 @@ struct ArtEntry {
 pub struct ProxyState {
     pub ytm: Arc<YtMusicClient>,
     pub library: Arc<LibraryStore>,
+    /// Small in-memory front for the hottest images (the player bar, the visible list).
     art_cache: Mutex<HashMap<String, ArtEntry>>,
+    art_disk: Arc<ArtCache>,
 }
 
-pub async fn start(ytm: Arc<YtMusicClient>, library: Arc<LibraryStore>) -> Result<u16, String> {
+pub async fn start(
+    ytm: Arc<YtMusicClient>,
+    library: Arc<LibraryStore>,
+    art_disk: Arc<ArtCache>,
+) -> Result<u16, String> {
     let listener = TcpListener::bind("127.0.0.1:0")
         .await
         .map_err(|e| format!("proxy bind failed: {e}"))?;
@@ -57,6 +64,7 @@ pub async fn start(ytm: Arc<YtMusicClient>, library: Arc<LibraryStore>) -> Resul
         ytm,
         library,
         art_cache: Mutex::new(HashMap::new()),
+        art_disk,
     });
 
     tokio::spawn(async move {
@@ -223,6 +231,13 @@ async fn serve_art(
         return send_bytes(write_half, 200, "OK", &ct, &bytes).await;
     }
 
+    let disk = Arc::clone(&state.art_disk);
+    let key = raw_url.to_string();
+    if let Ok(Some((ct, bytes))) = tokio::task::spawn_blocking(move || disk.get(&key)).await {
+        remember_art(state, raw_url, &ct, &bytes);
+        return send_bytes(write_half, 200, "OK", &ct, &bytes).await;
+    }
+
     let url_owned = raw_url.to_string();
     let fetched = tokio::task::spawn_blocking(move || {
         let stream = http::open_request("GET", &url_owned, &[], None, None, 8_000)?;
@@ -242,21 +257,26 @@ async fn serve_art(
 
     match fetched {
         Ok((ct, bytes)) => {
-            if let Ok(mut guard) = state.art_cache.lock() {
-                if guard.len() > 128 {
-                    guard.clear();
-                }
-                guard.insert(
-                    raw_url.to_string(),
-                    ArtEntry { content_type: ct.clone(), bytes: bytes.clone() },
-                );
-            }
+            remember_art(state, raw_url, &ct, &bytes);
+            let disk = Arc::clone(&state.art_disk);
+            let (key, disk_ct, disk_bytes) = (raw_url.to_string(), ct.clone(), bytes.clone());
+            // Fire and forget: the response does not wait for the disk write.
+            drop(tokio::task::spawn_blocking(move || disk.put(&key, &disk_ct, &disk_bytes)));
             send_bytes(write_half, 200, "OK", &ct, &bytes).await
         }
         Err(e) => {
             tracing::warn!(error = %e, url = raw_url, "Artwork proxy failed");
             send_text(write_half, 502, "Bad Gateway", &e).await
         }
+    }
+}
+
+fn remember_art(state: &ProxyState, raw_url: &str, content_type: &str, bytes: &[u8]) {
+    if let Ok(mut guard) = state.art_cache.lock() {
+        if guard.len() > 128 {
+            guard.clear();
+        }
+        guard.insert(raw_url.to_string(), ArtEntry { content_type: content_type.to_string(), bytes: bytes.to_vec() });
     }
 }
 
@@ -574,7 +594,8 @@ mod tests {
         rt.block_on(async {
             let ytm = std::sync::Arc::new(crate::ytmusic::YtMusicClient::new());
             let lib = std::sync::Arc::new(crate::library::LibraryStore::load());
-            let port = super::start(ytm, lib).await.unwrap();
+            let art = std::sync::Arc::new(crate::artcache::ArtCache::open(lib.cache_dir().join("..").join("artwork"), 64));
+            let port = super::start(ytm, lib, art).await.unwrap();
 
             use tokio::io::{AsyncReadExt, AsyncWriteExt};
             let mut sock = tokio::net::TcpStream::connect(("127.0.0.1", port)).await.unwrap();

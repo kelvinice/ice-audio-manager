@@ -8,7 +8,8 @@ use std::time::{Duration, Instant};
 use serde_json::{Value, json};
 
 use crate::http;
-use crate::models::{HomeFeed, SearchResponse, Track};
+use crate::models::{CollectionPage, HomeFeed, SearchResponse, Track};
+use crate::ytm_feed;
 
 const YTM_ORIGIN: &str = "https://music.youtube.com";
 const WEB_REMIX_VERSION: &str = "1.20250219.01.00";
@@ -85,52 +86,111 @@ impl YtMusicClient {
         self.visitor_data.lock().ok().and_then(|g| g.clone())
     }
 
-    pub fn home(&self) -> HomeFeed {
-        let body = json!({
-            "context": web_remix_context(),
-            "browseId": "FEmusic_home"
-        })
-        .to_string();
-        let headers = [
+    /// One `browse` call with the WEB_REMIX client. `extra` carries `browseId` or `continuation`.
+    fn browse(&self, extra: Value) -> Result<Value, String> {
+        let mut body = json!({ "context": web_remix_context() });
+        if let (Some(target), Some(fields)) = (body.as_object_mut(), extra.as_object()) {
+            target.extend(fields.clone());
+        }
+        let visitor = self.visitor_data.lock().ok().and_then(|g| g.clone()).unwrap_or_default();
+        let mut headers = vec![
             ("Origin", YTM_ORIGIN),
             ("Referer", "https://music.youtube.com/"),
             ("X-YouTube-Client-Name", "67"),
             ("X-YouTube-Client-Version", WEB_REMIX_VERSION),
         ];
-        match http::post_json("https://music.youtube.com/youtubei/v1/browse?prettyPrint=false", &headers, &body) {
-            Ok((200..=299, bytes)) => {
-                if let Ok(val) = serde_json::from_slice::<Value>(&bytes) {
-                    self.capture_visitor_data(&val);
-                    let mut items = Vec::new();
-                    collect_tracks(&val, &mut items);
-                    dedup_tracks(&mut items);
-                    let mid = (items.len() / 2).max(1).min(items.len());
-                    let quick_picks = items[..mid].to_vec();
-                    let trending = items[mid..].to_vec();
-                    let offline = quick_picks.is_empty() && trending.is_empty();
-                    tracing::info!(quick_picks = quick_picks.len(), trending = trending.len(), "YTM home loaded");
-                    return HomeFeed { quick_picks, trending, offline_fallback: offline, error: None };
+        if !visitor.is_empty() {
+            // Keeps one visitor identity across calls so continuations and A/B variants stay consistent.
+            headers.push(("X-Goog-Visitor-Id", visitor.as_str()));
+        }
+        let (status, bytes) =
+            http::post_json("https://music.youtube.com/youtubei/v1/browse?prettyPrint=false", &headers, &body.to_string())?;
+        if !(200..=299).contains(&status) {
+            return Err(format!("YouTube Music HTTP {status}"));
+        }
+        let val: Value =
+            serde_json::from_slice(&bytes).map_err(|e| format!("Could not parse YouTube Music response: {e}"))?;
+        self.capture_visitor_data(&val);
+        Ok(val)
+    }
+
+    /// The home feed as titled shelves. Follows continuations (HOME_PAGES in all) so a first page of editorial
+    /// playlist rows is followed by the song shelves ("Quick picks", "New releases", ...) further down.
+    pub fn home(&self) -> HomeFeed {
+        const HOME_PAGES: usize = 3;
+        let mut shelves = Vec::new();
+        let mut request = json!({ "browseId": "FEmusic_home" });
+        let mut error = None;
+        for _ in 0..HOME_PAGES {
+            match self.browse(request) {
+                Ok(val) => {
+                    let (page, token) = ytm_feed::parse_home_page(&val);
+                    shelves.extend(page);
+                    let Some(token) = token else { break };
+                    request = json!({ "continuation": token });
                 }
-                HomeFeed {
-                    quick_picks: Vec::new(),
-                    trending: Vec::new(),
-                    offline_fallback: true,
-                    error: Some("Could not parse YouTube Music home response".into()),
+                Err(e) => {
+                    error = Some(e);
+                    break;
                 }
             }
-            Ok((status, _)) => HomeFeed {
-                quick_picks: Vec::new(),
-                trending: Vec::new(),
-                offline_fallback: true,
-                error: Some(format!("YouTube Music HTTP {status}")),
-            },
-            Err(e) => HomeFeed {
-                quick_picks: Vec::new(),
-                trending: Vec::new(),
-                offline_fallback: true,
-                error: Some(e),
-            },
         }
+        let mut quick_picks: Vec<Track> = shelves.iter().flat_map(|shelf| shelf.tracks.iter().cloned()).collect();
+        dedup_tracks(&mut quick_picks);
+        let offline = shelves.is_empty();
+        tracing::info!(shelves = shelves.len(), songs = quick_picks.len(), "YTM home loaded");
+        HomeFeed { shelves, quick_picks, offline_fallback: offline, error: if offline { error } else { None } }
+    }
+
+    /// Opens a playlist, album or artist from the feed: header plus its tracks (playlists follow continuations).
+    pub fn collection(&self, browse_id: &str) -> Result<CollectionPage, String> {
+        let id = browse_id.trim();
+        if !ytm_feed::is_valid_browse_id(id) {
+            return Err("Unsupported YouTube Music link".into());
+        }
+        let (val, mut tracks) = self.browse_tracks(id)?;
+        let (title, subtitle, artwork_url) = ytm_feed::parse_collection_header(&val);
+        let title = title.unwrap_or_else(|| "YouTube Music".into());
+        let kind = if id.starts_with("MPRE") {
+            "album"
+        } else if id.starts_with("UC") {
+            "artist"
+        } else {
+            "playlist"
+        };
+        for track in &mut tracks {
+            // Album rows carry no artwork or album name of their own.
+            if track.artwork_url.is_none() {
+                track.artwork_url.clone_from(&artwork_url);
+            }
+            if kind == "album" && track.album.is_empty() {
+                track.album.clone_from(&title);
+            }
+        }
+        if tracks.is_empty() {
+            return Err("Nothing playable on that page".into());
+        }
+        Ok(CollectionPage { browse_id: id.to_string(), kind: kind.into(), title, subtitle, artwork_url, tracks })
+    }
+
+    /// First page of a browse id plus its tracks, following up to four continuation pages (500 tracks max).
+    fn browse_tracks(&self, browse_id: &str) -> Result<(Value, Vec<Track>), String> {
+        let val = self.browse(json!({ "browseId": browse_id }))?;
+        let mut tracks = Vec::new();
+        ytm_feed::collect_page_tracks(&val, &mut tracks);
+        let mut next_token = find_continuation_token(&val);
+        let mut seen_tokens = std::collections::HashSet::new();
+        for _ in 0..4 {
+            let Some(tok) = next_token.take() else { break };
+            if tracks.len() >= 500 || !seen_tokens.insert(tok.clone()) {
+                break;
+            }
+            let Ok(cont) = self.browse(json!({ "continuation": tok })) else { break };
+            collect_tracks(&cont, &mut tracks);
+            next_token = find_continuation_token(&cont);
+        }
+        dedup_tracks(&mut tracks);
+        Ok((val, tracks))
     }
 
     pub fn search(&self, query: &str, filter: &str) -> SearchResponse {
@@ -215,63 +275,8 @@ impl YtMusicClient {
         if clean.is_empty() {
             return Err("Missing YouTube playlist ID".into());
         }
-        let browse_id = format!("VL{clean}");
-        let body = json!({
-            "context": web_remix_context(),
-            "browseId": browse_id
-        })
-        .to_string();
-        let headers = [
-            ("Origin", YTM_ORIGIN),
-            ("Referer", "https://music.youtube.com/"),
-            ("X-YouTube-Client-Name", "67"),
-            ("X-YouTube-Client-Version", WEB_REMIX_VERSION),
-        ];
-        let (status, bytes) = http::post_json(
-            "https://music.youtube.com/youtubei/v1/browse?prettyPrint=false",
-            &headers,
-            &body,
-        )?;
-        if !(200..=299).contains(&status) {
-            return Err(format!("YouTube Music playlist request returned HTTP {status}"));
-        }
-        let val: Value = serde_json::from_slice(&bytes)
-            .map_err(|e| format!("Could not parse YouTube playlist JSON: {e}"))?;
-        self.capture_visitor_data(&val);
-
+        let (val, tracks) = self.browse_tracks(&format!("VL{clean}"))?;
         let title = extract_playlist_title(&val).unwrap_or_else(|| "YouTube Music Playlist".into());
-        let mut tracks = Vec::new();
-        collect_tracks(&val, &mut tracks);
-
-        let mut next_token = find_continuation_token(&val);
-        let mut seen_tokens = std::collections::HashSet::new();
-        for _ in 0..4 {
-            let Some(tok) = next_token.take() else {
-                break;
-            };
-            if tracks.len() >= 500 || !seen_tokens.insert(tok.clone()) {
-                break;
-            }
-            let cont_body = json!({
-                "context": web_remix_context(),
-                "continuation": tok
-            })
-            .to_string();
-            let Ok((200..=299, cont_bytes)) = http::post_json(
-                "https://music.youtube.com/youtubei/v1/browse?prettyPrint=false",
-                &headers,
-                &cont_body,
-            ) else {
-                break;
-            };
-            let Ok(cont_val) = serde_json::from_slice::<Value>(&cont_bytes) else {
-                break;
-            };
-            collect_tracks(&cont_val, &mut tracks);
-            next_token = find_continuation_token(&cont_val);
-        }
-
-        dedup_tracks(&mut tracks);
         if tracks.is_empty() {
             return Err("No tracks found in that YouTube playlist (make sure it is public or unlisted)".into());
         }
@@ -543,7 +548,7 @@ fn pick_best_audio_format(val: &Value) -> Option<ResolvedStream> {
     best.map(|(_, s)| s)
 }
 
-fn collect_tracks(val: &Value, out: &mut Vec<Track>) {
+pub(crate) fn collect_tracks(val: &Value, out: &mut Vec<Track>) {
     match val {
         Value::Object(map) => {
             if let Some(renderer) = map.get("musicResponsiveListItemRenderer") {
@@ -609,7 +614,7 @@ fn collect_playlist_panel_tracks(val: &Value, out: &mut Vec<Track>) {
     }
 }
 
-fn parse_responsive_item(item: &Value) -> Option<Track> {
+pub(crate) fn parse_responsive_item(item: &Value) -> Option<Track> {
     let video_id = item
         .pointer("/playlistItemData/videoId")
         .and_then(Value::as_str)
@@ -680,7 +685,7 @@ fn parse_responsive_item(item: &Value) -> Option<Track> {
     })
 }
 
-fn parse_two_row_item(item: &Value) -> Option<Track> {
+pub(crate) fn parse_two_row_item(item: &Value) -> Option<Track> {
     let video_id = item
         .pointer("/navigationEndpoint/watchEndpoint/videoId")
         .and_then(Value::as_str)?;
@@ -704,7 +709,7 @@ fn parse_two_row_item(item: &Value) -> Option<Track> {
     })
 }
 
-fn runs_text(val: Option<&Value>) -> Option<String> {
+pub(crate) fn runs_text(val: Option<&Value>) -> Option<String> {
     let v = val?;
     if let Some(simple) = v.get("simpleText").and_then(Value::as_str) {
         return Some(simple.to_string());
@@ -734,7 +739,7 @@ fn split_byline(byline: &str) -> (String, String) {
     (artist, album)
 }
 
-fn pick_thumbnail(thumbs: Option<&Value>) -> Option<String> {
+pub(crate) fn pick_thumbnail(thumbs: Option<&Value>) -> Option<String> {
     let arr = thumbs?.as_array()?;
     let url = arr
         .iter()

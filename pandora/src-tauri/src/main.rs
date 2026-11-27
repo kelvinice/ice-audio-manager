@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod artcache;
 mod companion;
 mod http;
 mod ice_bridge;
@@ -9,6 +10,7 @@ mod models;
 mod playlist_import;
 mod proxy;
 mod recognition;
+mod ytm_feed;
 mod ytmusic;
 
 use std::sync::Arc;
@@ -19,10 +21,11 @@ use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Emitter, Manager, RunEvent, State, WindowEvent};
 
+use crate::artcache::ArtCache;
 use crate::ice_bridge::IceBridge;
 use crate::library::LibraryStore;
 use crate::models::{
-    AppPaths, EqState, HomeFeed, IceConfigPatch, IceStatus, LibraryState, PandoraLyrics, PandoraSettings,
+    AppPaths, CollectionPage, EqState, HomeFeed, IceConfigPatch, IceStatus, LibraryState, PandoraLyrics, PandoraSettings,
     PlaylistImportResult, RecognizedTrack, SearchResponse, Track,
 };
 use crate::ytmusic::YtMusicClient;
@@ -32,6 +35,7 @@ struct AppState {
     demo_mode: bool,
     ytm: Arc<YtMusicClient>,
     library: Arc<LibraryStore>,
+    art: Arc<ArtCache>,
     ice: Arc<IceBridge>,
     recognition_cancel: Arc<AtomicBool>,
     /// Set while a recognition listens (the Recognize view and Ice share one capture).
@@ -157,7 +161,37 @@ fn save_eq(eq: EqState, state: State<'_, Arc<AppState>>) -> LibraryState {
 
 #[tauri::command]
 fn save_settings(settings: PandoraSettings, state: State<'_, Arc<AppState>>) -> LibraryState {
+    state.art.set_budget_mb(settings.artwork_cache_mb);
     state.library.save_settings(settings)
+}
+
+#[tauri::command]
+fn artwork_cache_bytes(state: State<'_, Arc<AppState>>) -> u64 {
+    state.art.used_bytes()
+}
+
+#[tauri::command]
+async fn clear_artwork_cache(state: State<'_, Arc<AppState>>) -> Result<u64, String> {
+    let art = Arc::clone(&state.art);
+    tauri::async_runtime::spawn_blocking(move || art.clear()).await.map_err(|e| e.to_string())
+}
+
+/// Saves an opened YouTube Music collection as a library playlist; returns the library and the new playlist id.
+#[tauri::command]
+fn save_collection(
+    name: String,
+    tracks: Vec<Track>,
+    state: State<'_, Arc<AppState>>,
+) -> Result<(LibraryState, String), String> {
+    state.library.create_playlist_with_tracks(&name, tracks).map(|(library, playlist)| (library, playlist.id))
+}
+
+#[tauri::command]
+async fn ytm_collection(browse_id: String, state: State<'_, Arc<AppState>>) -> Result<CollectionPage, String> {
+    let ytm = Arc::clone(&state.ytm);
+    tauri::async_runtime::spawn_blocking(move || ytm.collection(&browse_id))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -170,6 +204,7 @@ fn get_app_paths(state: State<'_, Arc<AppState>>) -> AppPaths {
     AppPaths {
         library_path: state.library.db_path().display().to_string(),
         cache_dir: state.library.cache_dir().display().to_string(),
+        artwork_dir: state.art.dir().display().to_string(),
         ice_config_path: state.ice.config_path().display().to_string(),
         ice_bridge_path: state.ice.bridge_info_path().display().to_string(),
     }
@@ -421,13 +456,15 @@ fn main() {
     let library = Arc::new(LibraryStore::load());
     let ytm = Arc::new(YtMusicClient::new());
     let initial_lib = library.snapshot();
+    let art_dir = library.cache_dir().parent().map_or_else(|| library.cache_dir().join("artwork"), |p| p.join("artwork"));
+    let art = Arc::new(ArtCache::open(art_dir, initial_lib.settings.artwork_cache_mb));
     let pref = initial_lib.ice_mode_pref;
     let auto_launch_ice = initial_lib.settings.auto_launch_ice_notch && !fake_engine;
     let ice = IceBridge::new(pref, fake_engine);
 
     let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
     let proxy_port = rt
-        .block_on(proxy::start(Arc::clone(&ytm), Arc::clone(&library)))
+        .block_on(proxy::start(Arc::clone(&ytm), Arc::clone(&library), Arc::clone(&art)))
         .expect("local media proxy failed to bind");
     tracing::info!(proxy_port, demo_mode, "Pandora local audio/art proxy ready");
 
@@ -436,6 +473,7 @@ fn main() {
         demo_mode,
         ytm,
         library,
+        art,
         ice: Arc::clone(&ice),
         recognition_cancel: Arc::new(AtomicBool::new(false)),
         recognizing: AtomicBool::new(false),
@@ -520,6 +558,10 @@ fn main() {
             get_proxy_port,
             is_demo_mode,
             ytm_home,
+            ytm_collection,
+            save_collection,
+            artwork_cache_bytes,
+            clear_artwork_cache,
             ytm_search,
             ytm_related,
             fetch_lyrics,

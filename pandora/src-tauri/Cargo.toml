@@ -18,6 +18,8 @@ tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "io-uti
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt"] }
 url = "2"
+# MIT/Apache-2.0. Already in the tree through Tauri; hashes artwork URLs into cache file names.
+sha2 = "0.10"
 
 [dependencies.windows]
 version = "0.62"

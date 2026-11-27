@@ -697,6 +697,7 @@ mod tests {
             wavy_progress: false,
             spinning_cover: true,
             close_to_tray: true,
+            artwork_cache_mb: 64,
         });
         assert!(!updated.settings.dynamic_theme);
         assert!((updated.settings.default_volume - 1.0).abs() < 0.001);
@@ -708,6 +709,7 @@ mod tests {
         assert!(!reloaded.settings.dynamic_theme);
         assert!(reloaded.settings.auto_launch_ice_notch);
         assert!(reloaded.settings.close_to_tray);
+        assert_eq!(reloaded.settings.artwork_cache_mb, 64);
 
         let reset = store.reset_settings();
         assert_eq!(reset.settings.theme, crate::models::PandoraTheme::Midnight);
@@ -717,5 +719,11 @@ mod tests {
         assert_eq!(reset.liked.len(), 1);
 
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn older_settings_get_the_default_artwork_budget() {
+        let old: PandoraSettings = serde_json::from_str(r#"{"theme":"midnight"}"#).unwrap();
+        assert_eq!(old.artwork_cache_mb, 256);
     }
 }

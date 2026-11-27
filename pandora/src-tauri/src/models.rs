@@ -30,10 +30,47 @@ pub struct Playlist {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HomeFeed {
+    /// Shelves in the order YouTube Music returns them ("Quick picks", editorial rows, new releases, ...).
+    pub shelves: Vec<HomeShelf>,
+    /// Every playable song across the shelves, in order (hero pick and "play all").
     pub quick_picks: Vec<Track>,
-    pub trending: Vec<Track>,
     pub offline_fallback: bool,
     pub error: Option<String>,
+}
+
+/// One titled row of the home feed. A shelf holds songs, collections (playlists / albums), or both.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HomeShelf {
+    pub title: String,
+    /// Small label above the title ("TOP TUNES RIGHT NOW").
+    pub strapline: Option<String>,
+    pub tracks: Vec<Track>,
+    pub collections: Vec<CollectionCard>,
+}
+
+/// A playlist, album or artist tile that opens with `ytm_collection`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CollectionCard {
+    pub browse_id: String,
+    /// `"playlist" | "album" | "artist"`
+    pub kind: String,
+    pub title: String,
+    pub subtitle: String,
+    pub artwork_url: Option<String>,
+}
+
+/// A collection opened from the feed: its header plus playable tracks.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CollectionPage {
+    pub browse_id: String,
+    pub kind: String,
+    pub title: String,
+    pub subtitle: String,
+    pub artwork_url: Option<String>,
+    pub tracks: Vec<Track>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -140,7 +177,15 @@ pub struct PandoraSettings {
     pub spinning_cover: bool,
     #[serde(default)]
     pub close_to_tray: bool,
+    /// Disk budget for cached artwork, in MiB (0 keeps artwork in memory only).
+    #[serde(default = "default_artwork_cache_mb")]
+    pub artwork_cache_mb: u32,
 }
+
+fn default_artwork_cache_mb() -> u32 {
+    256
+}
+
 
 impl Default for PandoraSettings {
     fn default() -> Self {
@@ -157,6 +202,7 @@ impl Default for PandoraSettings {
             wavy_progress: true,
             spinning_cover: false,
             close_to_tray: false,
+            artwork_cache_mb: default_artwork_cache_mb(),
         }
     }
 }
@@ -166,6 +212,7 @@ impl Default for PandoraSettings {
 pub struct AppPaths {
     pub library_path: String,
     pub cache_dir: String,
+    pub artwork_dir: String,
     pub ice_config_path: String,
     pub ice_bridge_path: String,
 }
