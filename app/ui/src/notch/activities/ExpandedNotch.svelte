@@ -6,6 +6,7 @@
   import { hasAnyLyrics } from '../../lib/notch/lyrics';
   import { isMediaActive } from '../../lib/notch/scheduler';
   import ExpandedEmptyCard from './ExpandedEmptyCard.svelte';
+  import DragHandle from './DragHandle.svelte';
   import ExpandedMediaCard from './ExpandedMediaCard.svelte';
   import OutputStrip from './OutputStrip.svelte';
   import LyricsExtension from './LyricsExtension.svelte';
@@ -85,6 +86,7 @@
 </script>
 
 <div class="expanded-shell" class:stagger={!instant} class:bottom-anchor={isBottom}>
+  <DragHandle edge={isBottom ? 'top' : 'bottom'} visible={(settings?.notchPlacement ?? 'fixed') !== 'fixed'} />
   <div class="expanded-card">
     <div class="main">
       {#if activeMedia}
@@ -160,6 +162,7 @@
 
 <style>
   .expanded-shell {
+    position: relative;
     width: 100%;
     height: 100%;
     display: flex;

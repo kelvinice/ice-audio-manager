@@ -7,6 +7,7 @@
   import { mediaSource } from '../../lib/notch/mediaSource';
   import { isMediaActive } from '../../lib/notch/scheduler';
   import DeviceIcon from './DeviceIcon.svelte';
+  import DragHandle from './DragHandle.svelte';
   import ExpandedEmptyCard from './ExpandedEmptyCard.svelte';
   import OutputStrip from './OutputStrip.svelte';
   import LyricsExtension from './LyricsExtension.svelte';
@@ -92,6 +93,7 @@
 </script>
 
 <div class="nook-shell" class:stagger={!instant} class:bottom-anchor={isBottom}>
+  <DragHandle edge={isBottom ? 'top' : 'bottom'} visible={(settings?.notchPlacement ?? 'fixed') !== 'fixed'} />
   <header class="nook-top">
     <div class="nook-status">
       {#if source}
@@ -182,6 +184,7 @@
 
 <style>
   .nook-shell {
+    position: relative;
     width: 100%;
     height: 100%;
     padding: 6px 6px 10px;
