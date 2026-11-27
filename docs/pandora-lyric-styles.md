@@ -70,4 +70,4 @@ while playing and paused (the loop must stop when paused).
 1. Extract `LyricsScroller` (Default's scroll, follow and Sync) so Branches can reuse it.
 2. Branches (no loop; lowest risk).
 3. `bassPulse` helper with tests, then Pulse reveal.
-4. Add both to `LyricsStyle` (Rust + TS) and the picker; document them in [modules/pandora](modules/pandora.md).
+4. Add both to `LyricsStyle` (Rust + TS) and the picker; document them in [modules/pandora/lyrics](modules/pandora/lyrics.md).
