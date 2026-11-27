@@ -34,6 +34,8 @@
     idx: number;
     words: RainWord[];
     noGaps: boolean;
+    /** Romaji / subtitle shown under the line, kept with it while it falls so its layout never changes. */
+    reading: string | null;
   }
 
   const reduceMotion = typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -55,14 +57,12 @@
         return { ch, a: rand(seed), b: rand(seed + 1), c: rand(seed + 2) };
       }),
     }));
-    return { idx, words, noGaps: joinsWithoutSpaces(line.text) };
+    const reading = showRomaji ? (line.romaji ?? line.subtitle ?? null) : null;
+    return { idx, words, noGaps: joinsWithoutSpaces(line.text), reading };
   }
 
   let current = $derived(activeIdx >= 0 ? build(activeIdx) : null);
   let upcoming = $derived(lines[activeIdx + 1]?.text ?? "");
-  let reading = $derived(
-    showRomaji && activeIdx >= 0 ? (lines[activeIdx]?.romaji ?? lines[activeIdx]?.subtitle ?? null) : null,
-  );
 
   /** Lines that already ended, still raining down. */
   let falling = $state<RainLine[]>([]);
@@ -87,8 +87,11 @@
 </script>
 
 <div class="sky" aria-live="off">
+  <!-- A finished line falls from exactly the layout it was shown in (same stack, romaji included), so nothing
+       jumps when it changes layer: its letters rain down and its romaji fades out where it was. -->
   {#each falling as line (line.idx)}
-    <p class="line falling" aria-hidden="true">
+    <div class="stack falling" aria-hidden="true">
+    <p class="line">
       {#each line.words as word, wi (wi)}<span class="word"
           >{#each word.glyphs as g, gi (gi)}<span
               class="glyph"
@@ -99,6 +102,8 @@
             >{/each}</span
         >{line.noGaps ? "" : " "}{/each}
     </p>
+    {#if line.reading}<p class="reading fading">{line.reading}</p>{/if}
+    </div>
   {/each}
 
   {#if current}
@@ -114,7 +119,7 @@
               >{/each}</span
           >{current.noGaps ? "" : " "}{/each}
       </p>
-      {#if reading}<p class="reading">{reading}</p>{/if}
+      {#if current.reading}<p class="reading">{current.reading}</p>{/if}
       </div>
     {/key}
   {/if}
@@ -169,6 +174,17 @@
     font-weight: 600;
     color: var(--p-text-muted);
     animation: reading-in 0.6s ease 0.15s both;
+  }
+
+  .reading.fading {
+    animation: reading-out 0.5s ease both;
+  }
+
+  @keyframes reading-out {
+    to {
+      opacity: 0;
+      translate: 0 10px;
+    }
   }
 
   @keyframes reading-in {

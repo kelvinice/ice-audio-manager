@@ -109,6 +109,8 @@ and lyrics for visual checks. See the [Pandora guide](../pandora.md) for launch 
 
 ## Change log
 
+- 2026-11-27 · Rain: a finished line falls from the same stack it was shown in (romaji kept, then faded), so lines with romaji
+  no longer jump when they start falling.
 - 2026-11-27 · Title bar snowflake: `ice_wake_and_peek` starts Ice if needed and asks it to wake and show the notch for 2 s
   (`peekNotch`; older Ice falls back to wake + `showNotch`).
 - 2026-11-27 · Spectrum bars are all accent again (owner: no progress colouring; the seek bar shows progress).
