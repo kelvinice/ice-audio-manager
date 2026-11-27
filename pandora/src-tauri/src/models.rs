@@ -153,6 +153,8 @@ pub struct RecognizedTrack {
 pub enum PandoraTheme {
     /// Ice Audio Manager's blue-grey palette.
     Ice,
+    /// Ice's light palette (`ice_light`): pale blue-grey surfaces, deep ocean accent.
+    IceLight,
     Daylight,
     Ember,
     System,

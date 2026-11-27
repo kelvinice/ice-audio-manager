@@ -51,6 +51,22 @@
   --p-text-muted: #c3d0de;
   --p-text-dim: #93a4b7;
 }
+/* Ice Audio Manager's light palette (`ice_light`): pale blue-grey surfaces, ink text and its deep ocean #026aa2 accent. */
+[data-theme="iceLight"] {
+  color-scheme: light;
+  --p-bg: #f3f6f9;
+  --p-rail: #e7edf3;
+  --p-surface-solid: #fff;
+  --p-surface-elevated: #fff;
+  --p-border: #d4dee8;
+  --p-border-strong: #9cafc2;
+  --p-fill: #e5ecf3;
+  --p-seed: #026aa2;
+  --p-companion: #3d8fc0;
+  --p-text: #11161f;
+  --p-text-muted: #3e4a5c;
+  --p-text-dim: #566275;
+}
 [data-theme="ember"] {
   color-scheme: dark;
   --p-bg: #201917;

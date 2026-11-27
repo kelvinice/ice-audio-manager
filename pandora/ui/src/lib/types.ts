@@ -104,7 +104,7 @@ export interface RecognitionProgress {
   level: number;
 }
 
-export type PandoraTheme = "midnight" | "ice" | "daylight" | "ember" | "system";
+export type PandoraTheme = "midnight" | "ice" | "iceLight" | "daylight" | "ember" | "system";
 
 export interface PandoraSettings {
   theme: PandoraTheme;

@@ -732,6 +732,8 @@ mod tests {
         assert_eq!(newer.lyrics_style, crate::models::LyricsStyle::Default);
         let ice: PandoraSettings = serde_json::from_str(r#"{"theme":"ice"}"#).unwrap();
         assert_eq!(ice.theme, crate::models::PandoraTheme::Ice);
+        let ice_light: PandoraSettings = serde_json::from_str(r#"{"theme":"iceLight"}"#).unwrap();
+        assert_eq!(ice_light.theme, crate::models::PandoraTheme::IceLight);
         let unknown: PandoraSettings = serde_json::from_str(r#"{"theme":"aurora"}"#).unwrap();
         assert_eq!(unknown.theme, crate::models::PandoraTheme::Midnight);
         // The old on-by-default switch no longer turns artwork accents on.

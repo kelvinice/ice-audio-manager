@@ -5,6 +5,7 @@
   const choices = [
     { id: "midnight", name: "Midnight" },
     { id: "ice", name: "Ice" },
+    { id: "iceLight", name: "Light Ice" },
     { id: "daylight", name: "Daylight" },
     { id: "ember", name: "Ember" },
     { id: "system", name: "Use Windows" },

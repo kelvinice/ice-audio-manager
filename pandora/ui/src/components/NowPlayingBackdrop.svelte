@@ -112,7 +112,8 @@
     animation: swell 17s ease-in-out infinite alternate;
   }
 
-  :global([data-theme="daylight"]) .orb {
+  :global([data-theme="daylight"]) .orb,
+  :global([data-theme="iceLight"]) .orb {
     mix-blend-mode: multiply;
     opacity: 0.35;
   }
