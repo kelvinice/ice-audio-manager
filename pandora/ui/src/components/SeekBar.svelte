@@ -1,7 +1,8 @@
 <script lang="ts">
   // Seek bar shared by the player bar and Now Playing, built like Ice's notch scrubber (MediaScrubber / WavyProgress):
   // one pointer-driven slider; a flat rail that thickens on hover with a thumb that appears on hover or drag; or, with
-  // `wavy`, a travelling wave as thick as the flat rest, round-capped, tapering into it and flattening on pause.
+  // `wavy`, a travelling wave as thick as the flat rest, round-capped, tapering into it and flattening on pause, with a
+  // round dot at the play head.
   import { untrack } from "svelte";
   import { formatTimecode, pointerSeekMs, SEEK_WAVE, taperedWavePath, type SeekSize } from "../lib/wave";
 
@@ -161,7 +162,7 @@
       </div>
     {/if}
     {#if canSeek}
-      <span class="thumb" class:pill={wavy} style:left={`${(progress * 100).toFixed(2)}%`}></span>
+      <span class="thumb" class:dot={wavy} style:left={`${(progress * 100).toFixed(2)}%`}></span>
     {/if}
   </div>
   <span class="time end">{formatTimecode(durationMs)}</span>
@@ -285,12 +286,10 @@
     pointer-events: none;
   }
 
-  /* With the wave, an upright pill marks the head (Android 13 style) and stays visible. */
-  .thumb.pill {
-    width: 5px;
-    height: 18px;
+  /* With the wave, a round dot in the accent marks the head and stays visible; it grows a little on hover or drag. */
+  .thumb.dot {
     background: var(--p-accent-bright);
-    transform: translate(-50%, -50%) scale(1);
+    transform: translate(-50%, -50%) scale(0.85);
   }
 
   .large .thumb {
@@ -298,15 +297,16 @@
     height: 14px;
   }
 
-  .large .thumb.pill {
-    width: 6px;
-    height: 22px;
-  }
-
   .track.interactive:hover .thumb,
   .dragging .thumb,
   .track:focus-visible .thumb {
     transform: translate(-50%, -50%) scale(1);
+  }
+
+  .track.interactive:hover .thumb.dot,
+  .dragging .thumb.dot,
+  .track:focus-visible .thumb.dot {
+    transform: translate(-50%, -50%) scale(1.15);
   }
 
   .time {
