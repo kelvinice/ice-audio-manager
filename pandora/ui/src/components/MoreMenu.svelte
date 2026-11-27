@@ -14,9 +14,14 @@
   interface Props {
     items: MenuItem[];
     label?: string;
+    icon?: ComponentProps<typeof Icon>["name"];
+    /** Trigger classes from app.css (`btn-icon bare` = the "…" look). */
+    buttonClass?: string;
+    /** Which edge of the trigger the menu lines up with. */
+    align?: "left" | "right";
   }
 
-  let { items, label = "More options" }: Props = $props();
+  let { items, label = "More options", icon = "more", buttonClass = "btn-icon bare", align = "left" }: Props = $props();
   let open = $state(false);
   let root: HTMLDivElement | undefined = $state();
 
@@ -28,11 +33,11 @@
 <svelte:window onclick={onWindowClick} onkeydown={(e) => e.key === "Escape" && (open = false)} />
 
 <div class="more" bind:this={root}>
-  <button class="btn-icon bare" aria-label={label} title={label} aria-expanded={open} onclick={() => (open = !open)}>
-    <Icon name="more" size={20} />
+  <button class={buttonClass} aria-label={label} title={label} aria-expanded={open} onclick={() => (open = !open)}>
+    <Icon name={icon} size={icon === "more" ? 20 : 16} />
   </button>
   {#if open}
-    <div class="menu" role="menu">
+    <div class="menu" class:right={align === "right"} role="menu">
       {#each items as item (item.label)}
         <button
           role="menuitem"
@@ -62,11 +67,17 @@
     top: calc(100% + 6px);
     left: 0;
     min-width: 200px;
+    max-width: 260px;
     padding: 6px;
     border-radius: 10px;
     background: var(--p-surface-elevated);
     border: 1px solid var(--p-border);
     box-shadow: 0 16px 36px rgb(0 0 0 / 0.4);
+  }
+
+  .menu.right {
+    left: auto;
+    right: 0;
   }
 
   .menu button {

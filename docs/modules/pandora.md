@@ -60,6 +60,8 @@ and lyrics for visual checks. See the [Pandora guide](../pandora.md) for launch 
 
 ## Change log
 
+- 2026-11-27 · Page headers draw their back link inside the tinted area and leave room for descenders; the sidebar's
+  playlist actions are one `+` menu (`MoreMenu` takes `icon` / `buttonClass` / `align`).
 - 2026-11-27 · Added theme presets, appearance previews and size-specific Windows icons.
 - 2026-11-27 · Home feed parses titled shelves of songs and playlist / album cards (fixes the empty feed on the
   playlist-only variant); `ytm_collection` / `save_collection` commands; disk artwork cache (`artcache.rs`,

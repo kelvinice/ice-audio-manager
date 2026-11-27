@@ -177,10 +177,6 @@
 
 {#if activePlaylist}
   {@const playlist = activePlaylist}
-  <button class="back btn-ghost" onclick={() => onSelectPlaylist(null)}>
-    <Icon name="arrow-left" size={14} />
-    <span>Your Library</span>
-  </button>
 
   {#snippet renameForm()}
     <form class="rename" onsubmit={submitRename}>
@@ -192,6 +188,8 @@
   {/snippet}
 
   <PageHero
+    backLabel="Your Library"
+    onBack={() => onSelectPlaylist(null)}
     covers={coversFor(playlist.trackIds)}
     label="Playlist"
     title={playlist.name}
@@ -482,12 +480,6 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-  }
-
-  .back {
-    margin: 20px 32px 0;
-    height: 32px;
-    padding: 0 14px;
   }
 
   .rename {

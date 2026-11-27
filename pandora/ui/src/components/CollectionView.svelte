@@ -80,12 +80,7 @@
   });
 </script>
 
-<button class="back btn-ghost" onclick={onBack}>
-  <Icon name="arrow-left" size={14} />
-  <span>Home</span>
-</button>
-
-<PageHero covers={cover ? [cover] : []} round={card.kind === "artist"} {label} title={page?.title ?? card.title} {meta}>
+<PageHero backLabel="Home" {onBack} covers={cover ? [cover] : []} round={card.kind === "artist"} {label} title={page?.title ?? card.title} {meta}>
   <button
     class="btn-play"
     aria-label="Play"
@@ -139,12 +134,6 @@
 </section>
 
 <style>
-  .back {
-    margin: 20px 32px 0;
-    height: 32px;
-    padding: 0 14px;
-  }
-
   .body {
     padding: 0 24px 48px;
   }

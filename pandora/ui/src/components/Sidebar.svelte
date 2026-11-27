@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { DeviceSummary, IceStatus, Playlist } from "../lib/types";
   import Icon from "./Icon.svelte";
+  import MoreMenu from "./MoreMenu.svelte";
   import pandoraMark from "../../../../assets/src/pandora.svg";
 
   export type NavTab = "home" | "search" | "recognize" | "library" | "ice" | "settings";
@@ -98,24 +99,16 @@
 
   <div class="playlists-head">
     <span>Playlists</span>
-    <div class="pl-head-btns">
-      <button
-        class="icon-add"
-        title="Import from Spotify or YouTube Music"
-        aria-label="Import from Spotify or YouTube Music"
-        onclick={onOpenImportPlaylist}
-      >
-        <Icon name="link" size={13} strokeWidth={2.1} />
-      </button>
-      <button
-        class="icon-add"
-        title="Create new playlist"
-        aria-label="Create new playlist"
-        onclick={onOpenNewPlaylist}
-      >
-        <Icon name="plus" size={14} strokeWidth={2.2} />
-      </button>
-    </div>
+    <MoreMenu
+      label="Add a playlist"
+      icon="plus"
+      buttonClass="btn-icon sm"
+      align="right"
+      items={[
+        { label: "New playlist", icon: "list-plus", onSelect: onOpenNewPlaylist },
+        { label: "Import from a link", icon: "link", onSelect: onOpenImportPlaylist },
+      ]}
+    />
   </div>
 
   <div class="playlists-list">
@@ -278,43 +271,18 @@
   }
 
   .playlists-head {
-    margin: 0 8px 8px;
+    margin: 0 4px 8px 8px;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    font-size: 11px;
+    font-size: 13px;
     font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: var(--p-text-dim);
-  }
-
-  .pl-head-btns {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-  }
-
-  .icon-add {
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
-    background: var(--p-fill);
-    border: 1px solid var(--p-border);
     color: var(--p-text-muted);
-    display: grid;
-    place-items: center;
-    transition: background 0.15s ease, color 0.15s ease;
   }
 
-  .icon-add:hover {
-    background: var(--p-accent-soft);
-    color: var(--p-accent-bright);
-  }
 
-  .icon-add:active {
-    transform: scale(0.92);
-  }
+
+
 
   .playlists-list {
     flex: 1;

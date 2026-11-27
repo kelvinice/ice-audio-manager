@@ -9,15 +9,25 @@
     title: string;
     meta: string;
     round?: boolean;
+    /** Back link drawn inside the header, so the tint runs from the top of the page. */
+    backLabel?: string;
+    onBack?: () => void;
     /** Replaces the title (e.g. an inline rename form). */
     titleSlot?: Snippet;
     children?: Snippet;
   }
 
-  let { covers, label, title, meta, round = false, titleSlot, children }: Props = $props();
+  let { covers, label, title, meta, round = false, backLabel, onBack, titleSlot, children }: Props = $props();
 </script>
 
 <header class="hero">
+  {#if onBack}
+    <button class="btn-ghost back" onclick={onBack}>
+      <Icon name="arrow-left" size={14} />
+      <span>{backLabel ?? "Back"}</span>
+    </button>
+  {/if}
+  <div class="row">
   <div class="cover" class:round class:mosaic={covers.length >= 4}>
     {#if covers.length >= 4}
       {#each covers.slice(0, 4) as src (src)}
@@ -38,6 +48,7 @@
     {/if}
     {#if meta}<p class="meta">{meta}</p>{/if}
   </div>
+  </div>
 </header>
 
 {#if children}
@@ -47,10 +58,24 @@
 <style>
   .hero {
     display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 24px;
+    padding: 20px 32px 28px;
+    background: linear-gradient(180deg, var(--p-surface-tint), transparent);
+  }
+
+  .back {
+    height: 32px;
+    padding: 0 14px;
+  }
+
+  .row {
+    display: flex;
     align-items: flex-end;
     gap: 28px;
-    padding: 36px 32px 28px;
-    background: linear-gradient(180deg, var(--p-surface-tint), transparent);
+    width: 100%;
+    min-width: 0;
   }
 
   .cover {
@@ -99,7 +124,9 @@
     margin: 0;
     font-size: clamp(30px, 4.6vw, 64px);
     font-weight: 800;
-    line-height: 1.02;
+    line-height: 1.12;
+    /* Room for descenders: the clamp's overflow would otherwise cut "g" and "y". */
+    padding-bottom: 0.06em;
     letter-spacing: -0.04em;
     overflow-wrap: anywhere;
     display: -webkit-box;
@@ -124,9 +151,12 @@
 
   @media (max-width: 720px) {
     .hero {
+      padding: 16px 20px 24px;
+    }
+
+    .row {
       flex-direction: column;
       align-items: flex-start;
-      padding: 24px 20px;
     }
 
     .actions {
