@@ -8,6 +8,7 @@ mod engine_bridge;
 mod ipc;
 mod logging;
 mod meter;
+mod pandora;
 mod placement;
 mod session;
 mod settings;
@@ -107,6 +108,7 @@ impl SharedRuntime {
             hidden_for_bench: false,
             active_monitor: 0,
             monitors: summaries,
+            pandora: ipc::PandoraView::default(),
         };
         engine_bridge::project(initial, &mut snapshot);
         let last_track = Mutex::new(initial.media.as_ref().map(engine_bridge::TrackKey::of));
@@ -1406,6 +1408,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     let setup_state = Arc::clone(&runtime);
     let exit_flag_ref = Arc::clone(&runtime);
     let bridge_info_path = app_data.join("bridge.json");
+    let install_dir = app_data.clone();
 
     let app = tauri::Builder::default()
         .register_uri_scheme_protocol("iceart", |ctx, request| {
@@ -1430,6 +1433,8 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             switch_to_device,
             media_command,
             ipc::open_music_service,
+            pandora::pandora_action,
+            ipc::set_call_mode,
             meter::set_visualizer,
             toggle_expand,
             request_idle_suspend,
@@ -1470,6 +1475,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 session::watch(&handle, &setup_state);
                 engine_bridge::watch(handle.clone(), Arc::clone(&setup_state))?;
                 bridge::start(&handle, &setup_state, bridge_info_path);
+                pandora::write_install_hint(&install_dir);
                 let engine = if fake_engine { "fake" } else { "windows" };
                 tracing::info!(engine, "Ice Audio Manager tray ready");
             }

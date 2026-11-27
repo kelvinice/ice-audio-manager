@@ -7,6 +7,7 @@
   import Section from '../controls/Section.svelte';
   import SettingCard from '../controls/SettingCard.svelte';
   import Toggle from '../controls/Toggle.svelte';
+  import WidgetEditor from './WidgetEditor.svelte';
 
   interface Props {
     client: SettingsClient;
@@ -68,6 +69,8 @@
     title="Experimental features"
     text="These options are off by default. They may behave unevenly or change in future updates."
   />
+
+  <WidgetEditor {client} />
 
   <Section
     title="Notch looks"

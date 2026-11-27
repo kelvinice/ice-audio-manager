@@ -214,6 +214,7 @@
             onOpenSettings={ctrl.openSettings}
             onHibernate={ctrl.hibernate}
             isBottom={ctrl.isBottomAnchor}
+            widget={ctrl.widget}
           />
         {:else if ctrl.notchSnapshot && ctrl.isExpanded}
           <ExpandedNotch
@@ -246,6 +247,7 @@
             onOpenMusicService={ctrl.openMusicService}
             onOpenSettings={ctrl.openSettings}
             isBottom={ctrl.isBottomAnchor}
+            widget={ctrl.widget}
           />
         {/if}
       </div>

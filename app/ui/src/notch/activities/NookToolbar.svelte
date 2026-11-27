@@ -4,6 +4,8 @@
   import type { MusicServiceId, MusicServiceItem } from '../../lib/notch/backdrop';
   import DeviceIcon from './DeviceIcon.svelte';
   import MusicServicesWidget from './MusicServicesWidget.svelte';
+  import WidgetButtons from './WidgetButtons.svelte';
+  import type { WidgetBinding } from '../../lib/notch/widget';
 
   interface Props {
     services: MusicServiceItem[];
@@ -19,6 +21,8 @@
     onHibernate: () => void;
     onTogglePin: () => void;
     onOpenSettings: () => void;
+    /** Experimental widget: when set, its buttons fill the capsule instead of the built-in toggles. */
+    widget?: WidgetBinding | null;
   }
 
   let {
@@ -35,6 +39,7 @@
     onHibernate,
     onTogglePin,
     onOpenSettings,
+    widget = null,
   }: Props = $props();
 </script>
 
@@ -45,6 +50,9 @@
     </div>
   {/if}
   <div class="capsule" role="group" aria-label="Notch controls">
+    {#if widget}
+      <WidgetButtons {...widget} variant="toolbar" />
+    {:else}
     {#if showLyricsToggle}
       <button
         class="tb"
@@ -93,6 +101,7 @@
     <button class="tb" type="button" title="Settings" aria-label="Open Settings" onclick={onOpenSettings}>
       <DeviceIcon kind="settings" size={12} />
     </button>
+    {/if}
   </div>
 </nav>
 

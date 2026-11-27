@@ -20,6 +20,7 @@ use crate::lyrics::{LYRICS_CACHE_MAX_MB, LyricsConfig};
 use crate::media::MusicServices;
 use crate::placement::{NotchAnchor, NotchPlacement};
 use crate::resolve::{DeviceRef, MatchMode, resolve};
+use crate::widget::NotchWidget;
 
 /// v2: performance profile and pinned monitor. v3: `show_disconnected`. v4: saved notch appearance.
 /// v5: `appearance.nowPlaying` (how the now-playing pill behaves). v6: `idle_linger_secs` (D-21.1 L1).
@@ -42,7 +43,8 @@ use crate::resolve::{DeviceRef, MatchMode, resolve};
 /// user can switch to row by row with `lyrics.word_highlight = false`), and older files turn it on.
 /// v23: `appearance.volumeButton` (the card's volume is always a button; off) and `appearance.experiments`
 /// (Experimental: beat rim, cover tilt; all off).
-pub const SCHEMA_VERSION: u32 = 23;
+/// v24: `[widget]` (Experimental notch widget: off, default button order).
+pub const SCHEMA_VERSION: u32 = 24;
 
 /// Allowed per-device lyric delay, in ms (negative = lyrics earlier).
 pub const LYRICS_DELAY_MS: std::ops::RangeInclusive<i32> = -1000..=2000;
@@ -115,6 +117,8 @@ pub struct Config {
     /// D-19: opens (or closes) the expanded notch; in Lite, the tray quick-switch menu. Unbound by default.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub show_notch_hotkey: Option<Chord>,
+    /// Experimental notch widget: the user's own quick buttons and their order (owner, 2026-11-27).
+    pub widget: NotchWidget,
 }
 
 impl Default for Config {
@@ -140,6 +144,7 @@ impl Default for Config {
             visualizer_spectrum: true,
             call_mode: CallModeConfig::default(),
             show_notch_hotkey: None,
+            widget: NotchWidget::default(),
         }
     }
 }
@@ -292,6 +297,7 @@ impl Config {
             return Err(ConfigError::Parse(format!("notch_x_ratio = {ratio} must be finite and within 0.0–1.0")));
         }
         cfg.call_mode.validate().map_err(|e| ConfigError::Parse(format!("call_mode: {e}")))?;
+        crate::widget::validate(&cfg.widget.buttons).map_err(|e| ConfigError::Parse(format!("widget: {e}")))?;
         match cfg.schema_version {
             v if v > SCHEMA_VERSION => Err(ConfigError::TooNew(v)),
             // v0/v1 gain the default profile and an initially unassigned monitor pin, v0–v2 gain
@@ -308,6 +314,7 @@ impl Config {
             // defaults.
             // v0–v21: word-by-word highlight became the default (v22), so the old off-by-default estimate turns on.
             // v0–v22 gain `appearance.volumeButton = false` and `appearance.experiments` (all off) via serde defaults.
+            // v0–v23 gain `[widget]` (off, default buttons) via serde defaults.
             v => {
                 if v < 22 {
                     cfg.lyrics.estimated_word_sync = true;
@@ -428,6 +435,7 @@ impl Config {
             visualizer_spectrum: self.visualizer_spectrum,
             call_mode: self.call_mode.clone(),
             show_notch_hotkey: self.show_notch_hotkey.map(|c| c.to_string()),
+            widget: self.widget.clone(),
         }
     }
 
@@ -604,6 +612,13 @@ impl Config {
             Command::SetShowNotchHotkey { hotkey } => {
                 next.show_notch_hotkey = parse_hotkey(hotkey.as_deref())?;
                 next.check_hotkeys_unique()?;
+            }
+            Command::SetNotchWidget { enabled, buttons } => {
+                if let Some(buttons) = buttons {
+                    crate::widget::validate(buttons)?;
+                    next.widget.buttons.clone_from(buttons);
+                }
+                next.widget.enabled = enabled.unwrap_or(next.widget.enabled);
             }
             Command::SetDefaultRoles { roles } => next.default_roles = *roles,
             _ => return Ok(false),
@@ -1329,6 +1344,28 @@ estimatedWordSync = false";
         assert!(saved.appearance.volume_button);
         assert!(saved.appearance.experiments.beat_rim && !saved.appearance.experiments.cover_tilt);
         assert!(saved.view(&[]).appearance.experiments.beat_rim);
+    }
+
+    #[test]
+    fn v23_gains_the_widget_off_and_saves_a_new_order() {
+        use crate::widget::{NotchWidget, WidgetButton};
+        let mut config = Config::from_toml("schema_version = 23\n[appearance]\ntheme = 'ice'").unwrap();
+        assert_eq!(config.schema_version, SCHEMA_VERSION);
+        assert_eq!(config.widget, NotchWidget::default());
+
+        let order = vec![WidgetButton::PandoraRecognize, WidgetButton::CallMode, WidgetButton::Pin];
+        let set = Command::SetNotchWidget { enabled: Some(true), buttons: Some(order.clone()) };
+        assert_eq!(config.apply_setting(&set, &[]), Ok(true));
+        assert_eq!(config.apply_setting(&set, &[]), Ok(false));
+        let saved = Config::from_toml(&config.to_toml()).unwrap();
+        assert!(saved.widget.enabled);
+        assert_eq!(saved.widget.buttons, order);
+        assert_eq!(saved.view(&[]).widget.buttons, order);
+
+        let repeat =
+            Command::SetNotchWidget { enabled: None, buttons: Some(vec![WidgetButton::Mic, WidgetButton::Mic]) };
+        assert!(config.apply_setting(&repeat, &[]).is_err());
+        assert!(Config::from_toml("[widget]\nbuttons = ['mic', 'mic']").is_err(), "a hand-edited repeat is rejected");
     }
 
     #[test]

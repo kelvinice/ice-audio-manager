@@ -4,23 +4,22 @@
 //! `%LOCALAPPDATA%\IceAudioManager\bridge.json` on startup and removed cleanly on exit. If nothing
 //! connects, the listener thread sleeps blocked in `TcpListener::accept` with zero CPU usage.
 
-use std::collections::hash_map::RandomState;
-use std::hash::BuildHasher;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 
+use ice_core::companion::{DiscoveryFile, new_token, tokens_match};
 use ice_core::engine::{Command, EngineSnapshot, PerformanceProfile};
 use serde::{Deserialize, Serialize};
 use tauri::AppHandle;
 
 use super::{SharedRuntime, settings, show_notch};
 
-const BRIDGE_VERSION: u32 = 1;
-const MAX_REQUEST_BYTES: u64 = 65_536;
+const BRIDGE_VERSION: u32 = ice_core::companion::PROTOCOL_VERSION;
+const MAX_REQUEST_BYTES: u64 = ice_core::companion::MAX_LINE_BYTES;
 const IO_TIMEOUT: Duration = Duration::from_secs(2);
 
 static ACTIVE: Mutex<Option<BridgeStop>> = Mutex::new(None);
@@ -29,15 +28,6 @@ struct BridgeStop {
     stop: Arc<AtomicBool>,
     port: u16,
     info_path: PathBuf,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct BridgeInfoFile {
-    version: u32,
-    port: u16,
-    token: String,
-    pid: u32,
 }
 
 #[derive(Debug, Deserialize)]
@@ -110,9 +100,9 @@ pub(super) fn start(app: &AppHandle, state: &Arc<SharedRuntime>, info_path: Path
         return;
     };
     let port = addr.port();
-    let token = generate_token();
-    let info = BridgeInfoFile { version: BRIDGE_VERSION, port, token: token.clone(), pid: std::process::id() };
-    if let Err(error) = write_info_file(&info_path, &info) {
+    let token = new_token();
+    let info = DiscoveryFile { version: BRIDGE_VERSION, port, token: token.clone(), pid: std::process::id() };
+    if let Err(error) = write_json_atomic(&info_path, &info) {
         tracing::warn!(%error, path = %info_path.display(), "Ice local bridge could not write discovery file");
     }
 
@@ -259,25 +249,12 @@ fn build_status(state: &SharedRuntime, snap: &EngineSnapshot) -> BridgeStatus {
     }
 }
 
-fn tokens_match(candidate: &str, expected: &str) -> bool {
-    candidate.as_bytes() == expected.as_bytes()
-}
-
-fn generate_token() -> String {
-    let nanos = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_nanos();
-    let pid = u128::from(std::process::id());
-    let s1 = RandomState::new();
-    let s2 = RandomState::new();
-    let hi = s1.hash_one((nanos, pid, 0x9e37_79b9_7f4a_7c15_u64));
-    let lo = s2.hash_one((pid, nanos.wrapping_mul(6364_1362_2384_6793_u128), &hi as *const u64 as usize));
-    format!("{hi:016x}{lo:016x}")
-}
-
-fn write_info_file(path: &Path, info: &BridgeInfoFile) -> std::io::Result<()> {
+/// Writes `value` as pretty JSON through a temp file and a rename, so a reader never sees half a file.
+pub(super) fn write_json_atomic<T: Serialize>(path: &Path, value: &T) -> std::io::Result<()> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    let json = serde_json::to_string_pretty(info).map_err(std::io::Error::other)?;
+    let json = serde_json::to_string_pretty(value).map_err(std::io::Error::other)?;
     let tmp = path.with_extension("json.tmp");
     std::fs::write(&tmp, &json)?;
     if std::fs::rename(&tmp, path).is_err() {
@@ -311,22 +288,5 @@ mod tests {
         let cmd: BridgeRequest =
             serde_json::from_str(r#"{"token":"abc","action":"command","command":{"type":"toggleMute"}}"#).unwrap();
         assert!(matches!(cmd.action, BridgeAction::Command { command: Command::ToggleMute }));
-    }
-
-    #[test]
-    fn token_generation_is_32_hex_chars_and_unique() {
-        let t1 = generate_token();
-        let t2 = generate_token();
-        assert_eq!(t1.len(), 32);
-        assert_eq!(t2.len(), 32);
-        assert!(t1.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f')));
-        assert_ne!(t1, t2);
-    }
-
-    #[test]
-    fn token_verification_checks_exact_match() {
-        assert!(tokens_match("deadbeef", "deadbeef"));
-        assert!(!tokens_match("deadbeee", "deadbeef"));
-        assert!(!tokens_match("", "deadbeef"));
     }
 }

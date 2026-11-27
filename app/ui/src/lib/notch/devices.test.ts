@@ -48,6 +48,7 @@ function baseSettings(overrides: Partial<SettingsView> = {}): SettingsView {
 
     callMode: { enabled: false, apps: ['Discord.exe'], duckPercent: 30, holdSecs: 3, sensitivity: 'normal' },
     showNotchHotkey: null,
+    widget: { enabled: false, buttons: ['pin', 'mic', 'settings'] },
     ...overrides,
   };
 }

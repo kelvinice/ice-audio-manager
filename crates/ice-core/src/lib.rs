@@ -6,6 +6,7 @@
 
 pub mod appearance;
 pub mod call_mode;
+pub mod companion;
 pub mod config;
 pub mod device;
 pub mod engine;
@@ -17,3 +18,4 @@ pub mod meter;
 pub mod placement;
 pub mod resolve;
 pub mod spectrum;
+pub mod widget;

@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 pub use ice_core::appearance::{IdleStyle, NotchStyle, SpringPreset, ThemeKind};
+pub use ice_core::companion::PandoraAction;
 pub use ice_core::placement::NotchAnchor;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -74,6 +75,18 @@ pub struct NotchSnapshot {
     pub hidden_for_bench: bool,
     pub active_monitor: usize,
     pub monitors: Vec<MonitorSummary>,
+    /// Experimental Pandora companion state for the notch widget's Pandora buttons.
+    pub pandora: PandoraView,
+}
+
+/// What the widget's Pandora buttons show (`pandora.rs`).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct PandoraView {
+    /// The Pandora job still running, if any (its button shows as busy).
+    pub busy: Option<PandoraAction>,
+    /// The last answer: "Title — Artist", "No match this time." or why it failed. Shown in the button's tooltip.
+    pub last_result: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -97,6 +110,26 @@ pub(super) async fn open_music_service(
             tracing::warn!(%e, "Could not launch music service");
             e.to_string()
         })
+}
+
+/// The notch widget's call-mode button (owner, 2026-11-27). Like `set_hibernate`, one fixed setting the notch may change.
+#[tauri::command]
+pub(super) fn set_call_mode(
+    window: tauri::WebviewWindow,
+    enabled: bool,
+    state: tauri::State<'_, std::sync::Arc<super::SharedRuntime>>,
+) -> Result<(), String> {
+    if window.label() != "notch" {
+        return Err("Only the notch uses this command".into());
+    }
+    state.engine.send(ice_core::engine::Command::SetCallMode {
+        enabled: Some(enabled),
+        apps: None,
+        duck_percent: None,
+        hold_secs: None,
+        sensitivity: None,
+    });
+    Ok(())
 }
 
 #[cfg(test)]
@@ -127,6 +160,10 @@ mod tests {
             &format!("export {}", MonitorSummary::decl(&cfg)),
             "",
             &format!("export {}", HitRect::decl(&cfg)),
+            "",
+            &format!("export {}", PandoraAction::decl(&cfg)),
+            "",
+            &format!("export {}", PandoraView::decl(&cfg)),
             "",
             &format!("export {}", NotchSnapshot::decl(&cfg)),
             "",
@@ -221,6 +258,10 @@ mod tests {
             &format!("export {}", DevicePrefsView::decl(&cfg)),
             "",
             &format!("export {}", PerformanceProfile::decl(&cfg)),
+            "",
+            &format!("export {}", ice_core::widget::WidgetButton::decl(&cfg)),
+            "",
+            &format!("export {}", ice_core::widget::NotchWidget::decl(&cfg)),
             "",
             &format!("export {}", SettingsView::decl(&cfg)),
             "",

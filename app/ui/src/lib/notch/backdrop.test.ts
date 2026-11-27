@@ -44,6 +44,7 @@ const baseSettings: SettingsView = {
 
   callMode: { enabled: false, apps: ['Discord.exe'], duckPercent: 30, holdSecs: 3, sensitivity: 'normal' },
   showNotchHotkey: null,
+  widget: { enabled: false, buttons: ['pin', 'mic', 'settings'] },
 };
 
 test('computeArtBackdrop derives 2-stop gradient washes and keeps WCAG AA scrim contrast on bright covers', () => {

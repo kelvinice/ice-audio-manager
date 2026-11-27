@@ -22,6 +22,18 @@ left: number, top: number, width: number, height: number, scaleFactor: number, r
 
 export type HitRect = { x: number, y: number, width: number, height: number, };
 
+export type PandoraAction = "recognize" | "open";
+
+export type PandoraView = {
+/**
+ * The Pandora job still running, if any (its button shows as busy).
+ */
+busy: PandoraAction | null,
+/**
+ * The last answer: "Title — Artist", "No match this time." or why it failed. Shown in the button's tooltip.
+ */
+lastResult: string | null, };
+
 export type NotchSnapshot = { revision: number, eventSeq: number, placedSeq: number,
 /**
  * D-20: the shell is carrying the notch (from the drag threshold until the button is released); the WebView
@@ -31,6 +43,10 @@ dragging: boolean, activity: ActivityKind, volumePercent: number, muted: boolean
 /**
  * D-20: the anchor in use (Edge Nook maps a bottom anchor to the top); a bottom one makes the notch grow upwards.
  */
-anchor: NotchAnchor, expanded: boolean, suspended: boolean, hiddenForBench: boolean, activeMonitor: number, monitors: Array<MonitorSummary>, };
+anchor: NotchAnchor, expanded: boolean, suspended: boolean, hiddenForBench: boolean, activeMonitor: number, monitors: Array<MonitorSummary>,
+/**
+ * Experimental Pandora companion state for the notch widget's Pandora buttons.
+ */
+pandora: PandoraView, };
 
 export type NotchDelta = { "kind": "state", snapshot: NotchSnapshot, };

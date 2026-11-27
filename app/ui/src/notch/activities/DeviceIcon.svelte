@@ -21,6 +21,9 @@
     | 'lyrics'
     | 'settings'
     | 'moon'
+    | 'recognize'
+    | 'pandora'
+    | 'call'
     | 'close';
 
   interface Props {
@@ -122,6 +125,13 @@
     <path d="M4 4l8 8M12 4l-8 8" />
   {:else if resolved === 'moon'}
     <path d="M13 9.6A5.4 5.4 0 0 1 6.4 3a5.4 5.4 0 1 0 6.6 6.6Z" />
+  {:else if resolved === 'recognize'}
+    <path d="M2.5 8h1.2M5 5.5v5M7.5 3.5v9M10 5.5v5M12.3 8h1.2" />
+  {:else if resolved === 'pandora'}
+    <path d="M8 2l5.2 6L8 14 2.8 8 8 2Z" />
+    <path d="M2.8 8h10.4M8 2 6.2 8 8 14M8 2l1.8 6L8 14" />
+  {:else if resolved === 'call'}
+    <path d="M5.4 2.8 3.6 3.2c-.7.2-1.1.9-1 1.6.9 4.6 4 7.7 8.6 8.6.7.1 1.4-.3 1.6-1l.4-1.8-2.7-1.4-1.2 1.2A7.4 7.4 0 0 1 5.6 6.7l1.2-1.2-1.4-2.7Z" />
   {:else if resolved === 'settings'}
     <path d="M2.5 4.8h5.8M11.7 4.8h1.8M2.5 11.2h1.8M7.7 11.2h5.8" />
     <circle cx="10" cy="4.8" r="1.7" />

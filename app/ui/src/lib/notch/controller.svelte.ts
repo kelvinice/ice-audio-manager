@@ -1,7 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import type { EngineSnapshot, Envelope, MediaAction, NotchAnchor, NotchStyle } from '../ipc/engine';
-import type { HitRect, NotchDelta, NotchSnapshot } from '../ipc/types';
+import type { HitRect, NotchDelta, NotchSnapshot, PandoraAction } from '../ipc/types';
 import { SpringGroup } from '../motion/spring.svelte';
 import {
   adaptAccentForSurface,
@@ -21,7 +21,8 @@ import {
   resolveRimStroke,
 } from './geometry';
 import { getNotchStyleStrategy, NO_HIT_RECT, plainGeometryContext, type GeometryContext } from './notchStyle';
-import { hasSubtitleLines, shouldShowCardLyrics, shouldShowPillLyrics } from './lyrics';
+import { hasAnyLyrics, hasSubtitleLines, shouldShowCardLyrics, shouldShowPillLyrics } from './lyrics';
+import { visibleWidgetButtons, type WidgetBinding } from './widget';
 import {
   DEFAULT_IDLE_MODE,
   formatRgbCss,
@@ -242,6 +243,30 @@ export class NotchController {
         this.lyricsCardOpen,
       ),
   );
+  /** Experimental widget: the user's quick buttons for the rail / toolbar, or `null` while it is off. */
+  readonly widget = $derived.by((): WidgetBinding | null => {
+    const s = this.engineState.settings;
+    if (!s?.widget.enabled) return null;
+    const lyricsToggle = isMediaActive(this.engineState.media) && s.lyrics.enabled && s.lyrics.showOnCard;
+    return {
+      buttons: visibleWidgetButtons(s.widget, lyricsToggle),
+      pinned: this.notchSnapshot?.expanded ?? false,
+      micMuted: this.effectiveMicMuted,
+      lyricsOn: this.lyricsCardOpen,
+      lyricsAvailable: hasAnyLyrics(this.engineState.lyrics),
+      callModeOn: s.callMode.enabled,
+      pandora: this.notchSnapshot?.pandora,
+      instant: this.isInstant,
+      onTogglePin: this.toggleExpand,
+      onToggleMicMute: this.toggleMicMute,
+      onToggleLyrics: this.toggleLyricsCard,
+      onHibernate: this.hibernate,
+      onToggleCallMode: this.toggleCallMode,
+      onPandora: this.pandoraAction,
+      onOpenSettings: this.openSettings,
+    };
+  });
+
   private computePillLyricsExtraH(view: ActivityView): number {
     const cfg = this.engineState.settings?.lyrics;
     if (view.kind === 'track' && shouldShowPillLyrics(cfg, this.engineState.lyrics, isMediaActive(view.media))) {
@@ -881,7 +906,15 @@ export class NotchController {
   switchDevice = (deviceId: string): void => void invoke('switch_to_device', { deviceId });
   toggleMicMute = (): void => void invoke('toggle_mic_mute');
   openSettings = (): void => void invoke('open_settings');
-  openMusicService = (service: MusicServiceId): void => {
+  /** Widget: flip call mode (D-30) through the notch's own setting command. */
+  toggleCallMode = (): void =>
+    void invoke('set_call_mode', { enabled: !(this.engineState.settings?.callMode.enabled ?? false) });
+  /** Widget: ask Pandora (`pandora.rs`); progress and the answer come back in `NotchSnapshot.pandora`. */
+  pandoraAction = (action: PandoraAction): void => {
+    this.scheduler.markInteraction(Date.now());
+    void invoke('pandora_action', { action }).catch(() => {});
+  };
+  openMusicService =(service: MusicServiceId): void => {
     this.scheduler.markInteraction(Date.now());
     this.scheduleNextTick();
     void invoke('open_music_service', { service }).catch(() => {});

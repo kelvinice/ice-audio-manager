@@ -48,3 +48,4 @@ Unit tests in `tray.rs` and `preferences.rs` cover id round-trips and favourite 
 - 2026-11-25 Claude: "Pinned monitor" submenu renamed **Notch position**; after a separator it lists the three D-20 anchors (`Command::SetNotchAnchor`).
 - 2026-11-25 Claude: **Notch position** lists all six D-20 anchors (bottom items disabled under Edge Nook) plus **"Drag to move"** check item (`Command::SetNotchPlacement`).
 - 2026-11-25 Gemini: enabled all six anchors for both Edge Nook and Floating; unchecks presets and shows a disabled `"Custom position (N%)"` item while `settings.notch_x_ratio` is set.
+- 2026-11-27 Claude: `notify` is `pub(super)` so `pandora.rs` can report recognition results (called on the main thread, where `TRAY` lives).

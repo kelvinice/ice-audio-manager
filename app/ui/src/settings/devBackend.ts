@@ -85,6 +85,7 @@ function initialSnapshot(): EngineSnapshot {
         sensitivity: 'normal',
       },
       showNotchHotkey: null,
+      widget: { enabled: false, buttons: ['pin', 'mic', 'pandora_recognize', 'settings'] },
     },
   };
 }
@@ -116,6 +117,7 @@ const notch: NotchSnapshot = {
     { index: 0, id: '\\\\.\\DISPLAY1', displayPath: 'DISPLAY-PATH-1', name: 'LG ULTRAGEAR', isPrimary: true, left: 0, top: 0, width: 2560, height: 1440, scaleFactor: 1.5, refreshHz: 144 },
     { index: 1, id: '\\\\.\\DISPLAY2', displayPath: 'DISPLAY-PATH-2', name: 'ASUS VP249', isPrimary: false, left: 2560, top: 220, width: 1920, height: 1080, scaleFactor: 1, refreshHz: 75 },
   ],
+  pandora: { busy: null, lastResult: null },
 };
 
 function applyCommand(s: EngineSnapshot, c: Command): void {
@@ -190,6 +192,9 @@ function applyCommand(s: EngineSnapshot, c: Command): void {
       };
       break;
     case 'setShowNotchHotkey': st.showNotchHotkey = c.hotkey; break;
+    case 'setNotchWidget':
+      st.widget = { enabled: c.enabled ?? st.widget.enabled, buttons: c.buttons ?? st.widget.buttons };
+      break;
     case 'setDefaultRoles': st.defaultRoles = c.roles; break;
     case 'setFavourites': st.favouritesPlayback = c.deviceIds.map(ref); break;
     case 'setDevicePrefs': {

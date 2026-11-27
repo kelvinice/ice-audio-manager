@@ -2,6 +2,7 @@
   import type { DeviceSummary, LyricsState, MediaAction, NowPlaying, SettingsView } from '../../lib/ipc/engine';
   import type { SpringPreset } from '../../lib/ipc/types';
   import type { MusicServiceId, MusicServiceItem } from '../../lib/notch/backdrop';
+  import type { WidgetBinding } from '../../lib/notch/widget';
   import { hasAnyLyrics } from '../../lib/notch/lyrics';
   import { isMediaActive } from '../../lib/notch/scheduler';
   import ExpandedEmptyCard from './ExpandedEmptyCard.svelte';
@@ -41,6 +42,8 @@
     onOpenMusicService?: (service: MusicServiceId) => void;
     onOpenSettings: () => void;
     isBottom?: boolean;
+    /** Experimental widget (`NotchController.widget`); `null` keeps the built-in buttons. */
+    widget?: WidgetBinding | null;
   }
 
   let {
@@ -73,6 +76,7 @@
     onOpenMusicService = () => {},
     onOpenSettings,
     isBottom = false,
+    widget = null,
   }: Props = $props();
 
   const activeMedia = $derived(isMediaActive(media) ? media : null);
@@ -133,6 +137,7 @@
       {onToggleMicMute}
       onOpenService={onOpenMusicService}
       {onOpenSettings}
+      {widget}
     />
   </div>
 

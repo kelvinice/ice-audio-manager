@@ -104,7 +104,7 @@ pub(super) fn show_notice(state: &SharedRuntime, notice: &Notice) {
     }
 }
 
-fn notify(state: &SharedRuntime, title: &str, message: &str) {
+pub(super) fn notify(state: &SharedRuntime, title: &str, message: &str) {
     prompts(state).feedback = Some(format!("{title} · {message}"));
     let accepted = TRAY.with_borrow(|tray| {
         tray.as_ref().is_some_and(|tray| {

@@ -21,6 +21,7 @@ use crate::device::{DeviceState, Flow, Role};
 use crate::lyrics::{LyricsConfig, LyricsState};
 use crate::media::{MusicServiceId, MusicServices, NowPlaying};
 use crate::placement::{NotchAnchor, NotchPlacement};
+use crate::widget::{NotchWidget, WidgetButton};
 
 /// Which default roles a switch sets (D-05, F02).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -361,6 +362,11 @@ pub enum Command {
         beat_rim: Option<bool>,
         cover_tilt: Option<bool>,
     },
+    /// Experimental notch widget: switch it and/or replace its button order (`None` leaves a field unchanged).
+    SetNotchWidget {
+        enabled: Option<bool>,
+        buttons: Option<Vec<WidgetButton>>,
+    },
     /// D-22 Storage: set maximum managed lyrics disk cache size in MiB (`5..=500`).
     SetLyricsCacheMaxMb {
         max_mb: u16,
@@ -424,6 +430,7 @@ impl Command {
             | Self::SetWavyProgress { .. }
             | Self::SetVolumeButton { .. }
             | Self::SetExperiments { .. }
+            | Self::SetNotchWidget { .. }
             | Self::SetLyricsCacheMaxMb { .. }
             | Self::DisableAllNetworkFeatures
             | Self::SetVisualizerSpectrum { .. }
@@ -540,6 +547,9 @@ pub struct SettingsView {
     /// D-19 "show notch" hotkey, if bound.
     #[serde(default)]
     pub show_notch_hotkey: Option<String>,
+    /// Experimental notch widget (`[widget]`).
+    #[serde(default)]
+    pub widget: NotchWidget,
 }
 
 fn default_idle_linger_secs() -> u16 {

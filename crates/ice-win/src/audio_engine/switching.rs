@@ -100,6 +100,7 @@ impl Worker {
             | Command::SetWavyProgress { .. }
             | Command::SetVolumeButton { .. }
             | Command::SetExperiments { .. }
+            | Command::SetNotchWidget { .. }
             | Command::SetLyricsCacheMaxMb { .. }
             | Command::DisableAllNetworkFeatures
             | Command::SetVisualizerSpectrum { .. }

@@ -2,6 +2,7 @@
   import type { DeviceSummary, LyricsState, MediaAction, NowPlaying, SettingsView } from '../../lib/ipc/engine';
   import type { SpringPreset } from '../../lib/ipc/types';
   import type { MusicServiceId, MusicServiceItem } from '../../lib/notch/backdrop';
+  import type { WidgetBinding } from '../../lib/notch/widget';
   import { hasAnyLyrics } from '../../lib/notch/lyrics';
   import { mediaSource } from '../../lib/notch/mediaSource';
   import { isMediaActive } from '../../lib/notch/scheduler';
@@ -44,6 +45,8 @@
     onOpenSettings: () => void;
     onHibernate?: () => void;
     isBottom?: boolean;
+    /** Experimental widget (`NotchController.widget`); `null` keeps the built-in buttons. */
+    widget?: WidgetBinding | null;
   }
 
   let {
@@ -77,6 +80,7 @@
     onOpenSettings,
     onHibernate = () => {},
     isBottom = false,
+    widget = null,
   }: Props = $props();
 
   const activeMedia = $derived(isMediaActive(media) ? media : null);
@@ -115,6 +119,7 @@
       {onHibernate}
       onTogglePin={onToggleExpand}
       {onOpenSettings}
+      {widget}
     />
   </header>
 

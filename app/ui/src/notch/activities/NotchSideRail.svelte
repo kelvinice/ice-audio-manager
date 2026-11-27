@@ -1,7 +1,9 @@
 <script lang="ts">
   import type { MusicServiceId, MusicServiceItem } from '../../lib/notch/backdrop';
+  import { railFitsServices, type WidgetBinding } from '../../lib/notch/widget';
   import DeviceIcon from './DeviceIcon.svelte';
   import MusicServicesWidget from './MusicServicesWidget.svelte';
+  import WidgetButtons from './WidgetButtons.svelte';
 
   interface Props {
     /** Pinned = the notch stays expanded (`NotchSnapshot.expanded`). */
@@ -14,6 +16,8 @@
     onToggleMicMute: () => void;
     onOpenService: (service: MusicServiceId) => void;
     onOpenSettings: () => void;
+    /** Experimental widget: when set, its buttons replace pin, mic and Settings. */
+    widget?: WidgetBinding | null;
   }
 
   let {
@@ -25,10 +29,24 @@
     onToggleMicMute,
     onOpenService,
     onOpenSettings,
+    widget = null,
   }: Props = $props();
+
+  const servicesShown = $derived(
+    showServices && services.length > 0 && (!widget || railFitsServices(widget.buttons.length, services.length)),
+  );
 </script>
 
 <nav class="rail" aria-label="Notch actions">
+  {#if widget}
+    <!-- Experimental widget: the user's buttons (five at most), then the services while they still fit. -->
+    <div class="group">
+      <WidgetButtons {...widget} variant="rail" />
+    </div>
+    {#if servicesShown}
+      <MusicServicesWidget {services} variant="rail" {onOpenService} />
+    {/if}
+  {:else}
   <div class="group">
     <button
       class="rail-btn"
@@ -54,7 +72,7 @@
     </button>
   </div>
 
-  {#if showServices && services.length > 0}
+  {#if servicesShown}
     <MusicServicesWidget {services} variant="rail" {onOpenService} />
   {/if}
 
@@ -63,6 +81,7 @@
   <button class="rail-btn" type="button" title="Settings" aria-label="Open Settings" onclick={onOpenSettings}>
     <DeviceIcon kind="settings" size={13} />
   </button>
+  {/if}
 </nav>
 
 <style>

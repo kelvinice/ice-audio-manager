@@ -36,7 +36,7 @@ created when opened and destroyed when closed (shell: `app/src-tauri/src/setting
 | Activities | Music services (`Spotify`, `YouTube Music`); Synced lyrics display (`Show synced lyrics`, pill/card extensions, Lyric highlight: `Word by word` default (estimates words on line-synced lyrics) or `Row by row`, Japanese Romaji) | `SetMusicService`; `SetLyricsEnabled`; `SetLyricsDisplay` (`wordHighlight`); `SetLyricsEstimatedWordSync` (on with Word by word) |
 | Privacy | Master network off switch; opt-in LRCLIB (`lrclib.net`) disclosure & toggle; local audio loopback spectrum visualizer disclosure & meter-only fallback switch | `DisableAllNetworkFeatures`; `SetLyricsOnlineLookup`; `SetVisualizerSpectrum` |
 | Storage | Live lyrics cache usage bar, max cache size (`5–500 MB`), clear cache, open local `.lrc` overrides folder | `SetLyricsCacheMaxMb`; `get_lyrics_storage_stats`; `clear_lyrics_cache`; `open_lyrics_folder` |
-| Experimental | Notch looks: beat rim, cover tilt (off); Drag & drop: landing ripple, glow while carrying (off; disabled with Fixed position) | `SetExperiments`; `SetDragEffects` |
+| Experimental | Notch widget: switch + up to 5 ordered buttons (`WidgetEditor.svelte`: move up/down, remove, add chips, Pandora note); Notch looks: beat rim, cover tilt (off); Drag & drop: landing ripple, glow while carrying (off; disabled with Fixed position) | `SetExperiments`; `SetDragEffects`; `SetNotchWidget` |
 | About | Version, trust promises | `plugin:app|version` |
 
 ## How it works
@@ -83,3 +83,4 @@ created when opened and destroyed when closed (shell: `app/src-tauri/src/setting
 - 2026-11-26 Claude: Experimental → **Song progress** → "Wavy progress line" (`SetWavyProgress`); `devBackend` handles it.
 - 2026-11-26 Claude: owner: estimated word highlight, wavy progress line and jelly landing leave Experimental. Activities → **Lyric highlight** `ChoiceGroup` (`Word by word` default = `wordHighlight` + `estimatedWordSync`, `Row by row` = `wordHighlight` off) replaces the two toggles; Appearance → Song progress → Wavy progress line; Notch → Display → Jelly landing (`SetDragEffects` patch). Experimental keeps landing ripple and carry glow; `devBackend` defaults `estimatedWordSync` on.
 - 2026-11-26 Claude: owner: Notch → **Open card** → "Volume as a button" (`SetVolumeButton`); Experimental → **Notch looks** (beat rim, cover tilt → `SetExperiments` patch); `devBackend` handles both.
+- 2026-11-27 Claude: Experimental → **Notch widget** (`WidgetEditor.svelte`; reorders with `moveItem`, sends `SetNotchWidget`); `devBackend` handles it.
