@@ -17,7 +17,7 @@ one area doc for your task. The user-facing guide, the build commands and the Ic
 | Recommendations | "Recommended songs" under each playlist, picked from the songs in it, with Add and Refresh | [library-and-discovery](library-and-discovery.md) |
 | Import | YouTube Music / Spotify playlist links, CSV / M3U / text tracklists | [library-and-discovery](library-and-discovery.md) |
 | Playback | Queue panel, shuffle / Magic shuffle (recommended songs in between) / repeat, autoplay radio, 10-band EQ + AutoEq import, normalize, skip silence, speed, sleep timer, output device picker, Windows media controls, resume the last song at launch | [playback](playback.md) |
-| Now Playing | Big cover, art-coloured animated backdrop (Calm or Lively lava lamp), Ice-style spectrum, wavy seek bar, liked heart burst | [playback](playback.md), [appearance](appearance.md) |
+| Now Playing | Big cover, art-coloured animated backdrop (Blend, Calm or Lively lava lamp), Ice-style spectrum, wavy seek bar, liked heart burst | [playback](playback.md), [appearance](appearance.md) |
 | Lyrics | Synced lyrics (Default, Fisheye, Rain styles), estimated word timing, romaji for Japanese / Korean / Cyrillic | [lyrics](lyrics.md) |
 | Song recognition | Name the song playing on the PC (or the mic) via a Shazam-compatible fingerprint; history with play / save | [ice-and-recognition](ice-and-recognition.md) |
 | Ice integration | Ice Audio hub (devices, volume, spatial, meter, notch controls), embedded or connected to a running Ice, Ice can ask Pandora to recognise a song | [ice-and-recognition](ice-and-recognition.md) |
@@ -100,6 +100,7 @@ Playback itself (the `<audio>` element, EQ, spectrum) is in the UI's Web Audio g
 
 ## Change log
 
+- 2026-11-28 · Blend backdrop (blurred cover under a softer lava lamp, breathing together) is the new default.
 - 2026-11-28 · Lively backdrop motion (`LavaLamp.svelte`, `lib/breath.ts`, `backdropMotion` setting; Calm stays default).
 - 2026-11-28 · Light Ice theme (`iceLight`).
 - 2026-11-28 · Storage: distinct classes fix the shifted bar segment and download badge; no per-song list; reset card as

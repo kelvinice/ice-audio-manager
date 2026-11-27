@@ -55,7 +55,9 @@ Cover (optionally spinning), title, transport, lyrics column. Backdrop (`NowPlay
 with Animated Backdrop, art-coloured orbs (`--art-*`) that pause with the song, in one of two motions
 (`settings.backdropMotion`):
 
-- **Calm** (default): five orbs on slow circles.
+- **Blend** (default): `LavaLamp` with `cover`: the blurred cover is drawn inside the lamp's field (so the bass breath
+  swells it too) under the same nine orbs at lower opacity. With no artwork it is Lively.
+- **Calm**: five orbs on slow circles.
 - **Lively** (`LavaLamp.svelte`, after Ice's `NotchBackdrop.svelte`): nine orbs, each looping around its own spot while
   its distance and size change (one `wander` keyframe driven by per-orb CSS variables, periods 26 s × 0.77–1.37), and
   the field swells on bass kicks (`lib/breath.ts`, Twin of Ice's `BreathEnvelope`; kicks are the 55–110 Hz level rising

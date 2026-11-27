@@ -126,8 +126,11 @@ export interface PandoraSettings {
   backdropMotion: BackdropMotion;
 }
 
-/** Now Playing's animated background (Rust `BackdropMotion`): slow circles, or Ice's lava lamp. */
-export type BackdropMotion = "calm" | "lively";
+/**
+ * Now Playing's animated background (Rust `BackdropMotion`): the blurred cover under a faint lava lamp (default), slow
+ * circles, or Ice's full lava lamp.
+ */
+export type BackdropMotion = "blend" | "calm" | "lively";
 
 /** Now Playing lyric styles (Rust `LyricsStyle`). */
 export type LyricsStyle = "default" | "fisheye" | "rain";
@@ -147,7 +150,7 @@ export const DEFAULT_PANDORA_SETTINGS: PandoraSettings = {
   closeToTray: false,
   artworkCacheMb: 256,
   lyricsStyle: "default",
-  backdropMotion: "calm",
+  backdropMotion: "blend",
 };
 
 export interface AppPaths {

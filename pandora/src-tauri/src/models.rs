@@ -194,16 +194,18 @@ pub struct PandoraSettings {
     pub backdrop_motion: BackdropMotion,
 }
 
-/// Now Playing's animated background. Unknown values (newer files) read as `Calm`.
+/// Now Playing's animated background. Unknown values (newer files) read as `Blend`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum BackdropMotion {
     /// Ice notch's lava lamp: nine orbs wandering their own loops, breathing with the bass.
     Lively,
     /// Five soft orbs on slow circles.
+    Calm,
+    /// The blurred cover with a fainter lava lamp over it, both breathing with the bass.
     #[default]
     #[serde(other)]
-    Calm,
+    Blend,
 }
 
 /// Now Playing lyric styles. Unknown values (newer files) read as `Default`.
@@ -242,7 +244,7 @@ impl Default for PandoraSettings {
             close_to_tray: false,
             artwork_cache_mb: default_artwork_cache_mb(),
             lyrics_style: LyricsStyle::Default,
-            backdrop_motion: BackdropMotion::Calm,
+            backdrop_motion: BackdropMotion::Blend,
         }
     }
 }

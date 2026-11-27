@@ -1,8 +1,8 @@
 <script lang="ts">
   // Now Playing backdrop. Always: the cover, blurred and enlarged, under a tint that keeps text readable. With
   // `animated` (the sparkle button): soft orbs in the artwork's colours drift on slow circular paths over it, in the
-  // spirit of the Ice notch's lava-lamp wash ("Calm"), or the full lava lamp (`LavaLamp`, "Lively", setting
-  // `backdropMotion`). Motion is transform-only, pauses with the song and is off for reduced motion (app.css stops
+  // spirit of the Ice notch's lava-lamp wash ("Calm"), the full lava lamp (`LavaLamp`, "Lively"), or both: the cover
+  // under a fainter lava lamp, breathing with the bass together ("Blend", the default; setting `backdropMotion`). Motion is transform-only, pauses with the song and is off for reduced motion (app.css stops
   // every animation then).
   import type { BackdropMotion } from "../lib/types";
   import LavaLamp from "./LavaLamp.svelte";
@@ -30,13 +30,16 @@
 </script>
 
 <div class="backdrop" aria-hidden="true">
-  {#if artworkUrl}
+  {#if artworkUrl && !(animated && motion === "blend")}
     {#key artworkUrl}
       <img class="cover" src={artworkUrl} alt="" />
     {/key}
   {/if}
 
-  {#if animated && motion === "lively"}
+  {#if animated && motion === "blend"}
+    <!-- The lamp draws the cover itself, inside the field that breathes with the bass (no cover: Lively orbs). -->
+    <LavaLamp {playing} cover={artworkUrl} />
+  {:else if animated && motion === "lively"}
     <LavaLamp {playing} />
   {:else if animated}
     <div class="orbs" class:paused={!playing}>

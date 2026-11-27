@@ -4,15 +4,19 @@
   // ease (closed loops on coprime-ish periods, so the pattern never visibly repeats), and the whole field breathing
   // with the bass (`lib/breath.ts`). Transform-only. The breath samples the analyser at most 30 Hz, only while playing
   // and mounted; reduced motion skips it (and app.css stops the loops).
+  // With `cover` ("Blend"), the blurred cover sits inside the breathing field under fainter orbs, so the artwork stays
+  // the backdrop and swells with the bass too.
   import { onDestroy } from "svelte";
   import { audioEngine } from "../lib/audio";
   import { BassBreath, BREATH_SCALE } from "../lib/breath";
 
   interface Props {
     playing: boolean;
+    /** The artwork URL to blur under the orbs (Blend), or null for orbs alone. */
+    cover?: string | null;
   }
 
-  let { playing }: Props = $props();
+  let { playing, cover = null }: Props = $props();
 
   const C1 = "var(--art-primary, var(--p-tone))";
   const C2 = "var(--art-secondary, var(--p-companion))";
@@ -80,8 +84,13 @@
   onDestroy(stopBreath);
 </script>
 
-<div class="lamp" class:paused={!playing}>
+<div class="lamp" class:paused={!playing} class:blend={cover !== null}>
   <div class="field" bind:this={field}>
+    {#if cover}
+      {#key cover}
+        <img class="cover" src={cover} alt="" />
+      {/key}
+    {/if}
     {#each ORBS as orb, i (i)}
       <div
         class="spot"
@@ -158,6 +167,34 @@
   :global([data-theme="iceLight"]) .blob {
     mix-blend-mode: multiply;
     opacity: 0.32;
+  }
+
+  /* Blend: the cover, blurred and a little larger than the page so the breath never shows its edge. */
+  .cover {
+    position: absolute;
+    inset: -12%;
+    width: 124%;
+    height: 124%;
+    object-fit: cover;
+    filter: blur(64px) saturate(1.45);
+    opacity: 0.85;
+    animation: cover-in 0.6s ease both;
+  }
+
+  /* Over the cover the orbs only tint and move it, so the artwork stays recognisable. */
+  .lamp.blend .blob {
+    opacity: 0.38;
+  }
+
+  :global([data-theme="daylight"]) .lamp.blend .blob,
+  :global([data-theme="iceLight"]) .lamp.blend .blob {
+    opacity: 0.22;
+  }
+
+  @keyframes cover-in {
+    from {
+      opacity: 0;
+    }
   }
 
   /* A closed loop: it ends a full turn later at its first distance and size, so `infinite` wraps without a jump. */

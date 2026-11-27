@@ -197,11 +197,13 @@
           <div class="row-sub">
             {settings.backdropMotion === "lively"
               ? "Lively: Ice's lava lamp, nine orbs wandering and breathing with the bass"
-              : "Calm: a few soft orbs on slow circles"}
+              : settings.backdropMotion === "calm"
+                ? "Calm: a few soft orbs on slow circles"
+                : "Blend: the blurred cover under a softer lava lamp, both breathing with the bass"}
           </div>
         </div>
         <div class="pref-row" role="radiogroup" aria-label="Backdrop motion">
-          {#each [{ id: "calm", label: "Calm" }, { id: "lively", label: "Lively" }] as const as option (option.id)}
+          {#each [{ id: "blend", label: "Blend" }, { id: "calm", label: "Calm" }, { id: "lively", label: "Lively" }] as const as option (option.id)}
             <button
               class="chip"
               role="radio"

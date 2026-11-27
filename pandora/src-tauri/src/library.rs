@@ -730,9 +730,11 @@ mod tests {
         let old: PandoraSettings = serde_json::from_str(r#"{"theme":"midnight"}"#).unwrap();
         assert_eq!(old.artwork_cache_mb, 256);
         assert_eq!(old.lyrics_style, crate::models::LyricsStyle::Default);
-        assert_eq!(old.backdrop_motion, crate::models::BackdropMotion::Calm);
+        assert_eq!(old.backdrop_motion, crate::models::BackdropMotion::Blend);
         let odd: PandoraSettings = serde_json::from_str(r#"{"backdropMotion":"wild"}"#).unwrap();
-        assert_eq!(odd.backdrop_motion, crate::models::BackdropMotion::Calm);
+        assert_eq!(odd.backdrop_motion, crate::models::BackdropMotion::Blend);
+        let calm: PandoraSettings = serde_json::from_str(r#"{"backdropMotion":"calm"}"#).unwrap();
+        assert_eq!(calm.backdrop_motion, crate::models::BackdropMotion::Calm);
         let newer: PandoraSettings = serde_json::from_str(r#"{"lyricsStyle":"branches"}"#).unwrap();
         assert_eq!(newer.lyrics_style, crate::models::LyricsStyle::Default);
         let ice: PandoraSettings = serde_json::from_str(r#"{"theme":"ice"}"#).unwrap();
