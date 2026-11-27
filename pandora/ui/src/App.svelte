@@ -30,6 +30,8 @@
     isDemoMode,
     isTauriEnv,
     onIceMeter,
+    onLibraryChanged,
+    onCompanionRecognized,
     onIceSnapshot,
     onIceStatus,
     removeFromPlaylist,
@@ -120,6 +122,8 @@
   let unlistenStatus: (() => void) | null = null;
   let unlistenSnap: (() => void) | null = null;
   let unlistenMeter: (() => void) | null = null;
+  let unlistenLibrary: (() => void) | null = null;
+  let unlistenCompanion: (() => void) | null = null;
 
   let likedIds = $derived(new Set(library.liked.map((t) => t.id)));
   $effect(() => {
@@ -152,6 +156,8 @@
       unlistenStatus = await onIceStatus((st) => (iceStatus = st));
       unlistenSnap = await onIceSnapshot((sn) => (iceSnapshot = sn));
       unlistenMeter = await onIceMeter((fr) => (iceMeter = fr));
+      unlistenLibrary = await onLibraryChanged((next) => (library = next));
+      unlistenCompanion = await onCompanionRecognized((t) => showNotice(`Ice asked: ${t.title} — ${t.artist}`));
       void getIceStatus()
         .then((st) => (iceStatus = st))
         .catch(() => {});
@@ -169,6 +175,8 @@
     unlistenStatus?.();
     unlistenSnap?.();
     unlistenMeter?.();
+    unlistenLibrary?.();
+    unlistenCompanion?.();
   });
 
   async function refreshHome() {

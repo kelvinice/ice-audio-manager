@@ -62,6 +62,44 @@ Pandora never breaks standalone `ice-audio-manager.exe` and never fights it over
    - If talking to an older standalone Ice binary without `bridge.json`, Pandora gracefully falls back to direct `ice-win` Core Audio calls + `%APPDATA%\IceAudioManager\config.toml` saves.
    - When **Broadcast to Windows SMTC / Ice Notch** is enabled in Settings, Pandora publishes track title, artist, album, artwork, and timeline position via `navigator.mediaSession`, so standalone Ice's Notch automatically displays whatever Pandora is playing!
 
+### Launching each other
+
+Each app writes an `install.json` (`{ version, exePath, appVersion }`) in its own `%LOCALAPPDATA%` folder at every
+start and keeps it after exit. The format lives in `ice_core::companion::InstallHint`.
+
+- **Pandora → Ice:** **Launch Ice** (Ice Audio Hub or Settings, or **Auto-Launch Standalone Ice** at startup) reads
+  `%LOCALAPPDATA%\IceAudioManager\install.json` first, then the usual source-checkout guesses (`target\release`,
+  `target\debug`). So once Ice has run from anywhere, Pandora can start it. The button stays disabled until one is
+  found.
+- **Ice → Pandora:** Ice reads `%LOCALAPPDATA%\Pandora\install.json`, then `pandora\src-tauri\target\{release,debug}`
+  next to its own exe. A Pandora that Ice starts for a recognition gets `--background` and stays in the tray. Pandora's
+  window now starts hidden in every case and shows itself in `setup`, so a background start never flashes it.
+
+### Ice controlling Pandora (experimental)
+
+Pandora runs its own loopback bridge, the mirror of Ice's (`pandora/src-tauri/src/companion.rs`):
+`127.0.0.1:0`, a per-run token in `%LOCALAPPDATA%\Pandora\bridge.json` (removed on exit), and one JSON line in and
+one out. The protocol types are shared from `ice_core::companion`.
+
+| Request | What Pandora does |
+|---|---|
+| `ping` | Answers with its version. |
+| `show` | Brings its window to the front. |
+| `recognize` | Listens to the PC's playback (WASAPI loopback, never the microphone), looks the song up, saves it in the recognition history, and answers `{ title, artist, album }`. One at a time, shared with the Recognize view. |
+
+In Ice, turn on **Settings → Experimental → Notch widget** and add **Recognise song** or **Open Pandora**. Pressing one
+of these buttons starts Pandora if needed, sends the request on a short `ice-pandora` thread, and pulses the button
+while it waits. The answer then appears as a tray notification and in the button's tooltip. Ice never touches the
+network for this: Pandora does the lookup.
+
+### The notch widget (experimental)
+
+**Settings → Experimental → Notch widget** replaces the notch's fixed buttons (the side rail on Floating, the toolbar
+capsule on Edge Nook) with up to five buttons in your own order. The available buttons are Pin, Microphone, Lyrics,
+Hibernate, Call mode, Recognise song, Open Pandora and Settings. Settings has move up/down, remove and add controls.
+The list is saved in `config.toml` under `[widget]` (schema v24). While the switch is off, the notch looks exactly as
+before.
+
 ---
 
 ## 3. Building & Running

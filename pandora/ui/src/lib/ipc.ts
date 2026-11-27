@@ -199,3 +199,15 @@ export async function onIceMeter(cb: (frame: MeterFrame) => void): Promise<Unlis
   if (!inTauri) return () => {};
   return listen<MeterFrame>("ice://meter/v1", (e) => cb(e.payload));
 }
+
+/** The library changed outside the UI (a recognition Ice asked for, see `companion.rs`). */
+export async function onLibraryChanged(cb: (lib: LibraryState) => void): Promise<UnlistenFn> {
+  if (!inTauri) return () => {};
+  return listen<LibraryState>("library://changed/v1", (e) => cb(e.payload));
+}
+
+/** Ice's notch widget asked Pandora to recognise a song, and it found one. */
+export async function onCompanionRecognized(cb: (track: RecognizedTrack) => void): Promise<UnlistenFn> {
+  if (!inTauri) return () => {};
+  return listen<RecognizedTrack>("companion://recognized/v1", (e) => cb(e.payload));
+}

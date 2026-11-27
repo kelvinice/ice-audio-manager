@@ -18,6 +18,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use ice_core::appearance::{NotchStyle, ThemeKind};
+use ice_core::companion::{self, DiscoveryFile, InstallHint};
 use ice_core::config::ConfigStore;
 use ice_core::device::{EndpointInfo, Flow, Role};
 use ice_core::engine::{
@@ -40,15 +41,6 @@ use windows::core::w;
 use crate::models::{IceConfigPatch, IceStatus};
 
 const ICE_MUTEX_NAME_SYNC: SYNCHRONIZATION_ACCESS_RIGHTS = SYNCHRONIZATION_ACCESS_RIGHTS(0x0010_0000);
-
-#[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct BridgeDiscoveryFile {
-    version: u32,
-    port: u16,
-    token: String,
-    pid: u32,
-}
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -791,20 +783,20 @@ fn default_ice_bridge_info_path() -> PathBuf {
     let base = std::env::var_os("LOCALAPPDATA")
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("."));
-    base.join("IceAudioManager").join("bridge.json")
+    base.join(companion::ICE_DIR).join(companion::DISCOVERY_FILE)
 }
 
-fn read_bridge_discovery(path: &Path) -> Option<BridgeDiscoveryFile> {
+fn read_bridge_discovery(path: &Path) -> Option<DiscoveryFile> {
     let text = std::fs::read_to_string(path).ok()?;
-    let info: BridgeDiscoveryFile = serde_json::from_str(&text).ok()?;
-    if info.version == 1 && info.port > 0 && !info.token.is_empty() && info.pid > 0 {
+    let info: DiscoveryFile = serde_json::from_str(&text).ok()?;
+    if info.version == companion::PROTOCOL_VERSION && info.port > 0 && !info.token.is_empty() && info.pid > 0 {
         Some(info)
     } else {
         None
     }
 }
 
-fn bridge_tcp_call(info: &BridgeDiscoveryFile, payload: &serde_json::Value) -> Result<BridgeReply, String> {
+fn bridge_tcp_call(info: &DiscoveryFile, payload: &serde_json::Value) -> Result<BridgeReply, String> {
     let addr = SocketAddr::from(([127, 0, 0, 1], info.port));
     let mut stream = TcpStream::connect_timeout(&addr, Duration::from_millis(350))
         .map_err(|e| format!("Ice bridge unreachable on port {}: {e}", info.port))?;
@@ -832,8 +824,9 @@ fn bridge_tcp_call(info: &BridgeDiscoveryFile, payload: &serde_json::Value) -> R
     Ok(reply)
 }
 
+/// Where to start Ice from: the `install.json` Ice writes at every start, then a source checkout next to Pandora.
 fn find_standalone_ice_exe() -> Option<PathBuf> {
-    let mut candidates = Vec::new();
+    let mut candidates: Vec<PathBuf> = ice_install_hint().into_iter().collect();
     if let Ok(exe) = std::env::current_exe() {
         for ancestor in exe.ancestors().take(6) {
             candidates.push(ancestor.join("target").join("release").join("ice-audio-manager.exe"));
@@ -890,4 +883,11 @@ pub fn apply_window_backdrop(win: &tauri::WebviewWindow) {
 #[allow(dead_code)]
 fn _role_default() -> RoleSet {
     RoleSet::Default
+}
+
+/// `%LOCALAPPDATA%\IceAudioManager\install.json`, if it names an absolute `.exe`.
+fn ice_install_hint() -> Option<PathBuf> {
+    let dir = PathBuf::from(std::env::var_os("LOCALAPPDATA")?).join(companion::ICE_DIR);
+    let bytes = std::fs::read(dir.join(companion::INSTALL_FILE)).ok()?;
+    serde_json::from_slice::<InstallHint>(&bytes).ok()?.exe()
 }

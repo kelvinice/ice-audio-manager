@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod companion;
 mod http;
 mod ice_bridge;
 mod library;
@@ -16,7 +17,7 @@ use std::sync::atomic::AtomicBool;
 use ice_core::engine::{Command, EngineSnapshot, RoleSet, SpatialMode};
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
-use tauri::{AppHandle, Manager, State, WindowEvent};
+use tauri::{AppHandle, Emitter, Manager, RunEvent, State, WindowEvent};
 
 use crate::ice_bridge::IceBridge;
 use crate::library::LibraryStore;
@@ -33,6 +34,8 @@ struct AppState {
     library: Arc<LibraryStore>,
     ice: Arc<IceBridge>,
     recognition_cancel: Arc<AtomicBool>,
+    /// Set while a recognition listens (the Recognize view and Ice share one capture).
+    recognizing: AtomicBool,
     import_cancel: Arc<AtomicBool>,
     quitting: Arc<AtomicBool>,
 }
@@ -320,21 +323,26 @@ async fn ice_open_settings(state: State<'_, Arc<AppState>>) -> Result<(), String
 }
 
 #[tauri::command]
-async fn recognize_music(
-    source: String,
-    app: AppHandle,
-    state: State<'_, Arc<AppState>>,
-) -> Result<RecognizedTrack, String> {
-    let cancel = Arc::clone(&state.recognition_cancel);
-    let ytm = Arc::clone(&state.ytm);
-    let lib = Arc::clone(&state.library);
+async fn recognize_music(source: String, app: AppHandle) -> Result<RecognizedTrack, String> {
     let cap_src = recognition::CaptureSource::from_str(&source);
-    let matched = tauri::async_runtime::spawn_blocking(move || {
-        recognition::recognize_from_audio(cap_src, &cancel, &app, &ytm)
-    })
-    .await
-    .map_err(|e| e.to_string())??;
-    lib.add_recognition_history(matched.clone());
+    tauri::async_runtime::spawn_blocking(move || recognize_now(&app, cap_src))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+/// One recognition at a time, from the Recognize view or from Ice's notch widget (`companion.rs`). Blocks up to ~10 s.
+/// Saves the match in the history and tells the UI, whichever side asked.
+fn recognize_now(app: &AppHandle, source: recognition::CaptureSource) -> Result<RecognizedTrack, String> {
+    use std::sync::atomic::Ordering;
+    let state = app.state::<Arc<AppState>>();
+    if state.recognizing.swap(true, Ordering::AcqRel) {
+        return Err("Pandora is already listening.".into());
+    }
+    let result = recognition::recognize_from_audio(source, &state.recognition_cancel, app, &state.ytm);
+    state.recognizing.store(false, Ordering::Release);
+    let matched = result?;
+    let library = state.library.add_recognition_history(matched.clone());
+    let _ = app.emit("library://changed/v1", &library);
     Ok(matched)
 }
 
@@ -408,6 +416,8 @@ fn main() {
 
     let fake_engine = std::env::args().any(|a| a == "--fake-engine");
     let demo_mode = std::env::args().any(|a| a == "--demo");
+    // Started by Ice for a background job (recognition): stay in the tray until the user opens the window.
+    let background = std::env::args().any(|a| a == ice_core::companion::BACKGROUND_ARG);
     let library = Arc::new(LibraryStore::load());
     let ytm = Arc::new(YtMusicClient::new());
     let initial_lib = library.snapshot();
@@ -428,6 +438,7 @@ fn main() {
         library,
         ice: Arc::clone(&ice),
         recognition_cancel: Arc::new(AtomicBool::new(false)),
+        recognizing: AtomicBool::new(false),
         import_cancel: Arc::new(AtomicBool::new(false)),
         quitting: Arc::new(AtomicBool::new(false)),
     });
@@ -436,6 +447,7 @@ fn main() {
         .manage(state)
         .setup(move |app| {
             ice.attach_app(app.handle().clone());
+            companion::start(app.handle());
             if auto_launch_ice {
                 let ice_launch = Arc::clone(&ice);
                 std::thread::Builder::new()
@@ -448,6 +460,10 @@ fn main() {
             }
             if let Some(win) = app.get_webview_window("main") {
                 ice_bridge::apply_window_backdrop(&win);
+                // The window starts hidden (tauri.conf.json) so a background start never flashes it.
+                if !background {
+                    let _ = win.show();
+                }
             }
             let show_item = MenuItem::with_id(app, "tray-show", "Show Pandora", true, None::<&str>)?;
             let sep = PredefinedMenuItem::separator(app)?;
@@ -548,6 +564,11 @@ fn main() {
             import_playlist,
             cancel_playlist_import,
         ])
-        .run(tauri::generate_context!())
-        .expect("error running Pandora");
+        .build(tauri::generate_context!())
+        .expect("error running Pandora")
+        .run(|_, event| {
+            if let RunEvent::Exit = event {
+                companion::stop();
+            }
+        });
 }
