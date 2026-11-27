@@ -1,8 +1,10 @@
 <script lang="ts">
   import { audioEngine, playerStore } from "../lib/audio";
   import { resolveArtworkUrl } from "../lib/theme";
-  import type { Track } from "../lib/types";
+  import type { LyricsStyle, Track } from "../lib/types";
   import Icon from "./Icon.svelte";
+  import LyricsFisheye from "./LyricsFisheye.svelte";
+  import LyricsRain from "./LyricsRain.svelte";
   import NowPlayingBackdrop from "./NowPlayingBackdrop.svelte";
   import SeekBar from "./SeekBar.svelte";
 
@@ -18,6 +20,8 @@
     onToggleLike: (track: Track) => void;
     onAddToPlaylist: (track: Track) => void;
     onToggleRomaji: () => void;
+    lyricsStyle: LyricsStyle;
+    onSetLyricsStyle: (style: LyricsStyle) => void;
     onToggleCanvas: () => void;
   }
 
@@ -33,10 +37,18 @@
     onToggleLike,
     onAddToPlaylist,
     onToggleRomaji,
+    lyricsStyle,
+    onSetLyricsStyle,
     onToggleCanvas,
   }: Props = $props();
 
   let rightTab = $state<"lyrics" | "queue">("lyrics");
+
+  const LYRIC_STYLES: { id: LyricsStyle; label: string }[] = [
+    { id: "default", label: "Default" },
+    { id: "fisheye", label: "Fisheye" },
+    { id: "rain", label: "Rain" },
+  ];
   let canvasEl = $state<HTMLCanvasElement | null>(null);
   let lyricsContainer = $state<HTMLDivElement | null>(null);
   let playing = $derived($playerStore.playing);
@@ -299,13 +311,37 @@
             </button>
           </div>
           {#if rightTab === "lyrics"}
-            <button class="chip-toggle" class:on={showRomaji} aria-pressed={showRomaji} onclick={onToggleRomaji}>
-              Romaji
-            </button>
+            <div class="lyric-tools">
+              <div class="styles" role="radiogroup" aria-label="Lyric style">
+                {#each LYRIC_STYLES as style (style.id)}
+                  <button
+                    role="radio"
+                    aria-checked={lyricsStyle === style.id}
+                    class:active={lyricsStyle === style.id}
+                    onclick={() => onSetLyricsStyle(style.id)}>{style.label}</button
+                  >
+                {/each}
+              </div>
+              {#if lyricsStyle !== "rain"}
+                <button class="chip-toggle" class:on={showRomaji} aria-pressed={showRomaji} onclick={onToggleRomaji}>
+                  Romaji
+                </button>
+              {/if}
+            </div>
           {/if}
         </div>
 
-        {#if rightTab === "lyrics"}
+        {#if rightTab === "lyrics" && lyricsStyle === "fisheye" && $playerStore.lyrics?.status === "synced"}
+          <LyricsFisheye
+            lines={$playerStore.lyrics.lines}
+            activeIdx={activeLineIdx}
+            timeMs={$playerStore.currentTimeMs}
+            {showRomaji}
+            onSeek={(ms) => audioEngine.seekMs(ms)}
+          />
+        {:else if rightTab === "lyrics" && lyricsStyle === "rain" && $playerStore.lyrics?.status === "synced"}
+          <LyricsRain lines={$playerStore.lyrics.lines} activeIdx={activeLineIdx} timeMs={$playerStore.currentTimeMs} />
+        {:else if rightTab === "lyrics"}
           <div
             class="lyrics-scroll"
             role="region"
@@ -668,9 +704,38 @@
     margin-bottom: 6px;
   }
 
-  .right-tabs {
+  .right-tabs,
+  .lyric-tools {
     display: flex;
+    align-items: center;
     gap: 8px;
+  }
+
+  /* Segmented style picker: one pill, the chosen style filled. */
+  .styles {
+    display: flex;
+    padding: 3px;
+    border-radius: 999px;
+    background: var(--p-fill);
+  }
+
+  .styles button {
+    height: 26px;
+    padding: 0 12px;
+    border-radius: 999px;
+    font-size: 12.5px;
+    font-weight: 650;
+    color: var(--p-text-muted);
+    transition: background 0.14s ease, color 0.14s ease;
+  }
+
+  .styles button:hover {
+    color: var(--p-text);
+  }
+
+  .styles button.active {
+    background: var(--p-text);
+    color: var(--p-bg);
   }
 
   .right-tabs button,

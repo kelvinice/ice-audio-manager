@@ -745,6 +745,8 @@
   onToggleLike={(track) => void handleToggleLike(track)}
   onAddToPlaylist={(track) => openPlaylistModal(track)}
   onToggleRomaji={() => void handleUpdateSettings({ showRomaji: !library.settings.showRomaji })}
+  lyricsStyle={library.settings.lyricsStyle}
+  onSetLyricsStyle={(lyricsStyle) => void handleUpdateSettings({ lyricsStyle })}
   onToggleCanvas={() =>
     void handleUpdateSettings({ animatedCanvas: !library.settings.animatedCanvas })}
 />

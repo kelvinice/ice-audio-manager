@@ -182,6 +182,23 @@ pub struct PandoraSettings {
     /// Disk budget for cached artwork, in MiB (0 keeps artwork in memory only).
     #[serde(default = "default_artwork_cache_mb")]
     pub artwork_cache_mb: u32,
+    /// How Now Playing shows synced lyrics.
+    #[serde(default)]
+    pub lyrics_style: LyricsStyle,
+}
+
+/// Now Playing lyric styles. Unknown values (newer files) read as `Default`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum LyricsStyle {
+    /// A lens over the current line: neighbours shrink, fade and blur with distance.
+    Fisheye,
+    /// One line at a time; words drop in as sung, finished lines fall away letter by letter.
+    Rain,
+    /// The scrolling list.
+    #[default]
+    #[serde(other)]
+    Default,
 }
 
 fn default_artwork_cache_mb() -> u32 {
@@ -205,6 +222,7 @@ impl Default for PandoraSettings {
             spinning_cover: false,
             close_to_tray: false,
             artwork_cache_mb: default_artwork_cache_mb(),
+            lyrics_style: LyricsStyle::Default,
         }
     }
 }

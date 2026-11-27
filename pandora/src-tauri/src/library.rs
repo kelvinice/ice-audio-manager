@@ -698,6 +698,7 @@ mod tests {
             spinning_cover: true,
             close_to_tray: true,
             artwork_cache_mb: 64,
+            lyrics_style: crate::models::LyricsStyle::Rain,
         });
         assert!(!updated.settings.dynamic_theme);
         assert!((updated.settings.default_volume - 1.0).abs() < 0.001);
@@ -710,6 +711,7 @@ mod tests {
         assert!(reloaded.settings.auto_launch_ice_notch);
         assert!(reloaded.settings.close_to_tray);
         assert_eq!(reloaded.settings.artwork_cache_mb, 64);
+        assert_eq!(reloaded.settings.lyrics_style, crate::models::LyricsStyle::Rain);
 
         let reset = store.reset_settings();
         assert_eq!(reset.settings.theme, crate::models::PandoraTheme::Midnight);
@@ -725,6 +727,9 @@ mod tests {
     fn older_settings_get_the_default_artwork_budget() {
         let old: PandoraSettings = serde_json::from_str(r#"{"theme":"midnight"}"#).unwrap();
         assert_eq!(old.artwork_cache_mb, 256);
+        assert_eq!(old.lyrics_style, crate::models::LyricsStyle::Default);
+        let newer: PandoraSettings = serde_json::from_str(r#"{"lyricsStyle":"branches"}"#).unwrap();
+        assert_eq!(newer.lyrics_style, crate::models::LyricsStyle::Default);
         let ice: PandoraSettings = serde_json::from_str(r#"{"theme":"ice"}"#).unwrap();
         assert_eq!(ice.theme, crate::models::PandoraTheme::Ice);
         let unknown: PandoraSettings = serde_json::from_str(r#"{"theme":"aurora"}"#).unwrap();

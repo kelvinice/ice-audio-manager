@@ -90,6 +90,12 @@ sound toggles, speed steps, sleep timer and AutoEq import. The player bar uses `
 wheel 5 %, arrows 2 %, level tooltip) and `OutputPicker` (device popover with headphone / speaker icons from the
 endpoint form factor).
 
+## Lyric styles
+
+Now Playing offers Default, Fisheye (`LyricsFisheye.svelte`) and Rain (`LyricsRain.svelte`), saved as `settings.lyricsStyle`
+(Rust `LyricsStyle`, unknown values read as Default). Word timings come from `lib/lyricWords.ts`. Design notes and the plan
+for Branches and Pulse reveal: [Pandora lyric styles](../pandora-lyric-styles.md).
+
 ## Audio quality (not offered)
 
 Pandora streams the ANDROID client's muxed file. Audio-only formats from every client tried (ANDROID, ANDROID_VR,
@@ -103,6 +109,8 @@ and lyrics for visual checks. See the [Pandora guide](../pandora.md) for launch 
 
 ## Change log
 
+- 2026-11-27 · Lyric styles: Default, Fisheye, Rain (`lyricsStyle` setting, picker in the lyrics header); plan for Branches and
+  Pulse reveal in `docs/pandora-lyric-styles.md`.
 - 2026-11-27 · Figtree font; equalizer sheet rebuilt (`EqBand`, response curve, no sideways scroll); `VolumeControl` and
   `OutputPicker` in the player bar.
 - 2026-11-27 · Now Playing backdrop (`NowPlayingBackdrop.svelte`: blurred cover + tint; with the animated background, art-coloured
