@@ -145,7 +145,6 @@
   <div class="side right" data-tauri-drag-region>
     <button class="btn-icon ice" aria-label="Ice Audio" title={iceLive ? "Ice Audio (connected)" : "Ice Audio"} onclick={onOpenIce}>
       <Icon name="snowflake" size={18} />
-      {#if iceLive}<span class="live" aria-hidden="true"></span>{/if}
     </button>
     {#if appWindow}
       <div class="win">
@@ -264,17 +263,6 @@
   .ice {
     position: relative;
     color: var(--p-companion);
-  }
-
-  .live {
-    position: absolute;
-    top: 3px;
-    right: 3px;
-    width: 9px;
-    height: 9px;
-    border-radius: 50%;
-    background: var(--p-success);
-    box-shadow: 0 0 0 2px var(--p-rail);
   }
 
   .win {

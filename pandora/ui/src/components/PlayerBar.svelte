@@ -268,9 +268,6 @@
     gap: 18px;
     padding: 0 20px;
     background: var(--p-rail);
-    border-top: 1px solid var(--p-border);
-    backdrop-filter: blur(28px);
-    box-shadow: 0 -4px 18px rgba(0, 0, 0, 0.08);
     z-index: 10;
   }
 

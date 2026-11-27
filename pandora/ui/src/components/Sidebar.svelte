@@ -1,391 +1,343 @@
 <script lang="ts">
-  import type { DeviceSummary, IceStatus, Playlist } from "../lib/types";
+  import { formatCount } from "../lib/format";
+  import { resolveArtworkUrl } from "../lib/theme";
+  import type { DeviceSummary, IceStatus, LibraryState, Playlist } from "../lib/types";
   import Icon from "./Icon.svelte";
   import MoreMenu from "./MoreMenu.svelte";
 
   export type NavTab = "home" | "search" | "recognize" | "library" | "ice" | "settings";
+  type LibraryTab = "liked" | "playlists" | "local" | "offline" | "history";
 
+  /** Two panels: page navigation, then "Your Library" (pinned Favorites / Downloads and every playlist with its cover). */
   interface Props {
     activeTab: NavTab;
+    libraryTab: LibraryTab;
     selectedPlaylistId: string | null;
-    playlists: Playlist[];
+    library: LibraryState;
+    proxyPort: number;
     iceStatus: IceStatus;
     defaultDevice: DeviceSummary | undefined;
     showIceCard: boolean;
     onNavigate: (tab: NavTab, playlistId?: string | null) => void;
+    onOpenLibraryTab: (tab: LibraryTab) => void;
     onOpenNewPlaylist: () => void;
     onOpenImportPlaylist: () => void;
   }
 
   let {
     activeTab,
+    libraryTab,
     selectedPlaylistId,
-    playlists,
+    library,
+    proxyPort,
     iceStatus,
     defaultDevice,
     showIceCard,
     onNavigate,
+    onOpenLibraryTab,
     onOpenNewPlaylist,
     onOpenImportPlaylist,
   }: Props = $props();
+
+  const NAV: { tab: NavTab; label: string; icon: "home" | "search" | "radar" | "snowflake" | "settings" }[] = [
+    { tab: "home", label: "Home", icon: "home" },
+    { tab: "search", label: "Search", icon: "search" },
+    { tab: "recognize", label: "Identify", icon: "radar" },
+    { tab: "ice", label: "Ice Audio", icon: "snowflake" },
+    { tab: "settings", label: "Settings", icon: "settings" },
+  ];
+
+  let inLibrary = $derived(activeTab === "library" && !selectedPlaylistId);
+
+  function cover(pl: Playlist): string | null {
+    for (const id of pl.trackIds) {
+      const url = resolveArtworkUrl(library.tracksIndex[id]?.artworkUrl ?? null, proxyPort);
+      if (url) return url;
+    }
+    return null;
+  }
+
+  let iceLine = $derived(
+    iceStatus.bridgeConnected
+      ? "Connected to the Ice app"
+      : iceStatus.standaloneRunning
+        ? "Ice app running"
+        : iceStatus.mode === "embedded" || iceStatus.mode === "fake"
+          ? "Built-in engine"
+          : "Ice is offline",
+  );
 </script>
 
 <aside class="sidebar">
-  <nav class="nav-list" aria-label="Main navigation">
-    <button
-      class="nav-item"
-      class:active={activeTab === "home"}
-      onclick={() => onNavigate("home", null)}
-    >
-      <span class="nav-ic"><Icon name="home" size={17} /></span>
-      <span>Home</span>
-    </button>
-    <button
-      class="nav-item"
-      class:active={activeTab === "search"}
-      onclick={() => onNavigate("search", null)}
-    >
-      <span class="nav-ic"><Icon name="search" size={17} /></span>
-      <span>Search</span>
-    </button>
-    <button
-      class="nav-item"
-      class:active={activeTab === "recognize"}
-      onclick={() => onNavigate("recognize", null)}
-    >
-      <span class="nav-ic"><Icon name="radar" size={17} /></span>
-      <span>Identify</span>
-    </button>
-    <button
-      class="nav-item"
-      class:active={activeTab === "library" && !selectedPlaylistId}
-      onclick={() => onNavigate("library", null)}
-    >
-      <span class="nav-ic"><Icon name="library" size={17} /></span>
-      <span>Library</span>
-    </button>
-    <button
-      class="nav-item"
-      class:active={activeTab === "ice"}
-      onclick={() => onNavigate("ice", null)}
-    >
-      <span class="nav-ic"><Icon name="snowflake" size={17} /></span>
-      <span>Ice Audio</span>
-      <span
-        class="mode-dot"
-        class:connected={iceStatus.mode === "connected"}
-        class:embedded={iceStatus.mode === "embedded" || iceStatus.mode === "fake"}
-      ></span>
-    </button>
-    <button
-      class="nav-item"
-      class:active={activeTab === "settings"}
-      onclick={() => onNavigate("settings", null)}
-    >
-      <span class="nav-ic"><Icon name="settings" size={17} /></span>
-      <span>Settings</span>
-    </button>
+  <nav class="panel nav" aria-label="Main navigation">
+    {#each NAV as item (item.tab)}
+      <button
+        class="nav-item"
+        class:active={activeTab === item.tab}
+        aria-current={activeTab === item.tab ? "page" : undefined}
+        onclick={() => onNavigate(item.tab, null)}
+      >
+        <Icon name={item.icon} size={20} strokeWidth={activeTab === item.tab ? 2.3 : 1.9} />
+        <span>{item.label}</span>
+      </button>
+    {/each}
   </nav>
 
-  <div class="divider"></div>
+  <section class="panel library" aria-label="Your Library">
+    <header class="lib-head">
+      <button class="lib-title" class:active={inLibrary} onclick={() => onOpenLibraryTab("playlists")}>
+        <Icon name="library" size={20} strokeWidth={inLibrary ? 2.3 : 1.9} />
+        <span>Your Library</span>
+      </button>
+      <MoreMenu
+        label="Add a playlist"
+        icon="plus"
+        buttonClass="btn-icon bare sm"
+        align="right"
+        items={[
+          { label: "New playlist", icon: "list-plus", onSelect: onOpenNewPlaylist },
+          { label: "Import from a link", icon: "link", onSelect: onOpenImportPlaylist },
+        ]}
+      />
+    </header>
 
-  <div class="playlists-head">
-    <span>Playlists</span>
-    <MoreMenu
-      label="Add a playlist"
-      icon="plus"
-      buttonClass="btn-icon sm"
-      align="right"
-      items={[
-        { label: "New playlist", icon: "list-plus", onSelect: onOpenNewPlaylist },
-        { label: "Import from a link", icon: "link", onSelect: onOpenImportPlaylist },
-      ]}
-    />
-  </div>
+    <div class="items">
+      <button
+        class="item"
+        class:active={activeTab === "library" && !selectedPlaylistId && libraryTab === "liked"}
+        onclick={() => onOpenLibraryTab("liked")}
+      >
+        <span class="tile liked"><Icon name="heart-filled" size={18} /></span>
+        <span class="text">
+          <span class="name">Favorites</span>
+          <span class="sub">Playlist • {formatCount(library.liked.length, "song")}</span>
+        </span>
+      </button>
+      <button
+        class="item"
+        class:active={activeTab === "library" && !selectedPlaylistId && libraryTab === "offline"}
+        onclick={() => onOpenLibraryTab("offline")}
+      >
+        <span class="tile saved"><Icon name="download" size={18} /></span>
+        <span class="text">
+          <span class="name">Downloads</span>
+          <span class="sub">{formatCount(library.cachedIds.length, "song")}</span>
+        </span>
+      </button>
 
-  <div class="playlists-list">
-    {#if playlists.length === 0}
-      <div class="empty-pl">No playlists yet</div>
-    {:else}
-      {#each playlists as pl (pl.id)}
+      {#each library.playlists as pl (pl.id)}
+        {@const art = cover(pl)}
         <button
-          class="pl-item"
+          class="item"
           class:active={activeTab === "library" && selectedPlaylistId === pl.id}
           onclick={() => onNavigate("library", pl.id)}
         >
-          <span class="pl-ic"><Icon name="list-music" size={14} /></span>
-          <span class="pl-name">{pl.name}</span>
-          <span class="pl-count">{pl.trackIds.length}</span>
+          <span class="tile">
+            {#if art}<img src={art} alt="" loading="lazy" />{:else}<Icon name="list-music" size={18} />{/if}
+          </span>
+          <span class="text">
+            <span class="name">{pl.name}</span>
+            <span class="sub">Playlist • {formatCount(pl.trackIds.length, "song")}</span>
+          </span>
         </button>
       {/each}
-    {/if}
-  </div>
+
+      {#if library.playlists.length === 0}
+        <div class="empty">
+          <span>Make your first playlist — it shows up here.</span>
+          <button class="btn-ghost" onclick={onOpenNewPlaylist}>New playlist</button>
+        </div>
+      {/if}
+    </div>
+  </section>
 
   {#if showIceCard}
-    <button class="ice-card" onclick={() => onNavigate("ice", null)}>
-      <div class="ice-card-top">
-        <span class="ice-label">
-          <Icon name="snowflake" size={12} />
-          <span>ICE AUDIO</span>
-        </span>
-        <span class="ice-pill" class:live={iceStatus.bridgeConnected}>
-          {iceStatus.bridgeConnected
-            ? "Live"
-            : iceStatus.mode === "connected"
-              ? "Connected"
-              : iceStatus.mode === "embedded"
-                ? "Built-in"
-                : iceStatus.mode === "fake"
-                  ? "Fake"
-                  : "Offline"}
-        </span>
-      </div>
-      <div class="ice-device">
-        <Icon name="headphones" size={13} />
-        <span>{defaultDevice ? defaultDevice.name : "Default Output"}</span>
-      </div>
-      <div class="ice-hint">
-        {iceStatus.bridgeConnected
-          ? "Notch connected"
-          : iceStatus.standaloneRunning
-            ? "Ice app running"
-            : "Built-in engine"}
-      </div>
+    <button class="panel ice" class:active={activeTab === "ice"} onclick={() => onNavigate("ice", null)}>
+      <Icon name="headphones" size={18} />
+      <span class="text">
+        <span class="name">{defaultDevice ? defaultDevice.name : "Default output"}</span>
+        <span class="sub">{iceLine}</span>
+      </span>
     </button>
   {/if}
 </aside>
 
 <style>
   .sidebar {
-    min-height: 0;
-    overflow-y: auto;
-    width: clamp(190px, 18vw, 240px);
+    width: clamp(220px, 20vw, 300px);
     flex-shrink: 0;
+    min-height: 0;
     display: flex;
     flex-direction: column;
-    padding: 10px 12px 14px;
-    background: var(--p-rail);
-    border-right: 1px solid var(--p-border);
-    backdrop-filter: blur(24px);
-    z-index: 2;
+    gap: 8px;
+    padding: 0 0 8px 8px;
   }
 
+  .panel {
+    border-radius: 10px;
+    background: var(--p-bg);
+  }
 
+  .nav {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 8px;
+  }
 
+  .nav-item,
+  .lib-title {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    height: 40px;
+    padding: 0 12px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 650;
+    color: var(--p-text-muted);
+    text-align: left;
+    transition: background 0.14s ease, color 0.14s ease;
+  }
 
-  .nav-list {
+  .nav-item:hover,
+  .lib-title:hover {
+    color: var(--p-text);
+  }
+
+  .nav-item.active {
+    background: var(--p-fill);
+    color: var(--p-text);
+  }
+
+  .lib-title.active {
+    color: var(--p-text);
+  }
+
+  .library {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    padding: 8px 6px 8px 8px;
+  }
+
+  .lib-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    padding-right: 4px;
+    margin-bottom: 6px;
+  }
+
+  .items {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .item,
+  .ice {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+    padding: 6px;
+    border-radius: 8px;
+    text-align: left;
+    transition: background 0.14s ease;
+  }
+
+  .item:hover {
+    background: var(--p-fill);
+  }
+
+  .item.active {
+    background: color-mix(in srgb, var(--p-text) 12%, var(--p-fill));
+  }
+
+  .tile {
+    width: 48px;
+    height: 48px;
+    flex-shrink: 0;
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+    border-radius: 6px;
+    background: var(--p-fill);
+    color: var(--p-text-dim);
+  }
+
+  .tile img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  .tile.liked {
+    background: var(--p-accent);
+    color: var(--p-on-accent);
+  }
+
+  .tile.saved {
+    background: var(--p-companion);
+    color: var(--p-on-accent);
+  }
+
+  .text {
+    min-width: 0;
     display: flex;
     flex-direction: column;
     gap: 3px;
   }
 
-  .nav-item {
-    position: relative;
-    display: flex;
-    align-items: center;
-    gap: 11px;
-    padding: 9px 12px;
-    border-radius: 11px;
-    font-size: 13.5px;
-    font-weight: 500;
-    color: var(--p-text-muted);
-    transition: background 0.16s ease, color 0.16s ease;
-    text-align: left;
+  .name,
+  .sub {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
-  .nav-item:hover {
-    background: var(--p-fill);
+  .name {
+    font-size: 14px;
+    font-weight: 600;
     color: var(--p-text);
   }
 
-  .nav-item:active {
-    transform: scale(0.98);
-  }
-
-  .nav-item.active {
-    background: var(--p-accent-soft);
+  .item.active .name {
     color: var(--p-accent-bright);
-    font-weight: 600;
   }
 
-  .nav-item.active::before {
-    content: "";
-    position: absolute;
-    left: 0;
-    top: 8px;
-    bottom: 8px;
-    width: 3px;
-    border-radius: 0 3px 3px 0;
-    background: var(--p-accent-bright);
+  .sub {
+    font-size: 12.5px;
+    color: var(--p-text-dim);
   }
 
-  .nav-ic {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 18px;
-  }
-
-  .mode-dot {
-    margin-left: auto;
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    background: #64748b;
-  }
-
-  .mode-dot.embedded {
-    background: var(--p-accent-bright);
-    box-shadow: 0 0 8px var(--p-accent);
-  }
-
-  .mode-dot.connected {
-    background: var(--p-success);
-    box-shadow: 0 0 8px var(--p-success);
-  }
-
-  .divider {
-    height: 1px;
-    margin: 14px 8px 12px;
-    background: var(--p-fill);
-  }
-
-  .playlists-head {
-    margin: 0 4px 8px 8px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    font-size: 13px;
-    font-weight: 700;
-    color: var(--p-text-muted);
-  }
-
-
-
-
-
-  .playlists-list {
-    flex: 1;
-    overflow-y: auto;
+  .empty {
     display: flex;
     flex-direction: column;
-    gap: 2px;
-    padding-right: 2px;
-  }
-
-  .empty-pl {
-    padding: 8px 10px;
-    font-size: 12px;
-    color: var(--p-text-dim);
-  }
-
-  .pl-item {
-    display: flex;
-    align-items: center;
-    gap: 9px;
-    padding: 8px 10px;
-    border-radius: 10px;
+    align-items: flex-start;
+    gap: 10px;
+    margin-top: 8px;
+    padding: 14px;
+    border-radius: 8px;
+    background: var(--p-fill);
     font-size: 13px;
     color: var(--p-text-muted);
-    text-align: left;
   }
 
-  .pl-item:hover {
-    background: var(--p-fill);
-    color: var(--p-text);
+  .ice {
+    padding: 12px 14px;
+    color: var(--p-companion);
   }
 
-  .pl-item.active {
-    background: var(--p-accent-soft);
-    color: var(--p-accent-bright);
-  }
-
-  .pl-ic {
-    display: inline-flex;
-    opacity: 0.72;
-  }
-
-  .pl-name {
-    flex: 1;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .pl-count {
-    font-size: 11px;
-    color: var(--p-text-dim);
-    font-variant-numeric: tabular-nums;
-  }
-
-  .ice-card {
-    margin-top: 12px;
-    padding: 11px 12px;
-    border-radius: 13px;
-    background: var(--p-surface-tint);
-    border: 1px solid var(--p-border);
-    text-align: left;
-    transition: border-color 0.16s ease, transform 0.16s ease;
-  }
-
-  .ice-card:hover {
-    border-color: var(--p-border-strong);
-    transform: translateY(-1px);
-  }
-
-  .ice-card-top {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 6px;
-  }
-
-  .ice-label {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    font-size: 10px;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    color: var(--p-text-dim);
-  }
-
-  .ice-pill {
-    font-size: 10px;
-    font-weight: 700;
-    padding: 2px 7px;
-    border-radius: 999px;
-    background: var(--p-accent-soft);
-    color: var(--p-accent-bright);
-  }
-
-  .ice-pill.live {
-    background: rgba(52, 211, 153, 0.18);
-    color: var(--p-success);
-  }
-
-  .ice-device {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 12.5px;
-    font-weight: 600;
-    margin-bottom: 3px;
-  }
-
-  .ice-device span {
-    min-width: 0;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .ice-hint {
-    font-size: 11px;
-    color: var(--p-text-dim);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+  .ice:hover,
+  .ice.active {
+    background: color-mix(in srgb, var(--p-text) 6%, var(--p-bg));
   }
 </style>

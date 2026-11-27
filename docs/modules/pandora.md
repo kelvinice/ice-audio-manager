@@ -68,6 +68,8 @@ and lyrics for visual checks. See the [Pandora guide](../pandora.md) for launch 
 
 ## Change log
 
+- 2026-11-27 · Sidebar as two panels (navigation; "Your Library" with pinned Favorites / Downloads and playlist covers) on
+  the title-bar frame, no status dot; `Ice` theme preset (Ice Audio Manager's palette) in Rust, `palettes.css` and the picker.
 - 2026-11-27 · Custom title bar with history, app-wide search and window buttons; SearchView uses `TrackTable` (with add
   to queue); `quit_app` command; `vite-env.d.ts` for asset imports.
 - 2026-11-27 · Page headers draw their back link inside the tinted area and leave room for descenders; the sidebar's

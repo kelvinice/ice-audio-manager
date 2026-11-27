@@ -4,6 +4,7 @@
   let { theme, onSelect }: { theme: PandoraTheme; onSelect: (value: PandoraTheme) => void } = $props();
   const choices = [
     { id: "midnight", name: "Midnight" },
+    { id: "ice", name: "Ice" },
     { id: "daylight", name: "Daylight" },
     { id: "ember", name: "Ember" },
     { id: "system", name: "Use Windows" },
@@ -29,7 +30,7 @@
 <style>
   .picker { margin: 0; padding: 0; border: 0; min-width: 0; }
   legend { padding: 0; margin-bottom: 12px; font-size: 17px; font-weight: 650; }
-  .choices { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+  .choices { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; }
   .option { position: relative; display: grid; overflow: hidden; border: 1px solid var(--p-border);
     border-radius: 12px; background: var(--p-surface); cursor: pointer; }
   .option:has(:checked) { outline: 2px solid var(--p-accent); outline-offset: -2px; }
@@ -48,5 +49,4 @@
   .indicator { width: 12px; height: 12px; border: 1px solid var(--p-border-strong); border-radius: 50%; }
   :checked ~ .caption .indicator { background: var(--p-accent); box-shadow: inset 0 0 0 2px var(--p-surface); border-color: var(--p-accent); }
   @media (max-width: 960px) { .choices { gap: 8px; } }
-  @media (max-width: 710px) { .choices { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 </style>

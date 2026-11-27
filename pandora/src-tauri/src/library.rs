@@ -725,5 +725,9 @@ mod tests {
     fn older_settings_get_the_default_artwork_budget() {
         let old: PandoraSettings = serde_json::from_str(r#"{"theme":"midnight"}"#).unwrap();
         assert_eq!(old.artwork_cache_mb, 256);
+        let ice: PandoraSettings = serde_json::from_str(r#"{"theme":"ice"}"#).unwrap();
+        assert_eq!(ice.theme, crate::models::PandoraTheme::Ice);
+        let unknown: PandoraSettings = serde_json::from_str(r#"{"theme":"aurora"}"#).unwrap();
+        assert_eq!(unknown.theme, crate::models::PandoraTheme::Midnight);
     }
 }

@@ -151,6 +151,8 @@ pub struct RecognizedTrack {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum PandoraTheme {
+    /// Ice Audio Manager's blue-grey palette.
+    Ice,
     Daylight,
     Ember,
     System,

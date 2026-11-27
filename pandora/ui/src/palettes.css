@@ -31,6 +31,22 @@
 
 [data-theme="system"] { color-scheme: light dark; }
 [data-theme="daylight"] { color-scheme: light; }
+/* Ice Audio Manager's palette: cool blue-grey surfaces and its #6bc5ff accent. */
+[data-theme="ice"] {
+  color-scheme: dark;
+  --p-bg: #10151c;
+  --p-rail: #090c11;
+  --p-surface-solid: #18202a;
+  --p-surface-elevated: #212b37;
+  --p-border: #263240;
+  --p-border-strong: #3d4c5f;
+  --p-fill: #1c2531;
+  --p-seed: #6bc5ff;
+  --p-companion: #9ad6ff;
+  --p-text: #eef6ff;
+  --p-text-muted: #c3d0de;
+  --p-text-dim: #93a4b7;
+}
 [data-theme="ember"] {
   color-scheme: dark;
   --p-bg: #201917;

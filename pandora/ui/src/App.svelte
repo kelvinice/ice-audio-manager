@@ -450,8 +450,6 @@
   }
 </script>
 
-<div class="ambient-bg" aria-hidden="true"></div>
-
 <svelte:window onkeydown={onHistoryKey} onmouseup={onHistoryMouse} />
 
 <div class="shell">
@@ -477,12 +475,15 @@
   <div class="main-area">
     <Sidebar
       {activeTab}
+      libraryTab={libraryInitialTab}
       {selectedPlaylistId}
-      playlists={library.playlists}
+      {library}
+      {proxyPort}
       {iceStatus}
       {defaultDevice}
       showIceCard={library.settings.showIceCardInSidebar}
       onNavigate={navigate}
+      onOpenLibraryTab={(libraryTab) => go({ tab: "library", playlistId: null, collection: null, libraryTab })}
       onOpenNewPlaylist={() => openPlaylistModal(null)}
       onOpenImportPlaylist={() => (importModalOpen = true)}
     />
@@ -747,10 +748,16 @@
     flex-direction: column;
   }
 
+  /* The title bar, the gaps and the player bar form one frame; sidebar panels and the page sit on it. */
+  .shell {
+    background: var(--p-rail);
+  }
+
   .main-area {
     flex: 1;
     min-height: 0;
     display: flex;
+    gap: 8px;
   }
 
   .content {
@@ -758,6 +765,9 @@
     min-width: 0;
     overflow-y: auto;
     position: relative;
+    margin: 0 8px 8px 0;
+    border-radius: 10px;
+    background: radial-gradient(ellipse at 72% -30%, var(--p-glow-1), transparent 55%), var(--p-bg);
   }
 
   .toast-err {
