@@ -20,6 +20,13 @@ source → 10 biquads (32 Hz–16 kHz) → preamp → [AutoEq parametric filters
 - Speed (`playbackRate`), sleep timer (minutes or end of track).
 - `playTrack(track, queue)` sets the queue, records history, loads lyrics, extracts cover colours, updates the media
   session. Autoplay radio (`autoQueueRelated`) appends `ytm_related` songs when two or fewer remain.
+- Shuffle (`playerStore.shuffle`: `off` → `on` → `magic`, `cycleShuffle`): plays every song of the list once per pass
+  (`shufflePlayed`), then stops unless repeat all is on. A new list (`noteSource`: its song ids, Magic additions
+  excluded) starts a new pass.
+- Magic shuffle (`lib/magicShuffle.ts`): after every 2–4 list songs, `next()` plays a recommended song, inserted right
+  after the current one. Recommendations come from `ytm_recommend` seeded by the list, a batch at a time (each batch
+  skips earlier suggestions); `playerStore.magicIds` marks them with a sparkle in the queue panel. Offline, it simply
+  shuffles.
 - Windows media controls through `navigator.mediaSession` (when enabled); Ice's notch picks this up via SMTC.
 - `applySettings` is called with every settings change (artwork accents, media session).
 
@@ -44,8 +51,18 @@ most 30 Hz while playing, with a round accent dot at the play head (always shown
 
 ## Now Playing (`NowPlayingOverlay`, `NowPlayingBackdrop`)
 
-Cover (optionally spinning), title, transport, lyrics column. Backdrop: blurred cover + tint; with Animated Backdrop,
-art-coloured orbs (`--art-*`) circle slowly and pause with the song. Spectrum: a 4096-point FFT (~12 Hz bins) read as
+Cover (optionally spinning), title, transport, lyrics column. Backdrop (`NowPlayingBackdrop`): blurred cover + tint;
+with Animated Backdrop, art-coloured orbs (`--art-*`) that pause with the song, in one of two motions
+(`settings.backdropMotion`):
+
+- **Calm** (default): five orbs on slow circles.
+- **Lively** (`LavaLamp.svelte`, after Ice's `NotchBackdrop.svelte`): nine orbs, each looping around its own spot while
+  its distance and size change (one `wander` keyframe driven by per-orb CSS variables, periods 26 s × 0.77–1.37), and
+  the field swells on bass kicks (`lib/breath.ts`, Twin of Ice's `BreathEnvelope`; kicks are the 55–110 Hz level rising
+  over its recent average). The breath samples the analyser at most 30 Hz, only while playing and Now Playing is open;
+  not at all with reduced motion.
+
+Spectrum: a 4096-point FFT (~12 Hz bins) read as
 log-spaced bands from 55 Hz to 15 kHz (`getSpectrumDb`; bands narrower than two bins interpolate at their centre, so
 bass bars don't move in lockstep), shaped by `lib/spectrum.ts` (Twin of Ice's `beat.ts` / `visualizer.ts`: per-band
 range, tilt, gate, springs, resting texture; Pandora adds an −8 dB bass trim and caps the lowest bars at 72 % height,

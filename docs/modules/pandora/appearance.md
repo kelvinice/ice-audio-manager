@@ -5,7 +5,8 @@
 
 ## Themes and accents
 
-- `settings.theme`: Midnight (default), Ice, Daylight, Ember, Use Windows (follows the system scheme live). `App.svelte`
+- `settings.theme`: Midnight (default), Ice, Light Ice (`iceLight`, Ice's `ice_light` palette), Daylight, Ember, Use
+  Windows (follows the system scheme live). Light themes (Daylight, Light Ice) blend backdrop orbs with `multiply`. `App.svelte`
   sets `data-theme` on the root; `palettes.css` defines every `--p-*` token with `light-dark()`.
 - Accent: `--p-tone` → `--p-accent`, `--p-accent-bright`, `--p-accent-soft`, `--p-glow-1`, `--p-surface-tint`. It is the
   theme's `--p-seed` unless **Album artwork accents** (`settings.artworkAccents`, off by default) is on; then
@@ -23,7 +24,9 @@
   starts Ice and peeks its notch for 2 s), minimize / maximize / close. Empty space is `data-tauri-drag-region`.
 - Close-to-tray (`closeToTray`): closing hides the window; Quit really exits.
 - `Sidebar`: navigation panel and "Your Library" panel; optional Ice audio card (`showIceCardInSidebar`).
-- `SettingsView` sections: Appearance & Lyrics, Playback, Ice Audio Bridge, Storage (`StorageSettings`).
+- `SettingsView` sections: Appearance & Lyrics, Playback, Ice Audio Bridge, Storage (`StorageSettings`). The tabs are a
+  segmented control (icons, a sliding highlight, arrow keys); the chosen section slides in from the side you moved
+  towards. Library tab content fades in on change. Both animations are off with reduced motion.
 
 ## Building blocks
 

@@ -58,5 +58,6 @@ YouTube Music in parallel), or Exportify CSV / M3U / plain tracklists. Progress 
 ## Downloads, local files and storage (`StorageSettings`)
 
 Download one song, a playlist or a collection (`download_track`); downloads have no size limit. Settings → Storage
-shows a Downloads / Artwork usage bar, the first five downloads (Show all opens Library → Downloads), the artwork cache
-budget, local folders, library counts, file locations and Reset.
+shows a Downloads / Artwork usage bar (parts grow by size), the download count and size (View opens Library →
+Downloads, where songs are listed and removed), the artwork cache budget, local folders, library counts, file locations
+and Reset (its own card, two-step).

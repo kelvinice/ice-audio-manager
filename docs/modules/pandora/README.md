@@ -16,12 +16,12 @@ one area doc for your task. The user-facing guide, the build commands and the Ic
 | Library | Favorites, playlists (create, rename, delete, cover mosaic), history, downloads, local folders | [library-and-discovery](library-and-discovery.md) |
 | Recommendations | "Recommended songs" under each playlist, picked from the songs in it, with Add and Refresh | [library-and-discovery](library-and-discovery.md) |
 | Import | YouTube Music / Spotify playlist links, CSV / M3U / text tracklists | [library-and-discovery](library-and-discovery.md) |
-| Playback | Queue panel, shuffle / repeat, autoplay radio, 10-band EQ + AutoEq import, normalize, skip silence, speed, sleep timer, output device picker, Windows media controls, resume the last song at launch | [playback](playback.md) |
-| Now Playing | Big cover, art-coloured animated backdrop, Ice-style spectrum, wavy seek bar, liked heart burst | [playback](playback.md), [appearance](appearance.md) |
+| Playback | Queue panel, shuffle / Magic shuffle (recommended songs in between) / repeat, autoplay radio, 10-band EQ + AutoEq import, normalize, skip silence, speed, sleep timer, output device picker, Windows media controls, resume the last song at launch | [playback](playback.md) |
+| Now Playing | Big cover, art-coloured animated backdrop (Calm or Lively lava lamp), Ice-style spectrum, wavy seek bar, liked heart burst | [playback](playback.md), [appearance](appearance.md) |
 | Lyrics | Synced lyrics (Default, Fisheye, Rain styles), estimated word timing, romaji for Japanese / Korean / Cyrillic | [lyrics](lyrics.md) |
 | Song recognition | Name the song playing on the PC (or the mic) via a Shazam-compatible fingerprint; history with play / save | [ice-and-recognition](ice-and-recognition.md) |
 | Ice integration | Ice Audio hub (devices, volume, spatial, meter, notch controls), embedded or connected to a running Ice, Ice can ask Pandora to recognise a song | [ice-and-recognition](ice-and-recognition.md) |
-| Look and feel | Themes (Midnight, Ice, Daylight, Ember, Use Windows), optional artwork accents, custom title bar, Figtree font | [appearance](appearance.md) |
+| Look and feel | Themes (Midnight, Ice, Light Ice, Daylight, Ember, Use Windows), optional artwork accents, custom title bar, Figtree font | [appearance](appearance.md) |
 | Storage | Library JSON, audio download cache, artwork disk cache with a budget, Settings → Storage | [backend](backend.md) |
 
 ## Layers
@@ -71,6 +71,8 @@ Playback itself (the `<audio>` element, EQ, spectrum) is in the UI's Web Audio g
 | `lib/ipc.ts`, `lib/types.ts` | Command wrappers and event listeners; TS mirrors of `models.rs` | [backend](backend.md) |
 | `lib/theme.ts` | Artwork URL resolving, cover colour extraction, artwork-accent switch | [appearance](appearance.md) |
 | `lib/session.ts` | Last queue / position in `localStorage` | [playback](playback.md) |
+| `lib/magicShuffle.ts` | Magic shuffle: recommended songs between list songs | [playback](playback.md) |
+| `lib/breath.ts` | Bass breath for the Lively backdrop (Twin of Ice's `ambient.ts`) | [playback](playback.md) |
 | `lib/spectrum.ts`, `lib/wave.ts` | Spectrum shaping (Twin of Ice's `beat.ts`), wavy seek line | [playback](playback.md) |
 | `lib/lyricWords.ts` | Word timing helpers for lyric styles | [lyrics](lyrics.md) |
 | `lib/parametricEq.ts` | AutoEq `ParametricEQ.txt` parser | [playback](playback.md) |
@@ -98,6 +100,11 @@ Playback itself (the `<audio>` element, EQ, spectrum) is in the UI's Web Audio g
 
 ## Change log
 
+- 2026-11-28 · Lively backdrop motion (`LavaLamp.svelte`, `lib/breath.ts`, `backdropMotion` setting; Calm stays default).
+- 2026-11-28 · Light Ice theme (`iceLight`).
+- 2026-11-28 · Storage: distinct classes fix the shifted bar segment and download badge; no per-song list; reset card as
+  a row with a solid confirm. Settings tabs as a segmented control with animated switching; Library tabs fade in.
+- 2026-11-28 · Magic shuffle (`lib/magicShuffle.ts`); shuffle plays each song once per pass.
 - 2026-11-28 · Spectrum: the bass bars no longer move as one block (4096-point FFT, centre interpolation for narrow
   bands) and sit lower (bass trim, 72 % reach); the wavy seek bar's head is a round dot instead of an upright pill.
 - 2026-11-27 · Module doc split into this folder (README + area docs).

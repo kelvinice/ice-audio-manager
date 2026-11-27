@@ -22,7 +22,7 @@ Developers: the code recap (features, file map, one doc per area) is [docs/modul
 | **Offline & Local Files** | Local caching/downloads + offline library | `%LOCALAPPDATA%\Pandora\cache\` byte-range offline audio cache + local Windows folder scanner (`.mp3/.flac/.wav/.ogg/.m4a/.opus`) |
 | **Privacy-First** | Local DB, zero trackers/telemetry | `%APPDATA%\Pandora\library.json` atomic JSON store, zero analytics |
 | **Windows Native Extra** | N/A | **Dual-mode Ice Audio Manager wrapper & live local bridge**: authenticated `127.0.0.1` JSON-line bridge (`bridge.json`), instant Notch Toggle / Show / Open Ice Settings, 1-click device switching, Master/Mic mute, Spatial Sound (Sonic/Atmos/DTS), 14-band WASAPI loopback meter, shared Notch & Call Mode controls, and Windows SMTC integration |
-| **Pandora Settings** | Compose settings screens | Dedicated **⚙ Settings** view (`SettingsView.svelte`) saved in `library.json`: Appearance theme presets (`Midnight`, `Ice`, `Daylight`, `Ember`, `Use Windows`) + artwork accent toggle, Animated Canvas, Romaji Lyrics, Auto-Queue Radio, Startup Volume, SMTC broadcast, **Minimize to System Tray on Close**, Auto-Launch Standalone Ice, Sidebar Ice card, Cache/Local Folder maintenance, and Settings/EQ reset |
+| **Pandora Settings** | Compose settings screens | Dedicated **⚙ Settings** view (`SettingsView.svelte`) saved in `library.json`: Appearance theme presets (`Midnight`, `Ice`, `Light Ice`, `Daylight`, `Ember`, `Use Windows`) + artwork accent toggle, Animated Canvas (Calm or Lively motion), Romaji Lyrics, Auto-Queue Radio, Startup Volume, SMTC broadcast, **Minimize to System Tray on Close**, Auto-Launch Standalone Ice, Sidebar Ice card, Cache/Local Folder maintenance, and Settings/EQ reset |
 | **Offline Prototype Testing** | Requires network or local files | Includes 3 synthesized WAV **Demo Tracks** with custom SVG art & synced LRC (including Japanese Romaji) |
 
 ---
@@ -108,7 +108,7 @@ before.
 
 ## 3. Building & Running
 
-In **Settings → Appearance**, choose Midnight, Ice, Daylight, Ember or Use Windows. The last option follows Windows
+In **Settings → Appearance**, choose Midnight, Ice, Light Ice, Daylight, Ember or Use Windows. The last option follows Windows
 when its appearance changes. Buttons keep the theme's colour; Album artwork accents (off by default) lets them take the
 playing cover's colour on any theme. Pandora stores both choices
 in the local library and restores them on launch. Playback, Ice Audio and Storage have separate settings sections.
