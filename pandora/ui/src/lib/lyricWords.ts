@@ -33,6 +33,18 @@ export function timedWords(line: PandoraLyricLine, nextStartMs: number | null): 
   });
 }
 
+/**
+ * The same words revealed sooner: each start moves toward the line's start (`pace` 0.55 = after 55 % of its delay),
+ * and no word waits longer than `maxStepMs` per word before it. Word timings are mostly estimated from the line's
+ * length, so they lag the singing; this keeps a style from trailing behind the voice.
+ */
+export function quickenWords(words: TimedWord[], lineStartMs: number, pace: number, maxStepMs: number): TimedWord[] {
+  return words.map((w, i) => {
+    const startMs = lineStartMs + Math.min((w.startMs - lineStartMs) * pace, i * maxStepMs);
+    return { ...w, startMs: Math.max(lineStartMs, Math.round(startMs)) };
+  });
+}
+
 /** Whether `text` is written without spaces between words (so pieces join without a gap). */
 export function joinsWithoutSpaces(text: string): boolean {
   return !text.includes(" ") && CJK_RUN.test(text);

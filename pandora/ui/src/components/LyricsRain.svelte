@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onDestroy } from "svelte";
-  import { joinsWithoutSpaces, timedWords, type TimedWord } from "../lib/lyricWords";
+  import { joinsWithoutSpaces, quickenWords, timedWords, type TimedWord } from "../lib/lyricWords";
   import type { PandoraLyricLine } from "../lib/types";
 
   /**
@@ -19,6 +19,9 @@
 
   /** How long a finished line keeps falling before it is removed (longest fall + largest delay). */
   const FALL_MS = 2_600;
+  /** Words drop in after 55 % of their (mostly estimated) delay, at most 260 ms apart, so they keep up with the voice. */
+  const WORD_PACE = 0.55;
+  const MAX_WORD_STEP_MS = 260;
 
   interface Glyph {
     ch: string;
@@ -49,7 +52,8 @@
     const line = lines[idx];
     if (!line) return null;
     let n = 0;
-    const words = timedWords(line, lines[idx + 1]?.timeMs ?? null).map((w) => ({
+    const timed = timedWords(line, lines[idx + 1]?.timeMs ?? null);
+    const words = quickenWords(timed, line.timeMs, WORD_PACE, MAX_WORD_STEP_MS).map((w) => ({
       ...w,
       glyphs: Array.from(w.text).map((ch) => {
         n += 1;
@@ -115,7 +119,7 @@
                 class="glyph"
                 style:--rot={`${g.b * 24}deg`}
                 style:--lift={`${0.6 + (g.c + 1) * 0.5}em`}
-                style:--stagger={`${gi * 28}ms`}>{g.ch}</span
+                style:--stagger={`${gi * 18}ms`}>{g.ch}</span
               >{/each}</span
           >{current.noGaps ? "" : " "}{/each}
       </p>
@@ -211,7 +215,7 @@
   }
 
   .current .word.sung .glyph {
-    animation: land 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) var(--stagger) backwards;
+    animation: land 0.32s cubic-bezier(0.34, 1.56, 0.64, 1) var(--stagger) backwards;
   }
 
   .current.calm .word:not(.sung) .glyph {

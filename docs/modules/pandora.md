@@ -120,6 +120,8 @@ and lyrics for visual checks. See the [Pandora guide](../pandora.md) for launch 
 
 ## Change log
 
+- 2026-11-27 · Rain reveals words sooner (`quickenWords`: 55 % of each word's delay, ≤ 260 ms per word) with a quicker
+  drop, since word timings are mostly estimated and lagged the voice.
 - 2026-11-27 · Playlist recommendations (`recommend.rs`, `ytm_recommend`, `PlaylistRecommendations.svelte`).
 - 2026-11-27 · Buttons and accents keep the theme colour by default: `dynamicTheme` (on) became `artworkAccents` (off; the old
   key is ignored). Cover colours still tint the Now Playing backdrop.
