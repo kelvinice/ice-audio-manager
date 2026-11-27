@@ -7,6 +7,7 @@ Pandora is a Windows music player (Tauri 2 + Svelte 5 + Web Audio) that streams 
 works with Ice Audio Manager. Ice never depends on it. This folder is the developer recap: read the README, then the
 one area doc for your task. The user-facing guide, the build commands and the Ice integration story are in
 [docs/pandora.md](../../pandora.md). Lyric style designs are in [pandora-lyric-styles.md](../../pandora-lyric-styles.md).
+The roadmap and the rules for experimental features are in [pandora-plan.md](../../pandora-plan.md).
 
 ## Features today
 
@@ -22,6 +23,7 @@ one area doc for your task. The user-facing guide, the build commands and the Ic
 | Song recognition | Name the song playing on the PC (or the mic) via a Shazam-compatible fingerprint; history with play / save | [ice-and-recognition](ice-and-recognition.md) |
 | Ice integration | Ice Audio hub (devices, volume, spatial, meter, notch controls), embedded or connected to a running Ice, Ice can ask Pandora to recognise a song | [ice-and-recognition](ice-and-recognition.md) |
 | Look and feel | Themes (Midnight, Ice, Light Ice, Daylight, Ember, Use Windows), optional artwork accents, custom title bar, Figtree font | [appearance](appearance.md) |
+| Experimental | Smooth transitions, beat pulse, gentle sleep timer (Settings → Experimental, all off) | [playback](playback.md), [plan](../../pandora-plan.md) |
 | Storage | Library JSON, audio download cache, artwork disk cache with a budget, Settings → Storage | [backend](backend.md) |
 
 ## Layers
@@ -71,6 +73,7 @@ Playback itself (the `<audio>` element, EQ, spectrum) is in the UI's Web Audio g
 | `lib/ipc.ts`, `lib/types.ts` | Command wrappers and event listeners; TS mirrors of `models.rs` | [backend](backend.md) |
 | `lib/theme.ts` | Artwork URL resolving, cover colour extraction, artwork-accent switch | [appearance](appearance.md) |
 | `lib/session.ts` | Last queue / position in `localStorage` | [playback](playback.md) |
+| `lib/fader.ts`, `lib/beatPulse.ts` | Experimental fades (transitions, sleep) and cover beat pulse | [playback](playback.md) |
 | `lib/devices.ts` | Device kind / headphone icon and spatial sound labels | [ice-and-recognition](ice-and-recognition.md) |
 | `lib/magicShuffle.ts` | Magic shuffle: recommended songs between list songs | [playback](playback.md) |
 | `lib/breath.ts` | Bass breath for the Lively backdrop (Twin of Ice's `ambient.ts`) | [playback](playback.md) |
@@ -101,6 +104,8 @@ Playback itself (the `<audio>` element, EQ, spectrum) is in the UI's Web Audio g
 
 ## Change log
 
+- 2026-11-28 · Settings → Experimental (`settings.experimental`): smooth transitions, beat pulse, gentle sleep timer;
+  roadmap in `docs/pandora-plan.md`.
 - 2026-11-28 · Ice Audio page regrouped: status header, Sound and Notch cards, Connection card (`IceSoundCard`,
   `IceNotchCard`, `lib/devices.ts`).
 - 2026-11-28 · Blend backdrop (blurred cover under a softer lava lamp, breathing together) is the new default.

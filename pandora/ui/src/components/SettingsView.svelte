@@ -14,6 +14,7 @@
     LibraryState,
     PandoraSettings,
   } from "../lib/types";
+  import ExperimentalPanel from "./ExperimentalPanel.svelte";
   import Icon from "./Icon.svelte";
   import StorageSettings from "./StorageSettings.svelte";
   import ThemePicker from "./ThemePicker.svelte";
@@ -59,6 +60,7 @@
     { id: "Playback", icon: "play" },
     { id: "Ice Audio", icon: "snowflake" },
     { id: "Storage", icon: "folder" },
+    { id: "Experimental", icon: "flask" },
   ] as const;
   type Section = (typeof sections)[number]["id"];
   let section = $state<Section>("Appearance");
@@ -465,6 +467,8 @@
       </div>
     </div>
   </section>
+  {:else if section === "Experimental"}
+    <ExperimentalPanel {settings} {onUpdateSettings} />
   {:else}
     <StorageSettings
       {settings}
@@ -520,7 +524,7 @@
     position: relative;
     display: grid;
     grid-template-columns: repeat(var(--count), minmax(0, 1fr));
-    max-width: 640px;
+    max-width: 760px;
     padding: 4px;
     border-radius: 999px;
     background: var(--p-fill);

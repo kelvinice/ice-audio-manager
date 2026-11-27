@@ -700,6 +700,11 @@ mod tests {
             artwork_cache_mb: 64,
             lyrics_style: crate::models::LyricsStyle::Rain,
             backdrop_motion: crate::models::BackdropMotion::Lively,
+            experimental: crate::models::ExperimentalSettings {
+                smooth_transitions: true,
+                beat_pulse: false,
+                gentle_sleep: true,
+            },
         });
         assert!(updated.settings.artwork_accents);
         assert!((updated.settings.default_volume - 1.0).abs() < 0.001);
@@ -714,6 +719,9 @@ mod tests {
         assert_eq!(reloaded.settings.artwork_cache_mb, 64);
         assert_eq!(reloaded.settings.lyrics_style, crate::models::LyricsStyle::Rain);
         assert_eq!(reloaded.settings.backdrop_motion, crate::models::BackdropMotion::Lively);
+        assert!(reloaded.settings.experimental.smooth_transitions);
+        assert!(!reloaded.settings.experimental.beat_pulse);
+        assert!(reloaded.settings.experimental.gentle_sleep);
 
         let reset = store.reset_settings();
         assert_eq!(reset.settings.theme, crate::models::PandoraTheme::Midnight);
@@ -731,6 +739,9 @@ mod tests {
         assert_eq!(old.artwork_cache_mb, 256);
         assert_eq!(old.lyrics_style, crate::models::LyricsStyle::Default);
         assert_eq!(old.backdrop_motion, crate::models::BackdropMotion::Blend);
+        assert_eq!(old.experimental, crate::models::ExperimentalSettings::default());
+        let partial: PandoraSettings = serde_json::from_str(r#"{"experimental":{"beatPulse":true}}"#).unwrap();
+        assert!(partial.experimental.beat_pulse && !partial.experimental.smooth_transitions);
         let odd: PandoraSettings = serde_json::from_str(r#"{"backdropMotion":"wild"}"#).unwrap();
         assert_eq!(odd.backdrop_motion, crate::models::BackdropMotion::Blend);
         let calm: PandoraSettings = serde_json::from_str(r#"{"backdropMotion":"calm"}"#).unwrap();

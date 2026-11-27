@@ -192,6 +192,21 @@ pub struct PandoraSettings {
     /// How much Now Playing's animated background moves.
     #[serde(default)]
     pub backdrop_motion: BackdropMotion,
+    /// Features still being tried out (Settings → Experimental), all off by default.
+    #[serde(default)]
+    pub experimental: ExperimentalSettings,
+}
+
+/// Settings → Experimental. Each switch is off until the user turns it on.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct ExperimentalSettings {
+    /// Songs fade in, fade out over their last seconds, and skips dip instead of cutting.
+    pub smooth_transitions: bool,
+    /// Now Playing's cover pulses on bass kicks.
+    pub beat_pulse: bool,
+    /// The sleep timer fades the music out over its last 30 seconds.
+    pub gentle_sleep: bool,
 }
 
 /// Now Playing's animated background. Unknown values (newer files) read as `Blend`.
@@ -245,6 +260,7 @@ impl Default for PandoraSettings {
             artwork_cache_mb: default_artwork_cache_mb(),
             lyrics_style: LyricsStyle::Default,
             backdrop_motion: BackdropMotion::Blend,
+            experimental: ExperimentalSettings::default(),
         }
     }
 }

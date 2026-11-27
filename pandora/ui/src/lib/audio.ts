@@ -6,6 +6,7 @@ import {
   saveEqState,
   ytmRelated,
 } from "./ipc";
+import { FADE_OUT_S, Fader } from "./fader";
 import { MagicShuffle } from "./magicShuffle";
 import { mapParametricFilterType } from "./parametricEq";
 import { applyDefaultMaterialTheme, applyMaterialThemeFromArt, resolveArtworkUrl, setArtworkAccents } from "./theme";
@@ -119,6 +120,8 @@ class PandoraAudioEngine {
   /** Songs already played in this shuffle pass, so shuffle plays every song once before repeating. */
   private shufflePlayed = new Set<string>();
   private magic = new MagicShuffle();
+  /** Experimental song and sleep fades (`lib/fader.ts`); null until the audio graph exists. */
+  private fader: Fader | null = null;
 
   init(
     proxyPort: number,
@@ -148,6 +151,7 @@ class PandoraAudioEngine {
       playerStore.update((st) => ({ ...st, currentTimeMs: curMs, durationMs: durMs }));
       this.syncMediaSessionPosition(curMs, durMs);
       this.checkSkipSilence();
+      this.checkFadeOut(curMs, durMs);
       if (performance.now() - this.lastSessionSaveMs > SESSION_SAVE_MS) this.persistSession();
     });
 
@@ -267,9 +271,12 @@ class PandoraAudioEngine {
     }
     node.connect(preampNode);
     preampNode.connect(compressor);
+    const fader = new Fader(ctx);
     compressor.connect(analyser);
-    analyser.connect(gain);
+    analyser.connect(fader.input);
+    fader.output.connect(gain);
     gain.connect(ctx.destination);
+    this.fader = fader;
 
     this.ctx = ctx;
     this.sourceNode = source;
@@ -288,6 +295,8 @@ class PandoraAudioEngine {
     this.settings = { ...DEFAULT_PANDORA_SETTINGS, ...next };
     const track = get(playerStore).currentTrack;
     setArtworkAccents(this.settings.artworkAccents);
+    if (prev.experimental.smoothTransitions && !this.settings.experimental.smoothTransitions) this.fader?.restore();
+    if (prev.experimental.gentleSleep && !this.settings.experimental.gentleSleep) this.fader?.setSleepLevel(1, 0.3);
 
     if (prev.mediaSessionEnabled !== this.settings.mediaSessionEnabled && "mediaSession" in navigator) {
       if (!this.settings.mediaSessionEnabled) {
@@ -390,7 +399,12 @@ class PandoraAudioEngine {
       },
     }));
 
+    const smooth = this.settings.experimental.smoothTransitions;
+    // Skipping away from a song that still plays: dip it out first so the switch doesn't click.
+    if (smooth && this.fader && !this.audio.paused) await this.fader.dip();
     this.audio.src = src;
+    if (smooth) this.fader?.fadeIn();
+    else this.fader?.restore(0);
     // Before metadata loads this becomes the start position, so a restored song continues where it stopped.
     if (resumeMs > 0) this.audio.currentTime = resumeMs / 1000;
     this.persistSession();
@@ -493,6 +507,8 @@ class PandoraAudioEngine {
     if (!this.audio) return;
     // A restored song that has not started yet: move where Play will pick it up.
     if (!this.audio.src && this.resume) this.resume.ms = Math.max(0, ms);
+    // Seeking back out of the closing fade brings the music straight back.
+    if (this.fader?.isFadingOut) this.fader.restore();
     this.audio.currentTime = Math.max(0, ms / 1000);
     playerStore.update((s) => ({ ...s, currentTimeMs: Math.max(0, ms) }));
   }
@@ -641,11 +657,27 @@ class PandoraAudioEngine {
     void saveEqState(nextEq).catch(() => {});
   }
 
+  /**
+   * Experimental smooth transitions: over a song's last `FADE_OUT_S` seconds, fade to silence by its end (not on
+   * repeat-one, where the song restarts). Called from `timeupdate`.
+   */
+  private checkFadeOut(curMs: number, durMs: number) {
+    if (!this.fader || this.fader.isFadingOut || !this.settings.experimental.smoothTransitions) return;
+    const st = get(playerStore);
+    if (!st.playing || st.repeat === "one" || durMs <= FADE_OUT_S * 2000) return;
+    const left = (durMs - curMs) / 1000;
+    if (left > 0 && left <= FADE_OUT_S) this.fader.fadeOutBy(left / (this.audio?.playbackRate || 1));
+  }
+
+  /** Gentle sleep (experimental): over the timer's last stretch, the music lowers in step with the countdown. */
+  private static readonly SLEEP_FADE_S = 30;
+
   setSleepTimer(minutes: number | null) {
     if (this.sleepTimerId !== null) {
       window.clearInterval(this.sleepTimerId);
       this.sleepTimerId = null;
     }
+    this.fader?.setSleepLevel(1, 0.3);
     if (!minutes || minutes <= 0) {
       playerStore.update((s) => ({ ...s, sleepRemainingSec: null, sleepEndOfTrack: false }));
       return;
@@ -654,12 +686,18 @@ class PandoraAudioEngine {
     playerStore.update((s) => ({ ...s, sleepRemainingSec: remaining, sleepEndOfTrack: false }));
     this.sleepTimerId = window.setInterval(() => {
       remaining -= 1;
+      const fadeS = PandoraAudioEngine.SLEEP_FADE_S;
+      if (this.settings.experimental.gentleSleep && remaining < fadeS && remaining >= 0) {
+        this.fader?.setSleepLevel(remaining / fadeS, 1);
+      }
       if (remaining <= 0) {
         if (this.sleepTimerId !== null) window.clearInterval(this.sleepTimerId);
         this.sleepTimerId = null;
         if (this.audio && !this.audio.paused) {
           this.audio.pause();
         }
+        // Back to full for whenever playback resumes; the pause has already silenced it.
+        window.setTimeout(() => this.fader?.setSleepLevel(1, 0), 300);
         playerStore.update((s) => ({ ...s, sleepRemainingSec: null }));
       } else {
         playerStore.update((s) => ({ ...s, sleepRemainingSec: remaining }));
@@ -672,6 +710,7 @@ class PandoraAudioEngine {
       window.clearInterval(this.sleepTimerId);
       this.sleepTimerId = null;
     }
+    this.fader?.setSleepLevel(1, 0.3);
     playerStore.update((s) => ({
       ...s,
       sleepRemainingSec: null,

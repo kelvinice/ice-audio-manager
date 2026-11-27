@@ -11,8 +11,15 @@ volume, shuffle / repeat, EQ, lyrics state). Sources come from the local proxy (
 The Web Audio graph is built on first play:
 
 ```
-source → 10 biquads (32 Hz–16 kHz) → preamp → [AutoEq parametric filters] → compressor → analyser → gain → out
+source → 10 biquads → preamp → [AutoEq filters] → compressor → analyser → fader (transition → sleep) → gain → out
 ```
+
+- Experimental (Settings → Experimental, `settings.experimental`, all off): **Smooth transitions** (`lib/fader.ts`:
+  fade in 1.2 s at each start, fade to silence over the last 3 s via `checkFadeOut` in `timeupdate`, a 0.18 s dip
+  before a skip, restored on a seek; not on repeat-one), **Gentle sleep** (the sleep timer ramps the fader's sleep stage
+  down over its last 30 s, back to full after the pause), **Beat pulse** (`lib/beatPulse.ts`, a Svelte action on
+  Now Playing's cover: `scale` on bass kicks, ≤ 30 Hz while playing). The fader sits after the analyser, so the
+  spectrum doesn't dip with a fade.
 
 - EQ: presets in `EQ_PRESETS`; AutoEq `ParametricEQ.txt` import (`lib/parametricEq.ts`) adds peaking / shelf / pass
   filters plus preamp. Normalize turns the compressor on (threshold −20 dB, ratio 5).

@@ -124,6 +124,17 @@ export interface PandoraSettings {
   artworkCacheMb: number;
   lyricsStyle: LyricsStyle;
   backdropMotion: BackdropMotion;
+  experimental: ExperimentalSettings;
+}
+
+/** Settings → Experimental (Rust `ExperimentalSettings`), all off by default. */
+export interface ExperimentalSettings {
+  /** Songs fade in, fade out over their last seconds, and skips dip instead of cutting. */
+  smoothTransitions: boolean;
+  /** Now Playing's cover pulses on bass kicks. */
+  beatPulse: boolean;
+  /** The sleep timer fades the music out over its last 30 seconds. */
+  gentleSleep: boolean;
 }
 
 /**
@@ -151,6 +162,7 @@ export const DEFAULT_PANDORA_SETTINGS: PandoraSettings = {
   artworkCacheMb: 256,
   lyricsStyle: "default",
   backdropMotion: "blend",
+  experimental: { smoothTransitions: false, beatPulse: false, gentleSleep: false },
 };
 
 export interface AppPaths {

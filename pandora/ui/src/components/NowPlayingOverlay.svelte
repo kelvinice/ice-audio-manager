@@ -1,5 +1,6 @@
 <script lang="ts">
   import { audioEngine, playerStore, SHUFFLE_TITLES } from "../lib/audio";
+  import { beatPulse } from "../lib/beatPulse";
   import { SpectrumShaper } from "../lib/spectrum";
   import { resolveArtworkUrl } from "../lib/theme";
   import type { BackdropMotion, LyricsStyle, Track } from "../lib/types";
@@ -18,6 +19,8 @@
     showRomaji: boolean;
     animatedCanvas: boolean;
     backdropMotion: BackdropMotion;
+    /** Experimental: the cover pulses on bass kicks. */
+    pulse?: boolean;
     wavyProgress?: boolean;
     spinningCover?: boolean;
     onClose: () => void;
@@ -36,6 +39,7 @@
     showRomaji,
     animatedCanvas,
     backdropMotion,
+    pulse = false,
     wavyProgress = true,
     spinningCover = false,
     onClose,
@@ -238,6 +242,7 @@
           class="cover-wrap"
           class:spinning={spinningCover}
           class:paused={!$playerStore.playing}
+          use:beatPulse={pulse && $playerStore.playing}
         >
           {#if resolveArtworkUrl(track.artworkUrl, proxyPort)}
             <img src={resolveArtworkUrl(track.artworkUrl, proxyPort)} alt={track.title} />
@@ -512,7 +517,8 @@
     overflow: hidden;
     box-shadow: 0 26px 64px rgba(0, 0, 0, 0.55), 0 0 40px var(--p-glow-1);
     background: var(--p-fill);
-    transition: border-radius 0.35s ease;
+    /* `scale` is the experimental beat pulse (lib/beatPulse.ts); its short transition smooths the 30 Hz steps. */
+    transition: border-radius 0.35s ease, scale 90ms linear;
   }
 
   .cover-wrap.spinning {

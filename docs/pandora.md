@@ -4,7 +4,8 @@
 
 Pandora is a native Windows desktop music player inspired by **Vivi Music**, built with Rust + Tauri v2 + WebView2 + Web Audio DSP, and wired directly into **Ice Audio Manager**'s core crates (`ice-core` and `ice-win`).
 
-Developers: the code recap (features, file map, one doc per area) is [docs/modules/pandora/](modules/pandora/README.md).
+Developers: the code recap (features, file map, one doc per area) is [docs/modules/pandora/](modules/pandora/README.md);
+the roadmap and experimental features are in [pandora-plan.md](pandora-plan.md).
 
 ---
 

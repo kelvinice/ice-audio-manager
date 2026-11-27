@@ -745,6 +745,7 @@
   showRomaji={library.settings.showRomaji}
   animatedCanvas={library.settings.animatedCanvas}
   backdropMotion={library.settings.backdropMotion}
+  pulse={library.settings.experimental.beatPulse}
   wavyProgress={library.settings.wavyProgress}
   spinningCover={library.settings.spinningCover}
   onClose={() => (showNowPlaying = false)}
