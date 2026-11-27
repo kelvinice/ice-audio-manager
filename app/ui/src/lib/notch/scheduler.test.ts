@@ -93,7 +93,7 @@ function sampleSnapshot(): EngineSnapshot {
       callMode: { enabled: false, apps: ['Discord.exe'], duckPercent: 30, holdSecs: 3, sensitivity: 'normal' },
       showNotchHotkey: null,
       widget: { enabled: false, buttons: ['pin', 'mic', 'settings'] },
-      appearance: { theme: 'ice', preset: 'smooth', idleStyle: 'mini_pill', notchStyle: 'floating', nowPlaying: 'brief', movingBackdrop: true, hibernate: false, hibernateLook: 'plain', hibernateHideFromCapture: true, dragEffects: { landingRipple: false, jellyLanding: false, carryGlow: false }, wavyProgress: false, volumeButton: false, experiments: { beatRim: false, coverTilt: false } },
+      appearance: { theme: 'ice', preset: 'smooth', idleStyle: 'mini_pill', notchStyle: 'floating', nowPlaying: 'brief', movingBackdrop: true, hibernate: false, hibernateLook: 'plain', hibernateHideFromCapture: true, dragEffects: { landingRipple: false, jellyLanding: false, carryGlow: false }, wavyProgress: false, volumeButton: false, experiments: { beatRim: false, coverTilt: false, dragHandle: false } },
     },
     media: null,
     lyrics: { status: 'disabled', trackKey: null, document: null },

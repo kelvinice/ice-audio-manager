@@ -129,6 +129,9 @@ pub struct Experiments {
     pub beat_rim: bool,
     /// The open card's cover tilts toward the pointer, with a soft glare (pointer events only, no loop).
     pub cover_tilt: bool,
+    /// A small grabber on the open card's far edge shows where to drag the notch (a cue only; the drag area is
+    /// unchanged). Shown only while the notch can be dragged.
+    pub drag_handle: bool,
 }
 
 impl Appearance {

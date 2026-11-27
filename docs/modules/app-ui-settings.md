@@ -85,3 +85,4 @@ created when opened and destroyed when closed (shell: `app/src-tauri/src/setting
 - 2026-11-26 Claude: owner: Notch → **Open card** → "Volume as a button" (`SetVolumeButton`); Experimental → **Notch looks** (beat rim, cover tilt → `SetExperiments` patch); `devBackend` handles both.
 - 2026-11-27 Claude: Experimental → **Notch widget** (`WidgetEditor.svelte`; reorders with `moveItem`, sends `SetNotchWidget`); `devBackend` handles it.
 - 2026-11-27 Claude: Activities → Music services gains **Pandora** (`SetMusicService { service: pandora }`).
+- 2026-11-27 Claude: Experimental → Notch looks gains "Drag handle" (`setExperiments.dragHandle`).

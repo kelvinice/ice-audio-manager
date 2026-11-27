@@ -43,6 +43,11 @@
       title: 'Cover tilt',
       description: 'The cover on the open card leans toward your pointer, with a soft glare.',
     },
+    {
+      key: 'dragHandle',
+      title: 'Drag handle',
+      description: 'A small grabber on the open card shows where you can drag the notch. Dragging works the same with it off.',
+    },
   ];
 
   function setExperiment(key: ExperimentKey, on: boolean): void {
@@ -50,6 +55,7 @@
       type: 'setExperiments',
       beatRim: key === 'beatRim' ? on : null,
       coverTilt: key === 'coverTilt' ? on : null,
+      dragHandle: key === 'dragHandle' ? on : null,
     });
   }
 

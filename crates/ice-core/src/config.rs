@@ -45,7 +45,8 @@ use crate::widget::NotchWidget;
 /// (Experimental: beat rim, cover tilt; all off).
 /// v24: `[widget]` (Experimental notch widget: off, default button order).
 /// v25: `music_services.pandora` (a launch button for the experimental Pandora player; off).
-pub const SCHEMA_VERSION: u32 = 25;
+/// v26: `appearance.experiments.dragHandle` (Experimental: grabber cue on the open card; off).
+pub const SCHEMA_VERSION: u32 = 26;
 
 /// Allowed per-device lyric delay, in ms (negative = lyrics earlier).
 pub const LYRICS_DELAY_MS: std::ops::RangeInclusive<i32> = -1000..=2000;
@@ -317,6 +318,7 @@ impl Config {
             // v0–v22 gain `appearance.volumeButton = false` and `appearance.experiments` (all off) via serde defaults.
             // v0–v23 gain `[widget]` (off, default buttons) via serde defaults.
             // v0–v24 gain `music_services.pandora = false` via serde defaults.
+            // v0–v25 gain `appearance.experiments.dragHandle = false` via serde defaults.
             v => {
                 if v < 22 {
                     cfg.lyrics.estimated_word_sync = true;
@@ -583,10 +585,11 @@ impl Config {
             }
             Command::SetWavyProgress { enabled } => next.appearance.wavy_progress = *enabled,
             Command::SetVolumeButton { enabled } => next.appearance.volume_button = *enabled,
-            Command::SetExperiments { beat_rim, cover_tilt } => {
+            Command::SetExperiments { beat_rim, cover_tilt, drag_handle } => {
                 let ex = &mut next.appearance.experiments;
                 ex.beat_rim = beat_rim.unwrap_or(ex.beat_rim);
                 ex.cover_tilt = cover_tilt.unwrap_or(ex.cover_tilt);
+                ex.drag_handle = drag_handle.unwrap_or(ex.drag_handle);
             }
             Command::SetLyricsCacheMaxMb { max_mb } => {
                 if !LYRICS_CACHE_MAX_MB.contains(max_mb) {
@@ -1345,7 +1348,7 @@ estimatedWordSync = false";
 
         let button = Command::SetVolumeButton { enabled: true };
         assert_eq!(config.apply_setting(&button, &[]), Ok(true));
-        let set = Command::SetExperiments { beat_rim: Some(true), cover_tilt: None };
+        let set = Command::SetExperiments { beat_rim: Some(true), cover_tilt: None, drag_handle: None };
         assert_eq!(config.apply_setting(&set, &[]), Ok(true));
         assert_eq!(config.apply_setting(&set, &[]), Ok(false));
         let saved = Config::from_toml(&config.to_toml()).unwrap();
@@ -1374,6 +1377,19 @@ estimatedWordSync = false";
             Command::SetNotchWidget { enabled: None, buttons: Some(vec![WidgetButton::Mic, WidgetButton::Mic]) };
         assert!(config.apply_setting(&repeat, &[]).is_err());
         assert!(Config::from_toml("[widget]\nbuttons = ['mic', 'mic']").is_err(), "a hand-edited repeat is rejected");
+    }
+
+    #[test]
+    fn v25_gains_the_drag_handle_off_and_saves_it() {
+        let mut config = Config::from_toml("schema_version = 25\n[appearance.experiments]\ncoverTilt = true").unwrap();
+        assert_eq!(config.schema_version, SCHEMA_VERSION);
+        assert!(config.appearance.experiments.cover_tilt && !config.appearance.experiments.drag_handle);
+
+        let on = Command::SetExperiments { beat_rim: None, cover_tilt: None, drag_handle: Some(true) };
+        assert_eq!(config.apply_setting(&on, &[]), Ok(true));
+        let saved = Config::from_toml(&config.to_toml()).unwrap();
+        assert!(saved.appearance.experiments.drag_handle && saved.appearance.experiments.cover_tilt);
+        assert!(saved.view(&[]).appearance.experiments.drag_handle);
     }
 
     #[test]

@@ -86,7 +86,7 @@
 </script>
 
 <div class="expanded-shell" class:stagger={!instant} class:bottom-anchor={isBottom}>
-  <DragHandle edge={isBottom ? 'top' : 'bottom'} visible={(settings?.notchPlacement ?? 'fixed') !== 'fixed'} />
+  <DragHandle edge={isBottom ? 'top' : 'bottom'} visible={(settings?.appearance.experiments.dragHandle ?? false) && (settings?.notchPlacement ?? 'fixed') !== 'fixed'} />
   <div class="expanded-card">
     <div class="main">
       {#if activeMedia}

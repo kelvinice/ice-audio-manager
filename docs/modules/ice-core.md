@@ -102,3 +102,4 @@ Inline `#[cfg(test)]` in each file. `resolve.rs` is built from the owner's real 
 - 2026-11-26 Claude: schema v23: `Appearance.volume_button` (`Command::SetVolumeButton`) and `Appearance.experiments` (`Experiments { beat_rim, cover_tilt }`, `Command::SetExperiments` patch), all off, + migration test.
 - 2026-11-27 Claude: `widget.rs` (`NotchWidget`, `WidgetButton`, `validate`), `Command::SetNotchWidget`, `SettingsView.widget`, schema v24 `[widget]` (serde default + fixture test); `companion.rs` (Ice ↔ Pandora protocol, shared token helpers moved from `app/src-tauri/src/bridge.rs`).
 - 2026-11-27 Claude: schema v25: `MusicServiceId::Pandora` and `MusicServices.pandora` (off; serde default + fixture test).
+- 2026-11-27 Claude: schema v26: `appearance.experiments.dragHandle` (off; `SetExperiments.drag_handle`), test `v25_gains_the_drag_handle_off_and_saves_it`.

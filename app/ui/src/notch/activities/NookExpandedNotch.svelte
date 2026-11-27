@@ -93,7 +93,7 @@
 </script>
 
 <div class="nook-shell" class:stagger={!instant} class:bottom-anchor={isBottom}>
-  <DragHandle edge={isBottom ? 'top' : 'bottom'} visible={(settings?.notchPlacement ?? 'fixed') !== 'fixed'} />
+  <DragHandle edge={isBottom ? 'top' : 'bottom'} visible={(settings?.appearance.experiments.dragHandle ?? false) && (settings?.notchPlacement ?? 'fixed') !== 'fixed'} />
   <header class="nook-top">
     <div class="nook-status">
       {#if source}

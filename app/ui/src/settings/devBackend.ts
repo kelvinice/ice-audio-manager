@@ -41,7 +41,7 @@ function initialSnapshot(): EngineSnapshot {
     media: null,
     lyrics: { status: 'disabled', trackKey: null, document: null },
     settings: {
-      appearance: { theme: 'ice', preset: 'bouncy', idleStyle: 'mini_pill', notchStyle: 'nook', nowPlaying: 'while_playing', movingBackdrop: true, hibernate: false, hibernateLook: 'plain', hibernateHideFromCapture: true, dragEffects: { landingRipple: false, jellyLanding: false, carryGlow: false }, wavyProgress: false, volumeButton: false, experiments: { beatRim: false, coverTilt: false } },
+      appearance: { theme: 'ice', preset: 'bouncy', idleStyle: 'mini_pill', notchStyle: 'nook', nowPlaying: 'while_playing', movingBackdrop: true, hibernate: false, hibernateLook: 'plain', hibernateHideFromCapture: true, dragEffects: { landingRipple: false, jellyLanding: false, carryGlow: false }, wavyProgress: false, volumeButton: false, experiments: { beatRim: false, coverTilt: false, dragHandle: false } },
       performanceProfile: 'instant',
       pinnedMonitor: 'DISPLAY-PATH-1',
       notchAnchor: 'top_center',
@@ -166,6 +166,7 @@ function applyCommand(s: EngineSnapshot, c: Command): void {
       st.appearance.experiments = {
         beatRim: c.beatRim ?? st.appearance.experiments.beatRim,
         coverTilt: c.coverTilt ?? st.appearance.experiments.coverTilt,
+        dragHandle: c.dragHandle ?? st.appearance.experiments.dragHandle,
       };
       break;
 

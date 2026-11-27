@@ -4,7 +4,7 @@
   interface Props {
     /** The card edge away from the dock: `bottom` for a top-anchored notch, `top` for a bottom-anchored one. */
     edge: 'top' | 'bottom';
-    /** Off when `notchPlacement` is `fixed` (nothing to drag). */
+    /** Experimental `appearance.experiments.dragHandle`, and off when `notchPlacement` is `fixed` (nothing to drag). */
     visible: boolean;
   }
 

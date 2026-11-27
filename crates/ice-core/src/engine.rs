@@ -361,6 +361,7 @@ pub enum Command {
     SetExperiments {
         beat_rim: Option<bool>,
         cover_tilt: Option<bool>,
+        drag_handle: Option<bool>,
     },
     /// Experimental notch widget: switch it and/or replace its button order (`None` leaves a field unchanged).
     SetNotchWidget {
