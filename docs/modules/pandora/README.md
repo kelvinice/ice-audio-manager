@@ -71,6 +71,7 @@ Playback itself (the `<audio>` element, EQ, spectrum) is in the UI's Web Audio g
 | `lib/ipc.ts`, `lib/types.ts` | Command wrappers and event listeners; TS mirrors of `models.rs` | [backend](backend.md) |
 | `lib/theme.ts` | Artwork URL resolving, cover colour extraction, artwork-accent switch | [appearance](appearance.md) |
 | `lib/session.ts` | Last queue / position in `localStorage` | [playback](playback.md) |
+| `lib/devices.ts` | Device kind / headphone icon and spatial sound labels | [ice-and-recognition](ice-and-recognition.md) |
 | `lib/magicShuffle.ts` | Magic shuffle: recommended songs between list songs | [playback](playback.md) |
 | `lib/breath.ts` | Bass breath for the Lively backdrop (Twin of Ice's `ambient.ts`) | [playback](playback.md) |
 | `lib/spectrum.ts`, `lib/wave.ts` | Spectrum shaping (Twin of Ice's `beat.ts`), wavy seek line | [playback](playback.md) |
@@ -100,6 +101,8 @@ Playback itself (the `<audio>` element, EQ, spectrum) is in the UI's Web Audio g
 
 ## Change log
 
+- 2026-11-28 · Ice Audio page regrouped: status header, Sound and Notch cards, Connection card (`IceSoundCard`,
+  `IceNotchCard`, `lib/devices.ts`).
 - 2026-11-28 · Blend backdrop (blurred cover under a softer lava lamp, breathing together) is the new default.
 - 2026-11-28 · Lively backdrop motion (`LavaLamp.svelte`, `lib/breath.ts`, `backdropMotion` setting; Calm stays default).
 - 2026-11-28 · Light Ice theme (`iceLight`).

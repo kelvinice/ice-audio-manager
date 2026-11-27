@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { deviceKind as kind, isHeadphones } from "../lib/devices";
   import { switchIceDevice } from "../lib/ipc";
   import type { DeviceSummary } from "../lib/types";
   import Icon from "./Icon.svelte";
@@ -15,18 +16,6 @@
   let switching = $state<string | null>(null);
 
   let active = $derived(devices.find((d) => d.isDefault));
-
-  /** Windows EndpointFormFactor: 3 headphones, 5 headset; everything else reads as a speaker. */
-  function isHeadphones(device: DeviceSummary): boolean {
-    return device.formFactor === 3 || device.formFactor === 5;
-  }
-
-  function kind(device: DeviceSummary): string {
-    if (device.formFactor === 5) return "Headset";
-    if (device.formFactor === 3) return "Headphones";
-    if (device.isVirtual) return "Virtual device";
-    return "Speakers";
-  }
 
   async function choose(device: DeviceSummary) {
     if (device.isDefault) {

@@ -1,6 +1,7 @@
 # Pandora, Ice and song recognition
 
-> Paths: `pandora/src-tauri/src/{ice_bridge,companion,recognition}.rs`, components `IceHubView`, `RecognizeView` ·
+> Paths: `pandora/src-tauri/src/{ice_bridge,companion,recognition}.rs`, components `IceHubView`, `IceSoundCard`,
+> `IceNotchCard`, `RecognizeView`, `lib/devices.ts` ·
 > Part of [Pandora](README.md). The user-level story (modes, launching each other, notch widget) is in
 > [docs/pandora.md](../../pandora.md).
 
@@ -14,6 +15,11 @@
 - `ice_launch_standalone` stops the embedded engine, then starts Ice found via Ice's `install.json` (then
   `target\{release,debug}`; `find_standalone_ice_exe`). The mode preference is `library.iceModePref`.
 - Events `ice://status/v1`, `ice://snapshot/v1`, `ice://meter/v1` (meter only while `ice_set_meter_active`).
+- The Ice Audio page (`IceHubView`): a header with the engine status and the main actions (refresh, Ice settings,
+  Start / Stop Ice); `IceSoundCard` (output devices as a list, volume with mute, live meter, microphone, spatial sound,
+  call ducking) beside `IceNotchCard` (theme, style, performance pickers; lyrics, spectrum, moving background,
+  hibernate switches; show / hide notch); and a Connection card with the engine mode (Auto / Built-in / External)
+  and what it means. Device names and spatial labels come from `lib/devices.ts` (shared with `OutputPicker`).
 
 ## Ice → Pandora (`companion.rs`, experimental)
 
