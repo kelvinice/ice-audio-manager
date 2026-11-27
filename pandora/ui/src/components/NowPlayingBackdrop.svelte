@@ -1,15 +1,20 @@
 <script lang="ts">
   // Now Playing backdrop. Always: the cover, blurred and enlarged, under a tint that keeps text readable. With
   // `animated` (the sparkle button): soft orbs in the artwork's colours drift on slow circular paths over it, in the
-  // spirit of the Ice notch's lava-lamp wash. Motion is transform-only, pauses with the song and is off for reduced
-  // motion (app.css stops every animation then).
+  // spirit of the Ice notch's lava-lamp wash ("Calm"), or the full lava lamp (`LavaLamp`, "Lively", setting
+  // `backdropMotion`). Motion is transform-only, pauses with the song and is off for reduced motion (app.css stops
+  // every animation then).
+  import type { BackdropMotion } from "../lib/types";
+  import LavaLamp from "./LavaLamp.svelte";
+
   interface Props {
     artworkUrl: string | null;
     animated: boolean;
+    motion: BackdropMotion;
     playing: boolean;
   }
 
-  let { artworkUrl, animated, playing }: Props = $props();
+  let { artworkUrl, animated, motion, playing }: Props = $props();
 
   /**
    * One orb: its centre point (% of the page), how far it circles from it (vmin), size (vmax), which artwork colour,
@@ -31,7 +36,9 @@
     {/key}
   {/if}
 
-  {#if animated}
+  {#if animated && motion === "lively"}
+    <LavaLamp {playing} />
+  {:else if animated}
     <div class="orbs" class:paused={!playing}>
       {#each ORBS as orb, i (i)}
         <div

@@ -191,6 +191,31 @@
         />
       </label>
 
+      <div class="toggle-row" class:muted={!settings.animatedCanvas}>
+        <div>
+          <div class="row-title">Backdrop Motion</div>
+          <div class="row-sub">
+            {settings.backdropMotion === "lively"
+              ? "Lively: Ice's lava lamp, nine orbs wandering and breathing with the bass"
+              : "Calm: a few soft orbs on slow circles"}
+          </div>
+        </div>
+        <div class="pref-row" role="radiogroup" aria-label="Backdrop motion">
+          {#each [{ id: "calm", label: "Calm" }, { id: "lively", label: "Lively" }] as const as option (option.id)}
+            <button
+              class="chip"
+              role="radio"
+              aria-checked={settings.backdropMotion === option.id}
+              class:active={settings.backdropMotion === option.id}
+              disabled={!settings.animatedCanvas}
+              onclick={() => onUpdateSettings({ backdropMotion: option.id })}
+            >
+              {option.label}
+            </button>
+          {/each}
+        </div>
+      </div>
+
       <label class="toggle-row">
         <div>
           <div class="row-title">Lyrics Romanization</div>
@@ -605,6 +630,11 @@
     padding: 12px 0;
     border-top: 1px solid var(--p-border);
     cursor: pointer;
+  }
+
+  .toggle-row.muted {
+    opacity: 0.55;
+    cursor: default;
   }
 
   .toggle-row.compact {

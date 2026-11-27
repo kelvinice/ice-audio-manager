@@ -123,7 +123,11 @@ export interface PandoraSettings {
   /** Disk budget for cached artwork in MiB; 0 keeps artwork in memory only. */
   artworkCacheMb: number;
   lyricsStyle: LyricsStyle;
+  backdropMotion: BackdropMotion;
 }
+
+/** Now Playing's animated background (Rust `BackdropMotion`): slow circles, or Ice's lava lamp. */
+export type BackdropMotion = "calm" | "lively";
 
 /** Now Playing lyric styles (Rust `LyricsStyle`). */
 export type LyricsStyle = "default" | "fisheye" | "rain";
@@ -143,6 +147,7 @@ export const DEFAULT_PANDORA_SETTINGS: PandoraSettings = {
   closeToTray: false,
   artworkCacheMb: 256,
   lyricsStyle: "default",
+  backdropMotion: "calm",
 };
 
 export interface AppPaths {

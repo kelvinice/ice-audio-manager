@@ -744,6 +744,7 @@
   {likedIds}
   showRomaji={library.settings.showRomaji}
   animatedCanvas={library.settings.animatedCanvas}
+  backdropMotion={library.settings.backdropMotion}
   wavyProgress={library.settings.wavyProgress}
   spinningCover={library.settings.spinningCover}
   onClose={() => (showNowPlaying = false)}

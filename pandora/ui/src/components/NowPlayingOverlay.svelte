@@ -2,7 +2,7 @@
   import { audioEngine, playerStore, SHUFFLE_TITLES } from "../lib/audio";
   import { SpectrumShaper } from "../lib/spectrum";
   import { resolveArtworkUrl } from "../lib/theme";
-  import type { LyricsStyle, Track } from "../lib/types";
+  import type { BackdropMotion, LyricsStyle, Track } from "../lib/types";
   import HeartButton from "./HeartButton.svelte";
   import Icon from "./Icon.svelte";
   import LyricsFisheye from "./LyricsFisheye.svelte";
@@ -17,6 +17,7 @@
     likedIds: Set<string>;
     showRomaji: boolean;
     animatedCanvas: boolean;
+    backdropMotion: BackdropMotion;
     wavyProgress?: boolean;
     spinningCover?: boolean;
     onClose: () => void;
@@ -34,6 +35,7 @@
     likedIds,
     showRomaji,
     animatedCanvas,
+    backdropMotion,
     wavyProgress = true,
     spinningCover = false,
     onClose,
@@ -194,6 +196,7 @@
     <NowPlayingBackdrop
       artworkUrl={resolveArtworkUrl(track.artworkUrl, proxyPort)}
       animated={animatedCanvas}
+      motion={backdropMotion}
       playing={$playerStore.playing}
     />
 
