@@ -1,9 +1,6 @@
 <script lang="ts">
   import { audioEngine } from "../lib/audio";
-  import { formatMb } from "../lib/format";
   import {
-    artworkCacheBytes,
-    clearArtworkCache,
     launchIceStandalone,
     openIceSettings,
     pingIceBridge,
@@ -18,6 +15,7 @@
     PandoraSettings,
   } from "../lib/types";
   import Icon from "./Icon.svelte";
+  import StorageSettings from "./StorageSettings.svelte";
   import ThemePicker from "./ThemePicker.svelte";
 
   interface Props {
@@ -26,6 +24,7 @@
     iceStatus: IceStatus;
     iceSnapshot: EngineSnapshot | null;
     appPaths: AppPaths | null;
+    proxyPort: number;
     onUpdateSettings: (patch: Partial<PandoraSettings>) => void;
     onResetSettings: () => void;
     onSetModePref: (pref: "auto" | "embedded" | "connected") => void;
@@ -34,6 +33,8 @@
     onOpenIceHub: () => void;
     onRescanLocal: () => void;
     onClearCache: () => void;
+    onOpenDownloads: () => void;
+    onDeleteCached: (trackId: string) => void;
     onNotify: (msg: string) => void;
   }
 
@@ -43,6 +44,7 @@
     iceStatus,
     iceSnapshot,
     appPaths,
+    proxyPort,
     onUpdateSettings,
     onResetSettings,
     onSetModePref,
@@ -51,35 +53,17 @@
     onOpenIceHub,
     onRescanLocal,
     onClearCache,
+    onOpenDownloads,
+    onDeleteCached,
     onNotify,
   }: Props = $props();
 
   const sections = ["Appearance", "Playback", "Ice Audio", "Storage"] as const;
   let section = $state<(typeof sections)[number]>("Appearance");
   let busy = $state(false);
-  let confirmingReset = $state(false);
   let bridgeError = $state<string | null>(null);
 
   let defaultPlayback = $derived(iceSnapshot?.playback.find((d) => d.isDefault));
-  let cacheMb = $derived((library.cacheBytes / (1024 * 1024)).toFixed(1));
-  const ARTWORK_BUDGETS = [0, 128, 256, 512, 1024];
-  let artworkBytes = $state(0);
-
-  $effect(() => {
-    if (section !== "Storage") return;
-    void artworkCacheBytes().then((bytes) => (artworkBytes = bytes)).catch(() => {});
-  });
-
-  async function clearArtwork() {
-    try {
-      const freed = await clearArtworkCache();
-      artworkBytes = 0;
-      onNotify(`Cleared ${formatMb(freed)} of artwork`);
-    } catch (e) {
-      onNotify(e instanceof Error ? e.message : String(e));
-    }
-  }
-
   let startupVolPct = $derived(Math.round((settings.defaultVolume ?? 0.85) * 100));
 
   let bridgeLabel = $derived(
@@ -128,7 +112,7 @@
 
   <nav class="section-nav" aria-label="Settings sections">
     {#each sections as item}
-      <button aria-pressed={section === item} onclick={() => { section = item; confirmingReset = false; }}>{item}</button>
+      <button aria-pressed={section === item} onclick={() => (section = item)}>{item}</button>
     {/each}
   </nav>
 
@@ -414,110 +398,23 @@
     </div>
   </section>
   {:else}
-  <section class="panel card-glass">
-    <div class="panel-head">
-      <div>
-        <h2>Storage &amp; Reset</h2>
-      </div>
-      <div class="mini-actions">
-        <button class="btn-ghost" onclick={onRescanLocal}>
-          <Icon name="refresh" size={14} />
-          <span>Rescan Folders</span>
-        </button>
-        <button
-          class="btn-ghost"
-          disabled={library.cachedIds.length === 0}
-          onclick={onClearCache}
-        >
-          <Icon name="trash" size={14} />
-          <span>Clear Cache ({cacheMb} MB)</span>
-        </button>
-        {#if confirmingReset}
-          <button
-            class="btn-danger"
-            onclick={() => {
-              confirmingReset = false;
-              onResetSettings();
-            }}
-          >
-            Confirm Reset
-          </button>
-          <button class="btn-ghost" onclick={() => (confirmingReset = false)}>Cancel</button>
-        {:else}
-          <button class="btn-ghost" onclick={() => (confirmingReset = true)}>
-            Reset Defaults
-          </button>
-        {/if}
-      </div>
-    </div>
-
-    <div class="stats-row">
-      <div class="stat-card">
-        <span>Favorites</span>
-        <strong>{library.liked.length}</strong>
-      </div>
-      <div class="stat-card">
-        <span>Playlists</span>
-        <strong>{library.playlists.length}</strong>
-      </div>
-      <div class="stat-card">
-        <span>Local Tracks</span>
-        <strong>{library.localTracks.length}</strong>
-      </div>
-      <div class="stat-card">
-        <span>Cached</span>
-        <strong>{library.cachedIds.length} ({cacheMb} MB)</strong>
-      </div>
-    </div>
-
-    <div class="toggle-row">
-      <div>
-        <div class="row-title">Artwork cache</div>
-        <div class="row-sub">
-          Covers are saved on disk by a hash of their address, so lists open instantly and work offline.
-          Using {formatMb(artworkBytes)}; the oldest covers make room when it is full.
-        </div>
-      </div>
-      <div class="mini-actions">
-        <select
-          aria-label="Artwork cache size"
-          value={settings.artworkCacheMb}
-          onchange={(e) => onUpdateSettings({ artworkCacheMb: Number((e.target as HTMLSelectElement).value) })}
-        >
-          {#each ARTWORK_BUDGETS as mb (mb)}
-            <option value={mb}>{mb === 0 ? "Off" : mb >= 1024 ? `${mb / 1024} GB` : `${mb} MB`}</option>
-          {/each}
-        </select>
-        <button class="btn-ghost" disabled={artworkBytes === 0} onclick={() => void clearArtwork()}>Clear</button>
-      </div>
-    </div>
-
-    {#if appPaths}
-      <details class="diag-details">
-        <summary>File Locations</summary>
-        <div class="paths-grid">
-          <div><span>Library:</span> <code>{appPaths.libraryPath}</code></div>
-          <div><span>Cache:</span> <code>{appPaths.cacheDir}</code></div>
-          <div><span>Artwork:</span> <code>{appPaths.artworkDir}</code></div>
-          <div><span>Ice Config:</span> <code>{appPaths.iceConfigPath}</code></div>
-          <div><span>Bridge Info:</span> <code>{appPaths.iceBridgePath}</code></div>
-        </div>
-      </details>
-    {/if}
-  </section>
+    <StorageSettings
+      {settings}
+      {library}
+      {appPaths}
+      {proxyPort}
+      {onUpdateSettings}
+      {onOpenDownloads}
+      {onDeleteCached}
+      {onClearCache}
+      {onRescanLocal}
+      {onResetSettings}
+      {onNotify}
+    />
   {/if}
 </div>
 
 <style>
-  select {
-    height: 34px;
-    padding: 0 12px;
-    border-radius: 999px;
-    border: none;
-    background: var(--p-fill);
-    font-size: 13px;
-    font-weight: 600;
-  }
 
   .page {
     padding: 24px 28px 40px;
@@ -712,62 +609,9 @@
     border-color: var(--p-accent);
   }
 
-  .btn-wrap,
-  .mini-actions {
+  .btn-wrap {
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
-  }
-
-  .stats-row {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-    gap: 10px;
-  }
-
-  .stat-card {
-    padding: 12px 14px;
-    border-radius: 12px;
-    background: var(--p-fill);
-    border: 1px solid var(--p-border);
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-  }
-
-  .stat-card span {
-    font-size: 11px;
-    color: var(--p-text-dim);
-  }
-
-  .stat-card strong {
-    font-size: 16px;
-  }
-
-  .diag-details {
-    font-size: 12px;
-    color: var(--p-text-muted);
-  }
-
-  .diag-details summary {
-    cursor: pointer;
-    padding: 4px 0;
-    color: var(--p-text-dim);
-  }
-
-  .paths-grid {
-    margin-top: 8px;
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-    gap: 8px;
-    font-size: 11px;
-    color: var(--p-text-dim);
-  }
-
-  code {
-    background: var(--p-fill);
-    padding: 2px 6px;
-    border-radius: 5px;
-    word-break: break-all;
   }
 </style>

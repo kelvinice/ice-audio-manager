@@ -68,6 +68,19 @@ minimize / maximize / close. Empty bar space carries `data-tauri-drag-region`; t
 the rest of `playerStore.queue`, click to play, remove on hover) and Recently played (`library.history`). Whether it is open
 is a per-machine view preference in `localStorage` (`pandora.queuePanelOpen`).
 
+## Last session at launch
+
+`lib/session.ts` keeps the queue, position in it and playback position in `localStorage` (`pandora.session.v1`, saved every
+5 s while playing, on pause and on `pagehide`). At launch `audioEngine.restoreSession(history[0])` shows that song paused at
+the saved spot (queue, lyrics, artwork colours) without streaming; Play resumes there (`currentTime` set before metadata).
+A saved session whose song is no longer the latest in history falls back to that latest song from 0:00.
+
+## Storage settings
+
+`StorageSettings.svelte`: total use with a Downloads / Artwork bar, Downloads (no size limit, first five listed with remove,
+"Show all" opens Library → Downloads, Remove all with a confirm), the artwork cache budget, local files, library counts,
+file locations, and Reset in its own panel.
+
 ## Audio quality (not offered)
 
 Pandora streams the ANDROID client's muxed file. Audio-only formats from every client tried (ANDROID, ANDROID_VR,
@@ -81,6 +94,8 @@ and lyrics for visual checks. See the [Pandora guide](../pandora.md) for launch 
 
 ## Change log
 
+- 2026-11-27 · Launch shows the last song paused where it stopped (`lib/session.ts`, `restoreSession`); Settings → Storage
+  rebuilt as `StorageSettings.svelte` with a usage bar and the download list (fixes the clipped stat cards).
 - 2026-11-27 · Right-hand `QueuePanel` (Queue / Recently played) toggled from the player bar.
 - 2026-11-27 · Shared `SeekBar` (Ice-style rail / wave); log-band spectrum; Now Playing lyrics without sideways scroll;
   bare icon buttons with a dark `.solid` variant, translucent `btn-ghost`, collapse / icon close buttons.

@@ -1,3 +1,4 @@
+import { loadSession, saveSession } from "./session";
 import { writable, get } from "svelte/store";
 import {
   fetchLyrics,
@@ -75,8 +76,14 @@ const initialState: PlayerState = {
 
 export const playerStore = writable<PlayerState>(initialState);
 
+/** How often the listening session is saved while playing (also on pause and when the window closes). */
+const SESSION_SAVE_MS = 5_000;
+
 class PandoraAudioEngine {
   private audio: HTMLAudioElement | null = null;
+  /** The restored song and where to pick it up; applied by the next `playTrack` of that song. */
+  private resume: { trackId: string; ms: number } | null = null;
+  private lastSessionSaveMs = 0;
   private ctx: AudioContext | null = null;
   private sourceNode: MediaElementAudioSourceNode | null = null;
   private filters: BiquadFilterNode[] = [];
@@ -122,6 +129,7 @@ class PandoraAudioEngine {
       playerStore.update((st) => ({ ...st, currentTimeMs: curMs, durationMs: durMs }));
       this.syncMediaSessionPosition(curMs, durMs);
       this.checkSkipSilence();
+      if (performance.now() - this.lastSessionSaveMs > SESSION_SAVE_MS) this.persistSession();
     });
 
     el.addEventListener("loadedmetadata", () => {
@@ -143,6 +151,7 @@ class PandoraAudioEngine {
 
     el.addEventListener("pause", () => {
       playerStore.update((st) => ({ ...st, playing: false }));
+      this.persistSession();
       if (this.settings.mediaSessionEnabled && "mediaSession" in navigator) {
         navigator.mediaSession.playbackState = "paused";
       }
@@ -163,6 +172,39 @@ class PandoraAudioEngine {
 
     this.audio = el;
     this.bindMediaSessionHandlers();
+    window.addEventListener("pagehide", () => this.persistSession());
+  }
+
+  /**
+   * At launch: shows the last session's song paused at its saved spot, with its queue, lyrics and colours, so the
+   * player never opens empty. Nothing streams until Play. Skipped if something is already loaded.
+   */
+  restoreSession(lastPlayed: Track | null) {
+    if (get(playerStore).currentTrack || this.audio?.src) return;
+    const session = loadSession(lastPlayed);
+    if (!session) return;
+    const track = session.queue[session.index];
+    this.resume = { trackId: track.id, ms: session.positionMs };
+    playerStore.update((s) => ({
+      ...s,
+      queue: session.queue,
+      currentIndex: session.index,
+      currentTrack: track,
+      currentTimeMs: session.positionMs,
+      durationMs: track.durationMs ?? 0,
+      playing: false,
+      loading: false,
+      error: null,
+      lyrics: { trackKey: track.id, status: "loading", source: null, lines: [], plainText: null, error: null },
+    }));
+    if (this.settings.dynamicTheme) void applyMaterialThemeFromArt(track.artworkUrl, this.proxyPort);
+    void this.loadLyricsForTrack(track);
+  }
+
+  private persistSession() {
+    this.lastSessionSaveMs = performance.now();
+    const st = get(playerStore);
+    if (st.currentTrack) saveSession(st.queue, st.currentIndex, st.currentTimeMs);
   }
 
   private ensureWebAudioGraph() {
@@ -314,13 +356,15 @@ class PandoraAudioEngine {
     }
 
     this.silenceSinceMs = null;
+    const resumeMs = this.resume?.trackId === track.id ? this.resume.ms : 0;
+    this.resume = null;
     playerStore.update((s) => ({
       ...s,
       queue,
       currentIndex: idx,
       currentTrack: track,
       loading: true,
-      currentTimeMs: 0,
+      currentTimeMs: resumeMs,
       durationMs: track.durationMs ?? 0,
       error: null,
       lyrics: {
@@ -334,6 +378,9 @@ class PandoraAudioEngine {
     }));
 
     this.audio.src = src;
+    // Before metadata loads this becomes the start position, so a restored song continues where it stopped.
+    if (resumeMs > 0) this.audio.currentTime = resumeMs / 1000;
+    this.persistSession();
     this.audio.playbackRate = get(playerStore).eq.playbackRate;
     if (this.settings.dynamicTheme) {
       void applyMaterialThemeFromArt(track.artworkUrl, this.proxyPort);
@@ -435,6 +482,8 @@ class PandoraAudioEngine {
 
   seekMs(ms: number) {
     if (!this.audio) return;
+    // A restored song that has not started yet: move where Play will pick it up.
+    if (!this.audio.src && this.resume) this.resume.ms = Math.max(0, ms);
     this.audio.currentTime = Math.max(0, ms / 1000);
     playerStore.update((s) => ({ ...s, currentTimeMs: Math.max(0, ms) }));
   }

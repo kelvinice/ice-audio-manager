@@ -184,6 +184,8 @@
         .then((next) => (library = next))
         .catch(() => {});
     });
+    // Open on the last song (paused where it stopped) instead of an empty player.
+    audioEngine.restoreSession(lib.history[0] ?? null);
 
     if (isTauriEnv()) {
       unlistenStatus = await onIceStatus((st) => (iceStatus = st));
@@ -682,6 +684,7 @@
           {iceStatus}
           {iceSnapshot}
           {appPaths}
+          {proxyPort}
           onUpdateSettings={(patch) => void handleUpdateSettings(patch)}
           onResetSettings={() => void handleResetSettings()}
           onSetModePref={(pref) => void handleSetModePref(pref)}
@@ -697,8 +700,14 @@
           onClearCache={() => {
             void clearOfflineCache().then((next) => {
               library = next;
-              showNotice("Cleared Pandora offline audio cache");
+              showNotice("Removed all downloads");
             });
+          }}
+          onOpenDownloads={() => go({ tab: "library", playlistId: null, collection: null, libraryTab: "offline" })}
+          onDeleteCached={(id) => {
+            void deleteCachedTrack(id)
+              .then((next) => (library = next))
+              .catch(() => {});
           }}
           onNotify={showNotice}
         />
