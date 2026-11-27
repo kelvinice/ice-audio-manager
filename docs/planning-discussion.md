@@ -152,7 +152,7 @@ Remake Ice Audio Manager into an audio manager that is **as great and as cool as
 | **Auralys** (Android, v4.1.0) | Android music app: "listen together" rooms with a session code (real-time shared playback), two switchable UI styles ("Editorial" and "Liquid Glass"), song share cards for stories | Unknown · **no public source found** | **Screenshot only** (`docs/reference/screens/auralys-android-promo-v4.1.0.png`). Style as a user choice, separate from colour themes (D-23). Listen-together needs a server, which is outside D-05 and §1.5 |
 
 **Added 2026-11-26:** **VIVI Music** (`vivizzz007/vivi-music`, Android YouTube Music client, Kotlin, **GPL-3.0** plus
-per-file reuse bans; ideas only). Cloned to `docs/reference/vivi-music`. Recap with greenlight / grey area / redline
+per-file reuse bans; ideas only). Cloned to `docs/reference/vivi-music`. Recap with greenlight / grey area
 lists: [research/vivi-music.md](research/vivi-music.md).
 
 *§1.3 (why DynamicWin is called malware) and §1.4 (the replaced Python codebase) are in the [archive](archive/decisions-closed.md#context-history).*

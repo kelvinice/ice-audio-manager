@@ -2,7 +2,7 @@
 
 > **Read on 2026-11-26** by Claude, from a shallow clone at commit `e41b101` (2026-11-23) in
 > `docs/reference/vivi-music/` (gitignored, never committed). Owner request: what is in it, what Ice could adopt, and
-> which ideas are greenlight, grey area or redline for us.
+> which ideas are greenlight or grey area for us.
 
 ## In one paragraph
 
@@ -73,27 +73,21 @@ M ≈ a few days.
 |---|---|---|---|---|
 | Y1 | **Last.fm scrobbling** | `lastfm/`, `utils/ScrobbleManager.kt` | Network + account + API key; §1.5 allows only the opt-in update check (and LRCLIB under D-22) | A D-22-style decision: off by default, token in Credential Manager, no background traffic beyond scrobbles, privacy note |
 | Y2 | **Lyric translation** with the user's own DeepL / AI key | `LyricsTranslationHelper`, `api/` | Sends lyric text to a third party; keys to store | Opt-in per provider, user's own key in Credential Manager, a clear disclosure in Privacy |
-| Y3 | **Discord Rich Presence** through Discord's documented **local IPC** (not VIVI's way, see R4) | `utils/DiscordRPC.kt` (template idea `{song_name}`, `{artist_name}`) | Shares what you play; already in the backlog as opt-in | Local named-pipe IPC with our own app ID, off by default, a privacy note |
+| Y3 | **Discord Rich Presence** through Discord's documented **local IPC** (not VIVI's account-token gateway) | `utils/DiscordRPC.kt` (template idea `{song_name}`, `{artist_name}`) | Shares what you play; already in the backlog as opt-in | Local named-pipe IPC with our own app ID, off by default, a privacy note |
 | Y4 | **More lyrics sources** (Unison, BetterLyrics, KuGou, YouLyPlus, Genius…) | `lyrics/` providers + `LyricsProviderOrder` | Each is a new network destination; several are unofficial or have unclear terms | Per-source terms check, then the D-22 rules (opt-in, cache); a provider-order setting |
 | Y5 | **Parametric EQ / AutoEq import** per headset | `eq/ParametricEQParser.kt` | Ice doesn't own the audio stream; system-wide EQ needs an APO driver, and installing or editing one needs admin rights (§1.2) | Only as "export an Equalizer APO config file" for users who already run APO; otherwise park (plan.md already says "probably out of scope") |
 | Y6 | **Local listening history + yearly recap card** | listen history, `ShowWrappedCard` | Stores track titles on disk (media PII); new data to protect and clear | Opt-in, local only, retention + "Clear history" in Storage; pairs with the Auralys "share card" backlog idea |
 | Y7 | **Chinese pinyin** romanization | `LyricsRomanizeChinese` | Needs a character dictionary (MBs); licence and size to check | A decision on a bundled dictionary, like the kanji question in `docs/lyrics.md` §9 |
 | Y8 | **Notch size / density setting** | `DensityScale` | Fixed canvas (648 × 292) and native-pill twin sizes would both need to scale | A geometry spike first (both hosts, 100 / 150 %) |
-| Y9 | **"What's new" after an update** | `changelogscreen.kt` | Fine if the notes ship inside the app; not if fetched (R7) | Bundle the changelog with the release; show once |
+| Y9 | **"What's new" after an update** | `changelogscreen.kt` | Fine if the notes ship inside the app; not if fetched (D-11, §1.5) | Bundle the changelog with the release; show once |
 
-## Redline: not for Ice
+## Beyond Ice: the experimental Pandora app
 
-| # | Idea | VIVI reference | Why not |
-|---|---|---|---|
-| R1 | Playing / downloading YouTube Music ourselves | `innertube/`, `CipherDeobfuscator`, `PoTokenWebView`, `Sabr…`, `BotDetectionMitigator` | Works around YouTube's technical protections and terms; D-22 already rejected in-app playback |
-| R2 | Animated covers from Spotify / Apple Music / Tidal | `spotify/` (`api-partner…/pathfinder`, `open.spotify.com/api/token`, `spclient…/canvaz-cache`), `Motionartwork/` (embed tokens) | Private, undocumented APIs and silent network (§1.5). Our generated motion backdrop (D-25) stays the answer |
-| R3 | JioSaavn streaming | `jiosaavn/` (DES-decrypted media URLs) | Decrypting a service's protected URLs; the file forbids reuse outright |
-| R4 | Discord presence by logging in with the user's **account token** | `kizzy/` (`wss://gateway.discord.gg`, `Identify` with `token`) | A self-bot: against Discord's terms; would mean holding the user's account secret. Use Y3 instead |
-| R5 | "Recognise this song" | `recognition/`, `shazamkit/`, `cpp/vibrafp` | Records the microphone (§1.9), reverse-engineered fingerprint, private Shazam API |
-| R6 | Listen Together rooms | `listentogether/` (VIVI's servers) | Needs a relay server; outside D-05 and §1.5 (already rejected for the Auralys idea) |
-| R7 | OTA updater that downloads and installs; GitHub announcements; "star the repo" prompts | `vivimusicupdater`, `UpdateDownloadWorker`, `github/` | D-11: the update check is notify-only and never downloads; zero silent network; no nagging |
-| R8 | Online romanization through Google Translate | `LyricsRomanizationHelper` | Unofficial endpoint and lyric text leaving the PC; our offline Romaji (D-22) stays |
-| R9 | Copying any of its code | whole repo | GPL-3.0 + `rules.md` conditions + per-file reuse bans; Ice is MIT (D-24, §1.8) |
+The former redline list was removed on 2026-11-27 at the owner's request. Ideas that don't fit inside Ice itself
+(in-app YouTube Music playback, song recognition, playlist import, audio DSP) are now explored in **Pandora**, the
+experimental companion player in `pandora/` ([pandora.md](../pandora.md)). Ice stays standalone and keeps its own rules
+(§1.5 zero silent network, §1.9 microphone); Pandora talks to it only through the optional loopback bridge. VIVI's
+code is still never copied into either app (GPL-3.0; §1.8 reference-never-copy).
 
 **Not applicable** (Ice never plays the audio itself): crossfade, normalisation, tempo/pitch, skip-silence, queues,
 downloads, data saver, proxy, SponsorBlock segment skipping.
