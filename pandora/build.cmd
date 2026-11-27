@@ -21,11 +21,8 @@ where npm >nul 2>nul || (echo npm not found. Install Node.js 22 and try again. &
 
 echo.
 echo === [1/3] Pandora UI packages
-if exist "ui\node_modules\.package-lock.json" (
-    echo already installed
-) else (
-    call npm --prefix ui install --no-audit --no-fund || goto :fail
-)
+rem Always run: about a second when nothing changed, and it picks up packages added since the last build.
+call npm --prefix ui install --no-audit --no-fund || goto :fail
 
 echo.
 echo === [2/3] Pandora UI build
