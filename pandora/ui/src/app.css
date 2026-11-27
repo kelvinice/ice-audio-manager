@@ -119,111 +119,127 @@ input[type="checkbox"]:checked:active::after {
   *, *::before, *::after { animation-duration: 0s !important; animation-iteration-count: 1 !important; transition-duration: 0s !important; }
 }
 
-.btn-primary {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  background: linear-gradient(135deg, var(--p-accent-bright), var(--p-accent));
-  color: var(--p-on-accent);
-  font-size: 13px;
-  font-weight: 650;
-  letter-spacing: -0.01em;
-  padding: 9px 17px;
-  border-radius: 10px;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), 0 4px 16px var(--p-glow-1);
-  transition:
-    transform 0.15s cubic-bezier(0.22, 1, 0.36, 1),
-    filter 0.15s ease,
-    box-shadow 0.18s ease,
-    opacity 0.15s ease;
-}
-
-.btn-primary:hover {
-  filter: brightness(1.08);
-  transform: translateY(-1px);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.34), 0 6px 20px var(--p-glow-1);
-}
-
-.btn-primary:active {
-  transform: translateY(0) scale(0.97);
-}
-
-.btn-primary:disabled {
-  opacity: 0.42;
-  pointer-events: none;
-}
-
-.btn-ghost {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  background: var(--p-surface-solid);
-  border: 1px solid var(--p-border-strong);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
-  color: var(--p-text);
-  padding: 8px 15px;
-  border-radius: 10px;
-  font-size: 13px;
-  font-weight: 550;
-  letter-spacing: -0.005em;
-  transition:
-    transform 0.15s cubic-bezier(0.22, 1, 0.36, 1),
-    background 0.15s ease,
-    border-color 0.15s ease,
-    opacity 0.15s ease;
-}
-
-.btn-ghost:hover {
-  background: var(--p-fill);
-  border-color: var(--p-border-strong);
-  transform: translateY(-1px);
-}
-
-.btn-ghost:active {
-  transform: translateY(0) scale(0.97);
-}
-
-.btn-ghost:disabled {
-  opacity: 0.42;
-  pointer-events: none;
-}
-
+/* Buttons are solid fills: one accent primary per view, neutral secondaries, no gradients, glows or lifts. */
+.btn-primary,
+.btn-ghost,
 .btn-danger {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 7px;
-  padding: 8px 15px;
-  border-radius: 10px;
+  gap: 8px;
+  height: 36px;
+  padding: 0 18px;
+  border-radius: 999px;
   font-size: 13px;
-  font-weight: 600;
-  background: rgba(239, 68, 68, 0.14);
-  border: 1px solid rgba(239, 68, 68, 0.35);
+  font-weight: 650;
+  letter-spacing: -0.005em;
+  white-space: nowrap;
+  transition: background 0.14s ease, color 0.14s ease, transform 0.12s ease, opacity 0.14s ease;
+}
+
+.btn-primary {
+  background: var(--p-accent);
+  color: var(--p-on-accent);
+}
+
+.btn-primary:hover {
+  background: var(--p-accent-bright);
+}
+
+.btn-ghost {
+  background: var(--p-fill);
+  color: var(--p-text);
+}
+
+.btn-ghost:hover {
+  background: color-mix(in srgb, var(--p-text) 14%, var(--p-fill));
+}
+
+.btn-danger,
+.btn-ghost.danger {
+  background: color-mix(in srgb, var(--p-danger) 16%, var(--p-fill));
   color: var(--p-danger);
-  transition: transform 0.15s ease, background 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
 }
 
-.btn-danger:hover {
-  background: rgba(239, 68, 68, 0.24);
-  border-color: rgba(239, 68, 68, 0.55);
+.btn-danger:hover,
+.btn-ghost.danger:hover {
+  background: color-mix(in srgb, var(--p-danger) 26%, var(--p-fill));
 }
 
-.btn-danger:active {
-  transform: scale(0.97);
+.btn-primary:active,
+.btn-ghost:active,
+.btn-danger:active,
+.btn-icon:active,
+.btn-play:active {
+  transform: scale(0.96);
 }
 
-.btn-danger:disabled {
+.btn-primary:disabled,
+.btn-ghost:disabled,
+.btn-danger:disabled,
+.btn-icon:disabled,
+.btn-play:disabled {
   opacity: 0.42;
   pointer-events: none;
+}
+
+/* Round neutral icon button (36 px; .sm is 30 px, .bare has no fill until hovered). */
+.btn-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  background: var(--p-fill);
+  color: var(--p-text-muted);
+  transition: background 0.14s ease, color 0.14s ease, transform 0.12s ease;
+}
+
+.btn-icon:hover {
+  background: color-mix(in srgb, var(--p-text) 14%, var(--p-fill));
+  color: var(--p-text);
+}
+
+.btn-icon.sm {
+  width: 30px;
+  height: 30px;
+}
+
+.btn-icon.bare {
+  background: transparent;
+}
+
+.btn-icon.bare:hover {
+  background: var(--p-fill);
+}
+
+.btn-icon.on {
+  color: var(--p-accent-bright);
+}
+
+/* The big round play button of a page header. */
+.btn-play {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  background: var(--p-accent);
+  color: var(--p-on-accent);
+  transition: background 0.14s ease, transform 0.12s ease;
+}
+
+.btn-play:hover {
+  background: var(--p-accent-bright);
+  transform: scale(1.04);
 }
 
 .card-glass {
   background: var(--p-surface);
   border: 1px solid var(--p-border);
   border-radius: var(--p-radius);
-  backdrop-filter: blur(18px);
 }
 
 .pill-badge {

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onDestroy, onMount } from "svelte";
+  import CollectionView from "./components/CollectionView.svelte";
   import EqDrawer from "./components/EqDrawer.svelte";
   import HomeView from "./components/HomeView.svelte";
   import IceHubView from "./components/IceHubView.svelte";
@@ -39,14 +40,18 @@
     renamePlaylist,
     rescanLocalFolders,
     resetPandoraSettings,
+    saveCollection,
     savePandoraSettings,
     setIceModePref,
     toggleLikeTrack,
+    ytmCollection,
     ytmHome,
   } from "./lib/ipc";
+  import { formatCount, shuffled } from "./lib/format";
   import {
     DEFAULT_PANDORA_SETTINGS,
     type AppPaths,
+    type CollectionCard,
     type EngineSnapshot,
     type HomeFeed,
     type IceStatus,
@@ -61,6 +66,10 @@
     "liked" | "playlists" | "local" | "offline" | "history"
   >("liked");
   let selectedPlaylistId = $state<string | null>(null);
+  /** A feed playlist / album opened from Home (shown in place of the Home view). */
+  let openCollection = $state<CollectionCard | null>(null);
+  let downloading = $state(false);
+  let content: HTMLElement | undefined = $state();
   let showNowPlaying = $state(false);
   let showEq = $state(false);
   let playlistModalOpen = $state(false);
@@ -75,8 +84,8 @@
   let externalQuery = $state("");
   let externalQuerySeq = $state(0);
   let feed = $state<HomeFeed>({
+    shelves: [],
     quickPicks: [],
-    trending: [],
     offlineFallback: false,
     error: null,
   });
@@ -191,6 +200,64 @@
   function navigate(tab: NavTab, playlistId: string | null = null) {
     activeTab = tab;
     selectedPlaylistId = playlistId;
+    openCollection = null;
+  }
+
+  // Each page starts at the top, like a new screen.
+  $effect(() => {
+    void activeTab;
+    void selectedPlaylistId;
+    void openCollection;
+    content?.scrollTo({ top: 0 });
+  });
+
+  async function playCollection(card: CollectionCard) {
+    try {
+      const page = await ytmCollection(card.browseId);
+      if (page.tracks.length > 0) void audioEngine.playTrack(page.tracks[0], page.tracks);
+    } catch (e) {
+      showNotice(`Couldn't open "${card.title}": ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+
+  async function handleSaveCollection(name: string, tracks: Track[]) {
+    try {
+      const [next] = await saveCollection(name, tracks);
+      library = next;
+      showNotice(`Saved "${name}" to your library`);
+    } catch (e) {
+      showNotice(`Couldn't save: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+
+  async function downloadOne(track: Track) {
+    try {
+      library = await downloadTrackOffline(track);
+      showNotice(`Downloaded "${track.title}"`);
+    } catch (e) {
+      showNotice(`Couldn't download "${track.title}": ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+
+  /** Downloads one song at a time so playback and the feed keep their bandwidth. */
+  async function downloadAll(tracks: Track[]) {
+    if (downloading || tracks.length === 0) return;
+    downloading = true;
+    let failed = 0;
+    try {
+      for (const [i, track] of tracks.entries()) {
+        showNotice(`Downloading ${i + 1} of ${tracks.length}: ${track.title}`);
+        try {
+          library = await downloadTrackOffline(track);
+        } catch {
+          failed += 1;
+        }
+      }
+    } finally {
+      downloading = false;
+    }
+    const done = tracks.length - failed;
+    showNotice(failed > 0 ? `Downloaded ${formatCount(done, "song")}, ${failed} failed` : `Downloaded ${formatCount(done, "song")}`);
   }
 
   function openPlaylistModal(track: Track | null) {
@@ -256,8 +323,8 @@
 
   function playShuffled(list: Track[]) {
     if (list.length === 0) return;
-    const shuffled = [...list].sort(() => Math.random() - 0.5);
-    void audioEngine.playTrack(shuffled[0], shuffled);
+    const order = shuffled(list);
+    void audioEngine.playTrack(order[0], order);
   }
 
   async function handleUpdateSettings(patch: Partial<PandoraSettings>) {
@@ -314,7 +381,7 @@
       onOpenImportPlaylist={() => (importModalOpen = true)}
     />
 
-    <main class="content">
+    <main class="content" bind:this={content}>
       {#if $playerStore.error}
         <div class="toast-err">
           <span>{$playerStore.error}</span>
@@ -331,13 +398,29 @@
         <div class="toast-ok">{statusNotice}</div>
       {/if}
 
-      {#if activeTab === "home"}
+      {#if activeTab === "home" && openCollection}
+        <CollectionView
+          card={openCollection}
+          {likedIds}
+          {cachedIds}
+          currentTrackId={$playerStore.currentTrack?.id ?? null}
+          isPlaying={$playerStore.playing}
+          {proxyPort}
+          onBack={() => (openCollection = null)}
+          onPlay={(track, list) => void audioEngine.playTrack(track, list)}
+          onPlayShuffled={playShuffled}
+          onToggleLike={(track) => void handleToggleLike(track)}
+          onAddToPlaylist={(track) => openPlaylistModal(track)}
+          onDownload={(track) => void downloadOne(track)}
+          onDownloadAll={(tracks) => void downloadAll(tracks)}
+          onSave={(name, tracks) => void handleSaveCollection(name, tracks)}
+        />
+      {:else if activeTab === "home"}
         <HomeView
           {feed}
           loading={feedLoading}
           {demoMode}
           history={library.history}
-          favorites={library.liked}
           {likedIds}
           currentTrackId={$playerStore.currentTrack?.id ?? null}
           isPlaying={$playerStore.playing}
@@ -345,8 +428,9 @@
           onPlay={(track, list) => void audioEngine.playTrack(track, list)}
           onToggleLike={(track) => void handleToggleLike(track)}
           onOpenPlaylistPicker={(track) => openPlaylistModal(track)}
+          onOpenCollection={(card) => (openCollection = card)}
+          onPlayCollection={(card) => void playCollection(card)}
           onRefresh={() => void refreshHome()}
-          onGoSearch={() => navigate("search")}
           onOpenLocal={() => {
             libraryInitialTab = "local";
             navigate("library");
@@ -393,9 +477,14 @@
           {selectedPlaylistId}
           tab={libraryInitialTab}
           {likedIds}
+          {cachedIds}
           currentTrackId={$playerStore.currentTrack?.id ?? null}
+          isPlaying={$playerStore.playing}
           {proxyPort}
-          onTabChange={(nextTab) => (libraryInitialTab = nextTab)}
+          onTabChange={(nextTab) => {
+            libraryInitialTab = nextTab;
+            selectedPlaylistId = null;
+          }}
           onPlay={(track, list) => void audioEngine.playTrack(track, list)}
           onPlayShuffled={playShuffled}
           onToggleLike={(track) => void handleToggleLike(track)}
@@ -416,6 +505,8 @@
               .then((next) => (library = next))
               .catch(() => {});
           }}
+          onDownload={(track) => void downloadOne(track)}
+          onDownloadAll={(tracks) => void downloadAll(tracks)}
           onDeleteCached={(id) => {
             void deleteCachedTrack(id)
               .then((next) => (library = next))
@@ -426,7 +517,10 @@
               .then((next) => (library = next))
               .catch(() => {});
           }}
-          onSelectPlaylist={(id) => navigate("library", id)}
+          onSelectPlaylist={(id) => {
+            if (id === null) libraryInitialTab = "playlists";
+            navigate("library", id);
+          }}
           onOpenNewPlaylist={() => openPlaylistModal(null)}
           onOpenImportPlaylist={() => (importModalOpen = true)}
           onOpenPlaylistPicker={(track) => openPlaylistModal(track)}

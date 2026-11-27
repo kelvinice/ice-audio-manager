@@ -3,6 +3,7 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import {
   DEFAULT_PANDORA_SETTINGS,
   type AppPaths,
+  type CollectionPage,
   type EngineSnapshot,
   type EqState,
   type HomeFeed,
@@ -48,9 +49,27 @@ export async function isDemoMode(): Promise<boolean> {
 
 export function ytmHome(): Promise<HomeFeed> {
   if (!inTauri) {
-    return Promise.resolve({ quickPicks: [], trending: [], offlineFallback: true, error: null });
+    return Promise.resolve({ shelves: [], quickPicks: [], offlineFallback: true, error: null });
   }
   return call<HomeFeed>("ytm_home");
+}
+
+export function ytmCollection(browseId: string): Promise<CollectionPage> {
+  return call<CollectionPage>("ytm_collection", { browseId });
+}
+
+/** Saves tracks as a new library playlist; resolves to the library and the new playlist id. */
+export function saveCollection(name: string, tracks: Track[]): Promise<[LibraryState, string]> {
+  return call<[LibraryState, string]>("save_collection", { name, tracks });
+}
+
+export function artworkCacheBytes(): Promise<number> {
+  if (!inTauri) return Promise.resolve(0);
+  return call<number>("artwork_cache_bytes");
+}
+
+export function clearArtworkCache(): Promise<number> {
+  return call<number>("clear_artwork_cache");
 }
 
 export function ytmSearch(query: string, filter = "songs"): Promise<SearchResponse> {

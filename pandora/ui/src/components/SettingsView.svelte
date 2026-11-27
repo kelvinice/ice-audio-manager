@@ -1,6 +1,9 @@
 <script lang="ts">
   import { audioEngine } from "../lib/audio";
+  import { formatMb } from "../lib/format";
   import {
+    artworkCacheBytes,
+    clearArtworkCache,
     launchIceStandalone,
     openIceSettings,
     pingIceBridge,
@@ -59,6 +62,24 @@
 
   let defaultPlayback = $derived(iceSnapshot?.playback.find((d) => d.isDefault));
   let cacheMb = $derived((library.cacheBytes / (1024 * 1024)).toFixed(1));
+  const ARTWORK_BUDGETS = [0, 128, 256, 512, 1024];
+  let artworkBytes = $state(0);
+
+  $effect(() => {
+    if (section !== "Storage") return;
+    void artworkCacheBytes().then((bytes) => (artworkBytes = bytes)).catch(() => {});
+  });
+
+  async function clearArtwork() {
+    try {
+      const freed = await clearArtworkCache();
+      artworkBytes = 0;
+      onNotify(`Cleared ${formatMb(freed)} of artwork`);
+    } catch (e) {
+      onNotify(e instanceof Error ? e.message : String(e));
+    }
+  }
+
   let startupVolPct = $derived(Math.round((settings.defaultVolume ?? 0.85) * 100));
 
   let bridgeLabel = $derived(
@@ -449,12 +470,35 @@
       </div>
     </div>
 
+    <div class="toggle-row">
+      <div>
+        <div class="row-title">Artwork cache</div>
+        <div class="row-sub">
+          Covers are saved on disk by a hash of their address, so lists open instantly and work offline.
+          Using {formatMb(artworkBytes)}; the oldest covers make room when it is full.
+        </div>
+      </div>
+      <div class="mini-actions">
+        <select
+          aria-label="Artwork cache size"
+          value={settings.artworkCacheMb}
+          onchange={(e) => onUpdateSettings({ artworkCacheMb: Number((e.target as HTMLSelectElement).value) })}
+        >
+          {#each ARTWORK_BUDGETS as mb (mb)}
+            <option value={mb}>{mb === 0 ? "Off" : mb >= 1024 ? `${mb / 1024} GB` : `${mb} MB`}</option>
+          {/each}
+        </select>
+        <button class="btn-ghost" disabled={artworkBytes === 0} onclick={() => void clearArtwork()}>Clear</button>
+      </div>
+    </div>
+
     {#if appPaths}
       <details class="diag-details">
         <summary>File Locations</summary>
         <div class="paths-grid">
           <div><span>Library:</span> <code>{appPaths.libraryPath}</code></div>
           <div><span>Cache:</span> <code>{appPaths.cacheDir}</code></div>
+          <div><span>Artwork:</span> <code>{appPaths.artworkDir}</code></div>
           <div><span>Ice Config:</span> <code>{appPaths.iceConfigPath}</code></div>
           <div><span>Bridge Info:</span> <code>{appPaths.iceBridgePath}</code></div>
         </div>
@@ -465,6 +509,16 @@
 </div>
 
 <style>
+  select {
+    height: 34px;
+    padding: 0 12px;
+    border-radius: 999px;
+    border: none;
+    background: var(--p-fill);
+    font-size: 13px;
+    font-weight: 600;
+  }
+
   .page {
     padding: 24px 28px 40px;
     display: flex;

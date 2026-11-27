@@ -41,6 +41,9 @@
     | "folder"
     | "link"
     | "arrow-left"
+    | "chevron-left"
+    | "chevron-right"
+    | "more"
     | "sparkles";
 
   interface Props {
@@ -233,6 +236,14 @@
   {:else if name === "arrow-left"}
     <path d="m12 19-7-7 7-7" />
     <path d="M19 12H5" />
+  {:else if name === "chevron-left"}
+    <path d="m15 18-6-6 6-6" />
+  {:else if name === "chevron-right"}
+    <path d="m9 18 6-6-6-6" />
+  {:else if name === "more"}
+    <circle cx="5" cy="12" r="1.6" fill="currentColor" stroke="none" />
+    <circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none" />
+    <circle cx="19" cy="12" r="1.6" fill="currentColor" stroke="none" />
   {:else if name === "sparkles"}
     <path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z" />
   {/if}

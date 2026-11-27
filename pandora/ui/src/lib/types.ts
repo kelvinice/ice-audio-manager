@@ -24,10 +24,33 @@ export interface Playlist {
 }
 
 export interface HomeFeed {
+  /** Shelves in YouTube Music's order: song rows (Quick picks) and playlist / album rows. */
+  shelves: HomeShelf[];
+  /** Every song across the shelves. */
   quickPicks: Track[];
-  trending: Track[];
   offlineFallback: boolean;
   error: string | null;
+}
+
+export interface HomeShelf {
+  title: string;
+  strapline: string | null;
+  tracks: Track[];
+  collections: CollectionCard[];
+}
+
+export type CollectionKind = "playlist" | "album" | "artist";
+
+export interface CollectionCard {
+  browseId: string;
+  kind: CollectionKind;
+  title: string;
+  subtitle: string;
+  artworkUrl: string | null;
+}
+
+export interface CollectionPage extends CollectionCard {
+  tracks: Track[];
 }
 
 export interface SearchResponse {
@@ -96,6 +119,8 @@ export interface PandoraSettings {
   wavyProgress: boolean;
   spinningCover: boolean;
   closeToTray: boolean;
+  /** Disk budget for cached artwork in MiB; 0 keeps artwork in memory only. */
+  artworkCacheMb: number;
 }
 
 export const DEFAULT_PANDORA_SETTINGS: PandoraSettings = {
@@ -111,11 +136,13 @@ export const DEFAULT_PANDORA_SETTINGS: PandoraSettings = {
   wavyProgress: true,
   spinningCover: false,
   closeToTray: false,
+  artworkCacheMb: 256,
 };
 
 export interface AppPaths {
   libraryPath: string;
   cacheDir: string;
+  artworkDir: string;
   iceConfigPath: string;
   iceBridgePath: string;
 }
