@@ -62,6 +62,12 @@ bypasses close-to-tray), Back / Forward over the route history in `App.svelte` (
 minimize / maximize / close. Empty bar space carries `data-tauri-drag-region`; the window permissions are in
 `capabilities/default.json`.
 
+## Queue panel
+
+`QueuePanel.svelte` is the right-hand panel the player bar's queue button opens and closes: Queue (now playing, then
+the rest of `playerStore.queue`, click to play, remove on hover) and Recently played (`library.history`). Whether it is open
+is a per-machine view preference in `localStorage` (`pandora.queuePanelOpen`).
+
 ## Audio quality (not offered)
 
 Pandora streams the ANDROID client's muxed file. Audio-only formats from every client tried (ANDROID, ANDROID_VR,
@@ -75,6 +81,7 @@ and lyrics for visual checks. See the [Pandora guide](../pandora.md) for launch 
 
 ## Change log
 
+- 2026-11-27 · Right-hand `QueuePanel` (Queue / Recently played) toggled from the player bar.
 - 2026-11-27 · Shared `SeekBar` (Ice-style rail / wave); log-band spectrum; Now Playing lyrics without sideways scroll;
   bare icon buttons with a dark `.solid` variant, translucent `btn-ghost`, collapse / icon close buttons.
 - 2026-11-27 · Sidebar as two panels (navigation; "Your Library" with pinned Favorites / Downloads and playlist covers) on

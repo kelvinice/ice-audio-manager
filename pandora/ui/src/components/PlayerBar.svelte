@@ -13,6 +13,8 @@
     wavyProgress?: boolean;
     onOpenNowPlaying: () => void;
     onOpenEq: () => void;
+    queueOpen: boolean;
+    onToggleQueue: () => void;
     onToggleLike: (track: Track) => void;
     onAddToPlaylist: (track: Track) => void;
   }
@@ -24,6 +26,8 @@
     wavyProgress = true,
     onOpenNowPlaying,
     onOpenEq,
+    queueOpen,
+    onToggleQueue,
     onToggleLike,
     onAddToPlaylist,
   }: Props = $props();
@@ -151,6 +155,18 @@
   </div>
 
   <div class="right">
+    <button
+      class="dock-icon"
+      class:lit={queueOpen}
+      title={queueOpen ? "Hide queue" : "Show queue"}
+      aria-label="Queue"
+      aria-pressed={queueOpen}
+      onclick={onToggleQueue}
+    >
+      <Icon name="queue" size={17} />
+      {#if queueOpen}<span class="dot"></span>{/if}
+    </button>
+
     <button
       class="dock-icon"
       title="Lyrics & Now Playing"

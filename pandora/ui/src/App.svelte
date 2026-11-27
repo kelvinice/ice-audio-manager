@@ -10,6 +10,7 @@
   import NowPlayingOverlay from "./components/NowPlayingOverlay.svelte";
   import PlayerBar from "./components/PlayerBar.svelte";
   import PlaylistModal from "./components/PlaylistModal.svelte";
+  import QueuePanel from "./components/QueuePanel.svelte";
   import RecognizeView from "./components/RecognizeView.svelte";
   import SearchView from "./components/SearchView.svelte";
   import SettingsView from "./components/SettingsView.svelte";
@@ -73,6 +74,26 @@
   let content: HTMLElement | undefined = $state();
   let showNowPlaying = $state(false);
   let showEq = $state(false);
+  /** The right-hand queue panel; remembered on this machine (a view preference, not library data). */
+  const QUEUE_OPEN_KEY = "pandora.queuePanelOpen";
+  let queueOpen = $state(readFlag(QUEUE_OPEN_KEY));
+
+  function readFlag(key: string): boolean {
+    try {
+      return localStorage.getItem(key) === "1";
+    } catch {
+      return false;
+    }
+  }
+
+  function toggleQueue() {
+    queueOpen = !queueOpen;
+    try {
+      localStorage.setItem(QUEUE_OPEN_KEY, queueOpen ? "1" : "0");
+    } catch {
+      // Storage can be unavailable; the panel still toggles for this session.
+    }
+  }
   let playlistModalOpen = $state(false);
   let playlistModalTrack = $state<Track | null>(null);
   let importModalOpen = $state(false);
@@ -488,7 +509,7 @@
       onOpenImportPlaylist={() => (importModalOpen = true)}
     />
 
-    <main class="content" bind:this={content}>
+    <main class="content" class:beside-panel={queueOpen} bind:this={content}>
       {#if $playerStore.error}
         <div class="toast-err">
           <span>{$playerStore.error}</span>
@@ -683,6 +704,10 @@
         />
       {/if}
     </main>
+
+    {#if queueOpen}
+      <QueuePanel history={library.history} {proxyPort} onClose={toggleQueue} />
+    {/if}
   </div>
 
   <PlayerBar
@@ -692,6 +717,8 @@
     wavyProgress={library.settings.wavyProgress}
     onOpenNowPlaying={() => (showNowPlaying = true)}
     onOpenEq={() => (showEq = true)}
+    {queueOpen}
+    onToggleQueue={toggleQueue}
     onToggleLike={(track) => void handleToggleLike(track)}
     onAddToPlaylist={(track) => openPlaylistModal(track)}
   />
@@ -768,6 +795,11 @@
     margin: 0 8px 8px 0;
     border-radius: 10px;
     background: radial-gradient(ellipse at 72% -30%, var(--p-glow-1), transparent 55%), var(--p-bg);
+  }
+
+  /* The queue panel brings its own right margin; the 8 px gap separates them. */
+  .content.beside-panel {
+    margin-right: 0;
   }
 
   .toast-err {

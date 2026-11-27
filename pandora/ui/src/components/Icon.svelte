@@ -44,6 +44,7 @@
     | "chevron-left"
     | "chevron-right"
     | "more"
+    | "queue"
     | "collapse"
     | "expand"
     | "win-min"
@@ -262,6 +263,10 @@
     <path d="M9 21H3v-6" />
     <path d="m21 3-7 7" />
     <path d="m3 21 7-7" />
+  {:else if name === "queue"}
+    <path d="M4 5h16" />
+    <path d="M4 10h16" />
+    <rect x="4" y="14.5" width="16" height="5.5" rx="1.5" />
   {:else if name === "more"}
     <circle cx="5" cy="12" r="1.6" fill="currentColor" stroke="none" />
     <circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none" />
