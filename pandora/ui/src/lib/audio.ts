@@ -229,9 +229,10 @@ class PandoraAudioEngine {
     compressor.release.value = 0.25;
 
     const analyser = ctx.createAnalyser();
-    // 1024 points gives ~43 Hz bins, enough to spread the visualizer's bars across bass, mids and treble.
-    analyser.fftSize = 1024;
-    analyser.smoothingTimeConstant = 0.72;
+    // 4096 points gives ~12 Hz bins, so the narrow bass bars read different bins (getSpectrumDb interpolates the
+    // rest); less frame smoothing than before keeps the longer window just as punchy.
+    analyser.fftSize = 4096;
+    analyser.smoothingTimeConstant = 0.6;
 
     const gain = ctx.createGain();
     const st = get(playerStore);
@@ -611,23 +612,30 @@ class PandoraAudioEngine {
   }
 
   /**
-   * Fills `out` with the loudest bin (dB) of `count` log-spaced bands from ~45 Hz to ~15 kHz, so each bar covers an
-   * equal musical range. Shaping into bar heights is `lib/spectrum.ts`. Returns false (nothing written) while paused.
+   * Fills `out` with one dB level for each of `count` log-spaced bands from ~55 Hz to ~15 kHz, so each bar covers an
+   * equal musical range: the loudest bin when a band spans two or more bins, otherwise the level interpolated at the
+   * band's centre. (Low bands are narrower than a bin; reading whole bins made neighbouring bass bars identical.)
+   * Shaping into bar heights is `lib/spectrum.ts`. Returns false (nothing written) while paused.
    */
   getSpectrumDb(count: number, out: Float32Array): boolean {
     if (!this.analyser || !this.freqBuf || !get(playerStore).playing) return false;
     this.analyser.getFloatFrequencyData(this.freqBuf);
-    const bins = this.freqBuf.length;
-    const nyquist = this.analyser.context.sampleRate / 2;
-    const lo = 45;
-    const hi = Math.min(15_000, nyquist);
+    const buf = this.freqBuf;
+    const bins = buf.length;
+    const binHz = this.analyser.context.sampleRate / 2 / bins;
+    const lo = 55;
+    const hi = Math.min(15_000, (bins - 1) * binHz);
     for (let i = 0; i < count; i++) {
-      const f0 = lo * (hi / lo) ** (i / count);
-      const f1 = lo * (hi / lo) ** ((i + 1) / count);
-      const first = Math.min(bins - 1, Math.floor((f0 / nyquist) * bins));
-      const last = Math.min(bins, Math.max(first + 1, Math.ceil((f1 / nyquist) * bins)));
+      const b0 = (lo * (hi / lo) ** (i / count)) / binHz;
+      const b1 = (lo * (hi / lo) ** ((i + 1) / count)) / binHz;
+      if (b1 - b0 < 2) {
+        const at = Math.min(bins - 1.001, Math.sqrt(b0 * b1));
+        const j = Math.floor(at);
+        out[i] = buf[j] + (buf[j + 1] - buf[j]) * (at - j);
+        continue;
+      }
       let peak = -Infinity;
-      for (let j = first; j < last; j++) peak = Math.max(peak, this.freqBuf[j]);
+      for (let j = Math.ceil(b0); j <= Math.min(bins - 1, Math.floor(b1)); j++) peak = Math.max(peak, buf[j]);
       out[i] = peak;
     }
     return true;

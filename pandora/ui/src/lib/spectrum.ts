@@ -3,9 +3,17 @@
 // Pandora's Now Playing bars use the same shaping as Ice's notch pill so the two move alike; Ice reads WASAPI band
 // levels, Pandora reads Web Audio FFT bins (dB), so the gate and presence floors below sit lower.
 
-/** Treble lift: music carries less energy up high, so without it the right half barely moves. */
+/**
+ * Treble lift: music carries less energy up high, so without it the right half barely moves. The tilt starts below
+ * zero so the loud bass bars on the left don't sit near the top all the time (Pandora only; FFT bass is hotter than
+ * Ice's WASAPI bands).
+ */
 const TILT_DB_PER_OCTAVE = 3.2;
+const BASS_TRIM_DB = -8;
 const MAX_TILT_DB = 22;
+/** The lowest bars reach at most this height, opening to full height over the first `BASS_REACH_SPAN` of the bars. */
+const BASS_REACH = 0.72;
+const BASS_REACH_SPAN = 0.3;
 /** Band level (FFT bin dB) at or below which a bar stays at rest, ramping to fully open over the span. */
 const GATE_FLOOR_DB = -86;
 const GATE_SPAN_DB = 16;
@@ -99,17 +107,22 @@ export class SpectrumShaper {
   private springs: Spring[] = [];
   private tilts: number[] = [];
   private masses: number[] = [];
+  private reach: number[] = [];
   private out: number[] = [];
 
   private resize(count: number): void {
     if (this.springs.length === count) return;
-    const octaves = Math.log2(15_000 / 45);
+    const octaves = Math.log2(15_000 / 55);
     this.bands = Array.from({ length: count }, () => new Band());
     this.springs = Array.from({ length: count }, () => new Spring());
     this.tilts = Array.from({ length: count }, (_, i) =>
-      Math.min(MAX_TILT_DB, ((i / Math.max(1, count - 1)) * octaves) * TILT_DB_PER_OCTAVE),
+      Math.min(MAX_TILT_DB, BASS_TRIM_DB + (i / Math.max(1, count - 1)) * octaves * TILT_DB_PER_OCTAVE),
     );
     this.masses = Array.from({ length: count }, (_, i) => 1.25 - 0.5 * (i / Math.max(1, count - 1)));
+    this.reach = Array.from({ length: count }, (_, i) => {
+      const x = Math.min(1, i / Math.max(1, count - 1) / BASS_REACH_SPAN);
+      return BASS_REACH + (1 - BASS_REACH) * x;
+    });
     this.out = new Array(count).fill(0);
   }
 
@@ -121,7 +134,7 @@ export class SpectrumShaper {
     this.resize(count);
     let moving = false;
     for (let i = 0; i < count; i++) {
-      const target = db ? this.bands[i].update(db[i], this.tilts[i], dt) : 0;
+      const target = db ? this.bands[i].update(db[i], this.tilts[i], dt) * this.reach[i] : 0;
       if (!db) this.bands[i].reset();
       if (this.springs[i].step(target, this.masses[i], dt)) moving = true;
       const rest = REST_LEVEL * REST_TEXTURE[i % REST_TEXTURE.length];

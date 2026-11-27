@@ -98,6 +98,8 @@ Playback itself (the `<audio>` element, EQ, spectrum) is in the UI's Web Audio g
 
 ## Change log
 
+- 2026-11-28 · Spectrum: the bass bars no longer move as one block (4096-point FFT, centre interpolation for narrow
+  bands) and sit lower (bass trim, 72 % reach); the wavy seek bar's head is a round dot instead of an upright pill.
 - 2026-11-27 · Module doc split into this folder (README + area docs).
 - 2026-11-27 · Rain reveals words sooner (`quickenWords`: 55 % of each word's delay, ≤ 260 ms per word) with a quicker
   drop, since word timings are mostly estimated and lagged the voice.

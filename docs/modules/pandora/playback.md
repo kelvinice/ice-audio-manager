@@ -40,11 +40,13 @@ presets, sound toggles, speed, sleep timer, AutoEq import.
 
 Follows Ice's notch scrubber: one pointer slider with keyboard steps, a rail that thickens on hover, and with
 `wavyProgress` a travelling wave on the played part (`wave.ts`, Twin of `app/ui/src/lib/notch/waves.ts`), animated at
-most 30 Hz while playing.
+most 30 Hz while playing, with a round accent dot at the play head (always shown with the wave; on hover otherwise).
 
 ## Now Playing (`NowPlayingOverlay`, `NowPlayingBackdrop`)
 
 Cover (optionally spinning), title, transport, lyrics column. Backdrop: blurred cover + tint; with Animated Backdrop,
-art-coloured orbs (`--art-*`) circle slowly and pause with the song. Spectrum: 1024-point FFT bands spaced
-logarithmically (`getSpectrumDb`), shaped by `lib/spectrum.ts` (Twin of Ice's `beat.ts` / `visualizer.ts`: per-band
-range, tilt, gate, springs, resting texture), drawn DPR-sharp at 30 Hz while playing, all in the accent colour.
+art-coloured orbs (`--art-*`) circle slowly and pause with the song. Spectrum: a 4096-point FFT (~12 Hz bins) read as
+log-spaced bands from 55 Hz to 15 kHz (`getSpectrumDb`; bands narrower than two bins interpolate at their centre, so
+bass bars don't move in lockstep), shaped by `lib/spectrum.ts` (Twin of Ice's `beat.ts` / `visualizer.ts`: per-band
+range, tilt, gate, springs, resting texture; Pandora adds an −8 dB bass trim and caps the lowest bars at 72 % height,
+opening to full over the first 30 % of bars), drawn DPR-sharp at 30 Hz while playing, all in the accent colour.
