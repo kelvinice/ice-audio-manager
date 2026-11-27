@@ -109,6 +109,7 @@ and lyrics for visual checks. See the [Pandora guide](../pandora.md) for launch 
 
 ## Change log
 
+- 2026-11-27 · Spectrum bars are all accent again (owner: no progress colouring; the seek bar shows progress).
 - 2026-11-27 · Spectrum shaped like the Ice pill (`lib/spectrum.ts`, Twin of `beat.ts` / `visualizer.ts`: per-band AGC, tilt, gate,
   springs, resting texture, progress colouring); `HeartButton` (pop, ring and sparks on like; `--p-love`); Romaji fixed (lyrics
   fetch joins a COM STA so kanji are read) and shown in every lyric style; TrackTable download slot always present.

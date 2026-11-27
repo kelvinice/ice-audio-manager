@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { get } from "svelte/store";
   import { audioEngine, playerStore } from "../lib/audio";
   import { SpectrumShaper } from "../lib/spectrum";
   import { resolveArtworkUrl } from "../lib/theme";
@@ -109,20 +108,15 @@
   });
 
   // Spectrum, shaped like Ice's notch pill (`lib/spectrum.ts`): thin round bars grown from the middle, each band on
-  // its own automatic range and spring, a low textured resting line when quiet. Bars up to the playback position
-  // are in the accent colour, the rest dimmed, so the bars double as progress. At most 30 Hz, only while playing
+  // its own automatic range and spring, a low textured resting line when quiet, all in the accent colour
+  // (the seek bar below shows progress). At most 30 Hz, only while playing
   // and shown; after a pause it runs just until the bars have settled onto the resting line.
   const SPECTRUM_FRAME_MS = 1000 / 30;
   const shaper = new SpectrumShaper();
   let bandDb = new Float32Array(48);
-  /** Repaints the progress colouring while paused, in 1 % steps (cheap: the loop restarts, the springs persist). */
-  let progressStep = $derived(
-    $playerStore.durationMs > 0 ? Math.round(($playerStore.currentTimeMs / $playerStore.durationMs) * 100) : 0,
-  );
 
   $effect(() => {
     const canvas = canvasEl;
-    void progressStep;
     if (!open || !canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
@@ -130,12 +124,9 @@
     let frame = 0;
     let lastPaint = 0;
     let accent = "";
-    let dim = "";
 
     function readColors() {
-      const cs = getComputedStyle(canvas!);
-      accent = cs.color;
-      dim = cs.getPropertyValue("--p-text").trim() || "#ffffff";
+      accent = getComputedStyle(canvas!).color;
     }
 
     function paint(dt: number): boolean {
@@ -154,17 +145,14 @@
       if (bandDb.length < count) bandDb = new Float32Array(count);
       const hasAudio = live && audioEngine.getSpectrumDb(count, bandDb);
       const { levels, moving } = shaper.step(hasAudio ? bandDb : null, count, dt);
-      const st = get(playerStore);
-      const played = st.durationMs > 0 ? Math.round((st.currentTimeMs / st.durationMs) * count) : 0;
       const x0 = Math.round((width - (count * barW + (count - 1) * gap)) / 2);
       const mid = height / 2;
       ctx.clearRect(0, 0, width, height);
+      ctx.fillStyle = accent;
       for (let i = 0; i < count; i++) {
         const level = levels[i];
         const h = Math.max(barW, height * (0.08 + 0.92 * level));
-        const isPlayed = i < played;
-        ctx.fillStyle = isPlayed ? accent : dim;
-        ctx.globalAlpha = isPlayed ? 0.55 + 0.45 * level : 0.2 + 0.3 * level;
+        ctx.globalAlpha = 0.55 + 0.45 * level;
         ctx.beginPath();
         ctx.roundRect(x0 + i * (barW + gap), mid - h / 2, barW, h, barW / 2);
         ctx.fill();
