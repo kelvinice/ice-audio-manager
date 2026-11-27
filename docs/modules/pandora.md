@@ -92,8 +92,8 @@ endpoint form factor).
 
 ## Lyric styles
 
-Now Playing offers Default, Fisheye (`LyricsFisheye.svelte`) and Rain (`LyricsRain.svelte`), saved as `settings.lyricsStyle`
-(Rust `LyricsStyle`, unknown values read as Default). Word timings come from `lib/lyricWords.ts`. Design notes and the plan
+Now Playing offers Default, Fisheye (`LyricsFisheye.svelte`) and Rain (`LyricsRain.svelte`), saved as `settings.lyricsStyle` and chosen from the lyrics
+icon in Now Playing's top bar (a `MoreMenu` with checked items and hints) (Rust `LyricsStyle`, unknown values read as Default). Word timings come from `lib/lyricWords.ts`. Design notes and the plan
 for Branches and Pulse reveal: [Pandora lyric styles](../pandora-lyric-styles.md).
 
 ## Audio quality (not offered)
@@ -109,6 +109,8 @@ and lyrics for visual checks. See the [Pandora guide](../pandora.md) for launch 
 
 ## Change log
 
+- 2026-11-27 · Lyric style picker moved to an icon menu beside the animated-background toggle; `MoreMenu` gains `checked`,
+  `hint`, `heading` and `active`.
 - 2026-11-27 · Lyric styles: Default, Fisheye, Rain (`lyricsStyle` setting, picker in the lyrics header); plan for Branches and
   Pulse reveal in `docs/pandora-lyric-styles.md`.
 - 2026-11-27 · Figtree font; equalizer sheet rebuilt (`EqBand`, response curve, no sideways scroll); `VolumeControl` and

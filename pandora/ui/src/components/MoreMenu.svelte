@@ -4,9 +4,13 @@
 
   interface MenuItem {
     label: string;
-    icon: ComponentProps<typeof Icon>["name"];
+    icon?: ComponentProps<typeof Icon>["name"];
     danger?: boolean;
     disabled?: boolean;
+    /** Set on choice lists: the item is a radio and the chosen one gets a check. */
+    checked?: boolean;
+    /** A short second line under the label. */
+    hint?: string;
     onSelect: () => void;
   }
 
@@ -19,9 +23,14 @@
     buttonClass?: string;
     /** Which edge of the trigger the menu lines up with. */
     align?: "left" | "right";
+    /** Small title above the items. */
+    heading?: string;
+    /** Marks the trigger as switched on (accent colour). */
+    active?: boolean;
   }
 
-  let { items, label = "More options", icon = "more", buttonClass = "btn-icon", align = "left" }: Props = $props();
+  let { items, label = "More options", icon = "more", buttonClass = "btn-icon", align = "left", heading, active = false }: Props =
+    $props();
   let open = $state(false);
   let root: HTMLDivElement | undefined = $state();
 
@@ -33,23 +42,37 @@
 <svelte:window onclick={onWindowClick} onkeydown={(e) => e.key === "Escape" && (open = false)} />
 
 <div class="more" bind:this={root}>
-  <button class={buttonClass} aria-label={label} title={label} aria-expanded={open} onclick={() => (open = !open)}>
-    <Icon name={icon} size={icon === "more" ? 20 : 16} />
+  <button
+    class={buttonClass}
+    class:on={active}
+    aria-label={label}
+    title={label}
+    aria-expanded={open}
+    onclick={() => (open = !open)}
+  >
+    <Icon name={icon} size={icon === "more" ? 20 : 17} />
   </button>
   {#if open}
-    <div class="menu" class:right={align === "right"} role="menu">
+    <div class="menu" class:right={align === "right"} role="menu" aria-label={heading ?? label}>
+      {#if heading}<div class="heading">{heading}</div>{/if}
       {#each items as item (item.label)}
         <button
-          role="menuitem"
+          role={item.checked === undefined ? "menuitem" : "menuitemradio"}
+          aria-checked={item.checked}
           class:danger={item.danger}
+          class:checked={item.checked}
           disabled={item.disabled}
           onclick={() => {
             open = false;
             item.onSelect();
           }}
         >
-          <Icon name={item.icon} size={15} />
-          <span>{item.label}</span>
+          {#if item.icon}<Icon name={item.icon} size={15} />{/if}
+          <span class="text">
+            <span>{item.label}</span>
+            {#if item.hint}<span class="hint">{item.hint}</span>{/if}
+          </span>
+          {#if item.checked}<Icon name="check" size={15} />{/if}
         </button>
       {/each}
     </div>
@@ -104,5 +127,32 @@
 
   .menu button.danger {
     color: var(--p-danger);
+  }
+
+  .menu button.checked {
+    color: var(--p-accent-bright);
+  }
+
+  .heading {
+    padding: 6px 10px 8px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--p-text-dim);
+  }
+
+  .text {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .hint {
+    font-size: 11.5px;
+    font-weight: 500;
+    color: var(--p-text-dim);
   }
 </style>

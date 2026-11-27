@@ -5,6 +5,7 @@
   import Icon from "./Icon.svelte";
   import LyricsFisheye from "./LyricsFisheye.svelte";
   import LyricsRain from "./LyricsRain.svelte";
+  import MoreMenu from "./MoreMenu.svelte";
   import NowPlayingBackdrop from "./NowPlayingBackdrop.svelte";
   import SeekBar from "./SeekBar.svelte";
 
@@ -44,10 +45,10 @@
 
   let rightTab = $state<"lyrics" | "queue">("lyrics");
 
-  const LYRIC_STYLES: { id: LyricsStyle; label: string }[] = [
-    { id: "default", label: "Default" },
-    { id: "fisheye", label: "Fisheye" },
-    { id: "rain", label: "Rain" },
+  const LYRIC_STYLES: { id: LyricsStyle; label: string; hint: string }[] = [
+    { id: "default", label: "Default", hint: "Scrolling list" },
+    { id: "fisheye", label: "Fisheye", hint: "A lens on the current line" },
+    { id: "rain", label: "Rain", hint: "Letters drop in and fall away" },
   ];
   let canvasEl = $state<HTMLCanvasElement | null>(null);
   let lyricsContainer = $state<HTMLDivElement | null>(null);
@@ -183,6 +184,19 @@
     <div class="top-bar">
       <span class="top-label">Now playing</span>
       <div class="top-actions">
+        <MoreMenu
+          label={`Lyric style: ${LYRIC_STYLES.find((s) => s.id === lyricsStyle)?.label ?? "Default"}`}
+          heading="Lyric style"
+          icon="lyrics"
+          align="right"
+          active={lyricsStyle !== "default"}
+          items={LYRIC_STYLES.map((style) => ({
+            label: style.label,
+            hint: style.hint,
+            checked: lyricsStyle === style.id,
+            onSelect: () => onSetLyricsStyle(style.id),
+          }))}
+        />
         <button
           class="btn-icon"
           class:on={animatedCanvas}
@@ -311,23 +325,11 @@
             </button>
           </div>
           {#if rightTab === "lyrics"}
-            <div class="lyric-tools">
-              <div class="styles" role="radiogroup" aria-label="Lyric style">
-                {#each LYRIC_STYLES as style (style.id)}
-                  <button
-                    role="radio"
-                    aria-checked={lyricsStyle === style.id}
-                    class:active={lyricsStyle === style.id}
-                    onclick={() => onSetLyricsStyle(style.id)}>{style.label}</button
-                  >
-                {/each}
-              </div>
-              {#if lyricsStyle !== "rain"}
-                <button class="chip-toggle" class:on={showRomaji} aria-pressed={showRomaji} onclick={onToggleRomaji}>
-                  Romaji
-                </button>
-              {/if}
-            </div>
+            {#if lyricsStyle !== "rain"}
+              <button class="chip-toggle" class:on={showRomaji} aria-pressed={showRomaji} onclick={onToggleRomaji}>
+                Romaji
+              </button>
+            {/if}
           {/if}
         </div>
 
@@ -704,38 +706,10 @@
     margin-bottom: 6px;
   }
 
-  .right-tabs,
-  .lyric-tools {
+  .right-tabs {
     display: flex;
     align-items: center;
     gap: 8px;
-  }
-
-  /* Segmented style picker: one pill, the chosen style filled. */
-  .styles {
-    display: flex;
-    padding: 3px;
-    border-radius: 999px;
-    background: var(--p-fill);
-  }
-
-  .styles button {
-    height: 26px;
-    padding: 0 12px;
-    border-radius: 999px;
-    font-size: 12.5px;
-    font-weight: 650;
-    color: var(--p-text-muted);
-    transition: background 0.14s ease, color 0.14s ease;
-  }
-
-  .styles button:hover {
-    color: var(--p-text);
-  }
-
-  .styles button.active {
-    background: var(--p-text);
-    color: var(--p-bg);
   }
 
   .right-tabs button,
