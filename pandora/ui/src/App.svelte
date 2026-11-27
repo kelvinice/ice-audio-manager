@@ -676,6 +676,7 @@
               (next) => (library = next),
             );
           }}
+          onAddToThisPlaylist={(plId, track) => void handleToggleTrackInPlaylist(plId, track, false)}
         />
       {:else if activeTab === "ice"}
         <IceHubView

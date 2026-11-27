@@ -89,6 +89,12 @@ export function ytmRelated(videoId: string): Promise<Track[]> {
   return call<Track[]>("ytm_related", { videoId });
 }
 
+/** Songs to add to a playlist: radios of a few of its songs, ranked in Rust (`recommend.rs`). */
+export function ytmRecommend(tracks: Track[], round: number, skip: string[]): Promise<Track[]> {
+  if (!inTauri) return Promise.resolve([]);
+  return call<Track[]>("ytm_recommend", { tracks, round, skip });
+}
+
 export function fetchLyrics(
   title: string,
   artist: string,

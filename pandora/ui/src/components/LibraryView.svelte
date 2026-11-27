@@ -7,6 +7,7 @@
   import Icon from "./Icon.svelte";
   import MoreMenu from "./MoreMenu.svelte";
   import PageHero from "./PageHero.svelte";
+  import PlaylistRecommendations from "./PlaylistRecommendations.svelte";
   import TrackTable from "./TrackTable.svelte";
 
   type LibraryTab = "liked" | "playlists" | "local" | "offline" | "history";
@@ -38,6 +39,7 @@
     onRenamePlaylist: (playlistId: string, name: string) => Promise<void>;
     onDeletePlaylist: (playlistId: string) => void;
     onRemoveFromPlaylist: (playlistId: string, trackId: string) => void;
+    onAddToThisPlaylist: (playlistId: string, track: Track) => void;
   }
 
   let {
@@ -67,6 +69,7 @@
     onRenamePlaylist,
     onDeletePlaylist,
     onRemoveFromPlaylist,
+    onAddToThisPlaylist,
   }: Props = $props();
 
   const TABS: { id: LibraryTab; label: string }[] = [
@@ -221,6 +224,18 @@
       onRemove: (t) => onRemoveFromPlaylist(playlist.id, t.id),
       removeLabel: "Remove from this playlist",
     })}
+    {#key playlist.id}
+      <PlaylistRecommendations
+        tracks={playlistTracks}
+        {likedIds}
+        {currentTrackId}
+        {isPlaying}
+        {proxyPort}
+        {onPlay}
+        {onToggleLike}
+        onAdd={(track) => onAddToThisPlaylist(playlist.id, track)}
+      />
+    {/key}
   </section>
 {:else}
   <div class="page">

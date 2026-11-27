@@ -35,6 +35,15 @@ collection cards (playlist / album / artist), and `home()` follows two continuat
 arrive too. A card opens with `ytm_collection` (tracks only from the page's own track shelf, not "More like this";
 album rows inherit the album cover and name). `save_collection` stores one as a library playlist.
 
+## Playlist recommendations
+
+Under a playlist's songs, `PlaylistRecommendations.svelte` lists up to 10 songs to add (Add, play, like, Refresh).
+`ytm_recommend` → `recommend.rs`: up to 5 streamable seed songs spread across the playlist (`round` shifts them for
+Refresh), one YouTube Music radio (`ytm.related`) per seed in parallel, then `rank`: a song scores by how many seeds
+suggest it and how high, ×1.3 when its artist is already in the playlist, at most 2 per artist; songs already in the
+playlist (also re-uploads with the same title + main artist) and ids passed in `skip` (shown before) are left out. It
+loads once per playlist; adding a song only removes it from the list.
+
 ## Artwork cache
 
 `artcache.rs` keeps covers in `%LOCALAPPDATA%\Pandora\artwork\<sha256(url)>.<ext>` behind the `/art` proxy (a
@@ -111,6 +120,7 @@ and lyrics for visual checks. See the [Pandora guide](../pandora.md) for launch 
 
 ## Change log
 
+- 2026-11-27 · Playlist recommendations (`recommend.rs`, `ytm_recommend`, `PlaylistRecommendations.svelte`).
 - 2026-11-27 · Buttons and accents keep the theme colour by default: `dynamicTheme` (on) became `artworkAccents` (off; the old
   key is ignored). Cover colours still tint the Now Playing backdrop.
 - 2026-11-27 · Rain: a finished line falls from the same stack it was shown in (romaji kept, then faded), so lines with romaji

@@ -10,6 +10,7 @@ mod models;
 mod playlist_import;
 mod proxy;
 mod recognition;
+mod recommend;
 mod ytm_feed;
 mod ytmusic;
 
@@ -90,6 +91,20 @@ async fn ytm_search(
 async fn ytm_related(video_id: String, state: State<'_, Arc<AppState>>) -> Result<Vec<Track>, String> {
     let ytm = Arc::clone(&state.ytm);
     tauri::async_runtime::spawn_blocking(move || ytm.related(&video_id))
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Songs to add to a playlist, from YouTube Music radios of its songs (`recommend.rs`).
+#[tauri::command]
+async fn ytm_recommend(
+    tracks: Vec<Track>,
+    round: u32,
+    skip: Vec<String>,
+    state: State<'_, Arc<AppState>>,
+) -> Result<Vec<Track>, String> {
+    let ytm = Arc::clone(&state.ytm);
+    tauri::async_runtime::spawn_blocking(move || recommend::recommend(&ytm, &tracks, round, &skip))
         .await
         .map_err(|e| e.to_string())
 }
@@ -582,6 +597,7 @@ fn main() {
             clear_artwork_cache,
             ytm_search,
             ytm_related,
+            ytm_recommend,
             fetch_lyrics,
             get_library,
             toggle_like,
