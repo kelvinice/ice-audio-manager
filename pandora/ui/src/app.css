@@ -12,7 +12,10 @@ body,
   overflow: hidden;
   background: var(--p-bg);
   color: var(--p-text);
-  font-family: "Segoe UI Variable", "Segoe UI", system-ui, -apple-system, sans-serif;
+  /* Figtree for Latin text; Windows UI fonts cover everything else (Japanese, Korean, symbols). */
+  font-family: "Figtree Variable", "Segoe UI Variable", "Segoe UI", "Yu Gothic UI", "Malgun Gothic", system-ui, sans-serif;
+  font-optical-sizing: auto;
+  -webkit-font-smoothing: antialiased;
   user-select: none;
 }
 

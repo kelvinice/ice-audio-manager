@@ -1,9 +1,10 @@
 <script lang="ts">
   import { audioEngine, playerStore } from "../lib/audio";
-  import { switchIceDevice } from "../lib/ipc";
   import { resolveArtworkUrl } from "../lib/theme";
   import type { DeviceSummary, Track } from "../lib/types";
   import Icon from "./Icon.svelte";
+  import OutputPicker from "./OutputPicker.svelte";
+  import VolumeControl from "./VolumeControl.svelte";
   import SeekBar from "./SeekBar.svelte";
 
   interface Props {
@@ -32,12 +33,7 @@
     onAddToPlaylist,
   }: Props = $props();
 
-  let showDevices = $state(false);
 
-  let activeDev = $derived(playbackDevices.find((d) => d.isDefault));
-  let volPct = $derived(
-    ($playerStore.muted ? 0 : Math.min(1, Math.max(0, $playerStore.volume))) * 100,
-  );
 </script>
 
 <footer class="player-bar">
@@ -188,67 +184,10 @@
     </button>
 
     {#if playbackDevices.length > 0}
-      <div class="dev-picker-wrap">
-        <button
-          class="dock-icon"
-          class:lit={showDevices}
-          title={activeDev ? `Output: ${activeDev.name}` : "Switch Audio Output"}
-          aria-label="Switch Audio Output"
-          onclick={() => (showDevices = !showDevices)}
-        >
-          <Icon name="headphones" size={17} />
-        </button>
-        {#if showDevices}
-          <div class="dev-popover card-glass">
-            <div class="pop-head">Audio Output</div>
-            {#each playbackDevices as dev (dev.id)}
-              <button
-                class:active={dev.isDefault}
-                onclick={() => {
-                  void switchIceDevice(dev.id);
-                  showDevices = false;
-                }}
-              >
-                <span class="dev-row-name">
-                  <Icon name="speaker" size={14} />
-                  <span>{dev.name}</span>
-                </span>
-                {#if dev.isDefault}<Icon name="check" size={14} />{/if}
-              </button>
-            {/each}
-          </div>
-        {/if}
-      </div>
+      <OutputPicker devices={playbackDevices} />
     {/if}
 
-    <div class="vol-wrap">
-      <button
-        class="dock-icon"
-        title={$playerStore.muted ? "Unmute" : "Mute"}
-        aria-label={$playerStore.muted ? "Unmute" : "Mute"}
-        onclick={() => audioEngine.toggleMute()}
-      >
-        <Icon
-          name={$playerStore.muted || $playerStore.volume === 0
-            ? "volume-x"
-            : $playerStore.volume < 0.5
-              ? "volume-1"
-              : "volume-2"}
-          size={17}
-        />
-      </button>
-      <input
-        class="range-track vol-range"
-        style="--progress: {volPct}%"
-        type="range"
-        min="0"
-        max="1"
-        step="0.02"
-        value={$playerStore.muted ? 0 : $playerStore.volume}
-        aria-label="Player volume"
-        oninput={(e) => audioEngine.setVolume(Number((e.target as HTMLInputElement).value))}
-      />
-    </div>
+    <VolumeControl />
   </div>
 </footer>
 
@@ -444,44 +383,6 @@
     gap: 10px;
   }
 
-
-  .range-track {
-    -webkit-appearance: none;
-    appearance: none;
-    flex: 1;
-    height: 4px;
-    border-radius: 999px;
-    background: linear-gradient(
-      to right,
-      var(--p-accent) var(--progress, 0%),
-      var(--p-border-strong) var(--progress, 0%)
-    );
-    outline: none;
-    cursor: pointer;
-    transition: height 0.12s ease;
-  }
-
-  .range-track:hover {
-    height: 6px;
-  }
-
-  .range-track::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 11px;
-    height: 11px;
-    border-radius: 50%;
-    background: var(--p-accent-bright);
-    box-shadow: 0 1px 6px rgba(0, 0, 0, 0.5);
-    opacity: 0;
-    transition: opacity 0.15s ease, transform 0.15s ease;
-  }
-
-  .range-track:hover::-webkit-slider-thumb {
-    opacity: 1;
-    transform: scale(1.1);
-  }
-
   .right {
     display: flex;
     align-items: center;
@@ -489,75 +390,4 @@
     gap: 6px;
   }
 
-  .dev-picker-wrap {
-    position: relative;
-  }
-
-  .dev-popover {
-    position: absolute;
-    bottom: 44px;
-    right: 0;
-    width: 268px;
-    padding: 8px;
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-    background: var(--p-surface-solid);
-    box-shadow: 0 14px 36px rgba(0, 0, 0, 0.52);
-    z-index: 30;
-  }
-
-  .pop-head {
-    font-size: 10px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: var(--p-text-dim);
-    padding: 4px 8px 6px;
-  }
-
-  .dev-popover button {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 10px;
-    border-radius: 8px;
-    font-size: 12px;
-    text-align: left;
-  }
-
-  .dev-row-name {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    min-width: 0;
-  }
-
-  .dev-row-name span {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .dev-popover button:hover {
-    background: var(--p-fill);
-  }
-
-  .dev-popover button.active {
-    background: var(--p-accent-soft);
-    color: var(--p-accent-bright);
-  }
-
-  .vol-wrap {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    width: 118px;
-    margin-left: 2px;
-  }
-
-  .vol-range {
-    width: 78px;
-  }
 </style>

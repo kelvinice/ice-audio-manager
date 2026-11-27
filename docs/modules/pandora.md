@@ -81,6 +81,15 @@ A saved session whose song is no longer the latest in history falls back to that
 "Show all" opens Library → Downloads, Remove all with a confirm), the artwork cache budget, local files, library counts,
 file locations, and Reset in its own panel.
 
+## Type, equalizer and volume
+
+The UI font is Figtree (OFL-1.1, `@fontsource-variable/figtree`, bundled by Vite into `dist`, so nothing is fetched at run
+time and the CSP stays `self`); Segoe UI, Yu Gothic UI and Malgun Gothic cover other scripts. `EqDrawer` is a right sheet:
+10 `EqBand` sliders (CSS-drawn; the native vertical range input overflowed) over a Catmull-Rom response curve, presets,
+sound toggles, speed steps, sleep timer and AutoEq import. The player bar uses `VolumeControl` (seek-bar-style slider,
+wheel 5 %, arrows 2 %, level tooltip) and `OutputPicker` (device popover with headphone / speaker icons from the
+endpoint form factor).
+
 ## Audio quality (not offered)
 
 Pandora streams the ANDROID client's muxed file. Audio-only formats from every client tried (ANDROID, ANDROID_VR,
@@ -94,6 +103,8 @@ and lyrics for visual checks. See the [Pandora guide](../pandora.md) for launch 
 
 ## Change log
 
+- 2026-11-27 · Figtree font; equalizer sheet rebuilt (`EqBand`, response curve, no sideways scroll); `VolumeControl` and
+  `OutputPicker` in the player bar.
 - 2026-11-27 · Now Playing backdrop (`NowPlayingBackdrop.svelte`: blurred cover + tint; with the animated background, art-coloured
   orbs on slow circular laps, paused with the song); lyrics follow the song until scrolled, then a bottom-middle Sync button
   re-centres and resumes; left column aligned to the cover width.
