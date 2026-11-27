@@ -695,7 +695,6 @@
           {iceStatus}
           {iceSnapshot}
           {appPaths}
-          {proxyPort}
           onUpdateSettings={(patch) => void handleUpdateSettings(patch)}
           onResetSettings={() => void handleResetSettings()}
           onSetModePref={(pref) => void handleSetModePref(pref)}
@@ -715,11 +714,6 @@
             });
           }}
           onOpenDownloads={() => go({ tab: "library", playlistId: null, collection: null, libraryTab: "offline" })}
-          onDeleteCached={(id) => {
-            void deleteCachedTrack(id)
-              .then((next) => (library = next))
-              .catch(() => {});
-          }}
           onNotify={showNotice}
         />
       {/if}

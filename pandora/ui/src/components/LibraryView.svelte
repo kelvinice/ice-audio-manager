@@ -262,6 +262,8 @@
       {/each}
     </nav>
 
+    {#key tab}
+    <div class="tab-body">
     {#if tab === "playlists"}
       {#if library.playlists.length === 0}
         <p class="empty">No playlists yet. Create one, import a link, or save one from Home.</p>
@@ -324,6 +326,8 @@
     {:else}
       {@render table(library.history, "Songs you play will show up here.")}
     {/if}
+    </div>
+    {/key}
   </div>
 {/if}
 
@@ -405,6 +409,27 @@
   .tab.active {
     background: var(--p-text);
     color: var(--p-bg);
+  }
+
+  /* A tab's content fades and rises in when the tab changes. */
+  .tab-body {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    animation: tab-in 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+
+  @keyframes tab-in {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .tab-body {
+      animation: none;
+    }
   }
 
   .n {

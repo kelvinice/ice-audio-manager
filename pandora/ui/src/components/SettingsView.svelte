@@ -24,7 +24,6 @@
     iceStatus: IceStatus;
     iceSnapshot: EngineSnapshot | null;
     appPaths: AppPaths | null;
-    proxyPort: number;
     onUpdateSettings: (patch: Partial<PandoraSettings>) => void;
     onResetSettings: () => void;
     onSetModePref: (pref: "auto" | "embedded" | "connected") => void;
@@ -34,7 +33,6 @@
     onRescanLocal: () => void;
     onClearCache: () => void;
     onOpenDownloads: () => void;
-    onDeleteCached: (trackId: string) => void;
     onNotify: (msg: string) => void;
   }
 
@@ -44,7 +42,6 @@
     iceStatus,
     iceSnapshot,
     appPaths,
-    proxyPort,
     onUpdateSettings,
     onResetSettings,
     onSetModePref,
@@ -54,12 +51,34 @@
     onRescanLocal,
     onClearCache,
     onOpenDownloads,
-    onDeleteCached,
     onNotify,
   }: Props = $props();
 
-  const sections = ["Appearance", "Playback", "Ice Audio", "Storage"] as const;
-  let section = $state<(typeof sections)[number]>("Appearance");
+  const sections = [
+    { id: "Appearance", icon: "sparkles" },
+    { id: "Playback", icon: "play" },
+    { id: "Ice Audio", icon: "snowflake" },
+    { id: "Storage", icon: "folder" },
+  ] as const;
+  type Section = (typeof sections)[number]["id"];
+  let section = $state<Section>("Appearance");
+  let sectionIdx = $derived(sections.findIndex((s) => s.id === section));
+  /** Which way the new section slides in: from the right when moving right, from the left when moving left. */
+  let direction = $state(1);
+
+  function selectSection(idx: number) {
+    const next = sections[(idx + sections.length) % sections.length];
+    if (next.id === section) return;
+    direction = idx > sectionIdx ? 1 : -1;
+    section = next.id;
+  }
+
+  function onTabKey(e: KeyboardEvent) {
+    if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+    e.preventDefault();
+    selectSection(sectionIdx + (e.key === "ArrowRight" ? 1 : -1));
+    (e.currentTarget as HTMLElement).querySelector<HTMLElement>(`[data-idx="${sectionIdx}"]`)?.focus();
+  }
   let busy = $state(false);
   let bridgeError = $state<string | null>(null);
 
@@ -110,12 +129,34 @@
     </div>
   </header>
 
-  <nav class="section-nav" aria-label="Settings sections">
-    {#each sections as item}
-      <button aria-pressed={section === item} onclick={() => (section = item)}>{item}</button>
+  <!-- svelte-ignore a11y_interactive_supports_focus -->
+  <div
+    class="tabs"
+    role="tablist"
+    aria-label="Settings sections"
+    tabindex="-1"
+    style:--count={sections.length}
+    style:--index={sectionIdx}
+    onkeydown={onTabKey}
+  >
+    <span class="indicator" aria-hidden="true"></span>
+    {#each sections as item, i (item.id)}
+      <button
+        role="tab"
+        data-idx={i}
+        aria-selected={section === item.id}
+        tabindex={section === item.id ? 0 : -1}
+        class:active={section === item.id}
+        onclick={() => selectSection(i)}
+      >
+        <Icon name={item.icon} size={15} />
+        <span>{item.id}</span>
+      </button>
     {/each}
-  </nav>
+  </div>
 
+  {#key section}
+  <div class="section-body" role="tabpanel" aria-label={section} style:--dir={direction}>
   {#if section === "Appearance"}
   <ThemePicker theme={settings.theme} onSelect={(theme) => onUpdateSettings({ theme })} />
 
@@ -402,16 +443,16 @@
       {settings}
       {library}
       {appPaths}
-      {proxyPort}
       {onUpdateSettings}
       {onOpenDownloads}
-      {onDeleteCached}
       {onClearCache}
       {onRescanLocal}
       {onResetSettings}
       {onNotify}
     />
   {/if}
+  </div>
+  {/key}
 </div>
 
 <style>
@@ -445,10 +486,95 @@
     gap: 10px;
   }
 
-  .section-nav { display: flex; flex-wrap: wrap; border-bottom: 1px solid var(--p-border); gap: 16px; }
-  .section-nav button { padding: 8px 2px 12px; color: var(--p-text-muted); font-size: 14px; border-bottom: 2px solid transparent; }
-  .section-nav button[aria-pressed="true"] { color: var(--p-accent-bright); border-color: var(--p-accent); font-weight: 650; }
   .page { max-width: 1100px; margin-inline: auto; }
+
+  /* Segmented tabs: one pill slides under the chosen tab. */
+  .tabs {
+    position: relative;
+    display: grid;
+    grid-template-columns: repeat(var(--count), minmax(0, 1fr));
+    max-width: 640px;
+    padding: 4px;
+    border-radius: 999px;
+    background: var(--p-fill);
+  }
+
+  .indicator {
+    position: absolute;
+    top: 4px;
+    bottom: 4px;
+    left: 4px;
+    width: calc((100% - 8px) / var(--count));
+    border-radius: 999px;
+    background: var(--p-surface-elevated);
+    box-shadow: 0 1px 6px rgb(0 0 0 / 0.22);
+    transform: translateX(calc(var(--index) * 100%));
+    transition: transform 0.34s cubic-bezier(0.3, 1.25, 0.5, 1);
+  }
+
+  .tabs button {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-width: 0;
+    height: 38px;
+    padding: 0 10px;
+    border-radius: 999px;
+    color: var(--p-text-muted);
+    font-size: 13.5px;
+    font-weight: 600;
+    white-space: nowrap;
+    transition: color 0.2s ease;
+  }
+
+  .tabs button:hover {
+    color: var(--p-text);
+  }
+
+  .tabs button.active {
+    color: var(--p-text);
+  }
+
+  .tabs button.active :global(.p-icon) {
+    color: var(--p-accent-bright);
+  }
+
+  .tabs button:focus-visible {
+    outline: 2px solid var(--p-accent);
+    outline-offset: -2px;
+  }
+
+  .section-body {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    animation: section-in 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+
+  @keyframes section-in {
+    from {
+      opacity: 0;
+      transform: translateX(calc(var(--dir) * 22px));
+    }
+  }
+
+  @media (max-width: 620px) {
+    .tabs button span {
+      display: none;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .indicator {
+      transition: none;
+    }
+
+    .section-body {
+      animation: none;
+    }
+  }
 
   .panel {
     padding: 18px 20px;

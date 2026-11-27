@@ -1,22 +1,20 @@
 <script lang="ts">
   import { formatCount, formatMb } from "../lib/format";
   import { artworkCacheBytes, clearArtworkCache } from "../lib/ipc";
-  import { resolveArtworkUrl } from "../lib/theme";
-  import type { AppPaths, LibraryState, PandoraSettings, Track } from "../lib/types";
+  import type { AppPaths, LibraryState, PandoraSettings } from "../lib/types";
   import Icon from "./Icon.svelte";
 
   /**
-   * Settings → Storage: what Pandora keeps on disk. Downloads have no size cap (they stay until removed); the artwork
-   * cache has a budget and trims its oldest covers. Reset lives apart, so it is never next to a routine button.
+   * Settings → Storage: what Pandora keeps on disk. Downloads have no size cap (they stay until removed; the songs are
+   * listed in Library → Downloads); the artwork cache has a budget and trims its oldest covers. Reset sits in its own
+   * card, so it is never next to a routine button.
    */
   interface Props {
     settings: PandoraSettings;
     library: LibraryState;
     appPaths: AppPaths | null;
-    proxyPort: number;
     onUpdateSettings: (patch: Partial<PandoraSettings>) => void;
     onOpenDownloads: () => void;
-    onDeleteCached: (trackId: string) => void;
     onClearCache: () => void;
     onRescanLocal: () => void;
     onResetSettings: () => void;
@@ -27,10 +25,8 @@
     settings,
     library,
     appPaths,
-    proxyPort,
     onUpdateSettings,
     onOpenDownloads,
-    onDeleteCached,
     onClearCache,
     onRescanLocal,
     onResetSettings,
@@ -38,8 +34,6 @@
   }: Props = $props();
 
   const ARTWORK_BUDGETS = [0, 128, 256, 512, 1024];
-  /** Downloads listed here before "Show all" sends you to the Library tab. */
-  const LISTED = 5;
 
   let artworkBytes = $state(0);
   let confirmingReset = $state(false);
@@ -49,10 +43,9 @@
     void artworkCacheBytes().then((bytes) => (artworkBytes = bytes)).catch(() => {});
   });
 
-  let downloads = $derived(library.cachedIds.map((id) => library.tracksIndex[id]).filter((t): t is Track => Boolean(t)));
+  let downloadCount = $derived(library.cachedIds.length);
   let totalBytes = $derived(library.cacheBytes + artworkBytes);
-  let downloadShare = $derived(totalBytes > 0 ? (library.cacheBytes / totalBytes) * 100 : 0);
-  let artworkLimit = $derived(settings.artworkCacheMb >= 1024 ? `${settings.artworkCacheMb / 1024} GB` : `${settings.artworkCacheMb} MB`);
+  let artworkLimit = $derived(budgetLabel(settings.artworkCacheMb));
 
   function budgetLabel(mb: number): string {
     if (mb === 0) return "Off";
@@ -75,25 +68,24 @@
 
   <div class="usage">
     <p class="total"><strong>{formatMb(totalBytes)}</strong> used by Pandora on this PC</p>
+    <!-- Each part grows by its size; a part that holds anything keeps a sliver so it never vanishes. -->
     <div class="bar" role="img" aria-label={`Downloads ${formatMb(library.cacheBytes)}, artwork ${formatMb(artworkBytes)}`}>
-      {#if totalBytes > 0}
-        <span class="seg downloads" style:width={`${downloadShare}%`}></span>
-        <span class="seg artwork" style:width={`${100 - downloadShare}%`}></span>
-      {/if}
+      {#if library.cacheBytes > 0}<span class="seg seg-dl" style:flex-grow={library.cacheBytes}></span>{/if}
+      {#if artworkBytes > 0}<span class="seg seg-art" style:flex-grow={artworkBytes}></span>{/if}
     </div>
     <div class="legend">
-      <span><i class="dot downloads"></i>Downloads {formatMb(library.cacheBytes)}</span>
-      <span><i class="dot artwork"></i>Artwork {formatMb(artworkBytes)}</span>
+      <span><i class="key key-dl"></i>Downloads {formatMb(library.cacheBytes)}</span>
+      <span><i class="key key-art"></i>Artwork {formatMb(artworkBytes)}</span>
     </div>
   </div>
 
   <div class="item">
-    <span class="badge downloads"><Icon name="download" size={18} /></span>
+    <span class="badge tone-dl"><Icon name="download" size={18} /></span>
     <div class="text">
       <div class="title">Downloads</div>
       <div class="sub">
-        {formatCount(downloads.length, "song")} • {formatMb(library.cacheBytes)}. No size limit: downloads stay until you remove
-        them.
+        {formatCount(downloadCount, "song")} • {formatMb(library.cacheBytes)}. No size limit: downloads stay until you
+        remove them.
       </div>
     </div>
     <div class="actions">
@@ -107,36 +99,16 @@
         >
         <button class="btn-ghost" onclick={() => (confirmingRemoveAll = false)}>Cancel</button>
       {:else}
-        <button class="btn-ghost danger" disabled={downloads.length === 0} onclick={() => (confirmingRemoveAll = true)}>
+        <button class="btn-ghost" disabled={downloadCount === 0} onclick={onOpenDownloads}>View</button>
+        <button class="btn-ghost danger" disabled={downloadCount === 0} onclick={() => (confirmingRemoveAll = true)}>
           Remove all
         </button>
       {/if}
     </div>
   </div>
 
-  {#if downloads.length > 0}
-    <ul class="downloads">
-      {#each downloads.slice(0, LISTED) as track (track.id)}
-        {@const art = resolveArtworkUrl(track.artworkUrl, proxyPort)}
-        <li>
-          <span class="thumb">{#if art}<img src={art} alt="" loading="lazy" />{:else}<Icon name="music" size={14} />{/if}</span>
-          <span class="song">
-            <span class="song-title">{track.title}</span>
-            <span class="song-sub">{track.artist}</span>
-          </span>
-          <button class="btn-icon sm" aria-label={`Remove download of ${track.title}`} title="Remove download" onclick={() => onDeleteCached(track.id)}>
-            <Icon name="x" size={14} />
-          </button>
-        </li>
-      {/each}
-    </ul>
-    {#if downloads.length > LISTED}
-      <button class="more" onclick={onOpenDownloads}>Show all {downloads.length} downloads</button>
-    {/if}
-  {/if}
-
   <div class="item">
-    <span class="badge artwork"><Icon name="sparkles" size={18} /></span>
+    <span class="badge tone-art"><Icon name="sparkles" size={18} /></span>
     <div class="text">
       <div class="title">Artwork cache</div>
       <div class="sub">
@@ -205,12 +177,18 @@
 </section>
 
 <section class="panel card-glass reset">
+  <span class="badge tone-danger"><Icon name="refresh" size={18} /></span>
   <div class="text">
     <div class="title">Reset settings</div>
-    <div class="sub">Puts Pandora's settings and equalizer back to defaults. Your library, playlists and downloads stay.</div>
+    <div class="sub">
+      {confirmingReset
+        ? "Reset every setting and the equalizer now? This can't be undone."
+        : "Puts Pandora's settings and equalizer back to defaults. Your library, playlists and downloads stay."}
+    </div>
   </div>
   <div class="actions">
     {#if confirmingReset}
+      <button class="btn-ghost" onclick={() => (confirmingReset = false)}>Cancel</button>
       <button
         class="btn-danger"
         onclick={() => {
@@ -218,9 +196,8 @@
           onResetSettings();
         }}>Reset</button
       >
-      <button class="btn-ghost" onclick={() => (confirmingReset = false)}>Cancel</button>
     {:else}
-      <button class="btn-ghost" onclick={() => (confirmingReset = true)}>Reset…</button>
+      <button class="btn-ghost danger" onclick={() => (confirmingReset = true)}>Reset…</button>
     {/if}
   </div>
 </section>
@@ -229,7 +206,6 @@
   .panel {
     display: flex;
     flex-direction: column;
-    gap: 4px;
     padding: 20px 22px;
   }
 
@@ -263,7 +239,7 @@
 
   .bar {
     display: flex;
-    gap: 2px;
+    gap: 3px;
     height: 10px;
     overflow: hidden;
     border-radius: 999px;
@@ -271,19 +247,32 @@
   }
 
   .seg {
-    min-width: 0;
+    flex-basis: 0;
+    min-width: 6px;
     height: 100%;
   }
 
-  .seg.downloads,
-  .dot.downloads,
-  .badge.downloads {
+  .seg:first-child {
+    border-radius: 999px 0 0 999px;
+  }
+
+  .seg:last-child {
+    border-radius: 0 999px 999px 0;
+  }
+
+  .seg:only-child {
+    border-radius: 999px;
+  }
+
+  .seg-dl,
+  .key-dl,
+  .tone-dl {
     background: var(--p-accent);
   }
 
-  .seg.artwork,
-  .dot.artwork,
-  .badge.artwork {
+  .seg-art,
+  .key-art,
+  .tone-art {
     background: var(--p-companion);
   }
 
@@ -301,7 +290,7 @@
     gap: 6px;
   }
 
-  .dot {
+  .key {
     width: 8px;
     height: 8px;
     border-radius: 50%;
@@ -310,6 +299,7 @@
   .item,
   .reset {
     display: flex;
+    flex-direction: row;
     align-items: center;
     gap: 14px;
   }
@@ -330,9 +320,14 @@
     color: var(--p-text-muted);
   }
 
-  .badge.downloads,
-  .badge.artwork {
+  .tone-dl,
+  .tone-art {
     color: var(--p-on-accent);
+  }
+
+  .tone-danger {
+    background: color-mix(in srgb, var(--p-danger) 14%, var(--p-fill));
+    color: var(--p-danger);
   }
 
   .text {
@@ -354,9 +349,16 @@
 
   .actions {
     display: flex;
+    flex-shrink: 0;
     flex-wrap: wrap;
     justify-content: flex-end;
     gap: 8px;
+  }
+
+  /* The confirming button is solid, so the second step reads clearly different from the first. */
+  .actions .btn-danger {
+    background: var(--p-danger);
+    color: var(--p-bg);
   }
 
   select {
@@ -367,84 +369,6 @@
     background: color-mix(in srgb, var(--p-text) 10%, transparent);
     font-size: 13px;
     font-weight: 600;
-  }
-
-  .downloads {
-    list-style: none;
-    margin: -6px 0 6px 54px;
-    padding: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
-
-  .downloads li {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 4px 4px 4px 6px;
-    border-radius: 8px;
-  }
-
-  .downloads li:hover {
-    background: var(--p-fill);
-  }
-
-  .thumb {
-    width: 34px;
-    height: 34px;
-    flex-shrink: 0;
-    display: grid;
-    place-items: center;
-    overflow: hidden;
-    border-radius: 5px;
-    background: var(--p-fill);
-    color: var(--p-text-dim);
-  }
-
-  .thumb img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    display: block;
-  }
-
-  .song {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 1px;
-  }
-
-  .song-title,
-  .song-sub {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .song-title {
-    font-size: 13px;
-    font-weight: 600;
-  }
-
-  .song-sub {
-    font-size: 12px;
-    color: var(--p-text-dim);
-  }
-
-  .more {
-    align-self: flex-start;
-    margin: 0 0 8px 60px;
-    font-size: 12.5px;
-    font-weight: 650;
-    color: var(--p-text-muted);
-  }
-
-  .more:hover {
-    color: var(--p-text);
-    text-decoration: underline;
   }
 
   .paths {
@@ -480,6 +404,7 @@
 
   .reset {
     margin-top: 16px;
+    padding: 16px 22px;
   }
 
   @media (max-width: 720px) {
