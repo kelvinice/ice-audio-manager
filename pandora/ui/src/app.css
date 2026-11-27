@@ -138,13 +138,14 @@ input[type="checkbox"]:checked:active::after {
   background: var(--p-accent-bright);
 }
 
+/* Secondary text button: a soft translucent pill over whatever is behind it. */
 .btn-ghost {
-  background: var(--p-fill);
+  background: color-mix(in srgb, var(--p-text) 10%, transparent);
   color: var(--p-text);
 }
 
 .btn-ghost:hover {
-  background: color-mix(in srgb, var(--p-text) 14%, var(--p-fill));
+  background: color-mix(in srgb, var(--p-text) 17%, transparent);
 }
 
 .btn-danger,
@@ -175,7 +176,8 @@ input[type="checkbox"]:checked:active::after {
   pointer-events: none;
 }
 
-/* Round neutral icon button (36 px; .sm is 30 px, .bare has no fill until hovered). */
+/* Icon button: just the icon until hovered (36 px; .sm is 30 px). .solid is the dark round button for the one
+   control that matters most in a spot (collapse, back, carousel arrows). */
 .btn-icon {
   width: 36px;
   height: 36px;
@@ -183,27 +185,28 @@ input[type="checkbox"]:checked:active::after {
   display: inline-grid;
   place-items: center;
   flex-shrink: 0;
-  background: var(--p-fill);
+  background: transparent;
   color: var(--p-text-muted);
   transition: background 0.14s ease, color 0.14s ease, transform 0.12s ease;
 }
 
 .btn-icon:hover {
-  background: color-mix(in srgb, var(--p-text) 14%, var(--p-fill));
+  background: color-mix(in srgb, var(--p-text) 10%, transparent);
   color: var(--p-text);
+}
+
+.btn-icon.solid {
+  background: color-mix(in srgb, #000 45%, transparent);
+  color: var(--p-text);
+}
+
+.btn-icon.solid:hover {
+  background: color-mix(in srgb, #000 62%, transparent);
 }
 
 .btn-icon.sm {
   width: 30px;
   height: 30px;
-}
-
-.btn-icon.bare {
-  background: transparent;
-}
-
-.btn-icon.bare:hover {
-  background: var(--p-fill);
 }
 
 .btn-icon.on {
@@ -245,15 +248,4 @@ input[type="checkbox"]:checked:active::after {
   background: var(--p-accent-soft);
   color: var(--p-accent-bright);
   border: 1px solid var(--p-border);
-}
-
-/* Shared wave uses the theme accent as its ink. */
-.playback-wave {
-  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='8' viewBox='0 0 24 8'%3E%3Cpath d='M0 4 Q 6 0.5 12 4 T 24 4' fill='none' stroke='%23ffffff' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E");
-  mask-repeat: repeat-x;
-  mask-size: 24px 8px;
-  animation: playback-wave .85s linear infinite;
-}
-@keyframes playback-wave {
-  to { mask-position: 24px 0; }
 }

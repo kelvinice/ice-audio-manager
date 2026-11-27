@@ -84,7 +84,7 @@
     <img class="mark" src={pandoraMark} alt="Pandora" width="24" height="24" data-tauri-drag-region />
     <MoreMenu
       label="Menu"
-      buttonClass="btn-icon bare sm"
+      buttonClass="btn-icon sm"
       items={[
         { label: "New playlist", icon: "list-plus", onSelect: onNewPlaylist },
         { label: "Import playlist from a link", icon: "link", onSelect: onImportPlaylist },
@@ -93,16 +93,16 @@
         { label: "Quit Pandora", icon: "power", onSelect: () => void quitApp() },
       ]}
     />
-    <button class="btn-icon bare sm" aria-label="Back" title="Back (Alt+Left)" disabled={!canBack} onclick={onBack}>
+    <button class="btn-icon sm" aria-label="Back" title="Back (Alt+Left)" disabled={!canBack} onclick={onBack}>
       <Icon name="chevron-left" size={18} />
     </button>
-    <button class="btn-icon bare sm" aria-label="Forward" title="Forward (Alt+Right)" disabled={!canForward} onclick={onForward}>
+    <button class="btn-icon sm" aria-label="Forward" title="Forward (Alt+Right)" disabled={!canForward} onclick={onForward}>
       <Icon name="chevron-right" size={18} />
     </button>
   </div>
 
   <div class="center">
-    <button class="btn-icon home" class:here={onHome} aria-label="Home" title="Home" onclick={onGoHome}>
+    <button class="btn-icon solid home" class:here={onHome} aria-label="Home" title="Home" onclick={onGoHome}>
       <Icon name="home" size={19} />
     </button>
     <form
@@ -131,19 +131,19 @@
         }}
       />
       {#if query}
-        <button type="button" class="btn-icon bare sm" aria-label="Clear search" onclick={() => { onSearch(""); input?.focus(); }}>
+        <button type="button" class="btn-icon sm" aria-label="Clear search" onclick={() => { onSearch(""); input?.focus(); }}>
           <Icon name="x" size={15} />
         </button>
       {/if}
       <span class="divider" aria-hidden="true"></span>
-      <button type="button" class="btn-icon bare sm" aria-label="Identify a song" title="Identify a song" onclick={onIdentify}>
+      <button type="button" class="btn-icon sm" aria-label="Identify a song" title="Identify a song" onclick={onIdentify}>
         <Icon name="radar" size={18} />
       </button>
     </form>
   </div>
 
   <div class="side right" data-tauri-drag-region>
-    <button class="btn-icon ice" aria-label="Ice Audio" title={iceLive ? "Ice Audio (connected)" : "Ice Audio"} onclick={onOpenIce}>
+    <button class="btn-icon solid ice" aria-label="Ice Audio" title={iceLive ? "Ice Audio (connected)" : "Ice Audio"} onclick={onOpenIce}>
       <Icon name="snowflake" size={18} />
     </button>
     {#if appWindow}
@@ -204,11 +204,6 @@
   .home {
     width: 46px;
     height: 46px;
-    color: var(--p-text-muted);
-  }
-
-  .home.here {
-    color: var(--p-text);
   }
 
   .search {

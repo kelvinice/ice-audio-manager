@@ -92,7 +92,7 @@
       <MoreMenu
         label="Add a playlist"
         icon="plus"
-        buttonClass="btn-icon bare sm"
+        buttonClass="btn-icon sm"
         align="right"
         items={[
           { label: "New playlist", icon: "list-plus", onSelect: onOpenNewPlaylist },

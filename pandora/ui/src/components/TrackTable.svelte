@@ -61,7 +61,7 @@
     <Icon name="search" size={14} />
     <input type="text" placeholder="Filter by title, artist or album" bind:value={query} />
     {#if query}
-      <button class="btn-icon sm bare" aria-label="Clear filter" onclick={() => (query = "")}>
+      <button class="btn-icon sm" aria-label="Clear filter" onclick={() => (query = "")}>
         <Icon name="x" size={13} />
       </button>
     {/if}
@@ -124,7 +124,7 @@
 
         <span class="acts">
           <button
-            class="btn-icon sm bare"
+            class="btn-icon sm"
             class:keep={liked}
             class:on={liked}
             title={liked ? "Remove from Favorites" : "Add to Favorites"}
@@ -133,21 +133,21 @@
           >
             <Icon name={liked ? "heart-filled" : "heart"} size={15} />
           </button>
-          <button class="btn-icon sm bare" title="Add to playlist" aria-label="Add to playlist" onclick={() => onAddToPlaylist(track)}>
+          <button class="btn-icon sm" title="Add to playlist" aria-label="Add to playlist" onclick={() => onAddToPlaylist(track)}>
             <Icon name="list-plus" size={15} />
           </button>
           {#if onEnqueue}
-            <button class="btn-icon sm bare" title="Add to queue" aria-label="Add to queue" onclick={() => onEnqueue(track)}>
+            <button class="btn-icon sm" title="Add to queue" aria-label="Add to queue" onclick={() => onEnqueue(track)}>
               <Icon name="queue-plus" size={15} />
             </button>
           {/if}
           {#if onDownload && track.source === "ytmusic" && !cached}
-            <button class="btn-icon sm bare" title="Download" aria-label="Download" onclick={() => onDownload(track)}>
+            <button class="btn-icon sm" title="Download" aria-label="Download" onclick={() => onDownload(track)}>
               <Icon name="download" size={15} />
             </button>
           {/if}
           {#if onRemove}
-            <button class="btn-icon sm bare" title={removeLabel} aria-label={removeLabel} onclick={() => onRemove(track)}>
+            <button class="btn-icon sm" title={removeLabel} aria-label={removeLabel} onclick={() => onRemove(track)}>
               <Icon name="x" size={15} />
             </button>
           {/if}

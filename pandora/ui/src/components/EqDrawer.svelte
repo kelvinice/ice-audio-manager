@@ -66,9 +66,8 @@
         <div>
           <h3>Equalizer</h3>
         </div>
-        <button class="btn-ghost" onclick={onClose} aria-label="Done">
-          <Icon name="x" size={15} />
-          <span>Done</span>
+        <button class="btn-icon" onclick={onClose} aria-label="Close equalizer" title="Close">
+          <Icon name="x" size={18} />
         </button>
       </div>
 

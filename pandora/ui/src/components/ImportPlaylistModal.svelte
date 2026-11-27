@@ -143,7 +143,7 @@
           <h3>Import Playlist</h3>
         </div>
         <button
-          class="close-btn"
+          class="btn-icon"
           aria-label="Close"
           disabled={busy}
           onclick={handleSafeClose}
@@ -361,14 +361,7 @@
     color: var(--p-text);
   }
 
-  .close-btn {
-    padding: 4px 8px;
-    color: var(--p-text-muted);
-  }
 
-  .close-btn:disabled {
-    opacity: 0.4;
-  }
 
   .tabs {
     display: flex;

@@ -45,10 +45,10 @@
     </div>
     {#if !(atStart && atEnd)}
       <div class="nav">
-        <button class="btn-icon sm" aria-label="Scroll back" disabled={atStart} onclick={() => page(-1)}>
+        <button class="btn-icon sm solid" aria-label="Scroll back" disabled={atStart} onclick={() => page(-1)}>
           <Icon name="chevron-left" size={16} />
         </button>
-        <button class="btn-icon sm" aria-label="Scroll forward" disabled={atEnd} onclick={() => page(1)}>
+        <button class="btn-icon sm solid" aria-label="Scroll forward" disabled={atEnd} onclick={() => page(1)}>
           <Icon name="chevron-right" size={16} />
         </button>
       </div>

@@ -4,6 +4,7 @@
   import { resolveArtworkUrl } from "../lib/theme";
   import type { DeviceSummary, Track } from "../lib/types";
   import Icon from "./Icon.svelte";
+  import SeekBar from "./SeekBar.svelte";
 
   interface Props {
     proxyPort: number;
@@ -29,17 +30,7 @@
 
   let showDevices = $state(false);
 
-  function formatMs(ms: number): string {
-    const s = Math.max(0, Math.floor(ms / 1000));
-    return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
-  }
-
   let activeDev = $derived(playbackDevices.find((d) => d.isDefault));
-  let seekPct = $derived(
-    $playerStore.durationMs > 0
-      ? Math.min(100, Math.max(0, ($playerStore.currentTimeMs / $playerStore.durationMs) * 100))
-      : 0,
-  );
   let volPct = $derived(
     ($playerStore.muted ? 0 : Math.min(1, Math.max(0, $playerStore.volume))) * 100,
   );
@@ -149,26 +140,13 @@
     </div>
 
     <div class="seek-row">
-      <span class="time">{formatMs($playerStore.currentTimeMs)}</span>
-      <div class="seek-wrap">
-        <div class="seek-rail"></div>
-        <div
-          class="seek-fill"
-          class:playback-wave={wavyProgress && $playerStore.playing}
-          style="width: {seekPct}%"
-        ></div>
-        <input
-          class="range-track transparent-track"
-          style="--progress: {seekPct}%"
-          type="range"
-          min="0"
-          max={Math.max(1000, $playerStore.durationMs)}
-          value={$playerStore.currentTimeMs}
-          aria-label="Playback position"
-          oninput={(e) => audioEngine.seekMs(Number((e.target as HTMLInputElement).value))}
-        />
-      </div>
-      <span class="time">{formatMs($playerStore.durationMs)}</span>
+      <SeekBar
+        positionMs={$playerStore.currentTimeMs}
+        durationMs={$playerStore.durationMs}
+        playing={$playerStore.playing}
+        wavy={wavyProgress}
+        onSeek={(ms) => audioEngine.seekMs(ms)}
+      />
     </div>
   </div>
 
@@ -450,53 +428,6 @@
     gap: 10px;
   }
 
-  .seek-wrap {
-    position: relative;
-    flex: 1;
-    height: 16px;
-    display: flex;
-    align-items: center;
-  }
-
-  .seek-rail {
-    position: absolute;
-    left: 0;
-    right: 0;
-    height: 4px;
-    border-radius: 999px;
-    background: var(--p-border-strong);
-    pointer-events: none;
-  }
-
-  .seek-fill {
-    position: absolute;
-    left: 0;
-    height: 4px;
-    border-radius: 999px;
-    background: var(--p-accent);
-    pointer-events: none;
-  }
-
-  .seek-fill:global(.playback-wave) {
-    height: 8px;
-    border-radius: 0;
-    filter: drop-shadow(0 0 6px var(--p-glow-1));
-  }
-
-
-  .range-track.transparent-track {
-    position: relative;
-    z-index: 2;
-    background: transparent;
-  }
-
-  .time {
-    font-size: 11px;
-    color: var(--p-text-dim);
-    font-variant-numeric: tabular-nums;
-    min-width: 32px;
-    text-align: center;
-  }
 
   .range-track {
     -webkit-appearance: none;

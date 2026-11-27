@@ -3,6 +3,7 @@
   import { resolveArtworkUrl } from "../lib/theme";
   import type { Track } from "../lib/types";
   import Icon from "./Icon.svelte";
+  import SeekBar from "./SeekBar.svelte";
 
   interface Props {
     open: boolean;
@@ -39,12 +40,6 @@
   let lyricsContainer = $state<HTMLDivElement | null>(null);
   let playing = $derived($playerStore.playing);
 
-  let pct = $derived(
-    $playerStore.durationMs > 0
-      ? Math.min(100, Math.max(0, ($playerStore.currentTimeMs / $playerStore.durationMs) * 100))
-      : 0,
-  );
-
   let activeLineIdx = $derived.by(() => {
     const lyr = $playerStore.lyrics;
     if (!lyr || lyr.lines.length === 0) return -1;
@@ -57,62 +52,94 @@
     return idx;
   });
 
+  const reduceMotion =
+    typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /** After the listener scrolls the lyrics, leave them where they are for this long before following the song. */
+  const MANUAL_SCROLL_HOLD_MS = 3_000;
+  let manualScrollAt = 0;
+
+  // Keep the current line in the middle of the lyrics pane. Scrolls only that pane (`scrollIntoView` also moved the
+  // page), and never sideways.
   $effect(() => {
-    if (!open || rightTab !== "lyrics" || activeLineIdx < 0 || !lyricsContainer) return;
-    const el = lyricsContainer.querySelector(`[data-line="${activeLineIdx}"]`) as HTMLElement | null;
-    if (el) {
-      el.scrollIntoView({ behavior: "smooth", block: "center" });
-    }
+    const idx = activeLineIdx;
+    const box = lyricsContainer;
+    if (!open || rightTab !== "lyrics" || idx < 0 || !box) return;
+    if (performance.now() - manualScrollAt < MANUAL_SCROLL_HOLD_MS) return;
+    const el = box.querySelector(`[data-line="${idx}"]`) as HTMLElement | null;
+    if (!el) return;
+    const top = el.offsetTop - box.clientHeight / 2 + el.offsetHeight / 2;
+    box.scrollTo({ top: Math.max(0, top), behavior: reduceMotion ? "auto" : "smooth" });
   });
+
+  // Spectrum: thin round bars grown from the middle, as many as fit, sharp at any display scale. They rise at once
+  // and fall back gently (meter ballistics). Redrawn at most 30 times a second, and only while playing and shown.
+  const SPECTRUM_FRAME_MS = 1000 / 30;
+  const SPECTRUM_FALL = 0.86;
 
   $effect(() => {
     const canvas = canvasEl;
     if (!open || !canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    const animate = playing;
+    const animate = playing && !reduceMotion;
     let frame = 0;
-    function draw() {
-      if (!canvas || !ctx || document.hidden) return;
-      const bars = audioEngine.getSpectrumBars(28);
-      const { width, height } = canvas;
-      const gap = 4;
-      const barWidth = (width - gap * (bars.length - 1)) / bars.length;
+    let lastPaint = 0;
+    let levels: number[] = [];
+    let color = getComputedStyle(canvas).color;
+
+    function draw(now = performance.now()) {
+      if (!canvas || !ctx) return;
+      if (animate) frame = requestAnimationFrame(draw);
+      if (now - lastPaint < SPECTRUM_FRAME_MS) return;
+      lastPaint = now;
+      const dpr = window.devicePixelRatio || 1;
+      const width = Math.round(canvas.clientWidth * dpr);
+      const height = Math.round(canvas.clientHeight * dpr);
+      if (canvas.width !== width || canvas.height !== height) {
+        canvas.width = width;
+        canvas.height = height;
+        color = getComputedStyle(canvas).color;
+      }
+      const barW = Math.max(2, Math.round(3 * dpr));
+      const gap = Math.max(2, Math.round(3 * dpr));
+      const count = Math.max(8, Math.floor((width + gap) / (barW + gap)));
+      const raw = audioEngine.getSpectrumBars(count);
+      if (levels.length !== count) levels = new Array(count).fill(0);
+      const x0 = Math.round((width - (count * barW + (count - 1) * gap)) / 2);
+      const mid = height / 2;
       ctx.clearRect(0, 0, width, height);
-      ctx.fillStyle = getComputedStyle(canvas).color;
-      for (const [i, level] of bars.entries()) {
-        const value = Math.max(0.06, level);
-        const barHeight = value * (height - 6);
-        ctx.globalAlpha = 0.35 + value * 0.65;
+      ctx.fillStyle = color;
+      for (let i = 0; i < count; i++) {
+        levels[i] = Math.max(raw[i] ?? 0, levels[i] * SPECTRUM_FALL);
+        const h = Math.max(barW, levels[i] * height);
+        ctx.globalAlpha = 0.4 + 0.6 * levels[i];
         ctx.beginPath();
-        ctx.roundRect(i * (barWidth + gap), height - barHeight, barWidth, barHeight, 3);
+        ctx.roundRect(x0 + i * (barW + gap), mid - h / 2, barW, h, barW / 2);
         ctx.fill();
       }
       ctx.globalAlpha = 1;
-      if (animate) frame = requestAnimationFrame(draw);
     }
-    function refresh() {
+
+    function redraw() {
       cancelAnimationFrame(frame);
+      lastPaint = 0;
       draw();
     }
-    refresh();
-    document.addEventListener("visibilitychange", refresh);
+    redraw();
+    const resize = new ResizeObserver(redraw);
+    resize.observe(canvas);
+    document.addEventListener("visibilitychange", redraw);
     return () => {
       cancelAnimationFrame(frame);
-      document.removeEventListener("visibilitychange", refresh);
+      resize.disconnect();
+      document.removeEventListener("visibilitychange", redraw);
     };
   });
 
-  function formatMs(ms: number): string {
-    const total = Math.max(0, Math.floor(ms / 1000));
-    return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
-  }
-
-  function handleSeek(e: Event) {
-    const val = Number((e.target as HTMLInputElement).value);
-    audioEngine.seekMs(val);
-  }
 </script>
+
+<svelte:window onkeydown={(e) => open && e.key === "Escape" && onClose()} />
 
 {#if open && $playerStore.currentTrack}
   {@const track = $playerStore.currentTrack}
@@ -126,17 +153,22 @@
     {/if}
 
     <div class="top-bar">
-      <div class="top-left">
-        <span class="pill-badge">Now Playing</span>
-        <button class="btn-ghost" onclick={onToggleCanvas}>
-          <Icon name="sparkles" size={14} />
-          <span>Canvas: {animatedCanvas ? "On" : "Off"}</span>
+      <span class="top-label">Now playing</span>
+      <div class="top-actions">
+        <button
+          class="btn-icon"
+          class:on={animatedCanvas}
+          aria-pressed={animatedCanvas}
+          title={animatedCanvas ? "Animated background: on" : "Animated background: off"}
+          aria-label="Animated background"
+          onclick={onToggleCanvas}
+        >
+          <Icon name="sparkles" size={17} />
+        </button>
+        <button class="btn-icon solid" aria-label="Collapse Now Playing" title="Collapse (Esc)" onclick={onClose}>
+          <Icon name="collapse" size={17} />
         </button>
       </div>
-      <button class="btn-ghost" onclick={onClose} aria-label="Close Now Playing">
-        <Icon name="x" size={15} />
-        <span>Close</span>
-      </button>
     </div>
 
     <div class="body-grid">
@@ -182,31 +214,17 @@
           </div>
         </div>
 
-        <canvas bind:this={canvasEl} width="420" height="54" class="spectrum"></canvas>
+        <canvas bind:this={canvasEl} class="spectrum" aria-hidden="true"></canvas>
 
-        <div class="scrubber">
-          <div class="scrub-wrap">
-            <div class="scrub-rail"></div>
-            <div
-              class="scrub-fill"
-              class:playback-wave={wavyProgress && $playerStore.playing}
-              style="width: {pct}%"
-            ></div>
-            <input
-              class="scrub-input"
-              aria-label="Seek in track"
-              type="range"
-              min="0"
-              max={Math.max(1000, $playerStore.durationMs)}
-              value={$playerStore.currentTimeMs}
-              oninput={handleSeek}
-            />
-          </div>
-          <div class="times">
-            <span>{formatMs($playerStore.currentTimeMs)}</span>
-            <span>{formatMs($playerStore.durationMs)}</span>
-          </div>
-        </div>
+        <SeekBar
+          positionMs={$playerStore.currentTimeMs}
+          durationMs={$playerStore.durationMs}
+          playing={$playerStore.playing}
+          wavy={wavyProgress}
+          size="large"
+          times="below"
+          onSeek={(ms) => audioEngine.seekMs(ms)}
+        />
 
         <div class="controls">
           <button
@@ -254,27 +272,34 @@
         </div>
       </div>
 
-      <div class="right-col card-glass">
+      <div class="right-col">
         <div class="right-head">
-          <div class="right-tabs">
-            <button class:active={rightTab === "lyrics"} onclick={() => (rightTab = "lyrics")}>
-              Synced Lyrics
+          <div class="right-tabs" role="tablist">
+            <button role="tab" aria-selected={rightTab === "lyrics"} class:active={rightTab === "lyrics"} onclick={() => (rightTab = "lyrics")}>
+              Lyrics
             </button>
-            <button class:active={rightTab === "queue"} onclick={() => (rightTab = "queue")}>
-              Up Next ({$playerStore.queue.length})
+            <button role="tab" aria-selected={rightTab === "queue"} class:active={rightTab === "queue"} onclick={() => (rightTab = "queue")}>
+              Up next <span class="n">{$playerStore.queue.length}</span>
             </button>
           </div>
           {#if rightTab === "lyrics"}
-            <button class="btn-ghost" onclick={onToggleRomaji}>
-              Romaji: {showRomaji ? "On" : "Off"}
+            <button class="chip-toggle" class:on={showRomaji} aria-pressed={showRomaji} onclick={onToggleRomaji}>
+              Romaji
             </button>
           {/if}
         </div>
 
         {#if rightTab === "lyrics"}
-          <div class="lyrics-scroll" bind:this={lyricsContainer}>
+          <div
+            class="lyrics-scroll"
+            role="region"
+            aria-label="Lyrics"
+            bind:this={lyricsContainer}
+            onwheel={() => (manualScrollAt = performance.now())}
+            ontouchmove={() => (manualScrollAt = performance.now())}
+          >
             {#if !$playerStore.lyrics || $playerStore.lyrics.status === "loading"}
-              <div class="lyr-state">Loading lyrics...</div>
+              <div class="lyr-state">Loading lyrics…</div>
             {:else if $playerStore.lyrics.status === "synced"}
               {#each $playerStore.lyrics.lines as line, idx (idx)}
                 {@const isActive = idx === activeLineIdx}
@@ -303,7 +328,7 @@
             {:else if $playerStore.lyrics.plainText}
               <pre class="plain-lyr">{$playerStore.lyrics.plainText}</pre>
             {:else if $playerStore.lyrics.status === "instrumental"}
-              <div class="lyr-state">♪ Instrumental track ♪</div>
+              <div class="lyr-state">Instrumental — no lyrics.</div>
             {:else}
               <div class="lyr-state">No lyrics available.</div>
             {/if}
@@ -403,10 +428,18 @@
     margin-bottom: 18px;
   }
 
-  .top-left {
+  .top-label {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--p-text-dim);
+  }
+
+  .top-actions {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 6px;
   }
 
   .body-grid {
@@ -415,6 +448,8 @@
     overflow-y: auto;
     display: grid;
     grid-template-columns: minmax(320px, 440px) 1fr;
+    /* One row exactly as tall as the overlay, so the lyrics pane scrolls inside it instead of the page growing. */
+    grid-template-rows: minmax(0, 1fr);
     gap: 32px;
     align-items: stretch;
   }
@@ -523,71 +558,10 @@
   }
 
   .spectrum {
+    display: block;
     width: 100%;
-    height: clamp(22px, 6vh, 54px);
+    height: clamp(28px, 7vh, 64px);
     color: var(--p-accent);
-  }
-
-  .scrub-wrap {
-    position: relative;
-    height: 18px;
-    display: flex;
-    align-items: center;
-  }
-
-  .scrub-rail {
-    position: absolute;
-    left: 0;
-    right: 0;
-    height: 4px;
-    border-radius: 999px;
-    background: var(--p-border-strong);
-    pointer-events: none;
-  }
-
-  .scrub-fill {
-    position: absolute;
-    left: 0;
-    height: 4px;
-    border-radius: 999px;
-    background: var(--p-accent);
-    pointer-events: none;
-  }
-
-  .scrub-fill:global(.playback-wave) {
-    height: 8px;
-    border-radius: 0;
-    filter: drop-shadow(0 0 6px var(--p-glow-1));
-  }
-
-
-  .scrub-input {
-    -webkit-appearance: none;
-    appearance: none;
-    position: relative;
-    z-index: 2;
-    width: 100%;
-    height: 16px;
-    background: transparent;
-    cursor: pointer;
-    outline: none;
-  }
-
-  .scrub-input::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
-    background: var(--p-accent-bright);
-    box-shadow: 0 1px 6px rgba(0, 0, 0, 0.5);
-  }
-
-  .times {
-    display: flex;
-    justify-content: space-between;
-    font-size: 11px;
-    color: var(--p-text-dim);
   }
 
   .controls {
@@ -635,15 +609,14 @@
     border-radius: 50%;
     display: grid;
     place-items: center;
-    background: linear-gradient(135deg, var(--p-accent-bright), var(--p-accent));
+    background: var(--p-accent);
     color: var(--p-on-accent);
-    box-shadow: 0 8px 24px var(--p-glow-1);
-    transition: transform 0.14s ease, filter 0.14s ease;
+    transition: transform 0.14s ease, background 0.14s ease;
   }
 
   .ctrl-lg:hover {
-    transform: scale(1.06);
-    filter: brightness(1.06);
+    transform: scale(1.05);
+    background: var(--p-accent-bright);
   }
 
   .ctrl-sm:active,
@@ -655,15 +628,20 @@
   .right-col {
     display: flex;
     flex-direction: column;
+    min-width: 0;
     min-height: 0;
-    padding: 18px 22px;
+    padding: 18px 8px 0 24px;
+    border-radius: 16px;
+    background: color-mix(in srgb, var(--p-bg) 55%, transparent);
   }
 
   .right-head {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 14px;
+    gap: 12px;
+    padding-right: 16px;
+    margin-bottom: 6px;
   }
 
   .right-tabs {
@@ -671,83 +649,130 @@
     gap: 8px;
   }
 
-  .right-tabs button {
-    padding: 7px 14px;
+  .right-tabs button,
+  .chip-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 32px;
+    padding: 0 14px;
     border-radius: 999px;
     font-size: 13px;
-    font-weight: 600;
-    color: var(--p-text-muted);
+    font-weight: 650;
     background: var(--p-fill);
+    color: var(--p-text-muted);
+    transition: background 0.14s ease, color 0.14s ease;
+  }
+
+  .right-tabs button:hover,
+  .chip-toggle:hover {
+    color: var(--p-text);
   }
 
   .right-tabs button.active {
-    background: var(--p-accent-soft);
-    color: var(--p-accent-bright);
+    background: var(--p-text);
+    color: var(--p-bg);
   }
 
-  .lyrics-scroll,
+  .chip-toggle.on {
+    background: var(--p-accent);
+    color: var(--p-on-accent);
+  }
+
+  .n {
+    font-size: 11.5px;
+    opacity: 0.65;
+    font-variant-numeric: tabular-nums;
+  }
+
   .queue-scroll {
     flex: 1;
+    min-height: 0;
     overflow-y: auto;
+    overflow-x: hidden;
     display: flex;
     flex-direction: column;
-    gap: 10px;
-    padding-right: 8px;
+    gap: 4px;
+    padding: 12px 16px 24px 0;
+  }
+
+  /* Lyrics: one column that only scrolls up and down. Lines wrap (never overflow sideways); the current line is set
+     apart by colour, not size, so nothing grows past the pane. The edges fade so lines drift in and out. */
+  .lyrics-scroll {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: none;
+    /* Room above and below so the first and last lines can sit mid-pane (vh: % padding follows the width). */
+    padding: 40vh 16px 40vh 0;
+    mask-image: linear-gradient(transparent, #000 14%, #000 82%, transparent);
+  }
+
+  .lyrics-scroll::-webkit-scrollbar {
+    display: none;
   }
 
   .lyr-state {
-    margin: auto;
+    margin-top: -20%;
     color: var(--p-text-muted);
-    font-size: 15px;
+    font-size: 16px;
   }
 
   .lyr-line {
+    display: block;
+    width: 100%;
+    margin: 0 0 6px;
+    padding: 6px 10px 6px 0;
     text-align: left;
-    padding: 8px 12px;
-    border-radius: 12px;
-    font-size: 22px;
-    font-weight: 700;
+    font-size: clamp(22px, 2.3vw, 34px);
+    font-weight: 800;
+    line-height: 1.22;
+    letter-spacing: -0.02em;
+    overflow-wrap: anywhere;
     color: var(--p-text-dim);
-    transition: color 0.25s ease, transform 0.25s ease, background 0.25s ease;
+    opacity: 0.55;
+    transition: color 0.3s ease, opacity 0.3s ease;
   }
 
   .lyr-line:hover {
-    background: var(--p-fill);
+    opacity: 0.9;
   }
 
   .lyr-line.past {
-    color: var(--p-text-muted);
+    opacity: 0.4;
   }
 
   .lyr-line.active {
     color: var(--p-text);
-    background: var(--p-accent-soft);
-    transform: scale(1.015);
+    opacity: 1;
   }
 
   .word {
-    color: var(--p-text-dim);
+    color: color-mix(in srgb, var(--p-text) 45%, transparent);
     transition: color 0.14s ease;
   }
 
   .word.lit {
-    color: var(--p-accent-bright);
-    text-shadow: 0 0 18px var(--p-glow-1);
+    color: var(--p-text);
   }
 
   .lyr-sub {
     margin-top: 4px;
-    font-size: 13px;
-    font-weight: 500;
+    font-size: 0.5em;
+    font-weight: 600;
+    letter-spacing: 0;
     color: var(--p-text-muted);
   }
 
   .plain-lyr {
     margin: 0;
     white-space: pre-wrap;
+    overflow-wrap: anywhere;
     font-family: inherit;
-    font-size: 15px;
-    line-height: 1.7;
+    font-size: 20px;
+    font-weight: 700;
+    line-height: 1.6;
     color: var(--p-text-muted);
   }
 

@@ -80,7 +80,7 @@
     >
       <div class="head">
         <h3>{track ? "Add to Playlist" : "New Playlist"}</h3>
-        <button class="close-btn" aria-label="Close" onclick={onClose}><Icon name="x" size={16} /></button>
+        <button class="btn-icon" aria-label="Close" onclick={onClose}><Icon name="x" size={16} /></button>
       </div>
 
       {#if track}
@@ -174,11 +174,6 @@
     font-size: 18px;
   }
 
-  .close-btn {
-    padding: 4px 8px;
-    color: var(--p-text-muted);
-    font-size: 15px;
-  }
 
   .track-preview {
     display: flex;

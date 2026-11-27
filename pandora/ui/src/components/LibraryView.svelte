@@ -296,7 +296,7 @@
               <span class="folder">
                 <Icon name="folder" size={13} />
                 <span>{folder}</span>
-                <button class="btn-icon sm bare" aria-label={`Remove ${folder}`} onclick={() => onRemoveFolder(folder)}>
+                <button class="btn-icon sm" aria-label={`Remove ${folder}`} onclick={() => onRemoveFolder(folder)}>
                   <Icon name="x" size={12} />
                 </button>
               </span>

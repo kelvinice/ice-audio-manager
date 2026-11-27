@@ -22,9 +22,8 @@
 
 <header class="hero">
   {#if onBack}
-    <button class="btn-ghost back" onclick={onBack}>
-      <Icon name="arrow-left" size={14} />
-      <span>{backLabel ?? "Back"}</span>
+    <button class="btn-icon solid" aria-label={backLabel ? `Back to ${backLabel}` : "Back"} title={backLabel ? `Back to ${backLabel}` : "Back"} onclick={onBack}>
+      <Icon name="chevron-left" size={20} />
     </button>
   {/if}
   <div class="row">
@@ -63,11 +62,6 @@
     gap: 24px;
     padding: 20px 32px 28px;
     background: linear-gradient(180deg, var(--p-surface-tint), transparent);
-  }
-
-  .back {
-    height: 32px;
-    padding: 0 14px;
   }
 
   .row {

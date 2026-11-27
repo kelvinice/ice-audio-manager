@@ -44,6 +44,8 @@
     | "chevron-left"
     | "chevron-right"
     | "more"
+    | "collapse"
+    | "expand"
     | "win-min"
     | "win-max"
     | "win-restore"
@@ -250,6 +252,16 @@
   {:else if name === "win-restore"}
     <rect x="5" y="8" width="11" height="11" rx="1.5" />
     <path d="M8 8V6.5A1.5 1.5 0 0 1 9.5 5h8A1.5 1.5 0 0 1 19 6.5v8a1.5 1.5 0 0 1-1.5 1.5H16" />
+  {:else if name === "collapse"}
+    <path d="M4 14h6v6" />
+    <path d="M20 10h-6V4" />
+    <path d="m14 10 7-7" />
+    <path d="m3 21 7-7" />
+  {:else if name === "expand"}
+    <path d="M15 3h6v6" />
+    <path d="M9 21H3v-6" />
+    <path d="m21 3-7 7" />
+    <path d="m3 21 7-7" />
   {:else if name === "more"}
     <circle cx="5" cy="12" r="1.6" fill="currentColor" stroke="none" />
     <circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none" />

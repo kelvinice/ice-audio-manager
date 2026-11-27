@@ -15,13 +15,13 @@
     items: MenuItem[];
     label?: string;
     icon?: ComponentProps<typeof Icon>["name"];
-    /** Trigger classes from app.css (`btn-icon bare` = the "…" look). */
+    /** Trigger classes from app.css (`btn-icon` = the bare "…" look). */
     buttonClass?: string;
     /** Which edge of the trigger the menu lines up with. */
     align?: "left" | "right";
   }
 
-  let { items, label = "More options", icon = "more", buttonClass = "btn-icon bare", align = "left" }: Props = $props();
+  let { items, label = "More options", icon = "more", buttonClass = "btn-icon", align = "left" }: Props = $props();
   let open = $state(false);
   let root: HTMLDivElement | undefined = $state();
 

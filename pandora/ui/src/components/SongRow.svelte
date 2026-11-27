@@ -34,7 +34,7 @@
   </button>
   <span class="acts">
     <button
-      class="btn-icon sm bare"
+      class="btn-icon sm"
       class:keep={isLiked}
       class:on={isLiked}
       aria-label={isLiked ? "Remove from Favorites" : "Add to Favorites"}
@@ -43,7 +43,7 @@
     >
       <Icon name={isLiked ? "heart-filled" : "heart"} size={15} />
     </button>
-    <button class="btn-icon sm bare" aria-label="Add to playlist" title="Add to playlist" onclick={onAddToPlaylist}>
+    <button class="btn-icon sm" aria-label="Add to playlist" title="Add to playlist" onclick={onAddToPlaylist}>
       <Icon name="list-plus" size={15} />
     </button>
   </span>

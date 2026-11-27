@@ -187,8 +187,11 @@ class PandoraAudioEngine {
     compressor.release.value = 0.25;
 
     const analyser = ctx.createAnalyser();
-    analyser.fftSize = 128;
-    analyser.smoothingTimeConstant = 0.78;
+    // 1024 points gives ~43 Hz bins, enough to spread the visualizer's bars across bass, mids and treble.
+    analyser.fftSize = 1024;
+    analyser.smoothingTimeConstant = 0.72;
+    analyser.minDecibels = -88;
+    analyser.maxDecibels = -22;
 
     const gain = ctx.createGain();
     const st = get(playerStore);
@@ -571,21 +574,29 @@ class PandoraAudioEngine {
     }));
   }
 
+  /**
+   * Levels (0..1) for `count` log-spaced bands from ~45 Hz to ~15 kHz, so each bar covers an equal musical range
+   * instead of most bars sharing the bass. Higher bands get a small lift because music carries less energy there.
+   */
   getSpectrumBars(count = 24): number[] {
     if (!this.analyser || !this.freqBuf || !get(playerStore).playing) {
       return new Array(count).fill(0);
     }
     this.analyser.getByteFrequencyData(this.freqBuf);
+    const bins = this.freqBuf.length;
+    const nyquist = this.analyser.context.sampleRate / 2;
+    const lo = 45;
+    const hi = Math.min(15_000, nyquist);
     const out: number[] = [];
-    const usable = Math.min(this.freqBuf.length, 48);
-    const step = Math.max(1, Math.floor(usable / count));
     for (let i = 0; i < count; i++) {
-      let sum = 0;
-      const start = Math.min(usable - 1, i * step);
-      for (let j = 0; j < step && start + j < usable; j++) {
-        sum += this.freqBuf[start + j];
-      }
-      out.push(sum / (step * 255));
+      const f0 = lo * (hi / lo) ** (i / count);
+      const f1 = lo * (hi / lo) ** ((i + 1) / count);
+      const first = Math.min(bins - 1, Math.floor((f0 / nyquist) * bins));
+      const last = Math.min(bins, Math.max(first + 1, Math.ceil((f1 / nyquist) * bins)));
+      let peak = 0;
+      for (let j = first; j < last; j++) peak = Math.max(peak, this.freqBuf[j]);
+      const tilt = 0.85 + 0.4 * (i / Math.max(1, count - 1));
+      out.push(Math.min(1, ((peak / 255) * tilt) ** 1.4));
     }
     return out;
   }

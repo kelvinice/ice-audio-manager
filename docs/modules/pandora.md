@@ -44,8 +44,15 @@ Storage shows usage and clears it.
 
 Shared pieces: `TrackTable` (every song list: playlists, collections, library tabs), `PageHero` + `MoreMenu`
 (playlist / album headers with a round play button; rename, download and delete live in the menu), `Shelf` +
-`CoverTile` + `SongRow` (home rows). Buttons are solid fills from `app.css` (`btn-primary`, `btn-ghost`, `btn-icon`,
-`btn-play`). No gradients or glows.
+`CoverTile` + `SongRow` (home rows). Buttons come from `app.css`: solid accent `btn-primary` / `btn-play`, a translucent pill `btn-ghost`, and
+`btn-icon`, bare until hovered, with `.solid` (a dark circle) for the one key control in a spot: collapse, back, carousel
+arrows, title-bar Home / Ice. Closing uses icons (collapse for Now Playing, x for dialogs), not "Close" labels.
+
+`SeekBar.svelte` (player bar and Now Playing) follows Ice's notch scrubber: one pointer slider with keyboard steps, a rail
+that thickens on hover, or with `wavyProgress` a travelling wave as thick as the flat rest (`lib/wave.ts`, a Twin of
+`app/ui/src/lib/notch/waves.ts`), animated at most 30 Hz while playing. Now Playing's spectrum reads 1024-point FFT
+bands spaced logarithmically (`getSpectrumBars`), drawn DPR-sharp at 30 Hz while playing; lyrics only scroll vertically,
+wrap long lines, mark the current line by colour, and pause auto-follow for 3 s after a manual scroll.
 
 ## Window frame
 
@@ -68,6 +75,8 @@ and lyrics for visual checks. See the [Pandora guide](../pandora.md) for launch 
 
 ## Change log
 
+- 2026-11-27 · Shared `SeekBar` (Ice-style rail / wave); log-band spectrum; Now Playing lyrics without sideways scroll;
+  bare icon buttons with a dark `.solid` variant, translucent `btn-ghost`, collapse / icon close buttons.
 - 2026-11-27 · Sidebar as two panels (navigation; "Your Library" with pinned Favorites / Downloads and playlist covers) on
   the title-bar frame, no status dot; `Ice` theme preset (Ice Audio Manager's palette) in Rust, `palettes.css` and the picker.
 - 2026-11-27 · Custom title bar with history, app-wide search and window buttons; SearchView uses `TrackTable` (with add
