@@ -3,6 +3,7 @@
   import { resolveArtworkUrl } from "../lib/theme";
   import type { Track } from "../lib/types";
   import Icon from "./Icon.svelte";
+  import NowPlayingBackdrop from "./NowPlayingBackdrop.svelte";
   import SeekBar from "./SeekBar.svelte";
 
   interface Props {
@@ -55,21 +56,37 @@
   const reduceMotion =
     typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-  /** After the listener scrolls the lyrics, leave them where they are for this long before following the song. */
-  const MANUAL_SCROLL_HOLD_MS = 3_000;
-  let manualScrollAt = 0;
+  /**
+   * Lyrics follow the song (current line kept mid-pane) until the listener scrolls them; then they stay put and a Sync
+   * button brings the current line back and resumes following. A new song or reopening starts in follow mode.
+   */
+  let following = $state(true);
 
-  // Keep the current line in the middle of the lyrics pane. Scrolls only that pane (`scrollIntoView` also moved the
-  // page), and never sideways.
   $effect(() => {
-    const idx = activeLineIdx;
+    void $playerStore.currentTrack?.id;
+    void open;
+    following = true;
+  });
+
+  function centerCurrentLine(behavior: ScrollBehavior) {
     const box = lyricsContainer;
-    if (!open || rightTab !== "lyrics" || idx < 0 || !box) return;
-    if (performance.now() - manualScrollAt < MANUAL_SCROLL_HOLD_MS) return;
-    const el = box.querySelector(`[data-line="${idx}"]`) as HTMLElement | null;
+    if (!box || activeLineIdx < 0) return;
+    const el = box.querySelector(`[data-line="${activeLineIdx}"]`) as HTMLElement | null;
     if (!el) return;
     const top = el.offsetTop - box.clientHeight / 2 + el.offsetHeight / 2;
-    box.scrollTo({ top: Math.max(0, top), behavior: reduceMotion ? "auto" : "smooth" });
+    box.scrollTo({ top: Math.max(0, top), behavior: reduceMotion ? "auto" : behavior });
+  }
+
+  function syncLyrics() {
+    following = true;
+    centerCurrentLine("smooth");
+  }
+
+  // Scrolls only the lyrics pane (`scrollIntoView` also moved the page), and never sideways.
+  $effect(() => {
+    void activeLineIdx;
+    if (!open || rightTab !== "lyrics" || !following || !lyricsContainer) return;
+    centerCurrentLine("smooth");
   });
 
   // Spectrum: thin round bars grown from the middle, as many as fit, sharp at any display scale. They rise at once
@@ -145,12 +162,11 @@
   {@const track = $playerStore.currentTrack}
   {@const isLiked = likedIds.has(track.id)}
   <div class="overlay">
-    {#if animatedCanvas}
-      <div class="canvas-backdrop">
-        <div class="orb o1"></div>
-        <div class="orb o2"></div>
-      </div>
-    {/if}
+    <NowPlayingBackdrop
+      artworkUrl={resolveArtworkUrl(track.artworkUrl, proxyPort)}
+      animated={animatedCanvas}
+      playing={$playerStore.playing}
+    />
 
     <div class="top-bar">
       <span class="top-label">Now playing</span>
@@ -295,8 +311,8 @@
             role="region"
             aria-label="Lyrics"
             bind:this={lyricsContainer}
-            onwheel={() => (manualScrollAt = performance.now())}
-            ontouchmove={() => (manualScrollAt = performance.now())}
+            onwheel={() => (following = false)}
+            ontouchmove={() => (following = false)}
           >
             {#if !$playerStore.lyrics || $playerStore.lyrics.status === "loading"}
               <div class="lyr-state">Loading lyrics…</div>
@@ -333,6 +349,12 @@
               <div class="lyr-state">No lyrics available.</div>
             {/if}
           </div>
+          {#if !following && $playerStore.lyrics?.status === "synced" && activeLineIdx >= 0}
+            <button class="sync" onclick={syncLyrics}>
+              <Icon name="locate" size={15} />
+              <span>Sync</span>
+            </button>
+          {/if}
         {:else}
           <div class="queue-scroll">
             {#each $playerStore.queue as qTrack, i (qTrack.id + i)}
@@ -376,49 +398,11 @@
     position: fixed;
     inset: 0;
     z-index: 40;
-    background: var(--p-surface-solid);
-    backdrop-filter: blur(42px);
+    isolation: isolate;
+    overflow: hidden;
     display: flex;
     flex-direction: column;
     padding: 20px 32px 28px;
-  }
-
-  .canvas-backdrop {
-    position: absolute;
-    inset: 0;
-    overflow: hidden;
-    pointer-events: none;
-    z-index: -1;
-  }
-
-  .orb {
-    position: absolute;
-    border-radius: 50%;
-    filter: blur(120px);
-    opacity: 0.7;
-  }
-
-  .o1 {
-    width: 560px;
-    height: 560px;
-    left: -80px;
-    top: -100px;
-    background: var(--p-glow-1);
-    animation: floatOrb 18s ease-in-out infinite alternate;
-  }
-
-  .o2 {
-    width: 520px;
-    height: 520px;
-    right: -60px;
-    bottom: -90px;
-    background: var(--p-glow-2);
-    animation: floatOrb 22s ease-in-out infinite alternate-reverse;
-  }
-
-  @keyframes floatOrb {
-    from { transform: translate(0, 0) scale(1); }
-    to { transform: translate(70px, 50px) scale(1.18); }
   }
 
   .top-bar {
@@ -454,19 +438,24 @@
     align-items: stretch;
   }
 
+  /* Cover, titles, spectrum, seek bar and controls share the cover's width, so their edges line up. */
   .left-col {
+    --col: clamp(200px, calc(100dvh - 380px), 360px);
     display: flex;
     flex-direction: column;
     justify-content: center;
+    align-items: center;
     gap: 14px;
+  }
+
+  .left-col > :global(*) {
+    width: min(100%, var(--col));
   }
 
   .cover-wrap {
     position: relative;
-    width: 100%;
-    max-width: clamp(140px,  calc(100dvh - 368px), 340px);
+    width: min(100%, var(--col));
     aspect-ratio: 1;
-    margin: 0 auto;
     border-radius: 22px;
     overflow: hidden;
     box-shadow: 0 26px 64px rgba(0, 0, 0, 0.55), 0 0 40px var(--p-glow-1);
@@ -559,7 +548,7 @@
 
   .spectrum {
     display: block;
-    width: 100%;
+    width: min(100%, var(--col));
     height: clamp(28px, 7vh, 64px);
     color: var(--p-accent);
   }
@@ -631,8 +620,43 @@
     min-width: 0;
     min-height: 0;
     padding: 18px 8px 0 24px;
-    border-radius: 16px;
-    background: color-mix(in srgb, var(--p-bg) 55%, transparent);
+    position: relative;
+  }
+
+  /* Bottom-middle pill shown once the listener scrolls away from the current line. */
+  .sync {
+    position: absolute;
+    left: 50%;
+    bottom: 24px;
+    translate: -50% 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    height: 38px;
+    padding: 0 18px;
+    border-radius: 999px;
+    background: var(--p-text);
+    color: var(--p-bg);
+    font-size: 13px;
+    font-weight: 700;
+    box-shadow: 0 8px 24px rgb(0 0 0 / 0.35);
+    animation: sync-in 0.18s ease both;
+    transition: scale 0.12s ease;
+  }
+
+  .sync:hover {
+    scale: 1.04;
+  }
+
+  .sync:active {
+    scale: 0.97;
+  }
+
+  @keyframes sync-in {
+    from {
+      opacity: 0;
+      translate: -50% 8px;
+    }
   }
 
   .right-head {
@@ -730,8 +754,8 @@
     line-height: 1.22;
     letter-spacing: -0.02em;
     overflow-wrap: anywhere;
-    color: var(--p-text-dim);
-    opacity: 0.55;
+    color: var(--p-text);
+    opacity: 0.4;
     transition: color 0.3s ease, opacity 0.3s ease;
   }
 
@@ -740,7 +764,7 @@
   }
 
   .lyr-line.past {
-    opacity: 0.4;
+    opacity: 0.28;
   }
 
   .lyr-line.active {

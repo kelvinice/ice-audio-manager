@@ -94,6 +94,9 @@ and lyrics for visual checks. See the [Pandora guide](../pandora.md) for launch 
 
 ## Change log
 
+- 2026-11-27 · Now Playing backdrop (`NowPlayingBackdrop.svelte`: blurred cover + tint; with the animated background, art-coloured
+  orbs on slow circular laps, paused with the song); lyrics follow the song until scrolled, then a bottom-middle Sync button
+  re-centres and resumes; left column aligned to the cover width.
 - 2026-11-27 · Launch shows the last song paused where it stopped (`lib/session.ts`, `restoreSession`); Settings → Storage
   rebuilt as `StorageSettings.svelte` with a usage bar and the download list (fixes the clipped stat cards).
 - 2026-11-27 · Right-hand `QueuePanel` (Queue / Recently played) toggled from the player bar.
