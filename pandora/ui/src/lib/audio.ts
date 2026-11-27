@@ -6,6 +6,7 @@ import {
   saveEqState,
   ytmRelated,
 } from "./ipc";
+import { MagicShuffle } from "./magicShuffle";
 import { mapParametricFilterType } from "./parametricEq";
 import { applyDefaultMaterialTheme, applyMaterialThemeFromArt, resolveArtworkUrl, setArtworkAccents } from "./theme";
 import {
@@ -28,6 +29,15 @@ export const EQ_PRESETS: Record<string, number[]> = {
   "V-Shape": [5, 4, 2, -2, -4, -3, 1, 3, 5, 6],
 };
 
+export type ShuffleMode = "off" | "on" | "magic";
+
+/** Shuffle button labels: the current mode and what a click does. */
+export const SHUFFLE_TITLES: Record<ShuffleMode, string> = {
+  off: "Shuffle: off (click for shuffle)",
+  on: "Shuffle: on (click for Magic shuffle)",
+  magic: "Magic shuffle: recommended songs play in between (click to turn off)",
+};
+
 export interface PlayerState {
   queue: Track[];
   currentIndex: number;
@@ -38,7 +48,10 @@ export interface PlayerState {
   durationMs: number;
   volume: number;
   muted: boolean;
-  shuffle: boolean;
+  /** `magic` shuffles and plays a recommended song every few songs (`lib/magicShuffle.ts`). */
+  shuffle: ShuffleMode;
+  /** Songs Magic shuffle put into the queue (marked in the queue panel). */
+  magicIds: string[];
   repeat: "off" | "all" | "one";
   eq: EqState;
   lyrics: PandoraLyrics | null;
@@ -57,7 +70,8 @@ const initialState: PlayerState = {
   durationMs: 0,
   volume: 0.85,
   muted: false,
-  shuffle: false,
+  shuffle: "off",
+  magicIds: [],
   repeat: "off",
   eq: {
     enabled: true,
@@ -100,6 +114,11 @@ class PandoraAudioEngine {
   private sleepTimerId: number | null = null;
   private onHistoryRecorded: (() => void) | null = null;
   private settings: PandoraSettings = { ...DEFAULT_PANDORA_SETTINGS };
+  /** The list being played (its songs without Magic shuffle's additions), to notice when a new list starts. */
+  private sourceKey = "";
+  /** Songs already played in this shuffle pass, so shuffle plays every song once before repeating. */
+  private shufflePlayed = new Set<string>();
+  private magic = new MagicShuffle();
 
   init(
     proxyPort: number,
@@ -340,6 +359,8 @@ class PandoraAudioEngine {
       queue = [track, ...queue];
       idx = 0;
     }
+    this.noteSource(queue);
+    this.shufflePlayed.add(track.id);
 
     const src = this.resolvePlaybackUrl(track);
     if (!src) {
@@ -476,14 +497,56 @@ class PandoraAudioEngine {
     playerStore.update((s) => ({ ...s, currentTimeMs: Math.max(0, ms) }));
   }
 
+  /** A new list (not just this list with Magic shuffle's additions) restarts the shuffle pass and Magic shuffle. */
+  private noteSource(queue: Track[]) {
+    const base = queue.filter((t) => !this.magic.added.has(t.id));
+    const key = base
+      .map((t) => t.id)
+      .sort()
+      .join("|");
+    if (key === this.sourceKey) return;
+    this.sourceKey = key;
+    this.shufflePlayed.clear();
+    this.magic.reset(base);
+    playerStore.update((s) => ({ ...s, magicIds: [] }));
+    if (get(playerStore).shuffle === "magic") this.magic.prime();
+  }
+
+  /** A random song of the list not yet played in this pass; null when the pass is over and repeat is off. */
+  private pickShuffled(st: PlayerState): number | null {
+    const candidates = (pool: Set<string>) =>
+      st.queue
+        .map((t, i) => ({ t, i }))
+        .filter(({ t, i }) => i !== st.currentIndex && !pool.has(t.id) && !this.magic.added.has(t.id))
+        .map(({ i }) => i);
+    let open = candidates(this.shufflePlayed);
+    if (open.length === 0) {
+      if (st.repeat !== "all") return null;
+      this.shufflePlayed.clear();
+      open = candidates(this.shufflePlayed);
+      if (open.length === 0) return null;
+    }
+    return open[Math.floor(Math.random() * open.length)];
+  }
+
   async next() {
     const st = get(playerStore);
     if (st.queue.length === 0) return;
     let nextIdx = st.currentIndex + 1;
-    if (st.shuffle && st.queue.length > 1) {
-      do {
-        nextIdx = Math.floor(Math.random() * st.queue.length);
-      } while (nextIdx === st.currentIndex);
+    if (st.shuffle !== "off" && st.queue.length > 1) {
+      const rec = st.shuffle === "magic" ? this.magic.takeTurn() : null;
+      if (rec) {
+        // Right after the current song, so the queue panel shows it as next.
+        const current = st.queue[st.currentIndex];
+        const queue = st.queue.filter((t) => t.id !== rec.id);
+        queue.splice(current ? queue.indexOf(current) + 1 : 0, 0, rec);
+        playerStore.update((s) => ({ ...s, magicIds: [...this.magic.added] }));
+        await this.playTrack(rec, queue);
+        return;
+      }
+      const pick = this.pickShuffled(st);
+      if (pick === null) return;
+      nextIdx = pick;
     } else if (nextIdx >= st.queue.length) {
       if (st.repeat === "all") {
         nextIdx = 0;
@@ -556,8 +619,13 @@ class PandoraAudioEngine {
     });
   }
 
-  toggleShuffle() {
-    playerStore.update((s) => ({ ...s, shuffle: !s.shuffle }));
+  /** Off → Shuffle → Magic shuffle → off. */
+  cycleShuffle() {
+    playerStore.update((s) => {
+      const shuffle: ShuffleMode = s.shuffle === "off" ? "on" : s.shuffle === "on" ? "magic" : "off";
+      return { ...s, shuffle };
+    });
+    if (get(playerStore).shuffle === "magic") this.magic.prime();
   }
 
   cycleRepeat() {

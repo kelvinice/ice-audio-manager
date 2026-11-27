@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { audioEngine, playerStore } from "../lib/audio";
+  import { audioEngine, playerStore, SHUFFLE_TITLES } from "../lib/audio";
   import { SpectrumShaper } from "../lib/spectrum";
   import { resolveArtworkUrl } from "../lib/theme";
   import type { LyricsStyle, Track } from "../lib/types";
@@ -279,12 +279,12 @@
         <div class="controls">
           <button
             class="ctrl-sm"
-            class:on={$playerStore.shuffle}
-            title="Shuffle"
-            aria-label="Toggle shuffle"
-            onclick={() => audioEngine.toggleShuffle()}
+            class:on={$playerStore.shuffle !== "off"}
+            title={SHUFFLE_TITLES[$playerStore.shuffle]}
+            aria-label={SHUFFLE_TITLES[$playerStore.shuffle]}
+            onclick={() => audioEngine.cycleShuffle()}
           >
-            <Icon name="shuffle" size={17} />
+            <Icon name={$playerStore.shuffle === "magic" ? "sparkles" : "shuffle"} size={17} />
           </button>
           <button
             class="ctrl-md"

@@ -35,7 +35,11 @@
       </span>
       <span class="text">
         <span class="title">{track.title}</span>
-        <span class="sub">{track.artist}</span>
+        <span class="sub">
+          {#if $playerStore.magicIds.includes(track.id)}<span class="magic" title="Added by Magic shuffle"
+              ><Icon name="sparkles" size={11} /></span
+            >{/if}{track.artist}
+        </span>
       </span>
     </button>
     {#if onRemove}
@@ -216,6 +220,11 @@
   .sub {
     font-size: 12.5px;
     color: var(--p-text-dim);
+  }
+
+  .magic {
+    margin-right: 4px;
+    color: var(--p-accent-bright);
   }
 
   .remove {

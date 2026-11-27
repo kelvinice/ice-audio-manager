@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { audioEngine, playerStore } from "../lib/audio";
+  import { audioEngine, playerStore, SHUFFLE_TITLES } from "../lib/audio";
   import { resolveArtworkUrl } from "../lib/theme";
   import type { DeviceSummary, Track } from "../lib/types";
   import HeartButton from "./HeartButton.svelte";
@@ -80,13 +80,13 @@
     <div class="transport">
       <button
         class="dock-icon"
-        class:lit={$playerStore.shuffle}
-        title="Shuffle"
-        aria-label="Toggle shuffle"
-        onclick={() => audioEngine.toggleShuffle()}
+        class:lit={$playerStore.shuffle !== "off"}
+        title={SHUFFLE_TITLES[$playerStore.shuffle]}
+        aria-label={SHUFFLE_TITLES[$playerStore.shuffle]}
+        onclick={() => audioEngine.cycleShuffle()}
       >
-        <Icon name="shuffle" size={16} />
-        {#if $playerStore.shuffle}<span class="dot"></span>{/if}
+        <Icon name={$playerStore.shuffle === "magic" ? "sparkles" : "shuffle"} size={16} />
+        {#if $playerStore.shuffle !== "off"}<span class="dot"></span>{/if}
       </button>
 
       <button
