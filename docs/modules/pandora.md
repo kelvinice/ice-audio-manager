@@ -47,6 +47,14 @@ Shared pieces: `TrackTable` (every song list: playlists, collections, library ta
 `CoverTile` + `SongRow` (home rows). Buttons are solid fills from `app.css` (`btn-primary`, `btn-ghost`, `btn-icon`,
 `btn-play`). No gradients or glows.
 
+## Window frame
+
+The native frame is off (`decorations: false`). `TitleBar.svelte` draws the caption: app menu (incl. `quit_app`, which
+bypasses close-to-tray), Back / Forward over the route history in `App.svelte` (also Alt+Left/Right and mouse buttons
+4/5), Home, the app-wide search field (Ctrl+K, / or Ctrl+L; typing opens Search, which waits 350 ms), Identify, Ice, and
+minimize / maximize / close. Empty bar space carries `data-tauri-drag-region`; the window permissions are in
+`capabilities/default.json`.
+
 ## Audio quality (not offered)
 
 Pandora streams the ANDROID client's muxed file. Audio-only formats from every client tried (ANDROID, ANDROID_VR,
@@ -60,6 +68,8 @@ and lyrics for visual checks. See the [Pandora guide](../pandora.md) for launch 
 
 ## Change log
 
+- 2026-11-27 · Custom title bar with history, app-wide search and window buttons; SearchView uses `TrackTable` (with add
+  to queue); `quit_app` command; `vite-env.d.ts` for asset imports.
 - 2026-11-27 · Page headers draw their back link inside the tinted area and leave room for descenders; the sidebar's
   playlist actions are one `+` menu (`MoreMenu` takes `icon` / `buttonClass` / `align`).
 - 2026-11-27 · Added theme presets, appearance previews and size-specific Windows icons.

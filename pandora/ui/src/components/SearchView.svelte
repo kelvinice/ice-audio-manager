@@ -1,16 +1,21 @@
 <script lang="ts">
+  import { untrack } from "svelte";
   import { ytmSearch } from "../lib/ipc";
-  import { resolveArtworkUrl } from "../lib/theme";
   import type { Track } from "../lib/types";
   import Icon from "./Icon.svelte";
+  import TrackTable from "./TrackTable.svelte";
+
+  /** Results for the title bar's search field. Typing searches after a short pause; Enter is immediate. */
   interface Props {
+    query: string;
+    /** Bumped by Enter in the search field to skip the typing pause. */
+    submitSeq: number;
     localTracks: Track[];
     likedIds: Set<string>;
     cachedIds: Set<string>;
     currentTrackId: string | null;
+    isPlaying: boolean;
     proxyPort: number;
-    externalQuery?: string;
-    externalQuerySeq?: number;
     onPlay: (track: Track, list: Track[]) => void;
     onEnqueue: (track: Track) => void;
     onToggleLike: (track: Track) => void;
@@ -19,13 +24,14 @@
   }
 
   let {
+    query,
+    submitSeq,
     localTracks,
     likedIds,
     cachedIds,
     currentTrackId,
+    isPlaying,
     proxyPort,
-    externalQuery = "",
-    externalQuerySeq = 0,
     onPlay,
     onEnqueue,
     onToggleLike,
@@ -33,368 +39,190 @@
     onOpenPlaylistPicker,
   }: Props = $props();
 
-  let query = $state("");
-  let filter = $state<"songs" | "videos" | "local">("songs");
+  type Filter = "songs" | "videos" | "local";
+  const FILTERS: { id: Filter; label: string }[] = [
+    { id: "songs", label: "Songs" },
+    { id: "videos", label: "Videos" },
+    { id: "local", label: "Local files" },
+  ];
+  const TYPING_PAUSE_MS = 350;
+
+  let filter = $state<Filter>("songs");
   let searching = $state(false);
   let results = $state<Track[]>([]);
   let error = $state<string | null>(null);
-  let downloadingId = $state<string | null>(null);
-  let lastHandledSeq = 0;
+  let searchedFor = $state("");
+  let request = 0;
+  let lastSubmit = 0;
 
-  $effect(() => {
-    if (externalQuerySeq > 0 && externalQuerySeq !== lastHandledSeq && externalQuery.trim()) {
-      lastHandledSeq = externalQuerySeq;
-      query = externalQuery.trim();
-      filter = "songs";
-      void runSearch();
-    }
+  let trimmed = $derived(query.trim());
+
+  let localMatches = $derived.by(() => {
+    const q = trimmed.toLowerCase();
+    if (!q) return localTracks;
+    return localTracks.filter((t) => `${t.title} ${t.artist} ${t.album}`.toLowerCase().includes(q));
   });
 
-  let displayedTracks = $derived.by(() => {
-    if (filter === "local") {
-      const q = query.trim().toLowerCase();
-      return q
-        ? localTracks.filter(
-            (t) =>
-              t.title.toLowerCase().includes(q) ||
-              t.artist.toLowerCase().includes(q) ||
-              t.album.toLowerCase().includes(q),
-          )
-        : localTracks;
-    }
-    return results;
-  });
-
-  async function runSearch(e?: Event) {
-    e?.preventDefault();
-    if (filter === "local") return;
-    if (!query.trim()) return;
+  async function run(q: string, kind: Filter) {
+    const seq = ++request;
     searching = true;
     error = null;
     try {
-      const res = await ytmSearch(query, filter);
+      const res = await ytmSearch(q, kind);
+      if (seq !== request) return;
       results = res.tracks;
       error = res.error;
-    } catch (err) {
-      error = err instanceof Error ? err.message : String(err);
+      searchedFor = q;
+    } catch (e) {
+      if (seq === request) error = e instanceof Error ? e.message : String(e);
     } finally {
+      if (seq === request) searching = false;
+    }
+  }
+
+  // Remote search follows the query and filter, after a pause (or at once on Enter).
+  $effect(() => {
+    const q = trimmed;
+    const kind = filter;
+    const immediate = submitSeq !== lastSubmit;
+    lastSubmit = submitSeq;
+    if (kind === "local" || !q) {
+      request++;
       searching = false;
+      if (!q) results = [];
+      return;
     }
-  }
+    // Results and errors are read without tracking, so a failed search does not re-run itself.
+    if (!immediate && untrack(() => q === searchedFor && !error)) return;
+    const timer = window.setTimeout(() => void run(q, kind), immediate ? 0 : TYPING_PAUSE_MS);
+    return () => window.clearTimeout(timer);
+  });
 
-  async function handleDownload(track: Track) {
-    downloadingId = track.id;
-    try {
-      await onDownload(track);
-    } finally {
-      downloadingId = null;
-    }
-  }
-
-  function formatMs(ms: number | null): string {
-    if (!ms) return "--:--";
-    const sec = Math.floor(ms / 1000);
-    return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
-  }
+  let shown = $derived(filter === "local" ? localMatches : results);
 </script>
 
 <div class="page">
-  <div class="search-head">
-    <h1>Search</h1>
-    <form class="search-bar" onsubmit={runSearch}>
-      <input
-        type="text"
-        placeholder="Search songs, artists, or albums..."
-        bind:value={query}
-      />
-      <button type="submit" class="btn-primary" disabled={searching}>
-        {searching ? "Searching..." : "Search"}
+  <nav class="filters" aria-label="Search in">
+    {#each FILTERS as item (item.id)}
+      <button
+        class="filter"
+        class:active={filter === item.id}
+        aria-pressed={filter === item.id}
+        onclick={() => {
+          filter = item.id;
+          searchedFor = "";
+        }}
+      >
+        {item.label}
+        {#if item.id === "local"}<span class="n">{localMatches.length}</span>{/if}
       </button>
-    </form>
-
-    <div class="chips">
-      <button class="chip" class:active={filter === "songs"} onclick={() => (filter = "songs")}>
-        Songs
-      </button>
-      <button class="chip" class:active={filter === "videos"} onclick={() => (filter = "videos")}>
-        Videos
-      </button>
-      <button class="chip" class:active={filter === "local"} onclick={() => (filter = "local")}>
-        Local ({localTracks.length})
-      </button>
-    </div>
-  </div>
+    {/each}
+    {#if searching}
+      <span class="status"><Icon name="loader" size={14} spin /> Searching…</span>
+    {/if}
+  </nav>
 
   {#if error}
-    <div class="err card-glass">{error}</div>
+    <p class="error">{error}</p>
   {/if}
 
-  <div class="track-list card-glass">
-    {#if displayedTracks.length === 0}
-      <div class="empty">
-        {#if filter === "local"}
-          No matching local songs.
-        {:else if searching}
-          Searching...
-        {:else}
-          Search for songs, artists, or local files.
-        {/if}
-      </div>
-    {:else}
-      {#each displayedTracks as track (track.id)}
-        {@const isLiked = likedIds.has(track.id) || track.liked}
-        {@const isCached = cachedIds.has(track.id) || track.cached}
-        <div class="row" class:playing={currentTrackId === track.id}>
-          <button class="row-main" onclick={() => onPlay(track, displayedTracks)}>
-            <div class="thumb">
-              {#if resolveArtworkUrl(track.artworkUrl, proxyPort)}
-                <img src={resolveArtworkUrl(track.artworkUrl, proxyPort)} alt={track.title} />
-              {:else}
-                <Icon name="music" size={18} />
-              {/if}
-            </div>
-            <div class="meta">
-              <div class="title">{track.title}</div>
-              <div class="sub">
-                {track.artist}{track.album ? ` • ${track.album}` : ""}
-              </div>
-            </div>
-          </button>
-
-          <div class="dur">{formatMs(track.durationMs)}</div>
-
-          <div class="actions">
-            <button
-              class="act"
-              class:liked={isLiked}
-              title={isLiked ? "Remove from Favorites" : "Add to Favorites"}
-              aria-label={isLiked ? "Remove from Favorites" : "Add to Favorites"}
-              onclick={() => onToggleLike(track)}
-            >
-              <Icon name={isLiked ? "heart-filled" : "heart"} size={14} />
-            </button>
-            <button
-              class="act"
-              title="Add to queue"
-              aria-label="Add to queue"
-              onclick={() => onEnqueue(track)}
-            >
-              <Icon name="queue-plus" size={14} />
-            </button>
-            {#if track.source === "ytmusic"}
-              <button
-                class="act"
-                class:cached={isCached}
-                disabled={isCached || downloadingId === track.id}
-                title={isCached ? "Cached offline" : "Download for offline"}
-                aria-label={isCached ? "Cached offline" : "Download for offline"}
-                onclick={() => handleDownload(track)}
-              >
-                <Icon
-                  name={downloadingId === track.id ? "loader" : isCached ? "check" : "download"}
-                  size={14}
-                  spin={downloadingId === track.id}
-                />
-              </button>
-            {/if}
-            <button
-              class="act"
-              title="Add to playlist"
-              aria-label="Add to playlist"
-              onclick={() => onOpenPlaylistPicker(track)}
-            >
-              <Icon name="list-plus" size={14} />
-            </button>
-          </div>
-        </div>
-      {/each}
-    {/if}
-  </div>
+  {#if !trimmed && filter !== "local"}
+    <div class="hint">
+      <Icon name="search" size={28} />
+      <strong>Search YouTube Music</strong>
+      <span>Type in the bar above — songs, artists or albums. Ctrl+K jumps there from anywhere.</span>
+    </div>
+  {:else}
+    <TrackTable
+      tracks={shown}
+      {likedIds}
+      {cachedIds}
+      {currentTrackId}
+      {isPlaying}
+      {proxyPort}
+      filterFrom={0}
+      emptyText={searching ? "Searching…" : filter === "local" ? "No local songs match." : `No results for “${trimmed}”.`}
+      {onPlay}
+      {onToggleLike}
+      onAddToPlaylist={onOpenPlaylistPicker}
+      {onEnqueue}
+      {onDownload}
+    />
+  {/if}
 </div>
 
 <style>
   .page {
-    padding: 24px 28px 40px;
     display: flex;
     flex-direction: column;
-    gap: 18px;
+    gap: 16px;
+    padding: 22px 24px 48px;
   }
 
-  .search-head h1 {
-    margin: 0 0 12px;
-    font-size: 24px;
-  }
-
-  .search-bar {
+  .filters {
     display: flex;
-    gap: 10px;
-  }
-
-  .search-bar input {
-    flex: 1;
-    background: var(--p-fill);
-    border: 1px solid var(--p-border);
-    border-radius: 999px;
-    padding: 11px 18px;
-    font-size: 14px;
-    outline: none;
-  }
-
-  .search-bar input:focus {
-    border-color: var(--p-accent);
-  }
-
-  .chips {
-    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
     gap: 8px;
-    margin-top: 12px;
+    padding: 0 8px;
   }
 
-  .chip {
-    padding: 7px 15px;
+  .filter {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    height: 32px;
+    padding: 0 14px;
     border-radius: 999px;
-    font-size: 12px;
+    background: var(--p-fill);
+    font-size: 13px;
     font-weight: 600;
-    background: var(--p-fill);
-    color: var(--p-text-muted);
-    border: 1px solid var(--p-border);
-    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.12s ease;
+    transition: background 0.14s ease, color 0.14s ease;
   }
 
-  .chip:hover {
-    background: var(--p-fill);
-    color: var(--p-text);
+  .filter:hover {
+    background: color-mix(in srgb, var(--p-text) 14%, var(--p-fill));
   }
 
-  .chip:active {
-    transform: scale(0.96);
+  .filter.active {
+    background: var(--p-text);
+    color: var(--p-bg);
   }
 
-  .chip.active {
-    background: var(--p-accent-soft);
-    color: var(--p-accent-bright);
-    border-color: var(--p-accent);
+  .n {
+    font-size: 11.5px;
+    opacity: 0.6;
+    font-variant-numeric: tabular-nums;
   }
 
-  .err {
-    padding: 12px 16px;
+  .status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: 6px;
+    font-size: 12.5px;
+    color: var(--p-text-dim);
+  }
+
+  .error {
+    margin: 0 8px;
     color: var(--p-danger);
     font-size: 13px;
   }
 
-  .track-list {
-    padding: 8px;
+  .hint {
     display: flex;
     flex-direction: column;
-    gap: 4px;
-  }
-
-  .empty {
-    padding: 36px 20px;
-    text-align: center;
-    color: var(--p-text-muted);
-    font-size: 14px;
-  }
-
-  .row {
-    display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 6px 10px;
-    border-radius: 12px;
-  }
-
-  .row:hover {
-    background: var(--p-fill);
-  }
-
-  .row.playing {
-    background: var(--p-accent-soft);
-  }
-
-  .row-main {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    text-align: left;
-  }
-
-  .thumb {
-    width: 44px;
-    height: 44px;
-    border-radius: 8px;
-    overflow: hidden;
-    background: var(--p-fill);
-    display: grid;
-    place-items: center;
-    flex-shrink: 0;
-  }
-
-  .thumb img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
-
-  .meta {
-    min-width: 0;
-  }
-
-  .title {
-    font-size: 14px;
-    font-weight: 600;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .sub {
-    font-size: 12px;
-    color: var(--p-text-muted);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .dur {
-    font-size: 12px;
+    gap: 8px;
+    padding: 72px 20px;
     color: var(--p-text-dim);
-    width: 46px;
-    text-align: right;
+    font-size: 13px;
+    text-align: center;
   }
 
-  .actions {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-  }
-
-  .act {
-    width: 32px;
-    height: 32px;
-    display: grid;
-    place-items: center;
-    border-radius: 8px;
-    color: var(--p-text-muted);
-    background: var(--p-fill);
-  }
-
-  .act:hover {
-    background: var(--p-fill);
+  .hint strong {
     color: var(--p-text);
-  }
-
-  .act:active {
-    transform: scale(0.91);
-  }
-
-  .act.liked {
-    color: var(--p-danger);
-  }
-
-  .act.cached {
-    color: var(--p-success);
+    font-size: 18px;
   }
 </style>

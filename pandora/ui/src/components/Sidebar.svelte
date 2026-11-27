@@ -2,7 +2,6 @@
   import type { DeviceSummary, IceStatus, Playlist } from "../lib/types";
   import Icon from "./Icon.svelte";
   import MoreMenu from "./MoreMenu.svelte";
-  import pandoraMark from "../../../../assets/src/pandora.svg";
 
   export type NavTab = "home" | "search" | "recognize" | "library" | "ice" | "settings";
 
@@ -32,13 +31,6 @@
 </script>
 
 <aside class="sidebar">
-  <div class="brand">
-    <img class="brand-mark" src={pandoraMark} alt="" width="36" height="36" />
-    <div>
-      <div class="brand-name">Pandora</div>
-    </div>
-  </div>
-
   <nav class="nav-list" aria-label="Main navigation">
     <button
       class="nav-item"
@@ -171,27 +163,15 @@
     flex-shrink: 0;
     display: flex;
     flex-direction: column;
-    padding: 18px 12px 14px;
+    padding: 10px 12px 14px;
     background: var(--p-rail);
     border-right: 1px solid var(--p-border);
     backdrop-filter: blur(24px);
     z-index: 2;
   }
 
-  .brand {
-    display: flex;
-    align-items: center;
-    gap: 11px;
-    padding: 4px 8px 24px;
-  }
 
-  .brand-mark { flex-shrink: 0; }
 
-  .brand-name {
-    font-size: 21px;
-    font-weight: 700;
-    letter-spacing: -0.02em;
-  }
 
   .nav-list {
     display: flex;

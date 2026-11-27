@@ -13,6 +13,7 @@
   import RecognizeView from "./components/RecognizeView.svelte";
   import SearchView from "./components/SearchView.svelte";
   import SettingsView from "./components/SettingsView.svelte";
+  import TitleBar from "./components/TitleBar.svelte";
   import Sidebar, { type NavTab } from "./components/Sidebar.svelte";
   import { audioEngine, playerStore } from "./lib/audio";
   import {
@@ -81,8 +82,10 @@
   let proxyPort = $state(0);
   let demoMode = $state(false);
   let feedLoading = $state(false);
-  let externalQuery = $state("");
-  let externalQuerySeq = $state(0);
+  /** The title bar's search text (the app's one search box). */
+  let searchQuery = $state("");
+  /** Bumped by Enter so Search skips its typing pause. */
+  let searchSubmitSeq = $state(0);
   let feed = $state<HomeFeed>({
     shelves: [],
     quickPicks: [],
@@ -197,10 +200,92 @@
     }
   }
 
+  type LibraryTab = typeof libraryInitialTab;
+  interface Route {
+    tab: NavTab;
+    playlistId: string | null;
+    collection: CollectionCard | null;
+    libraryTab: LibraryTab;
+  }
+
+  const HISTORY_LIMIT = 50;
+  let backStack = $state<Route[]>([]);
+  let forwardStack = $state<Route[]>([]);
+
+  function currentRoute(): Route {
+    return { tab: activeTab, playlistId: selectedPlaylistId, collection: openCollection, libraryTab: libraryInitialTab };
+  }
+
+  function applyRoute(route: Route) {
+    activeTab = route.tab;
+    selectedPlaylistId = route.playlistId;
+    openCollection = route.collection;
+    libraryInitialTab = route.libraryTab;
+  }
+
+  function sameRoute(a: Route, b: Route): boolean {
+    return (
+      a.tab === b.tab &&
+      a.playlistId === b.playlistId &&
+      a.collection?.browseId === b.collection?.browseId &&
+      (a.tab !== "library" || a.libraryTab === b.libraryTab)
+    );
+  }
+
+  /** Moves to a new page and records it for Back / Forward. */
+  function go(patch: Partial<Route>) {
+    const from = currentRoute();
+    const to = { ...from, ...patch };
+    if (sameRoute(from, to)) {
+      applyRoute(to);
+      return;
+    }
+    backStack = [...backStack.slice(1 - HISTORY_LIMIT), from];
+    forwardStack = [];
+    applyRoute(to);
+  }
+
+  function goBack() {
+    const to = backStack.at(-1);
+    if (!to) return;
+    forwardStack = [...forwardStack, currentRoute()];
+    backStack = backStack.slice(0, -1);
+    applyRoute(to);
+  }
+
+  function goForward() {
+    const to = forwardStack.at(-1);
+    if (!to) return;
+    backStack = [...backStack, currentRoute()];
+    forwardStack = forwardStack.slice(0, -1);
+    applyRoute(to);
+  }
+
   function navigate(tab: NavTab, playlistId: string | null = null) {
-    activeTab = tab;
-    selectedPlaylistId = playlistId;
-    openCollection = null;
+    go({ tab, playlistId, collection: null });
+  }
+
+  function search(query: string) {
+    searchQuery = query;
+    if (query.trim() && activeTab !== "search") navigate("search");
+  }
+
+  function submitSearch() {
+    searchSubmitSeq += 1;
+    if (activeTab !== "search") navigate("search");
+  }
+
+  // Alt+Left / Alt+Right and the mouse's back / forward buttons, as in a browser.
+  function onHistoryKey(e: KeyboardEvent) {
+    if (!e.altKey || (e.key !== "ArrowLeft" && e.key !== "ArrowRight")) return;
+    e.preventDefault();
+    if (e.key === "ArrowLeft") goBack();
+    else goForward();
+  }
+
+  function onHistoryMouse(e: MouseEvent) {
+    if (e.button === 3) goBack();
+    else if (e.button === 4) goForward();
   }
 
   // Each page starts at the top, like a new screen.
@@ -367,7 +452,28 @@
 
 <div class="ambient-bg" aria-hidden="true"></div>
 
+<svelte:window onkeydown={onHistoryKey} onmouseup={onHistoryMouse} />
+
 <div class="shell">
+  <TitleBar
+    query={searchQuery}
+    onHome={activeTab === "home" && !openCollection}
+    onSearchPage={activeTab === "search"}
+    canBack={backStack.length > 0}
+    canForward={forwardStack.length > 0}
+    iceLive={iceStatus.bridgeConnected || iceStatus.mode === "embedded"}
+    onBack={goBack}
+    onForward={goForward}
+    onGoHome={() => navigate("home")}
+    onSearch={search}
+    onSubmitSearch={submitSearch}
+    onIdentify={() => navigate("recognize")}
+    onOpenIce={() => navigate("ice")}
+    onOpenSettings={() => navigate("settings")}
+    onOpenEq={() => (showEq = true)}
+    onNewPlaylist={() => openPlaylistModal(null)}
+    onImportPlaylist={() => (importModalOpen = true)}
+  />
   <div class="main-area">
     <Sidebar
       {activeTab}
@@ -406,7 +512,7 @@
           currentTrackId={$playerStore.currentTrack?.id ?? null}
           isPlaying={$playerStore.playing}
           {proxyPort}
-          onBack={() => (openCollection = null)}
+          onBack={() => go({ collection: null })}
           onPlay={(track, list) => void audioEngine.playTrack(track, list)}
           onPlayShuffled={playShuffled}
           onToggleLike={(track) => void handleToggleLike(track)}
@@ -428,12 +534,11 @@
           onPlay={(track, list) => void audioEngine.playTrack(track, list)}
           onToggleLike={(track) => void handleToggleLike(track)}
           onOpenPlaylistPicker={(track) => openPlaylistModal(track)}
-          onOpenCollection={(card) => (openCollection = card)}
+          onOpenCollection={(card) => go({ collection: card })}
           onPlayCollection={(card) => void playCollection(card)}
           onRefresh={() => void refreshHome()}
           onOpenLocal={() => {
-            libraryInitialTab = "local";
-            navigate("library");
+            go({ tab: "library", playlistId: null, collection: null, libraryTab: "local" });
           }}
         />
       {:else if activeTab === "search"}
@@ -443,8 +548,9 @@
           {cachedIds}
           currentTrackId={$playerStore.currentTrack?.id ?? null}
           {proxyPort}
-          {externalQuery}
-          {externalQuerySeq}
+          query={searchQuery}
+          submitSeq={searchSubmitSeq}
+          isPlaying={$playerStore.playing}
           onPlay={(track, list) => void audioEngine.playTrack(track, list)}
           onEnqueue={(track) => audioEngine.enqueue(track)}
           onToggleLike={(track) => void handleToggleLike(track)}
@@ -462,9 +568,8 @@
           {proxyPort}
           onPlay={(track, list) => void audioEngine.playTrack(track, list)}
           onSearchQuery={(q) => {
-            externalQuery = q;
-            externalQuerySeq += 1;
-            navigate("search", null);
+            searchQuery = q;
+            submitSearch();
           }}
           onToggleLike={(track) => void handleToggleLike(track)}
           onAddToPlaylist={(track) => openPlaylistModal(track)}
@@ -481,10 +586,7 @@
           currentTrackId={$playerStore.currentTrack?.id ?? null}
           isPlaying={$playerStore.playing}
           {proxyPort}
-          onTabChange={(nextTab) => {
-            libraryInitialTab = nextTab;
-            selectedPlaylistId = null;
-          }}
+          onTabChange={(nextTab) => go({ libraryTab: nextTab, playlistId: null })}
           onPlay={(track, list) => void audioEngine.playTrack(track, list)}
           onPlayShuffled={playShuffled}
           onToggleLike={(track) => void handleToggleLike(track)}
@@ -518,8 +620,8 @@
               .catch(() => {});
           }}
           onSelectPlaylist={(id) => {
-            if (id === null) libraryInitialTab = "playlists";
-            navigate("library", id);
+            if (id === null) go({ tab: "library", playlistId: null, collection: null, libraryTab: "playlists" });
+            else navigate("library", id);
           }}
           onOpenNewPlaylist={() => openPlaylistModal(null)}
           onOpenImportPlaylist={() => (importModalOpen = true)}
@@ -531,8 +633,7 @@
           onDeletePlaylist={(id) => {
             void deletePlaylist(id).then((next) => {
               library = next;
-              selectedPlaylistId = null;
-              libraryInitialTab = "playlists";
+              go({ playlistId: null, libraryTab: "playlists" });
               showNotice("Playlist deleted");
             });
           }}

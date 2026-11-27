@@ -44,6 +44,9 @@
     | "chevron-left"
     | "chevron-right"
     | "more"
+    | "win-min"
+    | "win-max"
+    | "win-restore"
     | "sparkles";
 
   interface Props {
@@ -240,6 +243,13 @@
     <path d="m15 18-6-6 6-6" />
   {:else if name === "chevron-right"}
     <path d="m9 18 6-6-6-6" />
+  {:else if name === "win-min"}
+    <path d="M5 12h14" />
+  {:else if name === "win-max"}
+    <rect x="5" y="5" width="14" height="14" rx="1.5" />
+  {:else if name === "win-restore"}
+    <rect x="5" y="8" width="11" height="11" rx="1.5" />
+    <path d="M8 8V6.5A1.5 1.5 0 0 1 9.5 5h8A1.5 1.5 0 0 1 19 6.5v8a1.5 1.5 0 0 1-1.5 1.5H16" />
   {:else if name === "more"}
     <circle cx="5" cy="12" r="1.6" fill="currentColor" stroke="none" />
     <circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none" />

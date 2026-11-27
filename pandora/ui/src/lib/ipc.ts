@@ -54,6 +54,11 @@ export function ytmHome(): Promise<HomeFeed> {
   return call<HomeFeed>("ytm_home");
 }
 
+/** Quits Pandora for real (the window close button may only hide it to the tray). */
+export function quitApp(): Promise<void> {
+  return call<void>("quit_app");
+}
+
 export function ytmCollection(browseId: string): Promise<CollectionPage> {
   return call<CollectionPage>("ytm_collection", { browseId });
 }

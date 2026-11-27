@@ -23,6 +23,7 @@
     onToggleLike: (track: Track) => void;
     onAddToPlaylist: (track: Track) => void;
     onDownload?: (track: Track) => void;
+    onEnqueue?: (track: Track) => void;
     onRemove?: (track: Track) => void;
     removeLabel?: string;
   }
@@ -41,6 +42,7 @@
     onToggleLike,
     onAddToPlaylist,
     onDownload,
+    onEnqueue,
     onRemove,
     removeLabel = "Remove",
   }: Props = $props();
@@ -71,7 +73,7 @@
 {:else if visible.length === 0}
   <p class="empty">No tracks match “{query}”.</p>
 {:else}
-  <div class="table" class:no-album={!showAlbum} role="list">
+  <div class="table" class:no-album={!showAlbum} class:wide-acts={Boolean(onEnqueue)} role="list">
     <div class="row head" aria-hidden="true">
       <span class="num">#</span>
       <span>Title</span>
@@ -134,6 +136,11 @@
           <button class="btn-icon sm bare" title="Add to playlist" aria-label="Add to playlist" onclick={() => onAddToPlaylist(track)}>
             <Icon name="list-plus" size={15} />
           </button>
+          {#if onEnqueue}
+            <button class="btn-icon sm bare" title="Add to queue" aria-label="Add to queue" onclick={() => onEnqueue(track)}>
+              <Icon name="queue-plus" size={15} />
+            </button>
+          {/if}
           {#if onDownload && track.source === "ytmusic" && !cached}
             <button class="btn-icon sm bare" title="Download" aria-label="Download" onclick={() => onDownload(track)}>
               <Icon name="download" size={15} />
@@ -185,13 +192,18 @@
   }
 
   .table {
-    --cols: 40px minmax(0, 4fr) minmax(0, 3fr) 56px 112px;
+    --acts: 112px;
+    --cols: 40px minmax(0, 4fr) minmax(0, 3fr) 56px var(--acts);
     display: flex;
     flex-direction: column;
   }
 
   .table.no-album {
-    --cols: 40px minmax(0, 1fr) 56px 112px;
+    --cols: 40px minmax(0, 1fr) 56px var(--acts);
+  }
+
+  .table.wide-acts {
+    --acts: 146px;
   }
 
   .row {
@@ -377,7 +389,7 @@
 
   @media (max-width: 860px) {
     .table:not(.no-album) {
-      --cols: 40px minmax(0, 1fr) 56px 112px;
+      --cols: 40px minmax(0, 1fr) 56px var(--acts);
     }
 
     .table .album {

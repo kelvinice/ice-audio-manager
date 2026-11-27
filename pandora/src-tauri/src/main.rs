@@ -44,6 +44,17 @@ struct AppState {
     quitting: Arc<AtomicBool>,
 }
 
+/// Leaves for real (the close button only hides the window when "Minimize to tray" is on).
+fn quit(app: &AppHandle) {
+    app.state::<Arc<AppState>>().quitting.store(true, std::sync::atomic::Ordering::Release);
+    app.exit(0);
+}
+
+#[tauri::command]
+fn quit_app(app: AppHandle) {
+    quit(&app);
+}
+
 #[tauri::command]
 fn get_proxy_port(state: State<'_, Arc<AppState>>) -> u16 {
     state.proxy_port
@@ -513,12 +524,7 @@ fn main() {
                 .show_menu_on_left_click(false)
                 .on_menu_event(|app, event| match event.id.as_ref() {
                     "tray-show" => show_main_window(app),
-                    "tray-quit" => {
-                        app.state::<Arc<AppState>>()
-                            .quitting
-                            .store(true, std::sync::atomic::Ordering::Release);
-                        app.exit(0);
-                    }
+                    "tray-quit" => quit(app),
                     _ => {}
                 })
                 .on_tray_icon_event(|tray, event| match event {
@@ -556,6 +562,7 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             get_proxy_port,
+            quit_app,
             is_demo_mode,
             ytm_home,
             ytm_collection,
