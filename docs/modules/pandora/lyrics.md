@@ -24,7 +24,7 @@ Chosen from the lyrics icon menu in Now Playing's top bar (Rust `LyricsStyle`, u
 ## Word timing (`lib/lyricWords.ts`)
 
 - `timedWords(line, nextStart)`: the line's word timings, or an even split by length when it has none.
-- `quickenWords(words, lineStart, pace, maxStepMs)`: reveals words sooner. Rain uses pace 0.55 and 260 ms per word,
+- `quickenWords(words, lineStart, pace, maxStepMs)`: reveals words sooner. Rain uses pace 0.72 and 340 ms per word,
   because estimated timings lag the voice (they spread words over the whole gap to the next line).
 - `joinsWithoutSpaces`: Japanese / Chinese lines join pieces without spaces.
 

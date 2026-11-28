@@ -19,9 +19,10 @@
 
   /** How long a finished line keeps falling before it is removed (longest fall + largest delay). */
   const FALL_MS = 2_600;
-  /** Words drop in after 55 % of their (mostly estimated) delay, at most 260 ms apart, so they keep up with the voice. */
-  const WORD_PACE = 0.55;
-  const MAX_WORD_STEP_MS = 260;
+  /** Words drop in after 72 % of their (mostly estimated) delay, at most 340 ms apart: ahead of the estimate so they
+   *  keep up with the voice, but not so far ahead that they outrun it (55 % / 260 ms did). */
+  const WORD_PACE = 0.72;
+  const MAX_WORD_STEP_MS = 340;
 
   interface Glyph {
     ch: string;
@@ -119,7 +120,7 @@
                 class="glyph"
                 style:--rot={`${g.b * 24}deg`}
                 style:--lift={`${0.6 + (g.c + 1) * 0.5}em`}
-                style:--stagger={`${gi * 18}ms`}>{g.ch}</span
+                style:--stagger={`${gi * 22}ms`}>{g.ch}</span
               >{/each}</span
           >{current.noGaps ? "" : " "}{/each}
       </p>
@@ -215,7 +216,7 @@
   }
 
   .current .word.sung .glyph {
-    animation: land 0.32s cubic-bezier(0.34, 1.56, 0.64, 1) var(--stagger) backwards;
+    animation: land 0.38s cubic-bezier(0.34, 1.56, 0.64, 1) var(--stagger) backwards;
   }
 
   .current.calm .word:not(.sung) .glyph {

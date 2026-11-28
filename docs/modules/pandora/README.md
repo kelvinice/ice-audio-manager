@@ -104,6 +104,8 @@ Playback itself (the `<audio>` element, EQ, spectrum) is in the UI's Web Audio g
 
 ## Change log
 
+- 2026-11-28 · Rain reveals words a little later again (`quickenWords` pace 0.72, ≤ 340 ms per word; 22 ms letter
+  stagger, 0.38 s landing): 0.55 / 260 ms ran ahead of the voice.
 - 2026-11-28 · Settings → Experimental (`settings.experimental`): smooth transitions, beat pulse, gentle sleep timer;
   roadmap in `docs/pandora-plan.md`.
 - 2026-11-28 · Ice Audio page regrouped: status header, Sound and Notch cards, Connection card (`IceSoundCard`,
