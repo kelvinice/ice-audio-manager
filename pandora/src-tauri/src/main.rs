@@ -11,6 +11,7 @@ mod playlist_import;
 mod proxy;
 mod recognition;
 mod recommend;
+mod startup;
 mod ytm_feed;
 mod ytmusic;
 
@@ -18,7 +19,7 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
 use ice_core::engine::{Command, EngineSnapshot, RoleSet, SpatialMode};
-use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
+use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Emitter, Manager, RunEvent, State, WindowEvent};
 
@@ -54,6 +55,16 @@ fn quit(app: &AppHandle) {
 #[tauri::command]
 fn quit_app(app: AppHandle) {
     quit(&app);
+}
+
+#[tauri::command]
+fn get_launch_at_sign_in() -> startup::LaunchAtSignIn {
+    startup::state()
+}
+
+#[tauri::command]
+fn set_launch_at_sign_in(enabled: bool) -> Result<startup::LaunchAtSignIn, String> {
+    startup::set(enabled)
 }
 
 #[tauri::command]
@@ -541,19 +552,39 @@ fn main() {
                 }
             }
             let show_item = MenuItem::with_id(app, "tray-show", "Show Pandora", true, None::<&str>)?;
+            let launch = startup::state();
+            let launch_label =
+                if startup::LOCKED_IN_DEBUG { "Launch at sign-in (release builds only)" } else { "Launch at sign-in" };
+            let launch_item =
+                CheckMenuItem::with_id(app, "tray-launch", launch_label, launch.available, launch.enabled, None::<&str>)?;
             let sep = PredefinedMenuItem::separator(app)?;
+            let sep_quit = PredefinedMenuItem::separator(app)?;
             let quit_item = MenuItem::with_id(app, "tray-quit", "Quit Pandora", true, None::<&str>)?;
-            let tray_menu = Menu::with_items(app, &[&show_item, &sep, &quit_item])?;
+            let tray_menu = Menu::with_items(app, &[&show_item, &sep, &launch_item, &sep_quit, &quit_item])?;
+            let menu_launch = launch_item.clone();
             let mut tray_builder = TrayIconBuilder::with_id("pandora-tray")
                 .tooltip("Pandora")
                 .menu(&tray_menu)
                 .show_menu_on_left_click(false)
-                .on_menu_event(|app, event| match event.id.as_ref() {
+                .on_menu_event(move |app, event| match event.id.as_ref() {
                     "tray-show" => show_main_window(app),
+                    "tray-launch" => {
+                        let current = startup::state();
+                        if current.available {
+                            if let Err(error) = startup::set(!current.enabled) {
+                                tracing::warn!(%error, "Could not change Pandora's launch at sign-in");
+                            }
+                        }
+                        let _ = launch_item.set_checked(startup::state().enabled);
+                    }
                     "tray-quit" => quit(app),
                     _ => {}
                 })
-                .on_tray_icon_event(|tray, event| match event {
+                .on_tray_icon_event(move |tray, event| match event {
+                    // Settings can change it too, so re-read it as the menu opens.
+                    TrayIconEvent::Click { button: MouseButton::Right, button_state: MouseButtonState::Down, .. } => {
+                        let _ = menu_launch.set_checked(startup::state().enabled);
+                    }
                     TrayIconEvent::Click {
                         button: MouseButton::Left,
                         button_state: MouseButtonState::Up,
@@ -589,6 +620,8 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             get_proxy_port,
             quit_app,
+            get_launch_at_sign_in,
+            set_launch_at_sign_in,
             is_demo_mode,
             ytm_home,
             ytm_collection,

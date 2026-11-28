@@ -49,6 +49,7 @@ Playback itself (the `<audio>` element, EQ, spectrum) is in the UI's Web Audio g
 | File | What it does | Doc |
 |---|---|---|
 | `main.rs` | `AppState`, every Tauri command, tray, window close-to-tray, startup flags | [backend](backend.md) |
+| `startup.rs` | Launch at sign-in (own HKCU Run value, `--background`; locked in debug builds) | [backend](backend.md) |
 | `models.rs` | Shared types: `Track`, `Playlist`, `LibraryState`, `PandoraSettings`, feed / lyrics / Ice types | [backend](backend.md) |
 | `library.rs` | `library.json` store, local folder scan, offline audio cache | [backend](backend.md) |
 | `http.rs` | WinHTTP client (no extra TLS crates) | [backend](backend.md) |
@@ -104,6 +105,7 @@ Playback itself (the `<audio>` element, EQ, spectrum) is in the UI's Web Audio g
 
 ## Change log
 
+- 2026-11-28 · Launch at sign-in (`startup.rs`, `LaunchAtSignIn.svelte`, tray check item), release builds only.
 - 2026-11-28 · Rain reveals words a little later again (`quickenWords` pace 0.72, ≤ 340 ms per word; 22 ms letter
   stagger, 0.38 s landing): 0.55 / 260 ms ran ahead of the voice.
 - 2026-11-28 · Settings → Experimental (`settings.experimental`): smooth transitions, beat pulse, gentle sleep timer;

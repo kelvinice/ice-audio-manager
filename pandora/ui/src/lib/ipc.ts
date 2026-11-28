@@ -9,6 +9,7 @@ import {
   type HomeFeed,
   type IceConfigPatch,
   type IceStatus,
+  type LaunchAtSignIn,
   type LibraryState,
   type MeterFrame,
   type PandoraLyrics,
@@ -53,6 +54,16 @@ export function ytmHome(): Promise<HomeFeed> {
   }
   return call<HomeFeed>("ytm_home");
 }
+
+/** Pandora's launch-at-sign-in state; locked (unavailable) in debug builds and outside Tauri. */
+export function getLaunchAtSignIn(): Promise<LaunchAtSignIn> {
+  if (!inTauri) {
+    return Promise.resolve({ enabled: false, available: false, reason: "Only the desktop app can launch at sign-in." });
+  }
+  return call<LaunchAtSignIn>("get_launch_at_sign_in");
+}
+
+export const setLaunchAtSignIn = (enabled: boolean) => call<LaunchAtSignIn>("set_launch_at_sign_in", { enabled });
 
 /** Quits Pandora for real (the window close button may only hide it to the tray). */
 export function quitApp(): Promise<void> {

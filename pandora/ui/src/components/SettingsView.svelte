@@ -15,6 +15,7 @@
     PandoraSettings,
   } from "../lib/types";
   import ExperimentalPanel from "./ExperimentalPanel.svelte";
+  import LaunchAtSignIn from "./LaunchAtSignIn.svelte";
   import Icon from "./Icon.svelte";
   import StorageSettings from "./StorageSettings.svelte";
   import ThemePicker from "./ThemePicker.svelte";
@@ -317,6 +318,8 @@
             onUpdateSettings({ closeToTray: (e.target as HTMLInputElement).checked })}
         />
       </label>
+
+      <LaunchAtSignIn {onNotify} />
 
       <div class="slider-block">
         <div class="slider-top">

@@ -322,6 +322,13 @@ export interface PlaylistImportResult {
   note: string | null;
 }
 
+/** `get_launch_at_sign_in`: Pandora's Run entry (release builds only may change it). */
+export interface LaunchAtSignIn {
+  enabled: boolean;
+  available: boolean;
+  reason: string | null;
+}
+
 export interface PlaylistImportProgress {
   stage: "fetching" | "matching" | "done" | "cancelled" | "error";
   source: string;

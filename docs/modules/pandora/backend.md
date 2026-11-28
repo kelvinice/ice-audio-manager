@@ -10,7 +10,7 @@ for recognition and import. Blocking work (network, disk) runs in `spawn_blockin
 
 | Group | Commands |
 |---|---|
-| App | `get_proxy_port`, `quit_app` (skips close-to-tray), `is_demo_mode`, `get_app_paths` |
+| App | `get_proxy_port`, `quit_app` (skips close-to-tray), `is_demo_mode`, `get_app_paths`, `get_launch_at_sign_in`, `set_launch_at_sign_in` |
 | YouTube Music | `ytm_home`, `ytm_search`, `ytm_collection`, `save_collection`, `ytm_related`, `ytm_recommend` |
 | Library | `get_library`, `toggle_like`, `record_history`, playlist CRUD (`create_` / `rename_` / `delete_playlist`, `add_to_` / `remove_from_playlist`), `save_eq`, `save_settings`, `reset_settings` |
 | Local and offline | `add_local_folder`, `remove_local_folder`, `rescan_local`, `download_track`, `delete_cached_track`, `clear_offline_cache`, `artwork_cache_bytes`, `clear_artwork_cache` |
@@ -27,7 +27,13 @@ progress), `recognition://status/v1`, `ice://status/v1`, `ice://snapshot/v1`, `i
 `companion://recognized/v1`. Listeners are in `lib/ipc.ts`.
 
 Startup flags: `--demo` (offline demo tracks), `--fake-engine` (Ice embedded engine with fake devices),
-`--background` (stay in the tray; used when Ice starts Pandora). The window starts hidden and `setup` shows it.
+`--background` (stay in the tray; used when Ice starts Pandora and by launch at sign-in). The window starts hidden and
+`setup` shows it.
+
+Launch at sign-in (`startup.rs`): Pandora's own `HKCU\…\Run` value `Pandora` = `"<exe>" --background`, through
+`ice_win::autostart` (`set_enabled_as`). Settings → Playback (`LaunchAtSignIn.svelte`) and a tray check item (re-read on
+right-click) share it. Debug builds (`cfg!(debug_assertions)`) refuse to change it, so `target\debug` never lands in
+the Run key; the toggle shows why it is locked.
 
 ## Library store (`library.rs`, `models.rs`)
 

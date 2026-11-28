@@ -18,7 +18,7 @@ integration and autostart. All `unsafe` stays here. No hooks into other processe
 | `webview2.rs` | `try_suspend`, `resume`, `process_infos` (PIDs of the app's WebView2 tree), `on_process_exit` |
 | `proc_metrics.rs` | `sample_pids`, `cpu_percent_between`, `TreeSnapshot`: Private Bytes, private working set, CPU for the host + WebView2 processes |
 | `desktop.rs` | `InstanceGuard::acquire` (single instance), `finish_tray_menu`, `notify_tray` (tray balloon by GUID) |
-| `autostart.rs` | `Autostart`: per-user launch at sign-in (HKCU) |
+| `autostart.rs` | `Autostart`: per-user launch at sign-in (HKCU `…\Run`). `enabled` / `set_enabled` use `ICE_STARTUP`; `enabled_as` / `set_enabled_as` take a `StartupEntry` (value name + args) so Pandora registers its own entry |
 | `music_service.rs` | `open(MusicServiceId)`: refuses `Pandora` (the shell opens it through `pandora.rs`); on user click, launches the installed Spotify / YouTube Music app (Store app id, `spotify:` protocol, or Chrome/Edge PWA id) and falls back to the official website. STA COM, no network by the app itself |
 
 ## How it works
@@ -41,6 +41,7 @@ Unit tests for geometry/coverage logic in each file; real displays are covered b
 and `examples/fullscreen_spike.rs`.
 
 ## Change log
+- 2026-11-28 Claude: `autostart::StartupEntry` / `ICE_STARTUP`, `enabled_as` / `set_enabled_as` (Pandora's own Run value); Ice's behaviour unchanged.
 - 2026-11-23 Claude: initial recap.
 - 2026-11-25 Claude: `overlay_win::set_capture_excluded` (`SetWindowDisplayAffinity`, `WDA_EXCLUDEFROMCAPTURE` / `WDA_NONE`) for D-27 hibernate.
 - 2026-11-25 Claude: `overlay_win::ignores_cursor` (both `WS_EX_TRANSPARENT` and `WS_EX_LAYERED` set); `set_click_through` documented as for already-layered windows only (the native pill).
