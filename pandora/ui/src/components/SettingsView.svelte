@@ -57,6 +57,7 @@
   }: Props = $props();
 
   const sections = [
+    { id: "General", icon: "settings" },
     { id: "Appearance", icon: "sparkles" },
     { id: "Playback", icon: "play" },
     { id: "Ice Audio", icon: "snowflake" },
@@ -64,7 +65,7 @@
     { id: "Experimental", icon: "flask" },
   ] as const;
   type Section = (typeof sections)[number]["id"];
-  let section = $state<Section>("Appearance");
+  let section = $state<Section>("General");
   let sectionIdx = $derived(sections.findIndex((s) => s.id === section));
   /** Which way the new section slides in: from the right when moving right, from the left when moving left. */
   let direction = $state(1);
@@ -160,7 +161,28 @@
 
   {#key section}
   <div class="section-body" role="tabpanel" aria-label={section} style:--dir={direction}>
-  {#if section === "Appearance"}
+  {#if section === "General"}
+    <section class="panel card-glass">
+      <div class="panel-head">
+        <h2>Startup</h2>
+      </div>
+
+      <LaunchAtSignIn {onNotify} />
+
+      <label class="toggle-row">
+        <div>
+          <div class="row-title">Minimize to System Tray on Close</div>
+          <div class="row-sub">Keep music playing in the tray when clicking the close button</div>
+        </div>
+        <input
+          type="checkbox"
+          checked={settings.closeToTray}
+          onchange={(e) =>
+            onUpdateSettings({ closeToTray: (e.target as HTMLInputElement).checked })}
+        />
+      </label>
+    </section>
+  {:else if section === "Appearance"}
   <ThemePicker theme={settings.theme} onSelect={(theme) => onUpdateSettings({ theme })} />
 
     <section class="panel card-glass">
@@ -305,21 +327,6 @@
             onUpdateSettings({ mediaSessionEnabled: (e.target as HTMLInputElement).checked })}
         />
       </label>
-
-      <label class="toggle-row">
-        <div>
-          <div class="row-title">Minimize to System Tray on Close</div>
-          <div class="row-sub">Keep music playing in the tray when clicking the close button</div>
-        </div>
-        <input
-          type="checkbox"
-          checked={settings.closeToTray}
-          onchange={(e) =>
-            onUpdateSettings({ closeToTray: (e.target as HTMLInputElement).checked })}
-        />
-      </label>
-
-      <LaunchAtSignIn {onNotify} />
 
       <div class="slider-block">
         <div class="slider-top">
@@ -527,7 +534,7 @@
     position: relative;
     display: grid;
     grid-template-columns: repeat(var(--count), minmax(0, 1fr));
-    max-width: 760px;
+    max-width: 880px;
     padding: 4px;
     border-radius: 999px;
     background: var(--p-fill);
@@ -561,6 +568,11 @@
     font-weight: 600;
     white-space: nowrap;
     transition: color 0.2s ease;
+  }
+
+  .tabs button span {
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .tabs button:hover {

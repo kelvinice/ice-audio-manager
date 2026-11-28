@@ -107,6 +107,8 @@ Playback itself (the `<audio>` element, EQ, spectrum) is in the UI's Web Audio g
 
 ## Change log
 
+- 2026-11-29 · Settings opens on a new General tab; its Startup card holds launch at sign-in and minimize to tray
+  (moved from Playback).
 - 2026-11-28 · Launch at sign-in (`startup.rs`, `LaunchAtSignIn.svelte`, tray check item), release builds only.
 - 2026-11-28 · Playlist sync with Spotify / YouTube Music links (`playlist_link.rs`, `playlist_sync.rs`,
   `SyncPlaylistModal.svelte`, `Playlist.link`); imports from a link save it.

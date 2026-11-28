@@ -24,9 +24,9 @@
   starts Ice and peeks its notch for 2 s), minimize / maximize / close. Empty space is `data-tauri-drag-region`.
 - Close-to-tray (`closeToTray`): closing hides the window; Quit really exits.
 - `Sidebar`: navigation panel and "Your Library" panel; optional Ice audio card (`showIceCardInSidebar`).
-- `SettingsView` sections: Appearance & Lyrics, Playback, Ice Audio Bridge, Storage (`StorageSettings`), Experimental
-  (`ExperimentalPanel`). The tabs are a
-  segmented control (icons, a sliding highlight, arrow keys); the chosen section slides in from the side you moved
+- `SettingsView` sections: General (opens first; Startup: launch at sign-in via `LaunchAtSignIn`, minimize to tray),
+  Appearance & Lyrics, Playback, Ice Audio Bridge, Storage (`StorageSettings`), Experimental (`ExperimentalPanel`).
+  The tabs are a segmented control (icons, a sliding highlight, arrow keys); the chosen section slides in from the side you moved
   towards. Library tab content fades in on change. Both animations are off with reduced motion.
 
 ## Building blocks

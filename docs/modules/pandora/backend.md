@@ -31,7 +31,7 @@ Startup flags: `--demo` (offline demo tracks), `--fake-engine` (Ice embedded eng
 `setup` shows it.
 
 Launch at sign-in (`startup.rs`): Pandora's own `HKCU\…\Run` value `Pandora` = `"<exe>" --background`, through
-`ice_win::autostart` (`set_enabled_as`). Settings → Playback (`LaunchAtSignIn.svelte`) and a tray check item (re-read on
+`ice_win::autostart` (`set_enabled_as`). Settings → General → Startup (`LaunchAtSignIn.svelte`) and a tray check item (re-read on
 right-click) share it. Debug builds (`cfg!(debug_assertions)`) refuse to change it, so `target\debug` never lands in
 the Run key; the toggle shows why it is locked.
 
