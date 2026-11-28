@@ -16,7 +16,7 @@ The roadmap and the rules for experimental features are in [pandora-plan.md](../
 | Home and search | YouTube Music home shelves (songs + playlist / album / artist cards), app-wide search, collection pages you can save | [library-and-discovery](library-and-discovery.md) |
 | Library | Favorites, playlists (create, rename, delete, cover mosaic), history, downloads, local folders | [library-and-discovery](library-and-discovery.md) |
 | Recommendations | "Recommended songs" under each playlist, picked from the songs in it, with Add and Refresh | [library-and-discovery](library-and-discovery.md) |
-| Import | YouTube Music / Spotify playlist links, CSV / M3U / text tracklists | [library-and-discovery](library-and-discovery.md) |
+| Import and sync | YouTube Music / Spotify playlist links, CSV / M3U / text tracklists; linked playlists sync again (review new and gone songs, keep or remove) | [library-and-discovery](library-and-discovery.md) |
 | Playback | Queue panel, shuffle / Magic shuffle (recommended songs in between) / repeat, autoplay radio, 10-band EQ + AutoEq import, normalize, skip silence, speed, sleep timer, output device picker, Windows media controls, resume the last song at launch | [playback](playback.md) |
 | Now Playing | Big cover, art-coloured animated backdrop (Blend, Calm or Lively lava lamp), Ice-style spectrum, wavy seek bar, liked heart burst | [playback](playback.md), [appearance](appearance.md) |
 | Lyrics | Synced lyrics (Default, Fisheye, Rain styles), estimated word timing, romaji for Japanese / Korean / Cyrillic | [lyrics](lyrics.md) |
@@ -59,6 +59,8 @@ Playback itself (the `<audio>` element, EQ, spectrum) is in the UI's Web Audio g
 | `ytm_feed.rs` | Parses home shelves and collection pages | [library-and-discovery](library-and-discovery.md) |
 | `recommend.rs` | Playlist recommendations: seed choice and ranking | [library-and-discovery](library-and-discovery.md) |
 | `playlist_import.rs` | Spotify / YouTube Music / CSV / M3U import | [library-and-discovery](library-and-discovery.md) |
+| `playlist_link.rs` | Shared link logic: canonical links, `spotify.link` resolving, fetching, Spotify → YouTube Music matching | [library-and-discovery](library-and-discovery.md) |
+| `playlist_sync.rs` | Sync preview (diff) and apply | [library-and-discovery](library-and-discovery.md) |
 | `lyrics.rs` | Lyrics lookup + word timing + romaji (via `ice-core` / `ice-win`) | [lyrics](lyrics.md) |
 | `recognition.rs` | WASAPI capture, fingerprint, Shazam lookup | [ice-and-recognition](ice-and-recognition.md) |
 | `ice_bridge.rs` | Pandora → Ice: embedded engine or connected to a running Ice | [ice-and-recognition](ice-and-recognition.md) |
@@ -106,6 +108,8 @@ Playback itself (the `<audio>` element, EQ, spectrum) is in the UI's Web Audio g
 ## Change log
 
 - 2026-11-28 · Launch at sign-in (`startup.rs`, `LaunchAtSignIn.svelte`, tray check item), release builds only.
+- 2026-11-28 · Playlist sync with Spotify / YouTube Music links (`playlist_link.rs`, `playlist_sync.rs`,
+  `SyncPlaylistModal.svelte`, `Playlist.link`); imports from a link save it.
 - 2026-11-28 · Rain reveals words a little later again (`quickenWords` pace 0.72, ≤ 340 ms per word; 22 ms letter
   stagger, 0.38 s landing): 0.55 / 260 ms ran ahead of the voice.
 - 2026-11-28 · Settings → Experimental (`settings.experimental`): smooth transitions, beat pulse, gentle sleep timer;

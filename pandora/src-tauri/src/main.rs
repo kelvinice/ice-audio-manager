@@ -8,6 +8,8 @@ mod library;
 mod lyrics;
 mod models;
 mod playlist_import;
+mod playlist_link;
+mod playlist_sync;
 mod proxy;
 mod recognition;
 mod recommend;
@@ -28,7 +30,7 @@ use crate::ice_bridge::IceBridge;
 use crate::library::LibraryStore;
 use crate::models::{
     AppPaths, CollectionPage, EqState, HomeFeed, IceConfigPatch, IceStatus, LibraryState, PandoraLyrics, PandoraSettings,
-    PlaylistImportResult, RecognizedTrack, SearchResponse, Track,
+    PlaylistImportResult, PlaylistSyncPlan, RecognizedTrack, SearchResponse, Track,
 };
 use crate::ytmusic::YtMusicClient;
 
@@ -220,7 +222,7 @@ fn save_collection(
     tracks: Vec<Track>,
     state: State<'_, Arc<AppState>>,
 ) -> Result<(LibraryState, String), String> {
-    state.library.create_playlist_with_tracks(&name, tracks).map(|(library, playlist)| (library, playlist.id))
+    state.library.create_playlist_with_tracks(&name, tracks, None).map(|(library, playlist)| (library, playlist.id))
 }
 
 #[tauri::command]
@@ -463,6 +465,33 @@ async fn import_playlist(
     .map_err(|e| e.to_string())?
 }
 
+/// Reads a playlist's link (or `input`, a new one) and returns what a sync would change; nothing is saved yet.
+#[tauri::command]
+async fn preview_playlist_sync(
+    playlist_id: String,
+    input: Option<String>,
+    app: AppHandle,
+    state: State<'_, Arc<AppState>>,
+) -> Result<PlaylistSyncPlan, String> {
+    let ytm = Arc::clone(&state.ytm);
+    let lib = Arc::clone(&state.library);
+    let cancel = Arc::clone(&state.import_cancel);
+    tauri::async_runtime::spawn_blocking(move || {
+        playlist_sync::preview(&playlist_id, input.as_deref(), &ytm, &lib, &cancel, &app)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+fn apply_playlist_sync(
+    plan: PlaylistSyncPlan,
+    remove_missing: bool,
+    state: State<'_, Arc<AppState>>,
+) -> Result<LibraryState, String> {
+    playlist_sync::apply(plan, remove_missing, &state.library)
+}
+
 #[tauri::command]
 fn cancel_playlist_import(state: State<'_, Arc<AppState>>) {
     state
@@ -673,6 +702,8 @@ fn main() {
             clear_recognition_history,
             import_playlist,
             cancel_playlist_import,
+            preview_playlist_sync,
+            apply_playlist_sync,
         ])
         .build(tauri::generate_context!())
         .expect("error running Pandora")

@@ -10,11 +10,12 @@ use url::Url;
 
 use crate::http;
 use crate::library::LibraryStore;
-use crate::models::{PlaylistImportProgress, PlaylistImportResult, Track};
+use crate::models::{PlaylistImportProgress, PlaylistImportResult, PlaylistLink, Track};
+use crate::playlist_link::{self, LinkItems, SeedContext};
 use crate::ytmusic::YtMusicClient;
 
 const IMPORT_EVENT: &str = "playlist://import/v1";
-const MAX_IMPORT_TRACKS: usize = 250;
+pub const MAX_IMPORT_TRACKS: usize = 250;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SeedTrack {
@@ -27,6 +28,8 @@ pub struct SeedTrack {
 pub enum ImportSource {
     YouTubePlaylist { list_id: String },
     Spotify { kind: &'static str, id: String },
+    /// A `spotify.link` share link; `playlist_link::resolve_short_link` turns it into `Spotify`.
+    SpotifyShort { url: String },
     TextList { entries: Vec<SeedTrack> },
 }
 
@@ -60,11 +63,14 @@ pub fn parse_import_input(raw: &str) -> Result<ImportSource, String> {
             if host == "youtu.be" || host.ends_with(".youtu.be") || host == "youtube.com" || host.ends_with(".youtube.com") {
                 if let Some((_, list_id)) = url.query_pairs().find(|(k, _)| k == "list") {
                     let clean = list_id.trim();
-                    if !clean.is_empty() {
+                    if !clean.is_empty() && clean.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
                         return Ok(ImportSource::YouTubePlaylist { list_id: clean.to_string() });
                     }
                 }
                 return Err("That YouTube link does not include a playlist (`list=...`) parameter".into());
+            }
+            if host == "spotify.link" || host.ends_with(".spotify.link") || host == "spotify.app.link" {
+                return Ok(ImportSource::SpotifyShort { url: url.to_string() });
             }
             if host == "spotify.com" || host.ends_with(".spotify.com") {
                 let segs: Vec<&str> = url
@@ -102,7 +108,7 @@ pub fn parse_import_input(raw: &str) -> Result<ImportSource, String> {
     Ok(ImportSource::TextList { entries })
 }
 
-fn is_spotify_id(s: &str) -> bool {
+pub fn is_spotify_id(s: &str) -> bool {
     (16..=32).contains(&s.len()) && s.chars().all(|c| c.is_ascii_alphanumeric())
 }
 
@@ -319,7 +325,7 @@ pub fn extract_spotify_next_data(html: &str) -> Result<(String, Vec<SeedTrack>),
     Ok((name, seeds))
 }
 
-fn fetch_spotify_embed(kind: &str, id: &str) -> Result<(String, Vec<SeedTrack>), String> {
+pub fn fetch_spotify_embed(kind: &str, id: &str) -> Result<(String, Vec<SeedTrack>), String> {
     let url = format!("https://open.spotify.com/embed/{kind}/{id}");
     let stream = http::open_request("GET", &url, &[], None, Some(http::DEFAULT_UA), 15_000)?;
     if stream.meta.status == 404 {
@@ -333,7 +339,7 @@ fn fetch_spotify_embed(kind: &str, id: &str) -> Result<(String, Vec<SeedTrack>),
     extract_spotify_next_data(&html)
 }
 
-fn emit_progress(app: &AppHandle, progress: PlaylistImportProgress) {
+pub fn emit_progress(app: &AppHandle, progress: PlaylistImportProgress) {
     let _ = app.emit(IMPORT_EVENT, progress);
 }
 
@@ -405,13 +411,14 @@ pub fn pick_best_match<'a>(seed: &SeedTrack, candidates: &'a [Track]) -> Option<
     best.map(|(_, t)| t).or_else(|| candidates.first())
 }
 
-fn match_seeds_on_ytm(
+/// Searches YouTube Music for each seed (4 at a time); one slot per seed, `None` when nothing matched.
+pub fn match_seeds_on_ytm(
     seeds: &[SeedTrack],
     source_label: &str,
     ytm: &YtMusicClient,
     cancel: &AtomicBool,
     app: &AppHandle,
-) -> Result<(Vec<Track>, Vec<String>), String> {
+) -> Result<Vec<Option<Track>>, String> {
     let total = seeds.len().min(MAX_IMPORT_TRACKS);
     let slice = &seeds[..total];
     let slots: Vec<Mutex<Option<Option<Track>>>> = (0..total).map(|_| Mutex::new(None)).collect();
@@ -489,22 +496,60 @@ fn match_seeds_on_ytm(
         return Err("Playlist import cancelled".into());
     }
 
-    let mut matched = Vec::with_capacity(total);
-    let mut unmatched = Vec::new();
-    for (idx, seed) in slice.iter().enumerate() {
-        let got = slots[idx].lock().ok().and_then(|mut g| g.take()).flatten();
-        if let Some(track) = got {
-            matched.push(track);
-        } else {
-            let label = if seed.artist.is_empty() {
-                seed.title.clone()
-            } else {
-                format!("{} — {}", seed.artist, seed.title)
-            };
-            unmatched.push(label);
-        }
+    Ok(slots.into_iter().map(|slot| slot.into_inner().ok().flatten().flatten()).collect())
+}
+
+/// One stage event for the import / sync progress bar.
+pub fn progress(stage: &str, source: &str, completed: usize, total: usize, matched: usize) -> PlaylistImportProgress {
+    PlaylistImportProgress { stage: stage.into(), source: source.into(), completed, total, matched, current_track: None }
+}
+
+/// What an import found, before the playlist is created.
+struct Gathered {
+    name: String,
+    total: usize,
+    tracks: Vec<Track>,
+    unmatched: Vec<String>,
+    note: Option<String>,
+    link: Option<PlaylistLink>,
+}
+
+fn gather(parsed: ImportSource, ytm: &YtMusicClient, cancel: &AtomicBool, app: &AppHandle) -> Result<Gathered, String> {
+    if let ImportSource::TextList { entries } = parsed {
+        let total = entries.len().min(MAX_IMPORT_TRACKS);
+        let note =
+            (entries.len() > MAX_IMPORT_TRACKS).then(|| format!("Imported first {MAX_IMPORT_TRACKS} tracks from the list."));
+        let slots = match_seeds_on_ytm(&entries, "text", ytm, cancel, app)?;
+        let unmatched = playlist_link::unmatched_labels(&entries, &slots);
+        let tracks = slots.into_iter().flatten().collect();
+        return Ok(Gathered { name: "Imported Playlist".into(), total, tracks, unmatched, note, link: None });
     }
-    Ok((matched, unmatched))
+    let source = playlist_link::resolve_short_link(parsed)?;
+    let (service, url) = playlist_link::canonical_link(&source)
+        .ok_or_else(|| "Paste a Spotify or YouTube Music playlist link".to_string())?;
+    let fetched = playlist_link::fetch_link(&source, ytm)?;
+    if cancel.load(Ordering::Acquire) {
+        return Err("Playlist import cancelled".into());
+    }
+    let (seeds, slots) = match fetched.items {
+        LinkItems::Tracks(tracks) => (None, tracks.into_iter().map(Some).collect::<Vec<_>>()),
+        LinkItems::Seeds(seeds) => {
+            let (known, index) = (Default::default(), Default::default());
+            let ctx = SeedContext { known: &known, index: &index, current: &[] };
+            let slots = playlist_link::resolve_seeds(&seeds, &ctx, service, ytm, cancel, app)?;
+            (Some(seeds), slots)
+        }
+    };
+    let unmatched = seeds.as_deref().map(|s| playlist_link::unmatched_labels(s, &slots)).unwrap_or_default();
+    let link = playlist_link::link_record(service, url, seeds.as_deref(), &slots);
+    Ok(Gathered {
+        name: fetched.name,
+        total: fetched.total,
+        tracks: slots.into_iter().flatten().collect(),
+        unmatched,
+        note: fetched.note,
+        link: Some(link),
+    })
 }
 
 pub fn import_playlist(
@@ -517,111 +562,29 @@ pub fn import_playlist(
 ) -> Result<PlaylistImportResult, String> {
     cancel.store(false, Ordering::Release);
     let parsed = parse_import_input(raw_input)?;
-    let source_label = match &parsed {
-        ImportSource::YouTubePlaylist { .. } => "ytmusic",
-        ImportSource::Spotify { .. } => "spotify",
-        ImportSource::TextList { .. } => "text",
-    };
+    let source_label = source_label(&parsed);
+    emit_progress(app, progress("fetching", source_label, 0, 0, 0));
 
-    emit_progress(
-        app,
-        PlaylistImportProgress {
-            stage: "fetching".into(),
-            source: source_label.into(),
-            completed: 0,
-            total: 0,
-            matched: 0,
-            current_track: None,
-        },
-    );
-
-    let result: Result<(String, usize, Vec<Track>, Vec<String>, Option<String>), String> = match parsed {
-        ImportSource::YouTubePlaylist { list_id } => {
-            let (title, tracks) = ytm.fetch_playlist(&list_id)?;
-            let total = tracks.len();
-            Ok((title, total, tracks, Vec::new(), None))
-        }
-        ImportSource::Spotify { kind, id } => {
-            let (title, seeds) = fetch_spotify_embed(kind, &id)?;
-            if cancel.load(Ordering::Acquire) {
-                return Err("Playlist import cancelled".into());
-            }
-            let total = seeds.len().min(MAX_IMPORT_TRACKS);
-            let mut note = None;
-            if seeds.len() >= 100 {
-                note = Some(
-                    "Spotify public web preview includes up to 100 tracks. For larger playlists, paste an Exportify CSV in the Paste / CSV tab."
-                        .into(),
-                );
-            }
-            let (matched, unmatched) = match_seeds_on_ytm(&seeds, "spotify", ytm, cancel, app)?;
-            Ok((title, total, matched, unmatched, note))
-        }
-        ImportSource::TextList { entries } => {
-            let total = entries.len().min(MAX_IMPORT_TRACKS);
-            let note = if entries.len() > MAX_IMPORT_TRACKS {
-                Some(format!("Imported first {MAX_IMPORT_TRACKS} tracks from the list."))
-            } else {
-                None
-            };
-            let (matched, unmatched) = match_seeds_on_ytm(&entries, "text", ytm, cancel, app)?;
-            Ok(("Imported Playlist".into(), total, matched, unmatched, note))
-        }
-    };
-
-    let (detected_name, total_tracks, tracks, unmatched_tracks, note) = match result {
-        Ok(v) => v,
+    let gathered = match gather(parsed, ytm, cancel, app) {
+        Ok(found) => found,
         Err(e) => {
             let stage = if cancel.load(Ordering::Acquire) { "cancelled" } else { "error" };
-            emit_progress(
-                app,
-                PlaylistImportProgress {
-                    stage: stage.into(),
-                    source: source_label.into(),
-                    completed: 0,
-                    total: 0,
-                    matched: 0,
-                    current_track: None,
-                },
-            );
+            emit_progress(app, progress(stage, source_label, 0, 0, 0));
             return Err(e);
         }
     };
+    let Gathered { name: detected_name, total: total_tracks, tracks, unmatched: unmatched_tracks, note, link } = gathered;
 
     if tracks.is_empty() {
-        emit_progress(
-            app,
-            PlaylistImportProgress {
-                stage: "error".into(),
-                source: source_label.into(),
-                completed: total_tracks,
-                total: total_tracks,
-                matched: 0,
-                current_track: None,
-            },
-        );
+        emit_progress(app, progress("error", source_label, total_tracks, total_tracks, 0));
         return Err("Could not match any playable YouTube Music tracks".into());
     }
 
-    let final_name = name_override
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .unwrap_or(&detected_name)
-        .to_string();
+    let final_name = name_override.map(str::trim).filter(|s| !s.is_empty()).unwrap_or(&detected_name).to_string();
     let imported_tracks = tracks.len();
-    let (next_lib, playlist) = library.create_playlist_with_tracks(&final_name, tracks)?;
+    let (next_lib, playlist) = library.create_playlist_with_tracks(&final_name, tracks, link)?;
 
-    emit_progress(
-        app,
-        PlaylistImportProgress {
-            stage: "done".into(),
-            source: source_label.into(),
-            completed: total_tracks,
-            total: total_tracks,
-            matched: imported_tracks,
-            current_track: None,
-        },
-    );
+    emit_progress(app, progress("done", source_label, total_tracks, total_tracks, imported_tracks));
 
     Ok(PlaylistImportResult {
         library: next_lib,
@@ -633,6 +596,15 @@ pub fn import_playlist(
         unmatched_tracks,
         note,
     })
+}
+
+/// `"ytmusic" | "spotify" | "text"` for progress events and results.
+pub fn source_label(source: &ImportSource) -> &'static str {
+    match source {
+        ImportSource::YouTubePlaylist { .. } => "ytmusic",
+        ImportSource::Spotify { .. } | ImportSource::SpotifyShort { .. } => "spotify",
+        ImportSource::TextList { .. } => "text",
+    }
 }
 
 #[cfg(test)]
@@ -683,6 +655,11 @@ mod tests {
                 list_id: "PL4fGSI1pDJn6puJdseH2Rt9sMvt9E2M4i".into()
             })
         );
+        assert_eq!(
+            parse_import_input("https://spotify.link/AbCdEf123"),
+            Ok(ImportSource::SpotifyShort { url: "https://spotify.link/AbCdEf123".into() })
+        );
+        assert!(parse_import_input("https://music.youtube.com/playlist?list=PL%22x").is_err());
         assert_eq!(
             parse_import_input("PL4fGSI1pDJn6puJdseH2Rt9sMvt9E2M4i"),
             Ok(ImportSource::YouTubePlaylist {

@@ -148,7 +148,7 @@ impl YtMusicClient {
         if !ytm_feed::is_valid_browse_id(id) {
             return Err("Unsupported YouTube Music link".into());
         }
-        let (val, mut tracks) = self.browse_tracks(id)?;
+        let (val, mut tracks, _) = self.browse_tracks(id)?;
         let (title, subtitle, artwork_url) = ytm_feed::parse_collection_header(&val);
         let title = title.unwrap_or_else(|| "YouTube Music".into());
         let kind = if id.starts_with("MPRE") {
@@ -174,7 +174,9 @@ impl YtMusicClient {
     }
 
     /// First page of a browse id plus its tracks, following up to four continuation pages (500 tracks max).
-    fn browse_tracks(&self, browse_id: &str) -> Result<(Value, Vec<Track>), String> {
+    /// The flag is `false` when pages were left unread (limit reached or a continuation failed), so a playlist sync
+    /// must not treat songs it didn't see as removed.
+    fn browse_tracks(&self, browse_id: &str) -> Result<(Value, Vec<Track>, bool), String> {
         let val = self.browse(json!({ "browseId": browse_id }))?;
         let mut tracks = Vec::new();
         ytm_feed::collect_page_tracks(&val, &mut tracks);
@@ -182,15 +184,22 @@ impl YtMusicClient {
         let mut seen_tokens = std::collections::HashSet::new();
         for _ in 0..4 {
             let Some(tok) = next_token.take() else { break };
-            if tracks.len() >= 500 || !seen_tokens.insert(tok.clone()) {
+            if !seen_tokens.insert(tok.clone()) {
                 break;
             }
-            let Ok(cont) = self.browse(json!({ "continuation": tok })) else { break };
+            if tracks.len() >= 500 {
+                next_token = Some(tok);
+                break;
+            }
+            let Ok(cont) = self.browse(json!({ "continuation": tok.clone() })) else {
+                next_token = Some(tok);
+                break;
+            };
             collect_tracks(&cont, &mut tracks);
             next_token = find_continuation_token(&cont);
         }
         dedup_tracks(&mut tracks);
-        Ok((val, tracks))
+        Ok((val, tracks, next_token.is_none()))
     }
 
     pub fn search(&self, query: &str, filter: &str) -> SearchResponse {
@@ -270,18 +279,19 @@ impl YtMusicClient {
         tracks
     }
 
-    pub fn fetch_playlist(&self, list_id: &str) -> Result<(String, Vec<Track>), String> {
+    /// Title, tracks, and whether the whole list was read (see `browse_tracks`).
+    pub fn fetch_playlist(&self, list_id: &str) -> Result<(String, Vec<Track>, bool), String> {
         let clean = list_id.trim().trim_start_matches("VL").trim();
         if clean.is_empty() {
             return Err("Missing YouTube playlist ID".into());
         }
-        let (val, tracks) = self.browse_tracks(&format!("VL{clean}"))?;
+        let (val, tracks, complete) = self.browse_tracks(&format!("VL{clean}"))?;
         let title = extract_playlist_title(&val).unwrap_or_else(|| "YouTube Music Playlist".into());
         if tracks.is_empty() {
             return Err("No tracks found in that YouTube playlist (make sure it is public or unlisted)".into());
         }
-        tracing::info!(list_id = clean, title = %title, count = tracks.len(), "Fetched YTM playlist");
-        Ok((title, tracks))
+        tracing::debug!(list_id = clean, title = %title, count = tracks.len(), complete, "Fetched YTM playlist");
+        Ok((title, tracks, complete))
     }
 
     pub fn resolve_stream(&self, video_id: &str) -> Result<ResolvedStream, String> {

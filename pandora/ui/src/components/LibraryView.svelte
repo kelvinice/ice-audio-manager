@@ -8,6 +8,7 @@
   import MoreMenu from "./MoreMenu.svelte";
   import PageHero from "./PageHero.svelte";
   import PlaylistRecommendations from "./PlaylistRecommendations.svelte";
+  import SyncPlaylistModal from "./SyncPlaylistModal.svelte";
   import TrackTable from "./TrackTable.svelte";
 
   type LibraryTab = "liked" | "playlists" | "local" | "offline" | "history";
@@ -40,6 +41,8 @@
     onDeletePlaylist: (playlistId: string) => void;
     onRemoveFromPlaylist: (playlistId: string, trackId: string) => void;
     onAddToThisPlaylist: (playlistId: string, track: Track) => void;
+    /** A Spotify / YouTube Music sync was applied. */
+    onSynced: (library: LibraryState, message: string) => void;
   }
 
   let {
@@ -70,6 +73,7 @@
     onDeletePlaylist,
     onRemoveFromPlaylist,
     onAddToThisPlaylist,
+    onSynced,
   }: Props = $props();
 
   const TABS: { id: LibraryTab; label: string }[] = [
@@ -84,6 +88,7 @@
   let renaming = $state(false);
   let renameInput = $state("");
   let pendingDeletePlaylist = $state<Playlist | null>(null);
+  let syncingPlaylist = $state<Playlist | null>(null);
 
   $effect(() => {
     void selectedPlaylistId;
@@ -196,7 +201,11 @@
     covers={coversFor(playlist.trackIds)}
     label="Playlist"
     title={playlist.name}
-    meta={[formatCount(playlistTracks.length, "song"), formatTotalDuration(playlistTracks)].filter(Boolean).join(" • ")}
+    meta={[
+      formatCount(playlistTracks.length, "song"),
+      formatTotalDuration(playlistTracks),
+      playlist.link ? `Linked to ${playlist.link.service === "spotify" ? "Spotify" : "YouTube Music"}` : null,
+    ].filter(Boolean).join(" • ")}
     titleSlot={renaming ? renameForm : undefined}
   >
     <button class="btn-play" aria-label="Play" disabled={playlistTracks.length === 0} onclick={() => onPlay(playlistTracks[0], playlistTracks)}>
@@ -208,6 +217,11 @@
     <MoreMenu
       items={[
         { label: "Rename", icon: "edit", onSelect: startRename },
+        {
+          label: playlist.link ? "Sync with link" : "Sync with Spotify / YouTube Music",
+          icon: "refresh",
+          onSelect: () => (syncingPlaylist = playlist),
+        },
         {
           label: "Download songs",
           icon: "download",
@@ -329,6 +343,10 @@
     </div>
     {/key}
   </div>
+{/if}
+
+{#if syncingPlaylist}
+  <SyncPlaylistModal playlist={syncingPlaylist} onClose={() => (syncingPlaylist = null)} {onSynced} />
 {/if}
 
 <ConfirmModal

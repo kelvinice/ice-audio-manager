@@ -9,7 +9,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crate::http;
-use crate::models::{EqState, LibraryState, PandoraSettings, Playlist, RecognizedTrack, Track};
+use crate::models::{EqState, LibraryState, PandoraSettings, Playlist, PlaylistLink, RecognizedTrack, Track};
 use crate::ytmusic::YtMusicClient;
 
 const AUDIO_EXTENSIONS: &[&str] = &["mp3", "flac", "wav", "ogg", "m4a", "opus", "aac", "weba", "webm"];
@@ -119,6 +119,7 @@ impl LibraryStore {
             name: clean.to_string(),
             track_ids,
             created_at_ms: now_ms(),
+            link: None,
         });
         sync_track_flags(&self.cache_dir, &mut guard);
         self.save_locked(&guard);
@@ -177,6 +178,7 @@ impl LibraryStore {
         &self,
         name: &str,
         tracks: Vec<Track>,
+        link: Option<PlaylistLink>,
     ) -> Result<(LibraryState, Playlist), String> {
         let clean = name.trim();
         if clean.is_empty() {
@@ -200,11 +202,46 @@ impl LibraryStore {
             name: clean.to_string(),
             track_ids,
             created_at_ms: now_ms(),
+            link,
         };
         guard.playlists.push(created.clone());
         sync_track_flags(&self.cache_dir, &mut guard);
         self.save_locked(&guard);
         Ok((guard.clone(), created))
+    }
+
+    /// Applies a reviewed sync: appends `added` (skipping songs already there), drops `remove_ids`, saves `link`.
+    pub fn apply_playlist_sync(
+        &self,
+        playlist_id: &str,
+        added: Vec<Track>,
+        remove_ids: &[String],
+        mut link: PlaylistLink,
+    ) -> Result<LibraryState, String> {
+        let mut guard = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let index = guard
+            .playlists
+            .iter()
+            .position(|p| p.id == playlist_id)
+            .ok_or_else(|| "Playlist not found".to_string())?;
+        let mut new_ids = Vec::with_capacity(added.len());
+        for mut track in added {
+            track.liked = guard.liked.iter().any(|t| t.id == track.id);
+            new_ids.push(track.id.clone());
+            guard.tracks_index.insert(track.id.clone(), track);
+        }
+        let playlist = &mut guard.playlists[index];
+        playlist.track_ids.retain(|id| !remove_ids.contains(id));
+        for id in new_ids {
+            if !playlist.track_ids.contains(&id) {
+                playlist.track_ids.push(id);
+            }
+        }
+        link.synced_at_ms = now_ms();
+        playlist.link = Some(link);
+        sync_track_flags(&self.cache_dir, &mut guard);
+        self.save_locked(&guard);
+        Ok(guard.clone())
     }
 
     pub fn save_eq(&self, eq: EqState) -> LibraryState {
@@ -650,11 +687,29 @@ mod tests {
         let t4 = sample_track("trk2");
         let t5 = sample_track("trk3");
         let (s6, created) = store
-            .create_playlist_with_tracks("  Imported Mix  ", vec![t3, t4.clone(), t4, t5])
+            .create_playlist_with_tracks("  Imported Mix  ", vec![t3, t4.clone(), t4, t5], None)
             .unwrap();
         assert_eq!(created.name, "Imported Mix");
         assert_eq!(created.track_ids, vec!["trk1", "trk2", "trk3"]);
         assert!(s6.tracks_index.contains_key("trk3"));
+
+        let link = PlaylistLink {
+            service: "ytmusic".into(),
+            url: "https://music.youtube.com/playlist?list=PLtest".into(),
+            synced_at_ms: 0,
+            track_ids: vec!["trk2".into(), "trk4".into()],
+            matches: Default::default(),
+        };
+        let s7 = store
+            .apply_playlist_sync(&created.id, vec![sample_track("trk4"), sample_track("trk2")], &["trk1".into()], link)
+            .unwrap();
+        let synced = s7.playlists.iter().find(|p| p.id == created.id).unwrap();
+        assert_eq!(synced.track_ids, vec!["trk2", "trk3", "trk4"]);
+        let saved = synced.link.as_ref().unwrap();
+        assert!(saved.synced_at_ms > 0);
+        assert_eq!(saved.track_ids, vec!["trk2", "trk4"]);
+        let reloaded = LibraryStore::load_at(store.db_path().to_path_buf(), store.cache_dir().to_path_buf()).snapshot();
+        assert_eq!(reloaded.playlists[0].link, synced.link);
 
         let _ = std::fs::remove_dir_all(&dir);
     }

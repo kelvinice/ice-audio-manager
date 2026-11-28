@@ -676,6 +676,10 @@
               (next) => (library = next),
             );
           }}
+          onSynced={(next, message) => {
+            library = next;
+            showNotice(message);
+          }}
           onAddToThisPlaylist={(plId, track) => void handleToggleTrackInPlaylist(plId, track, false)}
         />
       {:else if activeTab === "ice"}

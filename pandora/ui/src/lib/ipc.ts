@@ -16,6 +16,7 @@ import {
   type PandoraSettings,
   type PlaylistImportProgress,
   type PlaylistImportResult,
+  type PlaylistSyncPlan,
   type RecognitionProgress,
   type RecognizedTrack,
   type SearchResponse,
@@ -213,6 +214,11 @@ export const clearRecognitionHistory = () => call<LibraryState>("clear_recogniti
 export const importPlaylist = (input: string, nameOverride: string | null = null) =>
   call<PlaylistImportResult>("import_playlist", { input, nameOverride });
 export const cancelPlaylistImport = () => call<void>("cancel_playlist_import");
+/** Reads `input` (or the playlist's saved link when null) and returns the changes; nothing is saved. */
+export const previewPlaylistSync = (playlistId: string, input: string | null) =>
+  call<PlaylistSyncPlan>("preview_playlist_sync", { playlistId, input });
+export const applyPlaylistSync = (plan: PlaylistSyncPlan, removeMissing: boolean) =>
+  call<LibraryState>("apply_playlist_sync", { plan, removeMissing });
 
 export async function onPlaylistImportProgress(
   cb: (progress: PlaylistImportProgress) => void,

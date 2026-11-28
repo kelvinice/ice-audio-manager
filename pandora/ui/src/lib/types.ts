@@ -21,6 +21,20 @@ export interface Playlist {
   name: string;
   trackIds: string[];
   createdAtMs: number;
+  /** The Spotify / YouTube Music link it was imported or last synced from. */
+  link?: PlaylistLink | null;
+}
+
+/** Mirrors `models.rs` `PlaylistLink`. */
+export interface PlaylistLink {
+  service: "spotify" | "ytmusic" | string;
+  /** Canonical link (no share tracking, short links resolved). */
+  url: string;
+  syncedAtMs: number;
+  /** Songs that came from the link last time; only these can go missing. */
+  trackIds: string[];
+  /** Spotify only: link song key → matched YouTube Music id. */
+  matches?: Record<string, string>;
 }
 
 export interface HomeFeed {
@@ -319,6 +333,21 @@ export interface PlaylistImportResult {
   totalTracks: number;
   importedTracks: number;
   unmatchedTracks: string[];
+  note: string | null;
+}
+
+/** What a sync would change (`preview_playlist_sync`); sent back as-is to `apply_playlist_sync`. */
+export interface PlaylistSyncPlan {
+  playlistId: string;
+  link: PlaylistLink;
+  sourceName: string;
+  added: Track[];
+  missing: Track[];
+  unchanged: number;
+  unmatchedTracks: string[];
+  totalTracks: number;
+  /** False when the link's list was cut short; removing songs is then refused. */
+  complete: boolean;
   note: string | null;
 }
 

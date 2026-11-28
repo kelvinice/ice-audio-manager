@@ -25,6 +25,28 @@ pub struct Playlist {
     pub name: String,
     pub track_ids: Vec<String>,
     pub created_at_ms: u64,
+    /// The Spotify / YouTube Music link it was imported or last synced from (absent in older libraries).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub link: Option<PlaylistLink>,
+}
+
+/// A playlist's source link, kept so it can be synced again.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlaylistLink {
+    /// `"spotify" | "ytmusic"`
+    pub service: String,
+    /// Canonical link without share tracking (`si=`, Branch parameters), resolved from short links.
+    pub url: String,
+    pub synced_at_ms: u64,
+    /// Song ids that came from the link last time. Only these are offered for removal when they leave it, so songs
+    /// added in Pandora (or kept on an earlier sync) stay.
+    #[serde(default)]
+    pub track_ids: Vec<String>,
+    /// Spotify only: link song (`song_key_of` title + artist) → the YouTube Music id it was matched to, so a sync
+    /// reuses earlier matches instead of searching again (a different search result would look like a new song).
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub matches: std::collections::BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -389,6 +411,29 @@ pub struct PlaylistImportResult {
     pub total_tracks: usize,
     pub imported_tracks: usize,
     pub unmatched_tracks: Vec<String>,
+    pub note: Option<String>,
+}
+
+/// What a sync would change, shown before anything is saved (`preview_playlist_sync` → `apply_playlist_sync`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlaylistSyncPlan {
+    pub playlist_id: String,
+    /// The link to save; its `track_ids` are the songs found in it, in its order.
+    pub link: PlaylistLink,
+    /// The name on Spotify / YouTube Music.
+    pub source_name: String,
+    /// In the link, not yet in the playlist.
+    pub added: Vec<Track>,
+    /// Came from the link before, no longer in it.
+    pub missing: Vec<Track>,
+    pub unchanged: usize,
+    /// Link songs with no YouTube Music match (`Artist — Title`).
+    pub unmatched_tracks: Vec<String>,
+    pub total_tracks: usize,
+    /// `false` when the link's list was cut short (Spotify's page shows 100 songs, YouTube Music stops at 500), so
+    /// songs not seen can't be called missing and removing is refused.
+    pub complete: bool,
     pub note: Option<String>,
 }
 

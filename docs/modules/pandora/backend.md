@@ -17,7 +17,7 @@ for recognition and import. Blocking work (network, disk) runs in `spawn_blockin
 | Lyrics | `fetch_lyrics` |
 | Ice | `ice_status`, `ice_snapshot`, `ice_set_mode_pref`, `ice_switch_device`, `ice_set_volume`, `ice_toggle_mute`, `ice_toggle_mic_mute`, `ice_set_spatial`, `ice_patch_settings`, `ice_set_meter_active`, `ice_launch_standalone`, `ice_stop_standalone`, `ice_ping_bridge`, `ice_toggle_notch`, `ice_show_notch`, `ice_wake_and_peek`, `ice_open_settings` |
 | Recognition | `recognize_music`, `cancel_recognition`, `delete_recognition_item`, `clear_recognition_history` |
-| Import | `import_playlist`, `cancel_playlist_import` |
+| Import and sync | `import_playlist`, `cancel_playlist_import` (also cancels a sync preview), `preview_playlist_sync`, `apply_playlist_sync` |
 
 There is no per-command permission file; registering in `generate_handler!` and adding a wrapper in `lib/ipc.ts` is
 enough. Wrappers return harmless defaults outside Tauri (`inTauri`), so `npm run dev` previews still render.
@@ -40,6 +40,8 @@ the Run key; the toggle shows why it is locked.
 - `%APPDATA%\Pandora\library.json`: liked, playlists, history, local folders and tracks, `tracksIndex` (id → `Track`,
   so playlists only store ids), cached ids, EQ, settings, recognition history, Ice mode preference. One `Mutex`,
   saved after each change.
+- `Playlist.link` (optional, `PlaylistLink`): service, canonical URL, last sync time, the song ids that came from the
+  link, and (Spotify) seed → YouTube Music id matches. Set by link imports and `apply_playlist_sync`.
 - `PandoraSettings` is `#[serde(default)]`: missing fields take defaults, enums use `#[serde(other)]`. `save_settings`
   clamps values (volume 0–1). `reset_settings` resets settings and EQ but keeps the library.
 - Offline audio: `%LOCALAPPDATA%\Pandora\cache\<id>`; `snapshot()` re-syncs `cached` flags from disk.

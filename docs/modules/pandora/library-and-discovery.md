@@ -1,7 +1,8 @@
 # Pandora library and discovery
 
-> Paths: `ytmusic.rs`, `ytm_feed.rs`, `recommend.rs`, `playlist_import.rs`; UI `HomeView`, `SearchView`,
-> `CollectionView`, `LibraryView`, `PlaylistRecommendations`, `PlaylistModal`, `ImportPlaylistModal`, `StorageSettings`,
+> Paths: `ytmusic.rs`, `ytm_feed.rs`, `recommend.rs`, `playlist_import.rs`, `playlist_link.rs`, `playlist_sync.rs`; UI
+> `HomeView`, `SearchView`, `CollectionView`, `LibraryView`, `PlaylistRecommendations`, `PlaylistModal`,
+> `ImportPlaylistModal`, `SyncPlaylistModal`, `StorageSettings`,
 > `Sidebar`, `TrackTable`, `SongRow`, `Shelf`, `CoverTile`, `PageHero` · Part of [Pandora](README.md)
 
 ## YouTube Music client (`ytmusic.rs`)
@@ -54,6 +55,29 @@ nothing.
 
 Public YouTube Music playlists (InnerTube browse), Spotify playlists / albums (public page, no API key; songs matched on
 YouTube Music in parallel), or Exportify CSV / M3U / plain tracklists. Progress on `playlist://import/v1`, cancellable.
+`spotify.link` short links are followed (best effort: the first `open.spotify.com/playlist|album/<id>` in the page).
+A link import saves the canonical link on the playlist (`Playlist.link`); tracklists don't.
+
+## Sync (`playlist_link.rs`, `playlist_sync.rs`, `SyncPlaylistModal`)
+
+Playlist ⋯ menu → Sync. The modal offers "Sync from last link" (saved or imported link) or a new link, then shows a
+review; nothing is saved before Apply.
+
+- `preview_playlist_sync` reads the link (`fetch_link`). Spotify songs are matched cheapest first: the link's earlier
+  matches (`PlaylistLink.matches`), a playlist song with the same title + main artist (`recommend::song_key_of`), then
+  a YouTube Music search. This keeps a re-sync from turning a different search hit into "new + gone".
+- `diff`: added = link songs not in the playlist; missing = songs that came from the link last time (`link.trackIds`)
+  and are gone from it. On a first or different link every playlist song can be missing. Songs added in Pandora never are.
+- The user picks Keep (default) or Remove. `apply_playlist_sync` appends new songs, removes only when asked, and saves
+  the link with the new song ids, so kept songs become the user's and aren't asked about again.
+- Removing is refused when the list may be cut short (`complete = false`): Spotify's public page lists 100 songs, and
+  YouTube Music reading stops at 500 songs or a failed continuation (`browse_tracks` flag).
+
+Link lifetimes (checked 2026-11-28, community sources; no official docs): plain playlist links don't expire, they break
+only if the playlist is deleted or made private; `si=` is share tracking. Spotify invite links for private /
+collaborative playlists expire after 7 days, and `spotify.link` short links go through a third-party redirect that may
+lapse, so only the canonical link is saved. YouTube Mixes (`RD…` except editorial `RDCLAK5uy_`) are rebuilt on each
+visit; import and sync add a note.
 
 ## Downloads, local files and storage (`StorageSettings`)
 

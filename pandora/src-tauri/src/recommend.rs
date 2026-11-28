@@ -92,9 +92,14 @@ pub fn rank(playlist: &[Track], related: &[Vec<Track>], skip: &[String]) -> Vec<
 
 /// One song across uploads: the title without bracketed extras ("(Official Video)", "[Lyrics]") plus the main artist.
 fn song_key(track: &Track) -> String {
+    song_key_of(&track.title, &track.artist)
+}
+
+/// `song_key` from a bare title and artist (playlist sync matches link songs to playlist songs with it).
+pub(crate) fn song_key_of(title_raw: &str, artist: &str) -> String {
     let mut title = String::new();
     let mut depth = 0usize;
-    for c in track.title.chars() {
+    for c in title_raw.chars() {
         match c {
             '(' | '[' => depth += 1,
             ')' | ']' => depth = depth.saturating_sub(1),
@@ -103,7 +108,7 @@ fn song_key(track: &Track) -> String {
         }
     }
     let title: String = title.split_whitespace().collect::<Vec<_>>().join(" ");
-    format!("{title}\u{1f}{}", primary_artist(&track.artist))
+    format!("{title}\u{1f}{}", primary_artist(artist))
 }
 
 /// The first credited artist, lowercased ("A, B", "A & B" and "A feat. B" all give "a").
